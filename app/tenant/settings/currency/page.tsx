@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { DollarSign, Loader2, Check, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface CurrencyData {
   currencies: CurrencyInfo[];
@@ -47,8 +48,9 @@ export default function CurrencySettingsPage() {
   const [saving, setSaving] = useState(false);
 
   // #1328: TanStack Query. `select` applies the default-currencies fallback so
-  // the component always sees a populated list.
-  const { data, isLoading: loading } = useApiQuery<{ data?: CurrencyData }>(
+  // the component always sees a populated list. `error` and `refetch` are bound
+  // now that the page branches on which read the failure belongs to (#2872).
+  const { data, isLoading: loading, error: currencyError, refetch } = useApiQuery<{ data?: CurrencyData }>(
     CURRENCY_QUERY,
     '/api/tenant/currency',
     {
@@ -65,13 +67,44 @@ export default function CurrencySettingsPage() {
   );
   const currencyData: CurrencyData = data?.data ?? EMPTY_CURRENCY;
 
+  // #2872: `currencyError` alone cannot tell "this read never answered" from
+  // "this read answered and the refresh was refused", and TanStack Query keeps
+  // `data` straight through the second (`lib/query/client.tsx:46-58`: `retry: 2`,
+  // `staleTime: 30_000`, `refetchOnWindowFocus: false`). The old page bound no
+  // `error` at all, so both states fell into the `loading ? … : values` arm.
+  // The trap specific to THIS page is that arm's inputs: `select` substitutes
+  // DEFAULT_CURRENCIES and `currencyData` substitutes EMPTY_CURRENCY, so a never-answered read
+  // arrives dressed as a populated ten-currency picker with "Default: USD" beside it. TanStack
+  // runs `select` only on a payload that exists, so `data` itself is still `undefined` when the
+  // read never answered — which is why both flags test `data` and not `currencyData`.
+  // `failed` is a read that never answered; `stale` is the last read, still held.
+  const failed = Boolean(currencyError) && !data;
+  const stale = Boolean(currencyError) && Boolean(data);
+  // The transport message (`ApiQueryError.message`, `lib/query/client.tsx:41`) is interpolated
+  // as-is into BOTH banners, per the epic's house convention, with the messageless fallback
+  // spelled out so a refusal with no message never prints `undefined`.
+  const reason = currencyError?.message || 'no response from the server';
+
+  // Whether the read answered at all. During the first load `data` is undefined,
+  // exactly as over a failed read, so nothing derived from the read may be shown
+  // as a value yet — it is withheld instead of defaulting. `data`, never
+  // `currencyData`: the latter is `?? EMPTY_CURRENCY` and so always truthy.
+  const hasRead = Boolean(data);
+  const readDefault = currencyData.defaultCurrency ?? 'USD';
   // The tenant's choice, not the rate basis. baseCurrency is always USD, and
-  // comparing the highlight against it made the picker jump back to USD on
-  // every revalidation, so a saved default looked like it had not taken.
-  const defaultCurrency = currencyData.defaultCurrency ?? 'USD';
+  // comparing the highlight against it made the picker jump back to USD on every
+  // revalidation, so a saved default looked like it had not taken (#1328). With no
+  // read there is no default to highlight and none to state, so both are withheld.
+  const activeDefault = hasRead ? readDefault : '';
+  const defaultDisplay = hasRead ? readDefault : '\u2014';
 
   const setDefault = async (code: string) => {
-    if (code === defaultCurrency) return;
+    // Epic rule #1: a read that never answered must not drive a tenant-wide write. Over
+    // `failed` the picker is the built-in list rather than the tenant's, so the whole grid is
+    // unmounted above; this is the second lock for any call path that reaches the handler anyway.
+    // Over `stale` the save stays live — see the banner's route audit.
+    if (failed) return;
+    if (code === activeDefault) return;
     setSaving(true);
     try {
       const res = await fetch('/api/tenant/currency', {
@@ -96,6 +129,7 @@ export default function CurrencySettingsPage() {
   };
 
   const currencies = currencyData.currencies.length > 0 ? currencyData.currencies : DEFAULT_CURRENCIES;
+  const rateCount = Object.keys(currencyData.rates).length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -106,22 +140,50 @@ export default function CurrencySettingsPage() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800">
           <DollarSign className="w-4 h-4 text-violet-600" />
-          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Default: {defaultCurrency}</span>
+          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Default: {defaultDisplay}</span>
         </div>
       </div>
 
+      {stale && (
+        // The one write this page makes is `setDefault` → POST (app/api/tenant/currency/route.ts:84).
+        // Measured against the route, which is what decides that it stays live over `stale`:
+        //  - it validates the code against the server's own `SUPPORTED_CURRENCIES` allowlist and
+        //    answers 400 for anything else (route.ts:94-101), so a stale pick is still checked;
+        //  - it writes ONE key with `jsonb_set` over `COALESCE(settings,'{}')` (route.ts:106-116),
+        //    so it cannot clobber the other settings keys, and the list and rates are never stored
+        //    at all — GET recomputes them from `getSupportedCurrencies()` and the rate provider
+        //    (route.ts:47-62).
+        // What it does NOT do is read the stored default back or compare against an expected value:
+        // the last write wins, and the only precondition is that the tenant row still exists
+        // (route.ts:118). So the save stays enabled and the banner names that overwrite as the cost.
+        <InlineErrorState
+          message={`Could not refresh the currency settings, so the supported list, the highlighted default and the exchange rates are the last read: ${reason}. Setting a default now replaces the tenant's current one without this page having read it, and a rate that moved since this was read is still shown as current.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />
           ))}
         </div>
+      ) : failed ? (
+        // #2872: the outage arm owns this whole region. `select` falls back to DEFAULT_CURRENCIES
+        // and `currencyData` to EMPTY_CURRENCY, so a read that never answered arrives here looking
+        // like a populated ten-currency picker with "Default: USD" beside it. Nothing derived from
+        // the read may be asserted, so the grid, the rates and every `Set as default` button are
+        // withheld rather than rendered disabled above an answer that was never given — and the
+        // header shows the dash, which is why the copy says the dash is not USD.
+        <InlineErrorState
+          message={`Failed to load the currency settings: ${reason}. The supported currency list, the tenant's default and the exchange rates are unanswered — the picker is withheld, not empty, and the dash above is not this tenant's default.`}
+          onRetry={() => void refetch()}
+        />
       ) : (
         <>
           {/* Currency Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {currencies.map(c => {
-              const isDefault = c.code === defaultCurrency;
+              const isDefault = c.code === activeDefault;
               const rate = currencyData.rates[c.code];
               return (
                 <div key={c.code} className={cn(
@@ -142,6 +204,9 @@ export default function CurrencySettingsPage() {
                       <p className="text-xs text-muted-foreground">{c.name}</p>
                     </div>
                   </div>
+                  {/* A rate is only ever derived from the read: this branch needs the read to have
+                      answered, and a currency with no rate shows no conversion line rather than one
+                      rendered as a zero (rule #5). */}
                   {rate !== undefined && !isDefault && (
                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                       <ArrowRightLeft className="w-3 h-3" />
@@ -151,7 +216,7 @@ export default function CurrencySettingsPage() {
                   {!isDefault && (
                     <button
                       onClick={() => setDefault(c.code)}
-                      disabled={saving}
+                      disabled={saving || failed}
                       className="mt-3 flex items-center gap-1.5 text-xs font-medium text-violet-600 hover:text-violet-700 disabled:opacity-50"
                     >
                       {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -163,8 +228,18 @@ export default function CurrencySettingsPage() {
             })}
           </div>
 
+          {/* The cost stated in the banner repeated where the click happens, since this is the
+              only control on the page and it is deliberately left live over a last read. It says
+              nothing when the read is neither stale nor failed. */}
+          {stale && (
+            <p className="text-xs text-muted-foreground">
+              Set as default writes the code you click over the stored default, and nothing is
+              read back first.
+            </p>
+          )}
+
           {/* Exchange Rates Table */}
-          {Object.keys(currencyData.rates).length > 0 && (
+          {rateCount > 0 && (
             <div className="admin-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
                 <h3 className="font-semibold text-sm">Exchange Rates</h3>
@@ -189,6 +264,17 @@ export default function CurrencySettingsPage() {
               </table>
               </div>
             </div>
+          )}
+
+          {/* #2872: an empty exchange-rate set is a fact about a read that answered — GET returns
+              `rates: {}` when the upstream provider throws (app/api/tenant/currency/route.ts:51-62)
+              while still answering 200. This branch is only reachable on a read that answered, so
+              the absence can be stated; over `failed` the whole region above is withheld instead,
+              because there `rateCount` is 0 only because nothing was read. */}
+          {rateCount === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No exchange rates came back with this list, so the cards above show no conversion.
+            </p>
           )}
         </>
       )}
