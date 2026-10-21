@@ -23,16 +23,16 @@
  * It reads the admitted set out of `0050` instead of restating it here, since a third copy of the
  * same list is precisely the defect this file exists to catch.
  *
- * WHAT IT DOES NOT DECIDE
- * -----------------------
- * `components/tenant/workflow-builder.tsx` offers nine dotted event names (`contact.created`,
- * `deal.won`, …) and posts them as `trigger_type`; none of them is in the CHECK, so creating a
- * workflow from the builder still answers 400 and this change does not touch that. #2806 asks the
- * owner to choose between (a) `trigger_type` is the kind and the event moves to `trigger_config`,
- * (b) the CHECK is widened to the event names — a migration on a live table — or (c) both columns
- * exist, properly typed. The last block pins that open half so a green suite cannot be read as
- * "#2806 is done", and it goes red the day the decision lands, which is the point. (PATCH's
- * trigger-editing gap is already documented in
+ * WHAT THIS FILE PINs
+ * -------------------
+ * `components/tenant/workflow-builder.tsx` used to offer nine dotted event
+ * names (`contact.created`, `deal.won`, …) and post them as `trigger_type`;
+ * none of them is in the CHECK, so creating a workflow from the builder was
+ * always a 400. The owner took the (a)/(b)/(c) decision on #2806: **(a)** —
+ * `trigger_type` is the kind and the event moves to `trigger_config` as
+ * `{ entity, event }`. The last block asserts that contract across all three
+ * sites — migration, schema, builder — so a future edit cannot re-open the gap.
+ * (PATCH's trigger-editing gap is fixed in the same change and pinned by
  * `tests/unit/workflow-patch-write-vocabulary-2805.test.ts`.)
  */
 import { describe, it, expect } from 'vitest';
@@ -181,27 +181,63 @@ describe('#2806 what POST /api/tenant/workflows answers for trigger_type', () =>
   });
 });
 
-describe('#2806 the half that is still open', () => {
+describe('#2806 option (a) — trigger_type is the kind, the event lives in trigger_config', () => {
+  // The owner took the (a)/(b)/(c) decision on #2806: (a). `trigger_type` keeps
+  // the four CHECK kinds; the dotted event moves to `trigger_config` as
+  // `{ entity, event }`, so the builder's choice survives both the schema and
+  // the CHECK, and no dotted value is ever posted as `trigger_type` again.
+
+  const SHARED_FILE = 'lib/automation/workflow-trigger.ts';
   const builder = readFileSync(`${ROOT}components/tenant/workflow-builder.tsx`, 'utf8');
-  const optionsBlock = /const TRIGGER_OPTIONS = \[([\s\S]*?)\n\]/.exec(builder);
-  expect(optionsBlock, 'TRIGGER_OPTIONS is no longer a literal array — re-read #2806').not.toBeNull();
-  const offered = [...optionsBlock![1]!.matchAll(/value:\s*'([^']+)'/g)].map((m) => m[1]!);
+  const shared = readFileSync(`${ROOT}${SHARED_FILE}`, 'utf8');
 
-  it('the builder still offers nine dotted event names', () => {
-    expect(offered).toHaveLength(9);
-    expect(offered).toContain('contact.created');
-  });
-
-  it('none of them is legal in the CHECK, so saving from the builder still 400s', () => {
-    const illegal = offered.filter((v) => !db.values.includes(v));
+  it('the shared trigger module is the builder-side copy of the CHECK set', async () => {
+    const { WORKFLOW_TRIGGER_TYPES } = await import('@/lib/automation/workflow-trigger');
     expect(
-      illegal,
-      `#2806's (a)/(b)/(c) decision looks like it was taken: ${illegal.join(', ')} now parse. `
-      + 'Update this file to assert the chosen vocabulary across all three sites, and say so on #2806.',
-    ).toEqual(offered);
+      [...WORKFLOW_TRIGGER_TYPES].sort(),
+      `the client-safe trigger vocabulary drifted from ${db.file}`,
+    ).toEqual([...db.values].sort());
+    expect([...WORKFLOW_TRIGGER_TYPES].sort()).toEqual([...schemaValues].sort());
   });
 
-  it('the builder posts that value as trigger_type on every create', () => {
-    expect(builder).toMatch(/trigger_type:\s*triggerType/);
+  it('the registry cites the shared module too, and it carries the literals', () => {
+    const registry = JSON.parse(
+      readFileSync(`${ROOT}scripts/constraint-vocab.json`, 'utf8'),
+    ) as { constraints: { id: string; declaredIn: string[] }[] };
+    const entry = registry.constraints.find((c) => c.id === 'workflows.trigger_type');
+    expect(entry!.declaredIn).toContain(SHARED_FILE);
+    for (const kind of db.values) {
+      expect(shared, `${SHARED_FILE} must carry '${kind}' literally for guard:vocab`).toContain(`'${kind}'`);
+    }
+  });
+
+  it('the builder offers kinds and events as two fields, not dotted values in trigger_type', () => {
+    // The nine dotted names used to be the only picker and their value went
+    // straight into trigger_type — every save was a 400. Now kind is the first
+    // select and the event pair is posted inside trigger_config.
+    expect(builder).toMatch(/WORKFLOW_TRIGGER_TYPES\.map/);
+    expect(builder).toMatch(/WORKFLOW_TRIGGER_EVENTS\.map/);
+    expect(builder).toMatch(/trigger_config:\s*\{\s*entity:\s*\w+,\s*event:\s*\w+\s*\}/);
+    expect(builder).not.toMatch(/const TRIGGER_OPTIONS = \[/);
+  });
+
+  it('the events the builder offers all parse to an entity + event pair', async () => {
+    const { WORKFLOW_TRIGGER_EVENTS } = await import('@/lib/automation/workflow-trigger');
+    expect(WORKFLOW_TRIGGER_EVENTS.map((e) => `${e.entity}.${e.event}`).sort()).toEqual([
+      'contact.created', 'contact.updated', 'deal.created', 'deal.lost',
+      'deal.stage_changed', 'deal.won', 'form.submitted', 'task.completed', 'task.created',
+    ]);
+    for (const { entity, event } of WORKFLOW_TRIGGER_EVENTS) {
+      expect(entity).toBeTruthy();
+      expect(event).toBeTruthy();
+    }
+  });
+
+  it('PATCH maps trigger_type through the same set instead of dropping it', () => {
+    // Acceptance criterion 3 of #2806: editing the trigger updates the row.
+    const patchRoute = readFileSync(`${ROOT}app/api/tenant/workflows/[id]/route.ts`, 'utf8');
+    expect(patchRoute).toMatch(/updateData\.triggerType = trigger_type/);
+    expect(patchRoute, 'an out-of-set value must be a 400 at the door, never a 23514')
+      .toMatch(/isWorkflowTriggerType\(trigger_type\)/);
   });
 });

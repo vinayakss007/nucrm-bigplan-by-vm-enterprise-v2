@@ -32,7 +32,7 @@
   "components/tenant/project-detail-client.tsx": 581,
   "components/tenant/report-builder.tsx": 509,
   "components/tenant/tasks-data-table.tsx": 592,
-  "components/tenant/workflow-builder.tsx": 820,
+  "components/tenant/workflow-builder.tsx": 867,
   "components/ui/data-table.tsx": 789,
   "lib/ai/common.ts": 502,
   "lib/ai/gateway.ts": 516,

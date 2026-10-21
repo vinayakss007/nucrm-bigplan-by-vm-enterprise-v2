@@ -14,6 +14,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { WORKFLOW_TRIGGER_TYPES, isWorkflowTriggerType } from '@/lib/automation/workflow-trigger';
 
 /**
  * GET /api/tenant/workflows/[id]
@@ -99,10 +100,23 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       name,
       description,
       status,
+      trigger_type,
       trigger_config,
       nodes,
       actions,
     } = body;
+
+    // #2806 (a): `trigger_type` is the kind and the column is gated by
+    // chk_workflows_trigger_type, which admits exactly WORKFLOW_TRIGGER_TYPES.
+    // POST answers out-of-set values with a 400 naming the allowed list; PATCH
+    // used to drop the key entirely, so editing the trigger was a silent no-op.
+    // Same rule here — reject at the door, never let a dotted value reach the
+    // database and surface as a 23514.
+    if (trigger_type !== undefined && !isWorkflowTriggerType(trigger_type)) {
+      return NextResponse.json({
+        error: `trigger_type must be one of: ${WORKFLOW_TRIGGER_TYPES.join(', ')}`,
+      }, { status: 400 });
+    }
 
     // Validation before publishing
     if (status === 'active') {
@@ -133,6 +147,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
       if (status !== undefined) updateData.status = status;
+      if (trigger_type !== undefined) updateData.triggerType = trigger_type;
       if (trigger_config !== undefined) updateData.triggerConfig = trigger_config;
       if (nodes !== undefined) updateData.nodes = nodes;
 

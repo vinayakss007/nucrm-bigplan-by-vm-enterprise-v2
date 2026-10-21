@@ -29,6 +29,16 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import toast from 'react-hot-toast'
 import { useUndoRedo } from './use-undo-redo'
+import {
+  DEFAULT_TRIGGER_EVENT,
+  TRIGGER_KIND_LABELS,
+  WORKFLOW_TRIGGER_EVENTS,
+  WORKFLOW_TRIGGER_TYPES,
+  isWorkflowTriggerType,
+  triggerDescription,
+  triggerEventFromConfig,
+  type WorkflowTriggerType,
+} from '@/lib/automation/workflow-trigger'
 
 // ─── Custom Node Data Type ─────────────────────────────────────────────────────
 
@@ -45,11 +55,14 @@ interface WorkflowActionRow {
   config?: WorkflowConfig | null;
 }
 
-/** The `data` of that response: a `workflows` row spread with its two lists. */
+/** The `data` of that response: a `workflows` row spread with its two lists.
+ *  `triggerType` is the kind (`chk_workflows_trigger_type`) and the event, when
+ *  the kind is `event`, lives in `triggerConfig` as `{ entity, event }` (#2806 (a)). */
 interface WorkflowResponse {
   name: string;
   description: string | null;
   triggerType: string;
+  triggerConfig?: WorkflowConfig | null;
   nodes?: unknown[];
   actions?: WorkflowActionRow[];
 }
@@ -88,17 +101,12 @@ const NODE_PALETTE = [
   { type: 'wait', label: 'Wait', icon: Clock, color: 'bg-slate-500', textColor: 'text-slate-600', bgColor: 'bg-slate-50 dark:bg-slate-950/30', borderColor: 'border-slate-300 dark:border-slate-700' },
 ]
 
-const TRIGGER_OPTIONS = [
-  { value: 'contact.created', label: 'Contact Created' },
-  { value: 'contact.updated', label: 'Contact Updated' },
-  { value: 'deal.created', label: 'Deal Created' },
-  { value: 'deal.stage_changed', label: 'Deal Stage Changed' },
-  { value: 'deal.won', label: 'Deal Won' },
-  { value: 'deal.lost', label: 'Deal Lost' },
-  { value: 'task.created', label: 'Task Created' },
-  { value: 'task.completed', label: 'Task Completed' },
-  { value: 'form.submitted', label: 'Form Submitted' },
-]
+// The trigger vocabulary is #2806's decision, kept in one client-safe module so
+// the builder, the API routes, and the drift test read the same lists.
+// `trigger_type` holds the KIND; the event name (entity + event) goes to
+// `trigger_config`. The former local TRIGGER_OPTIONS posted dotted values into
+// `trigger_type`, which `chk_workflows_trigger_type` rejects — that is why no
+// workflow could ever be created from this page.
 
 // ─── Custom Node Component ─────────────────────────────────────────────────────
 
@@ -163,7 +171,11 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [workflowName, setWorkflowName] = useState('New Workflow')
   const [workflowDescription, setWorkflowDescription] = useState('')
-  const [triggerType, setTriggerType] = useState('contact.created')
+  // #2806 (a): triggerType is the KIND — one of chk_workflows_trigger_type's
+  // four — and the dotted event the old single select held moves to
+  // trigger_config as { entity, event }.
+  const [triggerType, setTriggerType] = useState<WorkflowTriggerType>('event')
+  const [triggerEvent, setTriggerEvent] = useState<string>(DEFAULT_TRIGGER_EVENT)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [showPalette, setShowPalette] = useState(true)
@@ -173,6 +185,21 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
   // Undo/Redo
   const { canUndo, canRedo, pushState, undo, redo, reset } = useUndoRedo([], [])
+
+  const makeTriggerNode = (description?: string): CustomNode => ({
+    id: 'trigger-1',
+    type: 'workflowNode',
+    position: { x: 400, y: 50 },
+    data: { label: 'Trigger', nodeType: 'trigger', description, config: {} },
+  })
+
+  // Keep the canvas trigger node's caption in step with the two pickers.
+  const updateTriggerNode = (kind: string, event: string) =>
+    setNodes(nds => nds.map(n =>
+      n.data.nodeType === 'trigger'
+        ? { ...n, data: { ...n.data, description: triggerDescription(kind, event) } }
+        : n
+    ))
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -214,12 +241,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   useEffect(() => {
     if (!workflowId) {
       // Create initial trigger node
-      const triggerNode: CustomNode = {
-        id: 'trigger-1',
-        type: 'workflowNode',
-        position: { x: 400, y: 50 },
-        data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS[0]?.label, config: {} },
-      }
+      const triggerNode = makeTriggerNode(triggerDescription('event', DEFAULT_TRIGGER_EVENT))
       setNodes([triggerNode])
       reset([triggerNode], [])
       setLoading(false)
@@ -237,7 +259,16 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         const wf = data.data as WorkflowResponse
         setWorkflowName(wf.name)
         setWorkflowDescription(wf.description || '')
-        setTriggerType(wf.triggerType)
+        // chk_workflows_trigger_type is only satisfied by the four kinds, so a
+        // legacy row that still carries a dotted event name is not a legal kind
+        // — fall back to `event` and let the stored config supply the pair.
+        if (isWorkflowTriggerType(wf.triggerType)) {
+          setTriggerType(wf.triggerType)
+        } else {
+          setTriggerType('event')
+        }
+        const storedEvent = triggerEventFromConfig(wf.triggerConfig)
+        if (storedEvent) setTriggerEvent(storedEvent)
 
         // Load nodes from JSONB or create from actions
         if (wf.nodes && Array.isArray(wf.nodes) && wf.nodes.length > 0) {
@@ -254,12 +285,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
               config: action.config ?? {},
             },
           }))
-          const triggerNode: CustomNode = {
-            id: 'trigger-1',
-            type: 'workflowNode',
-            position: { x: 400, y: 50 },
-            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.triggerType)?.label, config: {} },
-          }
+          const triggerNode = makeTriggerNode(triggerDescription(wf.triggerType, triggerEventFromConfig(wf.triggerConfig)))
           setNodes([triggerNode, ...actionNodes])
 
           // Create edges connecting all nodes in sequence
@@ -272,12 +298,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           }))
           setEdges(newEdges)
         } else {
-          const triggerNode: CustomNode = {
-            id: 'trigger-1',
-            type: 'workflowNode',
-            position: { x: 400, y: 50 },
-            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.triggerType)?.label, config: {} },
-          }
+          const triggerNode = makeTriggerNode(triggerDescription(wf.triggerType, triggerEventFromConfig(wf.triggerConfig)))
           setNodes([triggerNode])
         }
       } catch (err: unknown) {
@@ -389,16 +410,22 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           condition_config: {},
         }))
 
+      // #2806 (a): trigger_type carries the kind and the event pair rides in
+      // trigger_config. For the non-event kinds the builder owns no config, so
+      // it is left out of the payload and PATCH leaves the stored value alone.
+      const [triggerEntity = '', triggerEventName = ''] = triggerEvent.split('.')
       const body: {
         name: string;
         description: string;
         trigger_type: string;
+        trigger_config?: { entity: string; event: string };
         nodes: CustomNode[];
         actions?: typeof actions;
       } = {
         name: workflowName.trim(),
         description: workflowDescription,
         trigger_type: triggerType,
+        ...(triggerType === 'event' ? { trigger_config: { entity: triggerEntity, event: triggerEventName } } : {}),
         nodes: nodes.map(n => ({ ...n, data: { ...n.data } })),
       }
 
@@ -436,7 +463,10 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trigger_entity_type: triggerType.split('.')[0],
+          // #2806 (a): for an event trigger the run/test payload takes the
+          // entity from the pair, not from splitting the kind. Non-event kinds
+          // have no entity, so the kind itself names the probe.
+          trigger_entity_type: triggerType === 'event' ? triggerEvent.split('.')[0] : triggerType,
           trigger_entity_id: '', // Will be filled in by user in a modal
         }),
       })
@@ -470,22 +500,39 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
             placeholder="Workflow name"
           />
           <select
+            aria-label="Trigger kind"
             value={triggerType}
             onChange={e => {
+              if (!isWorkflowTriggerType(e.target.value)) return
               setTriggerType(e.target.value)
-              // Update trigger node description
-              setNodes(nds => nds.map(n =>
-                n.data.nodeType === 'trigger'
-                  ? { ...n, data: { ...n.data, description: TRIGGER_OPTIONS.find(t => t.value === e.target.value)?.label } }
-                  : n
-              ))
+              updateTriggerNode(e.target.value, triggerEvent)
             }}
             className="px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
-            {TRIGGER_OPTIONS.map(t => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+            {WORKFLOW_TRIGGER_TYPES.map(kind => (
+              <option key={kind} value={kind}>{TRIGGER_KIND_LABELS[kind]}</option>
             ))}
           </select>
+          {triggerType === 'event' && (
+            <select
+              aria-label="Trigger event"
+              value={triggerEvent}
+              onChange={e => {
+                setTriggerEvent(e.target.value)
+                updateTriggerNode(triggerType, e.target.value)
+              }}
+              className="px-3 py-1.5 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              {/* A stored event the palette no longer offers must still render,
+                  or the select would silently display the first option. */}
+              {!WORKFLOW_TRIGGER_EVENTS.some(t => `${t.entity}.${t.event}` === triggerEvent) && (
+                <option value={triggerEvent}>{triggerEvent}</option>
+              )}
+              {WORKFLOW_TRIGGER_EVENTS.map(({ entity, event, label }) => (
+                <option key={`${entity}.${event}`} value={`${entity}.${event}`}>{label}</option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 mr-2">
