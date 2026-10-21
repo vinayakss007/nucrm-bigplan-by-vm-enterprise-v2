@@ -7,7 +7,10 @@
 
 /**
  * #2872 — the three customer portal pages the census missed, because they never call
- * `useApiQuery`.
+ * `useApiQuery`. (That sentence is now history, not state: #1328's census named putting
+ * them on the wrapper as its own task, that task landed, and the ratchet below pins the
+ * migrated form. Everything written here about the hand-written `queryFn` describes what
+ * these pages did when #2872 found them.)
  *
  * `app/portal/(protected)/tickets/page.tsx`, its `[id]` record and
  * `app/portal/(protected)/quotes/page.tsx` reach the server through `useQuery` from
@@ -73,7 +76,9 @@
  * contract those files already honoured — a genuine empty read still saying "No tickets yet" /
  * "No quotes yet" with no alert, and the record rendering a thread it answered — plus the guard,
  * baseline, size and overlap ratchets and the two pins of what this slice deliberately did not
- * touch (the mutation toasts, and staying off `useApiQuery`). They keep passing under the fix,
+ * touch (the mutation toasts, and staying off `useApiQuery` — the census on #1328 named that
+ * move as its own task, it has since landed, and the pin inverted rather than vanished). They
+ * keep passing under the fix,
  * which is the point: routing `failed` in place of the flag must not disturb what #2825 wrote.
  * With the three pages fixed: 32 passed. (The two never-answered cases fail at base for a
  * specific reason: #2825's outage copy told the customer to "reload the page to try again" and
@@ -397,8 +402,9 @@ describe('portal quotes list: an unanswered refresh does not certify the quote s
     // The write path silences the caveat: `setQueryData` is a `success` dispatch inside
     // react-query, so it clears the read's error along with its data. The screen goes back
     // to looking current while it still holds rows the refused refresh never confirmed —
-    // the one place on this page where #2872's shape survives the fix, and part of the
-    // `useApiQuery` migration this slice deliberately did not widen into.
+    // the one place on this page where #2872's shape survives the fix. It is orthogonal to
+    // the `useApiQuery` migration #1328 later took: the wrapper changes how the read is
+    // fetched and named, not how a write dispatch clears it.
     expect(alerts()).toBe('');
   });
 
@@ -625,22 +631,27 @@ describe('the ratchet this slice is measured by (#2872)', () => {
 
   it('names the reason the way the read can produce it, not the way a page guesses at it', () => {
     // The record used to throw `ApiQueryError('not found', …)` for every status, which is the
-    // sentence the bug then showed the customer. Its message is now the same one `apiFetcher`
-    // would have built; `status` is what the 404 branch reads.
+    // sentence the bug then showed the customer. Its message is now apiFetcher's own — the
+    // page cannot re-guess it — and `status` is what the 404 branch reads.
     const src = readFileSync(join(ROOT, DETAIL), 'utf8');
-    expect(src).toMatch(/throw new ApiQueryError\(`Request failed \(\$\{res\.status\}\)`, res\.status, info\)/);
+    expect(src, 'the detail read is back to hand-building its error').toMatch(/useApiQuery[\s\S]*`\/api\/public\/tickets\/\$\{ticketId\}`/);
     expect(src).not.toMatch(/new ApiQueryError\('not found'/);
+    const fetcher = readFileSync(join(ROOT, 'lib/query/client.tsx'), 'utf8');
+    expect(fetcher, 'apiFetcher no longer builds the status message the pages promise the customer')
+      .toMatch(/throw new ApiQueryError\(`Request failed \(\$\{res\.status\}\)`, res\.status, info\)/);
   });
 
-  it('stays off `useApiQuery`, so the migration is a separate decision on a customer surface', () => {
-    // Documented rather than quietly widened: these three bypass the helper, which is why the
-    // census missed them. Moving them onto it would change a public surface's fetch path and
-    // belongs in its own issue.
+  it('is on `useApiQuery` now — the migration this ratchet reserved for its own issue', () => {
+    // #2872 documented that these three bypassed the helper and that moving them belonged in
+    // its own task; #1328's census named that task, and #2946's parent took it. The ratchet
+    // inverts rather than disappears: a page drifting back to a hand-rolled fetch path would
+    // re-own the error message, which is exactly the regression the test above can no longer
+    // see from inside the page.
     for (const file of PAGES) {
       const src = readFileSync(join(ROOT, file), 'utf8');
-      expect(src, `${file} migrated after all — this slice did not mean to`).not.toMatch(/useApiQuery\(/);
-      expect(src).toMatch(/from '@tanstack\/react-query'/);
-      expect(src).toMatch(/ApiQueryError[\s\S]*from '@\/lib\/query\/client'/);
+      expect(src, `${file} fell off the shared fetch path`).toMatch(/useApiQuery[<(]/);
+      expect(src, `${file} re-owns error normalization`).not.toMatch(/\buseQuery\b/);
+      expect(src, `${file} re-owns error normalization`).not.toMatch(/import \{[^}]*ApiQueryError[^}]*\} from '@\/lib\/query\/client'/);
     }
   });
 

@@ -9,8 +9,8 @@ import { useRouter } from 'next/navigation';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ApiQueryError } from '@/lib/query/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession {
@@ -78,21 +78,14 @@ export default function PortalQuotesPage() {
   // refresh refused, and when it comes back absent the customer is sent to sign in
   // instead of being shown a list — so it is nothing the page asserts about quotes.
 
-  const { data, isLoading, error, refetch } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
-    queryKey: ['portal-quotes', session?.email],
-    enabled: !!session?.email,
-    queryFn: async () => {
-      // #1913: auth rides the httpOnly portal session cookie (same-origin
-      // fetch sends it automatically). Never send identity headers — the old
-      // x-portal-email header was spoofable and is no longer accepted.
-      const res = await fetch('/api/public/quotes');
-      if (!res.ok) {
-        const info = await res.json().catch(() => ({}));
-        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
-      }
-      return res.json();
-    },
-  });
+  // #1913: auth rides the httpOnly portal session cookie (apiFetcher's
+  // same-origin fetch sends it automatically). Never send identity headers —
+  // the old x-portal-email header was spoofable and is no longer accepted.
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: PortalQuote[] }>(
+    ['portal-quotes', session?.email],
+    '/api/public/quotes',
+    { enabled: !!session?.email },
+  );
   const quotes = data?.data ?? [];
   const loading = !session || isLoading;
 
