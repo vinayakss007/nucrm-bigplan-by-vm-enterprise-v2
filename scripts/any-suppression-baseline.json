@@ -104,7 +104,6 @@
   "tests/unit/soft-delete-residual-reads-2291.test.ts": 2,
   "tests/unit/stripe.test.ts": 4,
   "tests/unit/superadmin-search.test.ts": 7,
-  "tests/unit/tax-extended.test.ts": 23,
   "tests/unit/tax.test.ts": 10,
   "tests/unit/templates-sdk.test.ts": 1,
   "tests/unit/tenant-audit-api.test.ts": 1,
