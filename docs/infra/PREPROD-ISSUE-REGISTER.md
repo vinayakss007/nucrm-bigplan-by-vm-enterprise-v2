@@ -2933,7 +2933,7 @@ tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476
   `TENANT_TABLES` minus `PLATFORM_TABLES`. It fails on the pre-fix tree with the six names listed, and cannot
   be satisfied by deleting a table from the wipe alone without the export-side assertion noticing. The 15th
   pins the premise that makes the unfixed half safe — `TENANT_TABLES ⊆ TENANT_SCOPED_TABLES`, which needed
-  `backup-parser.ts:25` to become `export const`.
+  `lib/restore/backup-parser/tenant-tables.ts:18` to become `export const` (re-pinned 2026-10-21 from `backup-parser.ts:25`: the parser was split into a barrel which re-exports the set at `lib/restore/backup-parser.ts:37`).
 - **Deliberately not done — the other half of the divergence is an owner decision.** The two remaining
   one-way sets are: **9 names in `backup-parser.ts`'s `TENANT_SCOPED_TABLES` that the allowlist refuses**
   (`announcements`, `backup_schedules`, `critical_data_backups`, `restore_snapshots`, `selective_restore_logs`,
