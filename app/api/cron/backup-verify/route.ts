@@ -381,7 +381,7 @@ export async function POST(request: NextRequest) {
         `Backup ${backup.id} (${backup.backupType}, ${backup.completedAt?.toISOString()}) failed verification:\n\n` +
         failures.map((f) => `  - ${f}`).join('\n') +
         '\n\nAn unrestorable backup is not a backup. Investigate immediately.'
-      ).catch(() => { /* best-effort */ });
+      ).catch((err) => logError({ error: err, context: 'backup-verify:alert-resolve-best-effort' }));
     } else {
       // A passing restore is the evidence that closes the alert trail.
       await resolveVerifyAlerts();
