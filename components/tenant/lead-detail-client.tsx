@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/sanitize';
+import { clientLogError } from '@/lib/client-logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -145,7 +146,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
     fetch('/api/tenant/pipelines', { signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (signal.aborted) return; setPipelinesData(d.data ?? d.pipelines ?? d ?? []); })
-      .catch(() => {});
+      .catch((err) => clientLogError('lead:fetch-pipelines', err));
     return () => controller.abort();
   }, []);
 

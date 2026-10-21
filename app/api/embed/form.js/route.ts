@@ -44,7 +44,9 @@ const WIDGET_JS = `
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'view' })
-    }).catch(function() {});
+    }).catch(function(err) {
+      console.error('[NuCRM] Form analytics view tracking failed:', err);
+    });
   }
 
   function trackSubmit() {
@@ -52,7 +54,9 @@ const WIDGET_JS = `
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'submit' })
-    }).catch(function() {});
+    }).catch(function(err) {
+      console.error('[NuCRM] Form analytics submit tracking failed:', err);
+    });
   }
 
   function renderForm(def) {

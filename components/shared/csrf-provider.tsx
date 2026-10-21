@@ -5,6 +5,7 @@
  */
 'use client';
 import { useEffect } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 
 function getCsrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)nucrm_csrf_token=([^;]+)/);
@@ -55,9 +56,10 @@ export default function CsrfProvider() {
           }
           // Still no token - proceed without it
           return originalFetch(input, init);
-        }).catch(() => {
+        }).catch((err) => {
           // Recovery fetch failed - proceed without CSRF header and let the
           // request fail naturally at the proxy level if needed
+          clientLogError('csrf:recovery-fetch', err);
           return originalFetch(input, init);
         });
       }

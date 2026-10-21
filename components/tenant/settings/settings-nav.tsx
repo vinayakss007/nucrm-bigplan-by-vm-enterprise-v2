@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 import { SCOPES, visibleForRole } from './settings-config';
 
 /**
@@ -25,7 +26,7 @@ export default function SettingsNav() {
     fetch('/api/tenant/me', { signal: abort.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => { if (!abort.signal.aborted) setIsAdmin(d.is_admin ?? false); })
-      .catch(() => { /* Fallback to default on corrupted storage data */ });
+      .catch((err) => clientLogError('settings-nav:fetch-me', err));
 
     try {
       const q = sessionStorage.getItem('nucrm.settings.query');

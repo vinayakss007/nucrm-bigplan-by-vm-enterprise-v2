@@ -36,6 +36,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, hkdfSync } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
+import { logError } from '@/lib/errors-server';
 
 const ALGORITHM = 'aes-256-gcm' as const;
 const IV_LENGTH = 12; // 96 bits, recommended for GCM
@@ -205,7 +206,7 @@ export async function decryptBackupFile(encryptedPath: string, outputPath: strin
       return;
     } catch (err) {
       lastError = err;
-      await unlink(tempPath).catch(() => {});
+      await unlink(tempPath).catch((err) => void logError({ error: err, context: 'backups/encrypt:unlink-temp' }));
     }
   }
 

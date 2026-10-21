@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Register process-level error handlers for uncaught exceptions and
@@ -14,7 +15,7 @@ export function registerProcessErrorHandlers(context: string): void {
       message: err.message,
       stack: err.stack,
     });
-    sendCriticalErrorAlert({ error: err, level: 'fatal', context }).catch(() => {});
+    sendCriticalErrorAlert({ error: err, level: 'fatal', context }).catch((err) => void logError({ error: err, context: 'process-errors:alert-fatal' }));
     // Give logger + alert a moment to flush, then exit
     setTimeout(() => process.exit(1), 500);
   });
@@ -25,6 +26,6 @@ export function registerProcessErrorHandlers(context: string): void {
       message: err.message,
       stack: err.stack,
     });
-    sendCriticalErrorAlert({ error: err, level: 'error', context }).catch(() => {});
+    sendCriticalErrorAlert({ error: err, level: 'error', context }).catch((err) => void logError({ error: err, context: 'process-errors:alert-error' }));
   });
 }

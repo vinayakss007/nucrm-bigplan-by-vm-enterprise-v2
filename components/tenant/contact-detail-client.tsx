@@ -901,7 +901,7 @@ export default function ContactDetailClient({
                     fetch(`/api/tenant/calls?contact_id=${contact.id}`)
                       .then(r => r.json())
                       .then(d => setCallLogs(d.data || []))
-                      .catch(() => {});
+                      .catch((err) => clientLogError('contact:call-logs', err));
                   }}
                 />
               </div>

@@ -9,6 +9,7 @@ import path from 'path';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { streamLog } from '@/lib/log-stream';
 import { redactQueryParams, redactedErrorForSinks } from '@/lib/error-redaction';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Structured Logger (replaces console.log/error)
@@ -37,12 +38,12 @@ async function rotateLogs(): Promise<void> {
     if (!stats || stats.size < MAX_LOG_SIZE) return;
 
     const oldest = LOG_FILE + '.' + MAX_LOG_FILES;
-    await fs.promises.unlink(oldest).catch(() => {});
+    await fs.promises.unlink(oldest).catch((err) => void logError({ error: err, context: 'logger:rotate-unlink' }));
 
     for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
       const oldName = LOG_FILE + '.' + i;
       const newName = LOG_FILE + '.' + (i + 1);
-      await fs.promises.rename(oldName, newName).catch(() => {});
+      await fs.promises.rename(oldName, newName).catch((err) => void logError({ error: err, context: 'logger:rotate-rename' }));
     }
 
     await fs.promises.rename(LOG_FILE, LOG_FILE + '.1');
