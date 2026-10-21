@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
 import toast from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 const ENTITIES = [
   { id: 'contacts', label: 'Contacts', icon: '👤' },
@@ -107,11 +108,24 @@ function DataExplorerInner() {
   // inputs are part of the key so it refetches/caches per combination.
   const params = new URLSearchParams({ type: entityType, page: String(page), limit: '50', sort, order });
   if (query.trim()) params.set('q', query.trim());
-  const { data: results = null, isFetching: loading, error, refetch } = useApiQuery<SearchResult>(
+  const {
+    data: results = null, isLoading: loading, isFetching: refreshing, error, refetch,
+  } = useApiQuery<SearchResult>(
     ['tenant', 'data-explorer', { entityType, page, sort, order, q: query.trim() }],
     `/api/tenant/data-explorer?${params}`,
   );
-  useEffect(() => { if (error) toast.error('Search failed'); }, [error]);
+  // #2872: this table's own writes reload the read they just changed — the inline editor's PUT and
+  // the row DELETE each call `refetch()` on the exact key on screen, and the Search button is a
+  // `refetch()` as well — so the ordinary state one moment after editing a cell is "kept rows +
+  // refused revalidation". TanStack hands `results` back in that case and the page had no word for
+  // it: its whole channel was a `useEffect` toast reading "Search failed", four seconds of it over a
+  // table that went on saying whatever the kept payload happened to say, up to and including "No
+  // contacts found" for a read that never answered. The branch below also read `isFetching`, which is
+  // true for a background revalidation of rows the key already has — so every one of those reloads
+  // swapped the table for a spinner, and the refusal that followed had no rows left on screen to keep.
+  const failed = Boolean(error) && !results;    // never answered → outage
+  const stale = Boolean(error) && Boolean(results); // refused refresh → last-read caveat
+  const reason = error?.message || 'no response from the server';
   const handleSearch = () => refetch();
 
   useEffect(() => {
@@ -163,8 +177,13 @@ function DataExplorerInner() {
   };
 
   const exportToCSV = () => {
+    // #2872: `!results?.data.length` is the same question the table's empty sentence asks, and it
+    // has the same two answers — the last read counted nothing, or nothing was ever counted. The
+    // button only exists over rows, so the second is a defensive arm, but it must not report an
+    // unread table as an empty one. Exporting kept rows is the operator's call: the caveat above
+    // the table says which read they came from.
     if (!results?.data.length) {
-      toast.error('No data to export');
+      toast.error(failed ? `Cannot export — the ${entityType} table never loaded: ${reason}` : 'No data to export');
       return;
     }
 
@@ -238,10 +257,10 @@ function DataExplorerInner() {
         </div>
         <button
           onClick={() => handleSearch()}
-          disabled={loading}
+          disabled={refreshing}
           className="px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+          {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
           Search
         </button>
         {results && results.data.length > 0 && (
@@ -254,12 +273,21 @@ function DataExplorerInner() {
         )}
       </div>
 
-      {/* Results count */}
-      {results && (
+      {/* Results count. Only a read that never answered dashes it — a total the last read printed
+          is the operator's own number, refused refresh or not. */}
+      {(results || failed) && (
         <p className="text-xs text-muted-foreground">
-          {results.total} result{results.total !== 1 ? 's' : ''}
-          {results.total > results.limit && ` (showing page ${results.page} of ${Math.ceil(results.total / results.limit)})`}
+          {failed ? '— results' : `${results?.total ?? 0} result${results?.total === 1 ? '' : 's'}`}
+          {results && results.total > results.limit && ` (showing page ${results.page} of ${Math.ceil(results.total / results.limit)})`}
         </p>
+      )}
+
+      {/* Kept rows, refused refresh: the table stays and says what it may not show. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the ${entityType} table below is the last read: ${reason}. A cell you just edited or a row you just deleted is still shown the way it was, and Export CSV writes these rows.`}
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* Results table */}
@@ -267,6 +295,13 @@ function DataExplorerInner() {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : failed ? (
+          <div className="p-5">
+            <InlineErrorState
+              message={`Could not load ${entityType}: ${reason} — this is a failed request, not an empty table.`}
+              onRetry={() => void refetch()}
+            />
           </div>
         ) : !results || results.data.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
