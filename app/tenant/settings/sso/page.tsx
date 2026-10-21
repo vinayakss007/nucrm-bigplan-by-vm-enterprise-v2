@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface SSOProvider {
   id: string;
@@ -42,12 +43,38 @@ export default function SSOSettingsPage() {
 
   // #1328: load SSO providers via TanStack Query (was raw fetch + useEffect).
   // retry:false — the endpoint may 404 for tenants without SSO configured.
-  const { data, isLoading: loading } = useApiQuery<{ data?: SSOProvider[] }>(
+  const {
+    data,
+    isLoading: loading,
+    error: ssoError,
+    refetch: refetchSso,
+  } = useApiQuery<{ data?: SSOProvider[] }>(
     ['tenant', 'sso'],
     '/api/tenant/sso',
     { retry: false },
   );
   const providers: SSOProvider[] = data?.data ?? [];
+  // #2872: only `data` and `isLoading` were read off the hook, so a failed load looked
+  // exactly like a tenant that has no provider — and on this page that resemblance is
+  // load-bearing, because `providers.length` is what picks the verb of the page's single
+  // write (`isUpdate` below: PUT with `providers[0].id`, otherwise POST). The ordinary way
+  // into the refused-refresh state is this page's own Save: `saveMutation.onSuccess`
+  // invalidates `['tenant', 'sso']` — the exact key, and `retry: false` means the reload
+  // fails at once — so right after a successful save the operator is holding the rows the
+  // server just confirmed under an error flag nobody read.
+  //
+  // Over `failed` the form was never seeded (`providers[0]` does not exist) and the verb
+  // came out "create": POST inserts an unguarded second row (route.ts:138-144) while
+  // `lib/auth/sso.ts:73` and `:137` resolve a sign-in by provider id, so the tenant ends up
+  // with an active provider nobody configured and the real one left untouched. That is the
+  // #2922 shape — a save over an unseeded form is the data-loss path, so the outage names
+  // it and the submit is disabled until the read answers. Over `stale` the form holds the
+  // last read plus the operator's edits and the id it saves to is a provider the read
+  // really saw, so Save stays offered under the caveat.
+  const failed = Boolean(ssoError) && !data;
+  const stale = Boolean(ssoError) && Boolean(data);
+  const reason = ssoError?.message || 'no response from the server';
+  const isUpdate = providers.length > 0;
 
   // Seed the editable form once from the first existing provider.
   useEffect(() => {
@@ -105,7 +132,6 @@ export default function SSOSettingsPage() {
         isActive: true,
       };
 
-      const isUpdate = providers.length > 0;
       const method = isUpdate ? 'PUT' : 'POST';
       const body = isUpdate ? { ...payload, id: providers[0]!.id } : payload;
 
@@ -132,6 +158,10 @@ export default function SSOSettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // #2872: the disabled button is the visible gate; this is the same gate for a submit
+    // that reaches the handler another way, because POST over an unread read creates a
+    // second provider instead of updating the one on file.
+    if (failed) return;
     setMessage(null);
     saveMutation.mutate();
   }
@@ -147,7 +177,30 @@ export default function SSOSettingsPage() {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Configure SSO to allow team members to sign in with your identity provider.
         </p>
+        {/* #2872: whether this form updates or creates is derived from the read, so the page
+            says which one it is — and dashes it when nothing ever answered. */}
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {failed
+            ? 'Provider on file: — (this page could not read it)'
+            : providers.length === 0
+              ? 'No SSO provider configured yet — saving creates the first one.'
+              : `Provider on file: ${providers[0]!.name} — saving updates it`}
+        </p>
       </div>
+
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load your SSO configuration: ${reason}. This form cannot tell whether there is a provider to update, so saving is disabled until the read answers.`}
+          onRetry={refetchSso}
+        />
+      )}
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the provider below is the last read: ${reason}. A provider added or replaced since is not reflected here, and this form saves to the one named above.`}
+          onRetry={refetchSso}
+        />
+      )}
 
       {message && (
         <div className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
@@ -289,7 +342,7 @@ export default function SSOSettingsPage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || failed}
             className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save SSO Configuration'}
