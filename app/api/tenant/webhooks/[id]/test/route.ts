@@ -12,6 +12,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { safeFetch } from '@/lib/security/ssrf';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { webhookSignature } from '@/lib/webhooks';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) => {
@@ -93,7 +94,10 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         signal: AbortSignal.timeout(30_000),
       });
       statusCode = res.status;
-      responseBody = await res.text().catch(() => '');
+      responseBody = await res.text().catch((err) => {
+        void logError({ error: err, context: 'webhooks/test:read-response' });
+        return '';
+      });
       status = res.ok ? 'delivered' : 'failed';
     } catch (err: unknown) {
       errorMessage = err instanceof Error ? err.message : 'Unknown error';

@@ -10,6 +10,7 @@ import {
   Mail, MessageSquare, Phone, Calendar, Users, Brain, Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -107,7 +108,7 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
     fetch('/api/tenant/lead-warming/events', { signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (signal.aborted) return; setEvents(d.data ?? []); })
-      .catch(() => {});
+      .catch((err) => clientLogError('lead-warming:fetch-events', err));
     return () => controller.abort();
   }, []);
 

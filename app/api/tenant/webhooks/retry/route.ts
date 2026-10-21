@@ -173,7 +173,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ data: { delivery_id: deliveryId, status: 'delivered', response_status: responseStatus, retried_at: new Date().toISOString() } });
     }
 
-    const responseBody = await res.text().catch(() => '');
+    const responseBody = await res.text().catch((err) => {
+      void logError({ error: err, context: 'webhooks/retry:read-response' });
+      return '';
+    });
     const state = failureState();
     const saved = await finish({
       ...state,

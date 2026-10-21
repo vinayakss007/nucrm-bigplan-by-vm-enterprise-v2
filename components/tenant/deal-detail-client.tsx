@@ -14,6 +14,7 @@ import {
   FileText, Plus, MoreHorizontal, CheckCircle, Target
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 import DocumentsPanel from '@/components/documents/documents-panel';
 import DealRelatedPanel from '@/components/tenant/deal-related-panel';
 import DealTimeline from '@/components/tenant/deal-timeline';
@@ -132,7 +133,7 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           })));
         }
       })
-      .catch(() => { /* keep defaults */ });
+      .catch((err) => clientLogError('deal:fetch-stages', err));
     return () => controller.abort();
   }, []);
   const router = useRouter();
