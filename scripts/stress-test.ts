@@ -54,7 +54,7 @@ async function cleanup(tid: string) {
     { name: 'leads', table: schema.leads },
     { name: 'contacts', table: schema.contacts },
     { name: 'companies', table: schema.companies },
-    { name: 'tickets', table: schema.tickets },
+    { name: 'support_tickets', table: schema.supportTickets },
     { name: 'sequences', table: schema.sequences },
     { name: 'workflows', table: schema.workflows },
     { name: 'products', table: schema.products },
@@ -257,10 +257,14 @@ async function main() {
   }), refs);
 
   // ── Tickets ──
-  await insertRows('tickets', schema.tickets, () => ({
+  // `supportTickets` (#2944): this insert targeted the pre-rename `tickets`
+  // export, so it silently inserted nothing; `body` is NOT NULL with no
+  // default, so the old field set would still have been rejected.
+  await insertRows('support_tickets', schema.supportTickets, () => ({
     id: genId(),
     tenantId: refs.tenantId,
     subject: `Stress Ticket ${now}`,
+    body: `Stress ticket body ${now}`,
     status: 'open',
     priority: 'medium',
     createdBy: refs.userId,
