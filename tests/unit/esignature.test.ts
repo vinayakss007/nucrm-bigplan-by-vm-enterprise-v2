@@ -87,16 +87,11 @@ vi.mock('drizzle-orm', () => {
     { join: vi.fn((parts: unknown, sep: unknown) => [parts, sep]) },
   );
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    eq: vi.fn((...args: any[]) => ['eq', ...args]),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    and: vi.fn((...args: any[]) => ['and', ...args]),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    asc: vi.fn((...args: any[]) => ['asc', ...args]),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    desc: vi.fn((...args: any[]) => ['desc', ...args]),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    isNull: vi.fn((...args: any[]) => ['isNull', ...args]),
+    eq: vi.fn((...args: unknown[]) => ['eq', ...args]),
+    and: vi.fn((...args: unknown[]) => ['and', ...args]),
+    asc: vi.fn((...args: unknown[]) => ['asc', ...args]),
+    desc: vi.fn((...args: unknown[]) => ['desc', ...args]),
+    isNull: vi.fn((...args: unknown[]) => ['isNull', ...args]),
     sql: sqlMock,
   };
 });
@@ -140,8 +135,7 @@ describe('E-Signature - Provider Adapter Factory', () => {
 
   it('throws for unknown provider', async () => {
     const { getProviderAdapter } = await import('@/lib/esignature');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(() => getProviderAdapter('unknown' as any)).toThrow('Unsupported signing provider');
+    expect(() => getProviderAdapter('unknown' as never)).toThrow('Unsupported signing provider');
   });
 });
 
@@ -567,8 +561,7 @@ describe('E-Signature - getSigningStatus', () => {
   });
 
   it('returns signing request when found', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
       provider: 'internal', status: 'signed', externalId: 'ext-1',
       signers: [{ email: 'a@b.com', name: 'A' }], metadata: { key: 'val' },
@@ -583,8 +576,7 @@ describe('E-Signature - getSigningStatus', () => {
   });
 
   it('returns null when request not found', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue(null);
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue(null);
 
     const { getSigningStatus } = await import('@/lib/esignature');
     const result = await getSigningStatus('non-existent', 'tenant-1');
@@ -593,8 +585,7 @@ describe('E-Signature - getSigningStatus', () => {
   });
 
   it('handles null signers gracefully', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', documentId: 'doc-1',
       provider: 'internal', status: 'pending', externalId: null,
       signers: null, metadata: null,
@@ -615,8 +606,7 @@ describe('E-Signature - handleSigningWebhook', () => {
   });
 
   it('returns updated:false when request not found', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue(null);
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue(null);
 
     const { handleSigningWebhook } = await import('@/lib/esignature');
     const result = await handleSigningWebhook({
@@ -628,8 +618,7 @@ describe('E-Signature - handleSigningWebhook', () => {
   });
 
   it('updates status when request found and records event', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
 
@@ -645,8 +634,7 @@ describe('E-Signature - handleSigningWebhook', () => {
   });
 
   it('handles viewed webhook event', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
 
@@ -660,8 +648,7 @@ describe('E-Signature - handleSigningWebhook', () => {
   });
 
   it('handles declined webhook event', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.signingRequests.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.signingRequests.findFirst).mockResolvedValue({
       id: 'req-1', tenantId: 'tenant-1', status: 'sent',
     });
 
