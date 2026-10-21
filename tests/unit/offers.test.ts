@@ -8,14 +8,12 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
       quotes: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        findFirst: (...args: any[]) => mockDbQueryFindFirst(...args),
+        findFirst: (...args: unknown[]) => mockDbQueryFindFirst(...args),
       },
     },
     update: vi.fn(() => ({
       set: vi.fn(() => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        where: (...args: any[]) => mockDbWhereFn(...args),
+        where: (...args: unknown[]) => mockDbWhereFn(...args),
       })),
     })),
   },
@@ -26,14 +24,10 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: (a: any, b: any) => ({ op: 'eq', a, b }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: (...args: any[]) => ({ op: 'and', args }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sql: (strings: TemplateStringsArray, ...values: any[]) => ({ sql: strings.join('?'), values }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  isNull: (a: any) => ({ op: 'isNull', a }),
+  eq: (a: unknown, b: unknown) => ({ op: 'eq', a, b }),
+  and: (...args: unknown[]) => ({ op: 'and', args }),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values }),
+  isNull: (a: unknown) => ({ op: 'isNull', a }),
 }));
 
 beforeEach(() => {
@@ -140,8 +134,7 @@ describe('canTransition', () => {
   });
 
   it('returns false for unknown target status', () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(canTransition('draft', 'unknown' as any)).toBe(false);
+    expect(canTransition('draft', 'unknown' as never)).toBe(false);
   });
 
   it('disallows draft -> accepted', () => {

@@ -29,30 +29,24 @@ vi.mock('drizzle-orm', () => ({
 
 import { db } from '@/drizzle/db';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockSelect(returnValue: any) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.select as any).mockReturnValue({
+function mockSelect(returnValue: unknown) {
+  vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => returnValue),
     })),
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockInsert(returnValue: any) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.insert as any).mockReturnValue({
+function mockInsert(returnValue: unknown) {
+  vi.mocked(db.insert).mockReturnValue({
     values: vi.fn(() => ({
       returning: vi.fn(() => [returnValue]),
     })),
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockUpdate(returnValue: any) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.update as any).mockReturnValue({
+function mockUpdate(returnValue: unknown) {
+  vi.mocked(db.update).mockReturnValue({
     set: vi.fn(() => ({
       where: vi.fn(() => returnValue),
     })),
@@ -248,8 +242,7 @@ describe('resolveOwner', () => {
 
   it('looks up owner from assignments table when no direct assignedTo', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [
@@ -273,8 +266,7 @@ describe('resolveOwner', () => {
 
   it('returns null when no owner assignment found', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [
