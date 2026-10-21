@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Save, User, Lock, Loader2, Eye, EyeOff, Bell, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 const TIMEZONES = ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 
@@ -31,10 +32,23 @@ export default function ProfileSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: load current user via TanStack Query (was raw fetch + useEffect).
-  const { data } = useApiQuery<{ user?: UserProfile }>(['tenant', 'me'], '/api/tenant/me');
+  // #2872: `error` and `refetch` are bound now, because this page had only one arm
+  // for two opposite questions — its `!user` early return treated a read that
+  // never answered as a read still in flight, so an outage left the operator
+  // staring at a skeleton forever (the skeleton never resolves: nothing retries it).
+  const { data, isLoading: loading, error: meError, refetch } = useApiQuery<{ user?: UserProfile }>(['tenant', 'me'], '/api/tenant/me');
   const fetchedUser = data?.user ?? null;
   // Merge local edits saved via the profile mutation on top of the fetched user.
   const user: UserProfile | null = fetchedUser ? { ...fetchedUser, ...userOverride } : userOverride;
+
+  // A read here has three states, not two. TanStack Query keeps `data` straight
+  // through a refused revalidation (`lib/query/client.tsx`), so `meError` alone
+  // cannot tell "never answered" from "the last read, refresh refused" — and the
+  // second is the ordinary one, since `onSuccess` of the profile write does not
+  // invalidate this key and any later mount past `staleTime` revalidates it.
+  const failed = Boolean(meError) && !data;
+  const stale = Boolean(meError) && Boolean(data);
+  const reason = meError?.message || 'no response from the server';
 
   // Seed the editable form once the user is loaded.
   useEffect(() => {
@@ -83,14 +97,45 @@ export default function ProfileSettingsPage() {
     savePasswordMutation.mutate();
   };
 
-  if(!user) return <div className="animate-pulse space-y-4"><div className="h-8 w-40 bg-muted rounded"/><div className="admin-card h-48"/></div>;
+  // The skeleton is now only a skeleton while the read is genuinely in flight; a
+  // read that never came back is an outage, and an outage says so.
+  if (loading && !data) return <div className="animate-pulse space-y-4"><div className="h-8 w-40 bg-muted rounded"/><div className="admin-card h-48"/></div>;
 
   return (
     <div className="space-y-5 animate-fade-in">
       <h1 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5"/>My Profile</h1>
 
+      {/* #2872: the refused refresh sits ABOVE the identity block and the form it
+          did not replace. Rule #1 is why the Save button is not disabled here:
+          PATCH /api/user/profile addresses only `ctx.userId` (route.ts:82-85) — the
+          record it writes is this operator's own row, not one chosen off the screen —
+          and it does compare versions, but only when the body carries one
+          (`expectedUpdatedAt`, route.ts:75-79) and this page sends none. So the write
+          is blind to what changed since the read, and the banner has to say that out
+          loud rather than silently refusing the edit the operator came for. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh your profile, so the email address and the form below are the last read: ${reason}. Save sends what this form holds back over your stored phone, timezone and avatar, and nothing on the server compares versions, because this page never sends a stamp to check against.`}
+          onRetry={refetch}
+        />
+      )}
+
       {/* Profile */}
+      {failed ? (
+        // Nothing derived from the read renders in this arm. The editor is withheld
+        // rather than shown empty: a blank name, an empty phone and the `UTC` default
+        // are not this operator's details, and saving them would write them over the
+        // ones the server holds — the outage must not drive the irreversible action.
+        <InlineErrorState
+          message={`Failed to load your profile: ${reason}. The editor is not offered here because there is nothing to put in it — an empty name, phone and timezone are not your details, and saving them would replace the ones on record.`}
+          onRetry={refetch}
+        />
+      ) : (
       <form onSubmit={saveProfile} className="admin-card p-5 space-y-4">
+        {/* The identity block is the account the read answered with; `user` is only ever null on
+            the arm this form does not render on, so it is guarded rather than assumed — a missing
+            email would otherwise print the verification line as a fact about no account. */}
+        {user && (
         <div className="flex items-center gap-4 pb-3 border-b border-border">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-xl font-bold">
             {profile.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase()}
@@ -101,6 +146,7 @@ export default function ProfileSettingsPage() {
             </p>
           </div>
         </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><label className="block text-xs font-medium text-muted-foreground mb-1">Full Name</label><input value={profile.full_name} onChange={e=>setProfile(p=>({...p,full_name:e.target.value}))} required className={inp}/></div>
           <div><label className="block text-xs font-medium text-muted-foreground mb-1">Phone</label><input value={profile.phone} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))} className={inp} placeholder="+1 555 0100"/></div>
@@ -114,6 +160,7 @@ export default function ProfileSettingsPage() {
           {saving==='profile'?<Loader2 className="w-4 h-4 animate-spin"/>:<Save className="w-4 h-4"/>}{saving==='profile'?'Saving...':'Save Profile'}
         </button>
       </form>
+      )}
 
       {/* Password */}
       <form onSubmit={savePassword} className="admin-card p-5 space-y-4">
