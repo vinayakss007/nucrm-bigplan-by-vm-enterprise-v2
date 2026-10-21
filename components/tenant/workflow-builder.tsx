@@ -463,11 +463,11 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // #2806 (a): for an event trigger the run/test payload takes the
-          // entity from the pair, not from splitting the kind. Non-event kinds
-          // have no entity, so the kind itself names the probe.
+          // #2806 (a): for an event trigger the test payload names the entity
+          // from the stored pair; other kinds name the kind itself. No entity
+          // id is sent until the builder grows a picker — the /test route
+          // treats the entity as optional and runs the graph empty.
           trigger_entity_type: triggerType === 'event' ? triggerEvent.split('.')[0] : triggerType,
-          trigger_entity_id: '', // Will be filled in by user in a modal
         }),
       })
       const data = await res.json()

@@ -222,43 +222,9 @@ export const DELETE = withApiRoute(async (request: NextRequest,
   }
 });
 
-/**
- * POST /api/tenant/workflows/[id]/test
- * Test workflow execution
- */
-export const POST = withApiRoute(async (request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }) => {
-  try {
-    const ctx = await requireAuth(request);
-    if (ctx instanceof NextResponse) return ctx;
-    if (!can(ctx, 'automations.manage')) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
-    }
-    const { id } = await params;
-
-    const body = await readJsonBody(request);
-    const { trigger_entity_type, trigger_entity_id } = body;
-
-    if (!trigger_entity_type || !trigger_entity_id) {
-      return NextResponse.json({ 
-        error: 'trigger_entity_type and trigger_entity_id are required' 
-      }, { status: 400 });
-    }
-
-    // Execute workflow using SQL function
-    const result = await db.execute(
-      sql`SELECT public.execute_workflow(${id}, ${trigger_entity_type}, ${trigger_entity_id}) as execution_id`
-    );
-
-    return NextResponse.json({
-      ok: true,
-      execution_id: (result.rows[0] as Record<string, unknown>)?.execution_id as string,
-      message: 'Workflow test started',
-    });
- 
- 
-  } catch (error) {
-    await logError({ error: error, context: 'Workflow Test POST error', requestMethod: 'POST' });
-    return apiError(error);
-  }
-});
+// #2806 — this file used to also export a POST whose comment claimed the path
+// `POST /api/tenant/workflows/[id]/test`. Next.js serves this file at
+// `/workflows/:id`, so the Test button's `/workflows/:id/test` request had no
+// handler at all (a straight 404) while a `POST /workflows/:id` nobody calls
+// silently existed. The handler moved to `test/route.ts`, where the path and
+// the comment finally agree, and runs the same engine as `run/route.ts`.
