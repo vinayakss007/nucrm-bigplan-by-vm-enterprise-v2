@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
 const PLANS = ['free','starter','pro','enterprise'];
@@ -51,8 +52,22 @@ export default function SuperAdminSettingsPage() {
   const [testResult, setTestResult] = useState<'ok'|'fail'|null>(null);
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data, isLoading } = useApiQuery<{ data?: Record<string, unknown> }>(['superadmin', 'settings'], '/api/superadmin/settings');
+  const { data, isLoading, error: settingsError, refetch } = useApiQuery<{ data?: Record<string, unknown> }>(['superadmin', 'settings'], '/api/superadmin/settings');
   const loading = isLoading;
+
+  // #2872: `settingsError` alone cannot tell "this read never answered" from "it answered and
+  // this refresh was refused", and TanStack Query keeps `data` clean through the second one
+  // (lib/query/client.tsx:47-58 — `staleTime: 30_000`, `refetchOnWindowFocus: false`, and
+  // `refetchOnReconnect` left at its default). Nothing in the app invalidates
+  // `['superadmin','settings']` and `save()` posts with a bare fetch, so the refused
+  // revalidation here is not the operator's own action: it is the browser coming back online,
+  // and the remount refetch that every later visit to Settings runs against the warm cache —
+  // including the visit straight after a save, which this page never re-reads on purpose.
+  // Either way the form below kept values the page could no longer confirm.
+  // `failed` is a configuration that was never read; `stale` is the last read, still in hand.
+  const failed = Boolean(settingsError) && !data;
+  const stale = Boolean(settingsError) && Boolean(data);
+  const reason = settingsError?.message || 'no response from the server';
 
   // Seed the editable form once settings load.
   useEffect(() => {
@@ -75,10 +90,30 @@ export default function SuperAdminSettingsPage() {
   const bool = (k: string) => s[k]==='true';
 
   const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    // #2872: the audit below is why this returns — over a read that never answered the payload
+    // would be this component's own defaults, and nothing on the server can refuse them.
+    if (failed) return;
+    setSaving(true);
     // #1095: send non-secret settings, plus only the secret fields the admin
     // actually typed (non-empty). Blank secret inputs are omitted so we never
     // overwrite with a redacted/empty value.
+    // #2872 / epic rule #1 — which write survives which read, measured against
+    // app/api/superadmin/settings/route.ts: POST (:124-192) takes the body as a free-form
+    // record (platformSettingsSchema, lib/api/schemas/superadmin.ts:127-130 — no
+    // `expectedUpdatedAt` field exists), then upserts EVERY allowed key it is given
+    // (:141-165) with `set: { value: EXCLUDED.value }`. `concurrencyGuard`
+    // (lib/api/concurrency.ts:39-70) is not imported there and passes even when it is,
+    // so nothing on the server can refuse the collision — exactly the #2922 rate-limits
+    // shape. Over a read that never answered, `seeded` is false and the payload is this
+    // component's own `useState` defaults: `support_email`, `app_url`, `smtp_host`,
+    // `smtp_user`, `smtp_from`, `backup_bucket`, `stripe_publishable_key` as '' and
+    // `maintenance_mode`/`allow_signups`/`default_plan`/`max_free_tenants` as the
+    // literals above — i.e. an outage would write empty strings and safe defaults over
+    // the live platform configuration with no precondition to stop it. So `save` is
+    // blocked on `failed`. Over `stale` the form holds the last read plus the operator's
+    // own edits, and blocking it would make the page unable to do the one thing it is
+    // for; the banner says what the next save costs instead.
     const typedSecrets = Object.fromEntries(
       Object.entries(secrets).filter(([, val]) => typeof val === 'string' && val.trim() !== '')
     );
@@ -146,6 +181,9 @@ export default function SuperAdminSettingsPage() {
     );
   };
 
+  // #2872: `isLoading` is true only until this read answers for the first time, so it can
+  // never stand in for either arm below — a refused refresh leaves it false with the last
+  // read still filling the form. The sentence stays about the wait.
   if(loading) return <div className="flex items-center gap-3 text-white/40 p-4"><Loader2 className="w-4 h-4 animate-spin"/>Loading settings...</div>;
 
   return (
@@ -154,6 +192,20 @@ export default function SuperAdminSettingsPage() {
         <h1 className="text-lg font-bold text-white flex items-center gap-2"><Settings className="w-5 h-5 text-violet-400"/>Platform Settings</h1>
         <p className="text-xs text-white/40">All settings persist to the database and take effect immediately</p>
       </div>
+
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load the platform settings: ${reason}. Every value in this form is the page's own default, not a setting the server reported.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the platform settings, so this form is the last read: ${reason}. Another admin's change since then is not in it, and saving now writes every field below over whatever the server holds.`}
+          onRetry={() => void refetch()}
+        />
+      )}
 
       {bool('maintenance_mode')&&(
         <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -282,7 +334,7 @@ export default function SuperAdminSettingsPage() {
           </div>
         </Sec>
 
-        <button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+        <button type="submit" disabled={saving || failed} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
           {saving?<Loader2 className="w-4 h-4 animate-spin"/>:<Save className="w-4 h-4"/>}
           {saving?'Saving...':'Save All Settings'}
         </button>
