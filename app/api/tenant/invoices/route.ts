@@ -48,6 +48,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const offset = (page - 1) * limit;
     const results = await db.select().from(invoices).where(and(...whereConditions)).orderBy(desc(invoices.createdAt)).limit(limit).offset(offset);
 
+    // #2973: node-postgres returns Postgres `decimal` columns as strings, so
+    // taxRate arrived in the API response as "5.00" instead of 5. Coerce it to
+    // a number so clients receive a numeric value.
+    const normalized = results.map(r => ({ ...r, taxRate: money(r.taxRate) }));
+
     // Count must apply the SAME filters as the results query, otherwise
     // pagination totals are wrong whenever a status/contactId filter is set.
     const [countResult] = await db.select({ count: count() }).from(invoices).where(and(...whereConditions));
@@ -57,7 +62,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // The frontend and SDK read `data`; returning `invoices` here left the
     // invoices page permanently empty.
     return NextResponse.json({
-      data: results,
+      data: normalized,
       total,
       page,
       limit,
