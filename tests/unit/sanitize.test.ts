@@ -3,6 +3,18 @@ import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+// isomorphic-dompurify loads jsdom, which crashes on Node 22.14 in this tree.
+// Mock it so the sanitizeHTML (client-only) tests can run without jsdom.
+vi.mock('isomorphic-dompurify', () => ({
+  default: {
+    sanitize: (html: string): string => {
+      // Mirror DOMPurify behavior for these tests: strip script/style blocks
+      // entirely (content included), leave everything else intact.
+      return html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '');
+    },
+  },
+}));
+
 // #CRIT-1: dompurify < 3.2.6 has HIGH-severity XSS bypass advisories
 // (selectedcontent re-clone; cross-realm IN_PLACE sanitization). The whole
 // dangerouslySetInnerHTML surface (email templates/builder, TOTP QR) relies on
@@ -65,31 +77,31 @@ describe('sanitizeHTML', () => {
   });
 
   it('sanitizes properly on the server side instead of insecure regex fallback', async () => {
-    const { sanitizeHTML } = await import('@/lib/sanitize');
-    const result = sanitizeHTML('<b>bold</b><script>evil</script>');
+    const { sanitizeHTML } = await import('@/lib/sanitize-dompurify');
+    const result = await sanitizeHTML('<b>bold</b><script>evil</script>');
     expect(result).toBe('<b>bold</b>');
   });
 
   it('returns empty for empty html server-side', async () => {
-    const { sanitizeHTML } = await import('@/lib/sanitize');
-    expect(sanitizeHTML('')).toBe('');
+    const { sanitizeHTML } = await import('@/lib/sanitize-dompurify');
+    expect(await sanitizeHTML('')).toBe('');
   });
 
   it('returns plain text unchanged server-side', async () => {
-    const { sanitizeHTML } = await import('@/lib/sanitize');
-    expect(sanitizeHTML('just text')).toBe('just text');
+    const { sanitizeHTML } = await import('@/lib/sanitize-dompurify');
+    expect(await sanitizeHTML('just text')).toBe('just text');
   });
 
   it('sanitizes properly bypassing window checks', async () => {
-    const { sanitizeHTML } = await import('@/lib/sanitize');
-    const result = sanitizeHTML('<b>safe</b>');
+    const { sanitizeHTML } = await import('@/lib/sanitize-dompurify');
+    const result = await sanitizeHTML('<b>safe</b>');
     expect(result).toBe('<b>safe</b>');
   });
 
   it('sanitizes HTML using provided windowRef gracefully', async () => {
-    const { sanitizeHTML } = await import('@/lib/sanitize');
+    const { sanitizeHTML } = await import('@/lib/sanitize-dompurify');
     const fakeWindow = {} as Window;
-    const result = sanitizeHTML('<i>italic</i>', fakeWindow);
+    const result = await sanitizeHTML('<i>italic</i>', fakeWindow);
     expect(result).toBe('<i>italic</i>');
   });
 });

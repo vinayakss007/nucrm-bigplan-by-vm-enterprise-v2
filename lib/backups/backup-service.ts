@@ -185,8 +185,8 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
     throw new Error('Invalid backup type');
   }
 
-  const resolvedOutputPath = path.resolve(outputPath);
-  const localDir = path.resolve(process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
+  const resolvedOutputPath = path.resolve(/*turbopackIgnore: true*/ outputPath);
+  const localDir = path.resolve(/*turbopackIgnore: true*/ process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
   if (!resolvedOutputPath.startsWith('/tmp/') && !resolvedOutputPath.startsWith(localDir)) {
     throw new Error('Invalid output path');
   }
