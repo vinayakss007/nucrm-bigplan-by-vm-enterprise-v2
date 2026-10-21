@@ -87,8 +87,7 @@ describe('GET /api/superadmin/search', () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const tenantChain = makeChain([]);
     const userChain = makeChain([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
+    vi.mocked(db.select).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
     const res = await GET(makeRequest('ab'));
     expect(res.status).toBe(200);
     expect(tenantChain.from).toHaveBeenCalled();
@@ -99,8 +98,7 @@ describe('GET /api/superadmin/search', () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const tenantRows = [{ id: 't1', name: 'Acme', email: 'a@acme.com', status: 'active', type: 'tenant' }];
     const userRows = [{ id: 'u1', name: 'Jane Doe', email: 'jane@example.com', type: 'user' }];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockImplementationOnce(() => makeChain(tenantRows))
       .mockImplementationOnce(() => makeChain(userRows));
     const res = await GET(makeRequest('acme'));
@@ -114,8 +112,7 @@ describe('GET /api/superadmin/search', () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const tenantChain = makeChain([]);
     const userChain = makeChain([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
+    vi.mocked(db.select).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
     await GET(makeRequest('test'));
     expect(tenantChain.limit).toHaveBeenCalledWith(10);
     expect(userChain.limit).toHaveBeenCalledWith(10);
@@ -125,8 +122,7 @@ describe('GET /api/superadmin/search', () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const tenantChain = makeChain([]);
     const userChain = makeChain([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
+    vi.mocked(db.select).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
     await GET(makeRequest('test', '&limit=100'));
     expect(tenantChain.limit).toHaveBeenCalledWith(25);
     expect(userChain.limit).toHaveBeenCalledWith(25);
@@ -135,8 +131,7 @@ describe('GET /api/superadmin/search', () => {
   it('propagates DB errors as 500 instead of silently returning empty', async () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const dbError = new Error('connection refused');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockImplementation(() => { throw dbError; });
+    vi.mocked(db.select).mockImplementation(() => { throw dbError; });
     const res = await GET(makeRequest('test query'));
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -146,15 +141,13 @@ describe('GET /api/superadmin/search', () => {
   it('propagates a 500 when only the user query fails (regression for removed .catch)', async () => {
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
     const tenantChain = makeChain([{ id: 't1', name: 'Acme', email: 'a@acme.com', status: 'active', type: 'tenant' }]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userChain: any = {
+    const userChain: QueryChain = {
       from: vi.fn(() => userChain),
       where: vi.fn(() => userChain),
       orderBy: vi.fn(() => userChain),
       limit: vi.fn(() => Promise.reject(new Error('user query failed'))),
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
+    vi.mocked(db.select).mockImplementationOnce(() => tenantChain).mockImplementationOnce(() => userChain);
     const res = await GET(makeRequest('test query'));
     expect(res.status).toBe(500);
     const body = await res.json();
