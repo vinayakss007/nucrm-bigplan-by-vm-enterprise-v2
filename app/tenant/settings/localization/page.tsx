@@ -59,12 +59,29 @@ export default function LocalizationPage() {
     ['tenant', 'admin', 'localization'],
     '/api/tenant/admin/localization',
   );
-  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+  const { data: meData, isLoading: meLoading, error: meError, refetch: refetchMe } = useApiQuery<{ is_admin?: boolean }>(
     ['tenant', 'me'],
     '/api/tenant/me',
   );
   const loading = locLoading || meLoading;
   const isAdmin = meData?.is_admin ?? true;
+
+  // #2872: neither read could tell "never answered" from "answered, then this refresh was
+  // refused", and both states are reachable on this page's own terms. Nothing invalidates
+  // ['tenant','admin','localization'] or ['tenant','me'] — not `saveMutation`, which only
+  // re-seeds `original` locally, nor any other page — but the payload lives in the cache
+  // for gcTime and `staleTime: 30_000` makes the next mount revalidate it (the Settings
+  // sidebar is exactly that walk), and `refetchOnReconnect` is not disabled in
+  // lib/query/client.tsx. So `if (locError)` threw the form away over a timezone, weekend
+  // and holiday list the page was still holding, and `meError` was never bound at all: an
+  // unread permission read fell through `?? true` and handed the Save bar to someone the
+  // route would have refused (route.ts:86 answers 403).
+  const locFailed = Boolean(locError) && !locData;
+  const locStale = Boolean(locError) && Boolean(locData);
+  const locReason = locError?.message || 'no response from the server';
+  const meFailed = Boolean(meError) && !meData;
+  const meStale = Boolean(meError) && Boolean(meData);
+  const meReason = meError?.message || 'no response from the server';
 
   useEffect(() => {
     if (locData && original === null) {
@@ -120,17 +137,28 @@ export default function LocalizationPage() {
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
   const saving = saveMutation.isPending;
-  const save = () => saveMutation.mutate();
+  // #2872: PATCH /api/tenant/admin/localization (route.ts:141-158) rebuilds `safe` from
+  // everything the body carries and this page sends the whole `loc` — timezone, currency,
+  // fiscal year, week start, weekend, business hours, number format and the holiday array
+  // replaced wholesale. Its concurrency guard (route.ts:160) passes whenever the body has
+  // no `expectedUpdatedAt`, and the payload has none, so the server cannot refuse the
+  // collision and the only gate left is whether the page knows who is writing.
+  const save = () => {
+    if (meFailed) return;
+    saveMutation.mutate();
+  };
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
-  // The editable copy below is seeded from DEFAULTS until the read lands, so a refused read
-  // renders "UTC, USD, weekend Sat-Sun, no holidays" as if that were the tenant's answer —
-  // and the first edit arms Save to write it back (#2829). Read it or don't show it.
-  if (locError) return (
+  // The editable copy below is seeded from DEFAULTS until the read lands, so a read that
+  // never answered renders "UTC, USD, weekend Sat-Sun, no holidays" as if that were the
+  // tenant's answer — and the first edit arms Save to write it back (#2829). Read it or
+  // don't show it; #2872 moves this off the bare flag, because a refused refresh of a read
+  // that already answered keeps `locData` and belongs under the caveat below, not here.
+  if (locFailed) return (
     <div className="flex items-center justify-center h-48 px-4">
       <InlineErrorState
-        message={`Failed to load your localization settings: ${locError.message || 'no response from the server'}`}
+        message={`Failed to load your localization settings: ${locReason}`}
         onRetry={refetchLoc}
       />
     </div>
@@ -154,6 +182,25 @@ export default function LocalizationPage() {
           Workspace-wide defaults for time, money, and the working calendar. Individual users may override their own preferences.
         </p>
       </div>
+
+      {locStale && (
+        <InlineErrorState
+          message={`Could not refresh your localization settings, so every value on this page and the holiday count below are the last read: ${locReason}. Saving now writes that last read plus your edits over whatever the server holds — a holiday, weekend or timezone another admin set since is gone.`}
+          onRetry={refetchLoc}
+        />
+      )}
+      {meFailed && (
+        <InlineErrorState
+          message={`Failed to check whether you may edit these settings: ${meReason}. Save is closed until that read answers — the localization itself did come back and is shown below.`}
+          onRetry={refetchMe}
+        />
+      )}
+      {meStale && (
+        <InlineErrorState
+          message={`Could not refresh whether you may edit these settings, so the permission this form is acting on is the last read: ${meReason}. A role taken away since is not reflected here.`}
+          onRetry={refetchMe}
+        />
+      )}
 
       <Section icon={Clock} title="Time & date">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -295,7 +342,7 @@ export default function LocalizationPage() {
           className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>
-        <button onClick={save} disabled={saving || !dirty}
+        <button onClick={save} disabled={saving || !dirty || meFailed}
           className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving…' : 'Save localization'}

@@ -12,6 +12,7 @@ import { Save, Globe, Palette, Download, Loader2,
   Link2, CheckCircle, AlertTriangle, Copy, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 // Accessible switch row (matches the pattern used on the Preferences page).
 function ToggleRow({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -61,10 +62,25 @@ export default function TenantGeneralSettings() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: load workspace via TanStack Query (was raw fetch + useEffect).
-  const { data } = useApiQuery<{ data?: WorkspaceData }>(['tenant', 'workspace'], '/api/tenant/workspace');
+  const { data, error, refetch } = useApiQuery<{ data?: WorkspaceData }>(['tenant', 'workspace'], '/api/tenant/workspace');
   const fetchedTenant = data?.data ?? null;
   // Merge locally-saved values (from the save mutation) over the fetched data.
   const tenant: WorkspaceData | null = fetchedTenant ? { ...fetchedTenant, ...tenantOverride } : tenantOverride;
+
+  // #2872: `error` was never bound here, so the read had no channel at all — a workspace
+  // this page has never seen rendered as this form's own initial values, with a live Save
+  // button. The refused refresh is what this page reaches by walking, not by writing:
+  // nothing invalidates ['tenant','workspace'] — not this page's save (which only sets
+  // `tenantOverride`) nor the three other readers of that key (`settings/admin`,
+  // `settings/billing`, `settings/billing/subscription`) — but the payload survives in the
+  // cache for gcTime and `staleTime: 30_000` makes the next mount revalidate it, and
+  // `refetchOnReconnect` (not disabled in lib/query/client.tsx) re-fires it when the
+  // browser comes back. When either reload fails, TanStack hands the page its previous
+  // `data` with `error` set; the bare flag called that the same as a read that never
+  // answered. `failed` is a workspace this session has never seen; `stale` is the last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Seed the editable form once the workspace loads.
   useEffect(() => {
@@ -105,6 +121,13 @@ export default function TenantGeneralSettings() {
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
+    // #2872: PATCH /api/tenant/workspace (route.ts:145-167) writes every field the body
+    // carries — name, primary_color, industry, subdomain, custom_domain, and a shallow
+    // merge of `settings` over the stored jsonb — and this payload sends all of them, so a
+    // form nothing seeded writes its blanks and its UTC/USD over the real workspace. The
+    // route's concurrency guard (route.ts:175) only engages on an `expectedUpdatedAt` the
+    // page never sends, so nothing on the server stops it: the outage gate is the gate.
+    if (failed) return;
     saveMutation.mutate();
   };
 
@@ -131,6 +154,19 @@ export default function TenantGeneralSettings() {
   return (
     <div className="space-y-5 animate-fade-in">
       <h1 className="text-lg font-bold">Workspace Settings</h1>
+
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load your workspace settings: ${reason}. Every field in this form is its own blank, not your workspace's answer — and Save is closed, because saving now would write those blanks over your name, subdomain, custom domain, brand colour and the timezone and currency deals and invoices are priced in.`}
+          onRetry={refetch}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh your workspace settings, so this form holds the last read: ${reason}. Saving now writes that last read plus your edits over anything changed since — a renamed workspace, an edited subdomain, a custom domain added or removed, a new timezone, currency or auto-invoice setting.`}
+          onRetry={refetch}
+        />
+      )}
 
       <form onSubmit={save} className="space-y-5">
         {/* Branding */}
@@ -277,7 +313,9 @@ export default function TenantGeneralSettings() {
               placeholder="crm.yourcompany.com"
               disabled={tenant?.plan_id !== 'enterprise'}
             />
-            {tenant?.plan_id !== 'enterprise' && (
+            {/* #2872: `plan_id` comes off the same read, so an unread workspace may well be
+                on Enterprise — this sentence is a fact about the tenant's subscription. */}
+            {!failed && tenant?.plan_id !== 'enterprise' && (
               <p className="text-xs text-muted-foreground mt-1">Custom domains require the Enterprise plan. <a href="/tenant/settings/billing" className="text-violet-600 hover:underline">Upgrade →</a></p>
             )}
             {form.custom_domain && tenant?.plan_id==='enterprise' && (
@@ -302,7 +340,7 @@ export default function TenantGeneralSettings() {
           />
         </div>
 
-        <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+        <button type="submit" disabled={saving || failed} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
