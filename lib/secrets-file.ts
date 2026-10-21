@@ -34,10 +34,10 @@ function fileToEnvName(fileName: string): string {
  */
 export function materializeFileSecrets(): string[] {
   const dir = secretsDir();
-  if (!existsSync(dir)) return [];
+  if (!existsSync(/*turbopackIgnore: true*/ dir)) return [];
 
   const applied: string[] = [];
-  for (const entry of readdirSync(dir)) {
+  for (const entry of readdirSync(/*turbopackIgnore: true*/ dir)) {
     const filePath = `${dir}/${entry}`;
     let content: string;
     try {
