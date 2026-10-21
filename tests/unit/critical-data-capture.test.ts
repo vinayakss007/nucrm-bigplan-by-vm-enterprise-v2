@@ -6,51 +6,47 @@ const mockFindMany = vi.fn().mockResolvedValue([]);
 const mockFindFirst = vi.fn();
 const mockTxExecute = vi.fn();
 const _mockTxUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockResolvedValue(undefined) });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockTransaction = vi.fn((cb: (tx: any) => any) => {
-  const mockTx = {
+
+/** The transaction handle the mock hands to db.transaction callbacks. */
+type MockTx = {
+  query: { criticalDataBackups: { findFirst: typeof mockFindFirst } };
+  execute: typeof mockTxExecute;
+  update: () => { set: (values: unknown) => Promise<void> };
+};
+
+const mockTransaction = vi.fn((cb: (tx: MockTx) => Promise<unknown>) => {
+  const mockTx: MockTx = {
     query: { criticalDataBackups: { findFirst: mockFindFirst } },
     execute: mockTxExecute,
-    update: vi.fn().mockReturnValue({ set: vi.fn().mockResolvedValue(undefined) }),
+    update: () => ({ set: vi.fn().mockResolvedValue(undefined) }),
   };
   return cb(mockTx);
 });
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: (...args: any[]) => mockDbExecute(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    insert: (...args: any[]) => mockDbInsert(...args),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    select: (..._args: any[]) => ({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      from: (..._fargs: any[]) => ({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        where: (..._wargs: any[]) => Object.assign(
+    execute: (...args: unknown[]) => mockDbExecute(...args),
+    insert: (...args: unknown[]) => mockDbInsert(...args),
+    select: (..._args: unknown[]) => ({
+      from: (..._fargs: unknown[]) => ({
+        where: (..._wargs: unknown[]) => Object.assign(
           Promise.resolve([{ total_backups: 0, restorable: 0, deleted_records: 0, updated_records: 0 }]),
           {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            groupBy: (..._gargs: any[]) => ({
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              orderBy: (..._oargs: any[]) => Promise.resolve([]),
+            groupBy: (..._gargs: unknown[]) => ({
+              orderBy: (..._oargs: unknown[]) => Promise.resolve([]),
             }),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            orderBy: (..._oargs: any[]) => Promise.resolve([]),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            limit: (..._largs: any[]) => Promise.resolve([]),
+            orderBy: (..._oargs: unknown[]) => Promise.resolve([]),
+            limit: (..._largs: unknown[]) => Promise.resolve([]),
           }
         ),
       }),
     }),
     query: {
       criticalDataBackups: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        findMany: (...args: any[]) => mockFindMany(...args),
+        findMany: (...args: unknown[]) => mockFindMany(...args),
       },
     },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: (...args: any[]) => mockTransaction(...args),
+    transaction: (...args: unknown[]) => mockTransaction(...args),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -62,24 +58,17 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: (a: any, b: any) => ({ op: 'eq', a, b }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: (...args: any[]) => ({ op: 'and', args }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  gte: (a: any, b: any) => ({ op: 'gte', a, b }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lte: (a: any, b: any) => ({ op: 'lte', a, b }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  desc: (a: any) => ({ op: 'desc', a }),
+  eq: (a: unknown, b: unknown) => ({ op: 'eq', a, b }),
+  and: (...args: unknown[]) => ({ op: 'and', args }),
+  gte: (a: unknown, b: unknown) => ({ op: 'gte', a, b }),
+  lte: (a: unknown, b: unknown) => ({ op: 'lte', a, b }),
+  desc: (a: unknown) => ({ op: 'desc', a }),
   count: () => ({ op: 'count' }),
   sql: Object.assign(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (strings: TemplateStringsArray, ...values: any[]) => ({ sql: strings.join('?'), values }),
+    (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values }),
     { identifier: (name: string) => ({ op: 'identifier', name }) }
   ),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  isNull: (a: any) => ({ op: 'isNull', a }),
+  isNull: (a: unknown) => ({ op: 'isNull', a }),
 }));
 
 beforeEach(() => {
