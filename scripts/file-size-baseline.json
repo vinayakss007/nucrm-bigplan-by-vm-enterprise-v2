@@ -47,7 +47,6 @@
   "lib/lead-warming/reply-analyzer.ts": 559,
   "lib/marketing/features.ts": 661,
   "lib/modules/industry-templates.ts": 540,
-  "lib/restore/backup-parser.ts": 828,
   "lib/restore/restore-executor.ts": 562,
   "lib/sdk/types.ts": 592
 }
