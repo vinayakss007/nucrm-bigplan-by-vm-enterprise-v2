@@ -101,7 +101,6 @@
   "tests/unit/sentry-data-collection.test.ts": 1,
   "tests/unit/sequence-cancel-delete-paths-2392.test.ts": 1,
   "tests/unit/silent-catch-logging.test.ts": 2,
-  "tests/unit/sms.test.ts": 32,
   "tests/unit/soft-delete-lists-2236.test.ts": 3,
   "tests/unit/soft-delete-residual-reads-2291.test.ts": 2,
   "tests/unit/stripe.test.ts": 4,
