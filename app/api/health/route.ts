@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import * as Sentry from '@sentry/nextjs';
+import { logError } from '@/lib/errors-server';
 
 const PROBE_CACHE_TTL_MS = 5_000;
 const PROBE_TIMEOUT_MS = 3_000;
@@ -50,7 +51,7 @@ async function probeDatabase(): Promise<ProbeResult> {
         ]);
         result = { dbStatus: 'connected', schemaReady: (res.rowCount ?? 0) > 0 };
       } catch (err) {
-        console.error('[health] DB check failed:', err);
+        void logError({ error: err, context: 'health:db-check-failed' });
       }
       cachedProbe = { at: Date.now(), result };
       return result;
