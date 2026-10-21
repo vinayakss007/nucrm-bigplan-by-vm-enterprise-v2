@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type RowsWithLimit = unknown[] & { limit?: (...args: unknown[]) => unknown };
+
 // Mock drizzle DB
 vi.mock('@/drizzle/db', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         // Returns an array that additionally exposes .limit(), so both
         // `await ....where(...)` and `await ....where(...).limit(1)` work.
         where: vi.fn(() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const rows: any = [];
+          const rows: RowsWithLimit = [];
           rows.limit = vi.fn(() => rows);
           return rows;
         }),
@@ -34,8 +34,7 @@ vi.mock('@/drizzle/db', () => {
   // reads and writes in db.transaction(). The callback receives this same mock
   // object so that per-test overrides of db.select/db.insert/db.update are also
   // observed through `tx`.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db.transaction = vi.fn(async (cb: (tx: any) => unknown) => cb(db));
+  db.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => cb(db));
 
   return { db };
 });
@@ -292,8 +291,7 @@ describe('RBAC - Field Permissions Additional', () => {
       (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
           where: vi.fn(() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rows: any = [
+            const rows: RowsWithLimit = [
               { id: 'fp-1', fieldName: 'salary', accessLevel: 'none', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'contact' },
             ];
             rows.limit = vi.fn(() => rows);
@@ -342,8 +340,7 @@ describe('RBAC - Record Permissions Additional', () => {
       (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
           where: vi.fn(() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rows: any = [
+            const rows: RowsWithLimit = [
               { id: 'rp-1', tenantId: 'tenant-1', roleId: 'role-1', entityType: 'deal', entityId: 'deal-1', accessLevel: 'read', grantedBy: 'user-1' },
             ];
             rows.limit = vi.fn(() => rows);

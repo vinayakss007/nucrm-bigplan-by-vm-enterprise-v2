@@ -104,8 +104,7 @@ describe('email/service - webhook notification', () => {
 describe('auth/cron', () => {
   it('verifyCronSecret handles missing header', async () => {
     const { verifyCronSecret } = await import('@/lib/auth/cron');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockReq = { headers: { get: () => null } } as any;
+    const mockReq = { headers: { get: () => null } };
     const result = await verifyCronSecret(mockReq);
     expect(result).toBe(false);
   });
@@ -387,8 +386,7 @@ describe('db/ensure-schema', () => {
 describe('auth/api-key', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockChain: any = {
+    const mockChain = {
       values: vi.fn().mockResolvedValue(undefined),
     };
     vi.doMock('@/drizzle/db', () => ({
@@ -419,20 +417,17 @@ describe('auth/index', () => {
 describe('auth/middleware', () => {
   it('can returns true for super admin', async () => {
     const { can } = await import('@/lib/auth/middleware');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(can({ isSuperAdmin: true, isAdmin: false, permissions: {} } as any, 'x')).toBe(true);
+    expect(can({ isSuperAdmin: true, isAdmin: false, permissions: {} } as never, 'x')).toBe(true);
   });
 
   it('requirePerm returns null for super admin', async () => {
     const { requirePerm } = await import('@/lib/auth/middleware');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(requirePerm({ isSuperAdmin: true, isAdmin: false, permissions: {} } as any, 'x')).toBeNull();
+    expect(requirePerm({ isSuperAdmin: true, isAdmin: false, permissions: {} } as never, 'x')).toBeNull();
   });
 
   it('requirePerm returns 403 for no permission', async () => {
     const { requirePerm } = await import('@/lib/auth/middleware');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resp = requirePerm({ isSuperAdmin: false, isAdmin: false, permissions: {} } as any, 'x');
+    const resp = requirePerm({ isSuperAdmin: false, isAdmin: false, permissions: {} } as never, 'x');
     expect(resp?.status).toBe(403);
   });
 });
