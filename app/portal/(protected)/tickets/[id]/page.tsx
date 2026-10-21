@@ -9,8 +9,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Send, Loader2, User, Bot } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { useQuery } from '@tanstack/react-query';
-import { ApiQueryError } from '@/lib/query/client';
+import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
@@ -43,19 +42,12 @@ export default function PortalTicketDetailPage() {
   // worst it can do is come back absent, which sends the customer to sign in. It
   // feeds no count; the only thing it decides is whether the ticket read runs.
 
-  const { data, isLoading, error, refetch } = useQuery<{ data: { ticket: Ticket; replies: Reply[] } }, ApiQueryError>({
-    queryKey: ['portal-ticket', ticketId, session?.email],
-    enabled: !!session?.email && !!ticketId,
-    queryFn: async () => {
-      // #1982: session cookie authenticates (see tickets list page).
-      const res = await fetch(`/api/public/tickets/${ticketId}`);
-      if (!res.ok) {
-        const info = await res.json().catch(() => ({}));
-        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
-      }
-      return res.json();
-    },
-  });
+  // #1982: session cookie authenticates (see tickets list page).
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: { ticket: Ticket; replies: Reply[] } }>(
+    ['portal-ticket', ticketId, session?.email],
+    `/api/public/tickets/${ticketId}`,
+    { enabled: !!session?.email && !!ticketId },
+  );
 
   const loading = !session || isLoading;
 

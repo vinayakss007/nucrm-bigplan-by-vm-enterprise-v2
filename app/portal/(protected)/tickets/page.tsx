@@ -9,8 +9,8 @@ import { useRouter } from 'next/navigation';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiQueryError } from '@/lib/query/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
@@ -44,28 +44,21 @@ export default function PortalTicketsPage() {
   // refresh refused, and when it comes back absent the customer is sent to sign in
   // instead of being shown a list — so it is nothing the page asserts about tickets.
 
-  const { data, isLoading, error, refetch } = useQuery<{ data: PortalTicket[] }, ApiQueryError>({
-    queryKey: ['portal-tickets', session?.email],
-    enabled: !!session?.email,
-    queryFn: async () => {
-      // #1982: auth rides the httpOnly portal session cookie (same-origin
-      // fetch sends it automatically). Never send identity headers — the old
-      // x-portal-email header was spoofable and is no longer accepted.
-      const res = await fetch('/api/public/tickets');
-      if (!res.ok) {
-        const info = await res.json().catch(() => ({}));
-        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
-      }
-      return res.json();
-    },
-  });
+  // #1982: auth rides the httpOnly portal session cookie (apiFetcher's
+  // same-origin fetch sends it automatically). Never send identity headers —
+  // the old x-portal-email header was spoofable and is no longer accepted.
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: PortalTicket[] }>(
+    ['portal-tickets', session?.email],
+    '/api/public/tickets',
+    { enabled: !!session?.email },
+  );
   const tickets = data?.data ?? [];
   const loading = !session || isLoading;
 
-  // #2872: this read calls `useQuery` directly instead of `useApiQuery`, so the
-  // failure it holds is the `ApiQueryError` thrown above rather than the one
-  // `apiFetcher` normalizes — the client's own defaults (30s stale, 2 retries)
-  // still apply, since those live on the QueryClient and not on the helper. The
+  // #2872: this read now goes through `useApiQuery` (#1328), so the failure it
+  // holds is the `ApiQueryError` `apiFetcher` throws — same class, same message
+  // shape the hand-rolled queryFn produced; the client defaults (30s stale, 2
+  // retries) were already coming from the QueryClient and are unchanged. The
   // refused refresh here is the customer's own write: the create modal ends in
   // `invalidateQueries(['portal-tickets', session?.email])`, this exact key, so
   // the ordinary state one moment after filing a ticket is kept rows plus the
