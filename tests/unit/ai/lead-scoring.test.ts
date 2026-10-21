@@ -87,6 +87,57 @@ describe('Lead Scoring Engine', () => {
       expect(r.ai_analysis).toBeUndefined();
     });
 
+    // #2963: the deterministic pass must actually evaluate field/operator/value
+    // rules — this was the stub that always returned 0 without AI.
+    it('sums matched rule awards without AI', async () => {
+      mockDbFindFirst.mockResolvedValueOnce({
+        id: 'l4', tenantId: 't-1', firstName: 'D', lastName: 'E', companyName: 'BigCo',
+        title: 'VP Sales', source: 'webinar', leadStatus: 'new', email: 'd@bigco.com',
+        notes: null, score: 0, updatedAt: new Date(), metadata: {}, deletedAt: null,
+      });
+      mockDbFindMany.mockResolvedValueOnce([
+        { factor: 'webinar source', weight: 30, score: 30, field: 'source', operator: 'eq', value: 'Webinar', active: true, deletedAt: null },
+        { factor: 'senior title', weight: 40, score: 40, field: 'title', operator: 'contains', value: 'vp', active: true, deletedAt: null },
+        { factor: 'unknown field', weight: 99, score: 99, field: 'nonexistentColumn', operator: 'eq', value: 'x', active: true, deletedAt: null },
+        { factor: 'bad operator', weight: 77, score: 77, field: 'source', operator: 'sounds_nice', value: 'webinar', active: true, deletedAt: null },
+        // The admin UI's mirror rows carry no condition; they must not award points.
+        { factor: 'ui mirror', weight: 15, score: 15, field: 'lead.factor', operator: 'set', value: null, active: true, deletedAt: null },
+      ]);
+      const r = await mod.computeLeadScore('t-1', 'l4', { useAI: false });
+      expect(r.score).toBe(70);
+      expect(r.factors.map(f => f.factor)).toEqual(['webinar source', 'senior title']);
+    });
+
+    it('applies penalty weights and floors at 0', async () => {
+      mockDbFindFirst.mockResolvedValueOnce({
+        id: 'l5', tenantId: 't-1', firstName: 'E', lastName: 'F', companyName: null,
+        title: null, source: 'coldcall', leadStatus: 'new', email: null,
+        notes: null, score: 0, updatedAt: new Date(), metadata: {}, deletedAt: null,
+      });
+      mockDbFindMany.mockResolvedValueOnce([
+        { factor: 'no email penalty', weight: -50, score: -50, field: 'email', operator: 'is_empty', value: null, active: true, deletedAt: null },
+        { factor: 'cold call penalty', weight: -30, score: -30, field: 'source', operator: 'eq', value: 'coldcall', active: true, deletedAt: null },
+      ]);
+      const r = await mod.computeLeadScore('t-1', 'l5', { useAI: false });
+      expect(r.score).toBe(0);
+      expect(r.factors).toHaveLength(2);
+    });
+
+    it('uses the rule score instead of flat 50 when AI fails and rules matched', async () => {
+      mockDbFindFirst.mockResolvedValueOnce({
+        id: 'l6', tenantId: 't-1', firstName: 'G', lastName: 'H', companyName: null,
+        title: 'CEO', source: 'web', leadStatus: 'new', email: 'g@h.com',
+        notes: null, score: 0, updatedAt: new Date(), metadata: {}, deletedAt: null,
+      });
+      mockDbFindMany.mockResolvedValueOnce([
+        { factor: 'ceo', weight: 60, score: 60, field: 'title', operator: 'eq', value: 'ceo', active: true, deletedAt: null },
+      ]);
+      mockChat.mockRejectedValueOnce(new Error('AI down'));
+      const r = await mod.computeLeadScore('t-1', 'l6', { useAI: true, userId: 'u-1' });
+      expect(r.score).toBe(60);
+      expect(r.ai_analysis?.reason).toContain('rule-based');
+    });
+
     it('throws when lead not found', async () => {
       mockDbFindFirst.mockResolvedValueOnce(null);
       await expect(mod.computeLeadScore('t-1', 'none')).rejects.toThrow('Lead not found');
