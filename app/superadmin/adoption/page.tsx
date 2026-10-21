@@ -6,6 +6,7 @@
 'use client';
 import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   Crown, Loader2, Globe, Lock, ListChecks, Settings as SettingsIcon,
   ShieldCheck, ShieldX, ShieldAlert, Users, Plane, Sparkles, AlertTriangle,
@@ -41,12 +42,23 @@ export default function AdoptionMonitoringPage() {
 
   const data: Adoption | null = adoptionQuery.data ?? null;
   const activity: Activity | null = activityQuery.data ?? null;
-  const loading = adoptionQuery.isLoading || activityQuery.isLoading;
+
+  // #2872: two reads, each judged on its own. failed = never answered (outage
+  // sentence, and the feeds must not fall through to "No recent activity.");
+  // stale = refused refresh, TanStack keeps `data`, so the rows stay and a banner
+  // names the loss above them. One read in flight must not skeletonize the other.
+  const adoptionFailed = Boolean(adoptionQuery.error) && !data;
+  const adoptionStale = Boolean(adoptionQuery.error) && Boolean(data);
+  const adoptionReason = adoptionQuery.error?.message || 'no response from the server';
+  const activityFailed = Boolean(activityQuery.error) && !activity;
+  const activityStale = Boolean(activityQuery.error) && Boolean(activity);
+  const activityReason = activityQuery.error?.message || 'no response from the server';
+
+  const adoptionLoading = adoptionQuery.isLoading;
+  const activityLoading = activityQuery.isLoading;
+  // Header refresh is page-wide by design; each banner's retry calls only its own refetch.
   const refreshing = adoptionQuery.isFetching || activityQuery.isFetching;
   const load = () => { adoptionQuery.refetch(); activityQuery.refetch(); };
-
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
-  if (!data) return <div className="text-sm text-muted-foreground">Failed to load adoption metrics.</div>;
 
   const pct = (v: number, total: number) => (total === 0 ? 0 : Math.round((v / total) * 100));
 
@@ -69,70 +81,120 @@ export default function AdoptionMonitoringPage() {
         </button>
       </div>
 
-      {/* Overview stats — desktop dense */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Stat icon={Building2} label="Active tenants" value={data.total_tenants} />
-        <Stat icon={Users}     label="Active users"   value={data.users.total} />
-        <Stat icon={Sparkles}  label="Users w/ prefs" value={data.users.with_prefs}
-          sub={`${pct(data.users.with_prefs, data.users.total)}%`} />
-        <Stat icon={Plane}     label="OOO now"        value={data.users.out_of_office_now}
-          accent={data.users.out_of_office_now > 0 ? 'amber' : undefined} />
-        <Stat icon={ShieldX}   label="2FA off"        value={data.drift.two_factor_off}
-          sub={`${pct(data.drift.two_factor_off, data.total_tenants)}%`}
-          accent={data.drift.two_factor_off > 0 ? 'amber' : undefined} />
-        <Stat icon={ShieldCheck} label="2FA required" value={data.drift.two_factor_required}
-          sub={`${pct(data.drift.two_factor_required, data.total_tenants)}%`} accent="emerald" />
-        <Stat icon={ShieldAlert} label="Weak pwd"     value={data.drift.weak_password_policy}
-          accent={data.drift.weak_password_policy > 0 ? 'amber' : undefined} />
-        <Stat icon={Lock}      label="IP allowlist on" value={data.drift.ip_allowlist_on} />
-      </div>
+      {/* Adoption read — its outage / stale tell sits ABOVE the adoption figures. */}
+      {adoptionLoading && (
+        <p className="text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading adoption metrics…
+        </p>
+      )}
+      {!adoptionLoading && adoptionFailed && (
+        <InlineErrorState
+          message={`Failed to load adoption metrics: ${adoptionReason}. No tenant settings have been counted — the adoption bars, drift signals and user totals are unanswered, not zero, and this is not a platform where nothing is configured.`}
+          onRetry={() => void adoptionQuery.refetch()}
+        />
+      )}
+      {!adoptionLoading && adoptionStale && (
+        <InlineErrorState
+          message={`Could not refresh the adoption metrics, so the adoption bars, drift counts and user figures below are the last read: ${adoptionReason}. A tenant that configured or cleared a settings tree since this was fetched sits on the wrong side of a bar, one that changed its two-factor, password length, IP allowlist or self-signup since is counted under its old security state, and every percentage here is from before the refresh failed. Only active and trialing tenants are counted, so a tenant that left those statuses since is missing from these numbers rather than cleared by them.`}
+          onRetry={() => void adoptionQuery.refetch()}
+        />
+      )}
+
+      {/* Overview stats — desktop dense. Rendered only once the adoption read answered
+          (healthy or stale), so a failed read withholds every derived figure instead of
+          printing 0 counts / 0% claims for a read that never ran. */}
+      {!adoptionLoading && data && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+          <Stat icon={Building2} label="Active tenants" value={data.total_tenants} />
+          <Stat icon={Users}     label="Active users"   value={data.users.total} />
+          <Stat icon={Sparkles}  label="Users w/ prefs" value={data.users.with_prefs}
+            sub={`${pct(data.users.with_prefs, data.users.total)}%`} />
+          <Stat icon={Plane}     label="OOO now"        value={data.users.out_of_office_now}
+            accent={data.users.out_of_office_now > 0 ? 'amber' : undefined} />
+          <Stat icon={ShieldX}   label="2FA off"        value={data.drift.two_factor_off}
+            sub={`${pct(data.drift.two_factor_off, data.total_tenants)}%`}
+            accent={data.drift.two_factor_off > 0 ? 'amber' : undefined} />
+          <Stat icon={ShieldCheck} label="2FA required" value={data.drift.two_factor_required}
+            sub={`${pct(data.drift.two_factor_required, data.total_tenants)}%`} accent="emerald" />
+          <Stat icon={ShieldAlert} label="Weak pwd"     value={data.drift.weak_password_policy}
+            accent={data.drift.weak_password_policy > 0 ? 'amber' : undefined} />
+          <Stat icon={Lock}      label="IP allowlist on" value={data.drift.ip_allowlist_on} />
+        </div>
+      )}
 
       {/* Two-column layout on XL: adoption bars + activity feeds */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* LEFT: Adoption + drift cards (xl: 1 col) */}
+        {/* LEFT: Adoption + drift cards (xl: 1 col). Gated on the adoption read only. */}
         <div className="xl:col-span-1 space-y-4">
-          <Card title="Settings tree adoption" desc="% of active tenants that configured each tree.">
-            <div className="space-y-3">
-              <Bar icon={Globe}        label="Localization"  count={data.adoption.localization}  total={data.total_tenants} />
-              <Bar icon={Lock}         label="Login Policy"  count={data.adoption.login_policy}  total={data.total_tenants} />
-              <Bar icon={ListChecks}   label="Picklists"     count={data.adoption.picklists}     total={data.total_tenants} />
-              <Bar icon={SettingsIcon} label="User Defaults" count={data.adoption.user_defaults} total={data.total_tenants} />
-            </div>
-          </Card>
+          {!adoptionLoading && data && (
+            <>
+              <Card title="Settings tree adoption" desc="% of active tenants that configured each tree.">
+                <div className="space-y-3">
+                  <Bar icon={Globe}        label="Localization"  count={data.adoption.localization}  total={data.total_tenants} />
+                  <Bar icon={Lock}         label="Login Policy"  count={data.adoption.login_policy}  total={data.total_tenants} />
+                  <Bar icon={ListChecks}   label="Picklists"     count={data.adoption.picklists}     total={data.total_tenants} />
+                  <Bar icon={SettingsIcon} label="User Defaults" count={data.adoption.user_defaults} total={data.total_tenants} />
+                </div>
+              </Card>
 
-          <Card title="Security drift signals" desc="Configurations weaker than recommended.">
-            <div className="space-y-2">
-              <DriftRow severity={data.drift.weak_password_policy > 0 ? 'warn' : 'ok'}
-                icon={ShieldAlert} label="Weak password policy" sub="Min length below 12"
-                count={data.drift.weak_password_policy} total={data.total_tenants} />
-              <DriftRow severity={data.drift.two_factor_off > 0 ? 'warn' : 'ok'}
-                icon={ShieldX} label="2FA disabled" sub="Enforcement = off"
-                count={data.drift.two_factor_off} total={data.total_tenants} />
-              <DriftRow severity="ok" icon={ShieldCheck} label="2FA required" sub="Enforced for everyone"
-                count={data.drift.two_factor_required} total={data.total_tenants} positive />
-              <DriftRow severity="ok" icon={Lock} label="IP allowlist on" sub="CIDR-restricted access"
-                count={data.drift.ip_allowlist_on} total={data.total_tenants} positive />
-              <DriftRow severity={data.drift.self_signup_on > 0 ? 'info' : 'ok'}
-                icon={AlertTriangle} label="Self-signup enabled" sub="Anyone can join"
-                count={data.drift.self_signup_on} total={data.total_tenants} />
-            </div>
-          </Card>
+              <Card title="Security drift signals" desc="Configurations weaker than recommended.">
+                <div className="space-y-2">
+                  <DriftRow severity={data.drift.weak_password_policy > 0 ? 'warn' : 'ok'}
+                    icon={ShieldAlert} label="Weak password policy" sub="Min length below 12"
+                    count={data.drift.weak_password_policy} total={data.total_tenants} />
+                  <DriftRow severity={data.drift.two_factor_off > 0 ? 'warn' : 'ok'}
+                    icon={ShieldX} label="2FA disabled" sub="Enforcement = off"
+                    count={data.drift.two_factor_off} total={data.total_tenants} />
+                  <DriftRow severity="ok" icon={ShieldCheck} label="2FA required" sub="Enforced for everyone"
+                    count={data.drift.two_factor_required} total={data.total_tenants} positive />
+                  <DriftRow severity="ok" icon={Lock} label="IP allowlist on" sub="CIDR-restricted access"
+                    count={data.drift.ip_allowlist_on} total={data.total_tenants} positive />
+                  <DriftRow severity={data.drift.self_signup_on > 0 ? 'info' : 'ok'}
+                    icon={AlertTriangle} label="Self-signup enabled" sub="Anyone can join"
+                    count={data.drift.self_signup_on} total={data.total_tenants} />
+                </div>
+              </Card>
+            </>
+          )}
         </div>
 
-        {/* RIGHT: Activity feeds (xl: 2 cols) */}
+        {/* RIGHT: Activity feeds (xl: 2 cols) — the second read, judged independently. */}
         <div className="xl:col-span-2 space-y-4">
-          <Card title="Critical activity" desc="Bulk transfers, login policy changes, OOO reassigns, role changes." icon={AlertTriangle} accent="amber">
-            <ActivityList rows={activity?.critical ?? []} />
-          </Card>
+          {activityLoading && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading recent activity…
+            </p>
+          )}
+          {!activityLoading && activityFailed && (
+            // The base fell through `activity?.critical ?? []` here and printed
+            // "No recent activity." for a read that never ran.
+            <InlineErrorState
+              message={`Failed to load recent activity: ${activityReason}. No audit events were read — the feeds are unanswered, not empty, and this is not a platform that stayed quiet.`}
+              onRetry={() => void activityQuery.refetch()}
+            />
+          )}
+          {!activityLoading && activityStale && (
+            <InlineErrorState
+              message={`Could not refresh recent activity, so the activity feeds below are the last read: ${activityReason}. A bulk operation, settings change or security event since this was fetched — a login-policy change, a tenant suspend or restore, a role change — is not shown here, so nothing newer will surface until a read succeeds.`}
+              onRetry={() => void activityQuery.refetch()}
+            />
+          )}
+          {!activityLoading && activity && (
+            <>
+              <Card title="Critical activity" desc="Bulk transfers, login policy changes, OOO reassigns, role changes." icon={AlertTriangle} accent="amber">
+                <ActivityList rows={activity.critical ?? []} />
+              </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card title="Recent bulk operations" desc="Bulk_* audit entries across tenants." icon={ArrowRightLeft}>
-              <ActivityList rows={activity?.bulk_ops ?? []} compact />
-            </Card>
-            <Card title="Recent settings changes" desc="Localization, login policy, picklists, defaults, tags." icon={History}>
-              <ActivityList rows={activity?.settings_changes ?? []} compact />
-            </Card>
-          </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card title="Recent bulk operations" desc="Bulk_* audit entries across tenants." icon={ArrowRightLeft}>
+                  <ActivityList rows={activity.bulk_ops ?? []} compact />
+                </Card>
+                <Card title="Recent settings changes" desc="Localization, login policy, picklists, defaults, tags." icon={History}>
+                  <ActivityList rows={activity.settings_changes ?? []} compact />
+                </Card>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -147,7 +209,7 @@ function Stat({ icon: Icon, label, value, sub, accent }: { icon: LucideIcon; lab
   const accentBg =
     accent === 'amber'   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/80 dark:border-amber-800/80 shadow-sm' :
     accent === 'red'     ? 'bg-red-50 dark:bg-red-950/30 border-red-300/80 dark:border-red-800/80 shadow-sm' :
-    accent === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/80 dark:border-emerald-800/80 shadow-sm' :
+    accent === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-800/80 shadow-sm' :
                            'bg-card border-border/80 shadow-sm';
   return (
     <div className={cn('rounded-xl border-2 p-3 hover:shadow-md transition-shadow', accentBg)}>
