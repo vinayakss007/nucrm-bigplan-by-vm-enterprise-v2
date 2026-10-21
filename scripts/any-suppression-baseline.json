@@ -48,7 +48,6 @@
   "tests/unit/env.test.ts": 1,
   "tests/unit/error-redaction.test.ts": 1,
   "tests/unit/errors-server.test.ts": 1,
-  "tests/unit/esignature.test.ts": 13,
   "tests/unit/field-encryption.test.ts": 4,
   "tests/unit/field-permissions.test.ts": 1,
   "tests/unit/gateway.test.ts": 3,
