@@ -11,6 +11,7 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -38,7 +39,11 @@ export default function PortalTicketDetailPage() {
     } catch { router.replace('/portal/login'); }
   }, [router]);
 
-  const { data, isLoading, error } = useQuery<{ data: { ticket: Ticket; replies: Reply[] } }, ApiQueryError>({
+  // #2872: unsplit on purpose — this gate is `localStorage`, not a read, so the
+  // worst it can do is come back absent, which sends the customer to sign in. It
+  // feeds no count; the only thing it decides is whether the ticket read runs.
+
+  const { data, isLoading, error, refetch } = useQuery<{ data: { ticket: Ticket; replies: Reply[] } }, ApiQueryError>({
     queryKey: ['portal-ticket', ticketId, session?.email],
     enabled: !!session?.email && !!ticketId,
     queryFn: async () => {
@@ -46,13 +51,31 @@ export default function PortalTicketDetailPage() {
       const res = await fetch(`/api/public/tickets/${ticketId}`);
       if (!res.ok) {
         const info = await res.json().catch(() => ({}));
-        throw new ApiQueryError('not found', res.status, info);
+        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
       }
       return res.json();
     },
   });
 
   const loading = !session || isLoading;
+
+  // #2872: nothing invalidates ['portal-ticket', ticketId, session?.email] — the
+  // reply form below POSTs and appends to local state only — so this read
+  // revalidates on the customer walking back to the list and into the ticket again
+  // inside gcTime (and the session effect re-runs on every mount, re-keying it).
+  // The page used to answer any failure of that refresh with a `Ticket not found`
+  // toast plus `router.replace('/portal/tickets')`, which threw the conversation
+  // away mid-reply and claimed a record the server had never been reached about.
+  // `failed` is the read that never answered; `stale` keeps the conversation on
+  // screen and says it is not current.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  // The ticket's own id is in the key, so a 404 is a third state: the request got
+  // through and the server named this record as not the customer's — a fact about
+  // the ticket, not a load failure. Both stop rendering the conversation; only
+  // `notFound` may say the ticket is absent, and neither may navigate away.
+  const notFound = failed && error?.status === 404;
 
   // Seed local ticket + replies from the query so writes (sendReply) can append
   // replies and flip the ticket status locally.
@@ -62,14 +85,6 @@ export default function PortalTicketDetailPage() {
       setReplies(data.data.replies);
     }
   }, [data]);
-
-  // On load failure the ticket doesn't exist (or isn't ours) — bounce back.
-  useEffect(() => {
-    if (error) {
-      toast.error('Ticket not found');
-      router.replace('/portal/tickets');
-    }
-  }, [error, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,11 +138,60 @@ export default function PortalTicketDetailPage() {
     );
   }
 
-  if (!ticket) return null;
+  // Nothing answered, and the server did not name this ticket: an outage. No
+  // conversation, no reply box — a reply sent from here would POST against an id
+  // this session has only failed to read.
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <button onClick={() => router.push('/portal/tickets')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to my tickets
+        </button>
+        <InlineErrorState
+          message={`We could not load this ticket. That is a failed request, not a missing conversation. ${reason}`}
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
+  if (!ticket) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Kept conversation, refused refresh, and no ticket in what was kept. */}
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. The ticket may have been removed since it last answered — that is not the same as never loading.`}
+            onRetry={() => void refetch()}
+          />
+        )}
+        <button onClick={() => router.push('/portal/tickets')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to my tickets
+        </button>
+        <div className="text-center py-12">
+          <p className="text-sm text-muted-foreground">
+            {notFound
+              ? 'That ticket is not in your account — it may have been removed.'
+              : 'Nothing came back to show for this ticket.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const canReply = !['closed'].includes(ticket.status);
 
   return (
     <div className="space-y-4 animate-fade-in h-[calc(100vh-8rem)] flex flex-col">
+      {/* Kept conversation, refused refresh: the thread stays, the reply box stays,
+          and the page says which of its contents a refusal would not have updated. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the conversation below is the last read: ${reason}. A reply added since it was fetched, or a change to this ticket's status, is not shown — your own replies are still sent.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/portal/tickets')} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
