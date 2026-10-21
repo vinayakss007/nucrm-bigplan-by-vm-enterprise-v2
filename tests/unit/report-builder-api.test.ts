@@ -30,8 +30,7 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 
 vi.mock('@/lib/api-error', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  apiError: vi.fn((err: any, _msg?: string, status = 500) =>
+  apiError: vi.fn((err: unknown, _msg?: string, status = 500) =>
     NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status })
   ),
 }));
@@ -59,8 +58,7 @@ vi.mock('@/drizzle/schema', () => ({
   activities: { tenantId: 'tenant_id' },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function testRequest(path: string, options: { method?: string; body?: any } = {}) {
+function testRequest(path: string, options: { method?: string; body?: unknown } = {}) {
   const url = new URL(path, 'http://localhost:3000');
   const init: RequestInit & { headers: Record<string, string> } = {
     method: options.method || 'GET',
@@ -118,8 +116,7 @@ describe('POST /api/tenant/reports/builder', () => {
     const json = await response.json();
 
     expect(json.total).toBe(28);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const totalPct = json.data.reduce((s: number, d: any) => s + d.percentage, 0);
+    const totalPct = json.data.reduce((s: number, d: { percentage: number }) => s + d.percentage, 0);
     expect(totalPct).toBeCloseTo(100, 0);
   });
 
@@ -230,8 +227,7 @@ describe('GET /api/tenant/reports/builder', () => {
     expect(json.entities).toBeInstanceOf(Array);
     expect(json.entities.length).toBeGreaterThan(0);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contacts = json.entities.find((e: any) => e.id === 'contacts');
+    const contacts = json.entities.find((e: { id: string }) => e.id === 'contacts');
     expect(contacts).toBeDefined();
     expect(contacts.groupByOptions).toBeInstanceOf(Array);
     expect(contacts.metricOptions).toBeInstanceOf(Array);
@@ -245,14 +241,12 @@ describe('GET /api/tenant/reports/builder', () => {
     const response = await GET(request);
     const json = await response.json();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ids = json.entities.map((e: any) => e.id);
+    const ids = json.entities.map((e: { id: string }) => e.id);
     for (const id of ['quotes', 'invoices', 'tickets', 'leads']) {
       expect(ids).toContain(id);
     }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const invoices = json.entities.find((e: any) => e.id === 'invoices');
+    const invoices = json.entities.find((e: { id: string }) => e.id === 'invoices');
     expect(invoices.metricOptions.some((m: { field: string }) => m.field === 'total_amount')).toBe(true);
   });
 });

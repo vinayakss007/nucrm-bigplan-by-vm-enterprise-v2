@@ -13,6 +13,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockTxExecute = vi.fn();
 const mockDbTransaction = vi.fn();
 
+type MockTx = { execute: (...args: unknown[]) => unknown };
+
 // Fake transaction semantics: a callback that resolves is COMMITted, a
 // callback that throws is ROLLBACKed. Counting the two proves the atomicity
 // guarantee under test: after a failed import there must be a rollback and
@@ -22,8 +24,7 @@ let rollbackCount = 0;
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: (cb: any) => mockDbTransaction(cb),
+    transaction: (cb: (tx: MockTx) => Promise<unknown>) => mockDbTransaction(cb),
     execute: vi.fn(),
   },
 }));
@@ -31,8 +32,7 @@ vi.mock('@/drizzle/db', () => ({
 const mockSqlIdentifier = vi.fn((name: string) => ({ type: 'identifier', name }));
 const mockSqlJoin = vi.fn();
 const mockSql = Object.assign(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (strings: TemplateStringsArray, ...values: any[]) => ({
+  (strings: TemplateStringsArray, ...values: unknown[]) => ({
     query: strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? `$${i + 1}` : ''), ''),
     strings,
     values,
@@ -42,14 +42,14 @@ const mockSql = Object.assign(
 
 vi.mock('drizzle-orm', () => ({ sql: mockSql }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isLockCall(arg: any): boolean {
-  const text = arg?.strings?.[0] ?? arg?.query ?? '';
+function isLockCall(arg: unknown): boolean {
+  const a = arg as { strings?: string[]; query?: string };
+  const text = a?.strings?.[0] ?? a?.query ?? '';
   return String(text).includes('pg_try_advisory_xact_lock');
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isInsertCall(arg: any): boolean {
-  const text = arg?.strings?.[0] ?? '';
+function isInsertCall(arg: unknown): boolean {
+  const a = arg as { strings?: string[] };
+  const text = a?.strings?.[0] ?? '';
   return String(text).startsWith('INSERT INTO');
 }
 
@@ -62,12 +62,10 @@ describe('TenantDataImporter.restore — atomic wipe + import (#2225)', () => {
     vi.clearAllMocks();
     commitCount = 0;
     rollbackCount = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockDbTransaction.mockImplementation(async (cb: any) => {
+    mockDbTransaction.mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => {
       try {
         const res = await cb({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          execute: (...args: any[]) => mockTxExecute(...args),
+          execute: (...args: unknown[]) => mockTxExecute(...args),
         });
         commitCount++;
         return res;
