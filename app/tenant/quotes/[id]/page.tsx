@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -13,6 +13,7 @@ import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { PromptDialog } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface Quote {
@@ -58,17 +59,27 @@ export default function QuoteDetailPage() {
   const [form, setForm] = useState<Partial<Quote>>({});
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
-  // #1328: detail read via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<QuoteResponse>(
+  // #1328: detail read via TanStack Query. Terms, notes and every money field are fields of
+  // this one response, so a refused refresh stales the whole document — there is no second
+  // read on the page to retry by accident.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<QuoteResponse>(
     QUOTE_QUERY(id),
     `/api/tenant/quotes/${id}`,
     { enabled: !!id },
   );
   const quote = data?.data;
 
-  useEffect(() => {
-    if (error) toast.error('Failed to load quote');
-  }, [error]);
+  // #2872: four of this page's own writes — saving the edit form, Send Quote / Accept /
+  // Decline, and the Send-via-Email dialog's onConfirm — end in `invalidate()`, which targets
+  // QUOTE_QUERY(id), this exact key. So the state right after a quote is marked sent is the
+  // quote still on screen plus a set flag, and the page keyed only off that flag: it toasted,
+  // faded, and fell into `if (!quote)` to report the quote as not found. A 404 is a different
+  // answer — quotes/[id] 404s only when no live row matches this id and tenant (a refusal is
+  // a 403) — so "does not exist" must stay out of the outage branch.
+  const failed = Boolean(error) && !data;
+  const notFound = failed && error?.status === 404;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: QUOTE_QUERY(id) });
 
@@ -156,12 +167,36 @@ export default function QuoteDetailPage() {
     );
   }
 
+  // The read never answered, and the server was not asked whether this quote exists. None of
+  // the write controls below may be offered against an id this session only failed to read.
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <Link href="/tenant/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Quotes
+        </Link>
+        <InlineErrorState message={`Failed to load quote: ${reason}`} onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  // The read answered and there is no quote in it — the 404 above, or a 2xx with an empty
+  // body. It says so plainly, and a refused refresh on top of it still carries the caveat
+  // rather than silently claiming the quote is gone.
   if (!quote) {
     return (
-      <div className="text-center py-12">
-        <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-        <p className="text-lg font-semibold">Quote not found</p>
-        <Link href="/tenant/quotes" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to quotes</Link>
+      <div className="space-y-4 animate-fade-in">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. The quote may have been deleted since it last answered — that is not the same as never loading.`}
+            onRetry={() => void refetch()}
+          />
+        )}
+        <div className="text-center py-12">
+          <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-lg font-semibold">Quote not found</p>
+          <Link href="/tenant/quotes" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to quotes</Link>
+        </div>
       </div>
     );
   }
@@ -172,6 +207,14 @@ export default function QuoteDetailPage() {
       <Link href="/tenant/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Quotes
       </Link>
+
+      {/* Kept document, refused refresh: the quote stays on screen and says what it may not show. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so this quote is the last read: ${reason}. The status you just sent or accepted, the edit you just saved, or the email you just sent may not be reflected here.`}
+          onRetry={() => void refetch()}
+        />
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
