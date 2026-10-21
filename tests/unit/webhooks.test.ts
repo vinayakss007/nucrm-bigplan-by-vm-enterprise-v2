@@ -143,8 +143,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const { fireWebhooks } = await import('@/lib/webhooks');
       await fireWebhooks('tenant-1', 'contact.created', { id: '123' });
@@ -160,8 +159,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -193,8 +191,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -220,8 +217,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn();
       vi.stubGlobal('fetch', mockFetch);
@@ -242,8 +238,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -274,8 +269,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -306,8 +300,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network failure'));
       vi.stubGlobal('fetch', mockFetch);
@@ -316,8 +309,7 @@ describe('webhooks', () => {
         values: vi.fn(() => ({
           returning: vi.fn(() => [{ id: 'delivery-1' }]),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const { fireWebhooks } = await import('@/lib/webhooks');
       await fireWebhooks('tenant-1', 'contact.created', {});
@@ -337,8 +329,7 @@ describe('webhooks', () => {
         from: vi.fn(() => ({
           where: whereFn,
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn();
       vi.stubGlobal('fetch', mockFetch);
@@ -374,8 +365,7 @@ describe('webhooks', () => {
             })),
           })),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const { retryFailedWebhooks } = await import('@/lib/webhooks');
       const result = await retryFailedWebhooks();
@@ -404,8 +394,7 @@ describe('webhooks', () => {
             })),
           })),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -414,8 +403,7 @@ describe('webhooks', () => {
       vi.stubGlobal('fetch', mockFetch);
 
       const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
+      vi.mocked(db.update).mockReturnValue({ set: setFn });
 
       const { retryFailedWebhooks } = await import('@/lib/webhooks');
       const result = await retryFailedWebhooks();
@@ -450,8 +438,7 @@ describe('webhooks', () => {
             })),
           })),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -460,8 +447,7 @@ describe('webhooks', () => {
       vi.stubGlobal('fetch', mockFetch);
 
       const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
+      vi.mocked(db.update).mockReturnValue({ set: setFn });
 
       const { retryFailedWebhooks } = await import('@/lib/webhooks');
       await retryFailedWebhooks();
@@ -494,15 +480,13 @@ describe('webhooks', () => {
             })),
           })),
         })),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
 
       const mockFetch = vi.fn().mockRejectedValue(new Error('Timeout'));
       vi.stubGlobal('fetch', mockFetch);
 
       const setFn = vi.fn(() => ({ where: vi.fn() }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as any);
+      vi.mocked(db.update).mockReturnValue({ set: setFn });
 
       const { retryFailedWebhooks } = await import('@/lib/webhooks');
       const result = await retryFailedWebhooks();
