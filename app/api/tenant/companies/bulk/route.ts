@@ -129,7 +129,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const res = await db
           .update(companies)
           .set({
-            metadata: sql`jsonb_set(${companies.metadata}, '{assigned_to}', ${payload.assigned_to}::jsonb)`,
+            // #2960: write the first-class #1084 columns. The old code put the
+            // assignee in metadata JSON, which no reader consults and which the
+            // owner-scope filters and idx_companies_assigned cannot see.
+            assignedTo: payload.assigned_to,
             updatedAt: new Date(),
           })
           .where(
@@ -152,14 +155,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const res = await db
           .update(companies)
           .set({
-            // status field mapping - companies in schema might use metadata or specific column
-            // In drizzle/schema/crm.ts, companies doesn't have a 'status' column.
-            // It has 'isCustomer' and 'lastActivityAt'.
-            // If the legacy DB had a status column, we should check if it's missing in Drizzle.
-            // Based on drizzle/schema/crm.ts, let's assume it should go into metadata or is missing.
-            // Actually, I should check if I missed it. (I did, I'll re-read crm.ts if needed).
-            // For now, let's use metadata to be safe or check if it's a known issue.
-            metadata: sql`jsonb_set(COALESCE(${companies.metadata}, '{}'), '{status}', ${JSON.stringify(payload.status)})`,
+            // #2960: companies.status is a first-class notNull column (#1084);
+            // the metadata JSON it used to write is read by nothing.
+            status: payload.status,
             updatedAt: new Date(),
           })
           .where(

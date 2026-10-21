@@ -35,7 +35,6 @@
   "tests/unit/chat.test.ts": 8,
   "tests/unit/complete-backend.test.ts": 5,
   "tests/unit/conversion-funnel.test.ts": 1,
-  "tests/unit/critical-data-capture.test.ts": 19,
   "tests/unit/crypto.test.ts": 2,
   "tests/unit/csp-nonce.test.ts": 8,
   "tests/unit/currency-extended.test.ts": 2,
