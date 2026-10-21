@@ -1987,8 +1987,11 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   (a) `leads` and `projects` are not in it, and (b) **`v_count` counts DELETE statements, not rows** —
   it returns at most 4 no matter whether 0 or 40,000 rows went.
 - **What that cost the tenant-facing endpoint.** `app/api/tenant/trash` `DELETE {purge_all:true}` called
-  the function and returned its value as `purged`, which `app/superadmin/settings/page.tsx:262` renders
-  as `Purged ${d.purged ?? 0} items`. Every click of "Purge Trash (30+ days old)" therefore claimed four
+  the function and returned its value as `purged`, which `app/superadmin/settings/page.tsx:314` renders
+  as `Purged ${d.purged ?? 0} items`. (The coordinate was re-pinned 2026-10-21 from `:262`, where it sat
+  when this entry was written: **#2938** grew that page's platform-settings block 52 lines above it, so
+  the pointer still landed on a live line — just not the one described here.) Every click of "Purge
+  Trash (30+ days old)" therefore claimed four
   items, and the six types the same endpoint lists (`TRASH_TABLES`: contact, deal, task, company,
   **lead**, **project**) meant two of them were never purged by it at all. The confirm dialog's promise
   ("permanently purge **all** trash items older than 30 days") was wider than the code behind it.
