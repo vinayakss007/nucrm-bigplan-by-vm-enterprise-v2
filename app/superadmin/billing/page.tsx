@@ -9,6 +9,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import PlanOfferingsPanel from '@/components/superadmin/plan-offerings-panel';
 
 const FEATURE_OPTIONS = ['contacts','deals','tasks','automations','forms','reports','sequences','products','quotes','ai','api_access','custom_roles','custom_domain','sso','audit_logs','dedicated_support'];
@@ -165,6 +166,17 @@ export default function BillingPage() {
   const plans: Plan[] = plansQuery.data?.data ?? [];
   const tenants: { plan_id: string; status: string }[] = tenantsQuery.data?.data ?? [];
   const loading = plansQuery.isLoading || tenantsQuery.isLoading;
+  // #2872: both reads are bound as whole result objects and read only `.data`, so a
+  // failed plans read collapsed the grid to zero cards ("no plans") and a failed tenants
+  // read collapsed every `planCounts` to `{active:0, trialing:0}` — a false all-clear on
+  // subscriber counts. `useApiQuery` keeps `data` through a refused revalidation, so the
+  // outage and the last read are split apart here; a messageless error still prints text.
+  const plansFailed = Boolean(plansQuery.error) && !plansQuery.data;
+  const plansStale = Boolean(plansQuery.error) && Boolean(plansQuery.data);
+  const plansReason = plansQuery.error?.message || 'no response from the server';
+  const tenantsFailed = Boolean(tenantsQuery.error) && !tenantsQuery.data;
+  const tenantsStale = Boolean(tenantsQuery.error) && Boolean(tenantsQuery.data);
+  const tenantsReason = tenantsQuery.error?.message || 'no response from the server';
 
   // Re-load both reads after a plan is created/edited (was `load()`).
   const reload = () => { plansQuery.refetch(); tenantsQuery.refetch(); };
@@ -194,10 +206,37 @@ export default function BillingPage() {
         </button>
       </div>
 
+      {/* #2872: the refused refreshes keep the cards they did not replace; only an outage
+          that never produced a list swaps the grid itself (below). Reachability: "New Plan"
+          above stays clickable over any stale read. */}
+      {plansStale && (
+        <InlineErrorState
+          message={`Could not refresh the plans, so the cards below are the last read: ${plansReason}. A plan you just created or edited may not be reflected — open it to check before saving again.`}
+          onRetry={() => void plansQuery.refetch()}
+        />
+      )}
+      {tenantsFailed && (
+        <InlineErrorState
+          message={`Could not load tenant subscriber counts (${tenantsReason}) — the "—" figures on the cards are a failed request, not plans with no subscribers.`}
+          onRetry={() => void tenantsQuery.refetch()}
+        />
+      )}
+      {tenantsStale && (
+        <InlineErrorState
+          message={`Could not refresh the tenant counts, so the Active/Trialing figures on the cards are the last read: ${tenantsReason}.`}
+          onRetry={() => void tenantsQuery.refetch()}
+        />
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_,i)=><div key={i} className="rounded-xl border border-white/10 h-60 animate-pulse bg-white/5"/>)}
         </div>
+      ) : plansFailed ? (
+        <InlineErrorState
+          message={`Could not load the plans — this is a failed request, not a tenant with no plans. (${plansReason})`}
+          onRetry={() => void plansQuery.refetch()}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map(plan => {
@@ -247,11 +286,11 @@ export default function BillingPage() {
                 )}
                 <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-1.5 text-center text-xs">
                   <div className="rounded-lg bg-emerald-500/10 py-1.5">
-                    <p className="font-bold text-emerald-400">{counts.active}</p>
+                    <p className="font-bold text-emerald-400">{tenantsFailed ? '—' : counts.active}</p>
                     <p className="text-white/30 text-[10px]">Active</p>
                   </div>
                   <div className="rounded-lg bg-amber-500/10 py-1.5">
-                    <p className="font-bold text-amber-400">{counts.trialing}</p>
+                    <p className="font-bold text-amber-400">{tenantsFailed ? '—' : counts.trialing}</p>
                     <p className="text-white/30 text-[10px]">Trialing</p>
                   </div>
                 </div>

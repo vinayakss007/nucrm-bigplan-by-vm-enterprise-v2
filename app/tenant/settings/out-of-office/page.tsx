@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plane, Save, Loader2, Calendar, User, MessageSquare, AlertCircle, CheckCircle2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type MemberApiRow = { userId: string; fullName?: string | null; email: string };
 
@@ -36,19 +37,33 @@ export default function OutOfOfficePage() {
   const [original, setOriginal] = useState<OOO | null>(null);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: oooData, isLoading: oooLoading } = useApiQuery<{ out_of_office?: OOO }>(
+  // #2872: `error` + `refetch` are now bound on all three. `useApiQuery` keeps `data`
+  // through a refused revalidation, so `error` alone cannot tell an outage (nothing was
+  // ever read — the form would seed DEFAULT and a save would write it over the stored
+  // config, the roster would read as "no teammates") from a stale read (the rows on
+  // screen are the last good answer). Three channels per read, never folded together.
+  const { data: oooData, isLoading: oooLoading, error: oooError, refetch: refetchOoo } = useApiQuery<{ out_of_office?: OOO }>(
     ['tenant', 'out-of-office'],
     '/api/user/out-of-office',
   );
-  const { data: membersData, isLoading: membersLoading } = useApiQuery<{ data?: MemberApiRow[] }>(
+  const { data: membersData, isLoading: membersLoading, error: membersError, refetch: refetchMembers } = useApiQuery<{ data?: MemberApiRow[] }>(
     ['tenant', 'members', 'for-ooo'],
     '/api/tenant/members',
   );
-  const { data: meData, isLoading: meLoading } = useApiQuery<{ user?: { id?: string | null } }>(
+  const { data: meData, isLoading: meLoading, error: meError, refetch: refetchMe } = useApiQuery<{ user?: { id?: string | null } }>(
     ['tenant', 'me'],
     '/api/tenant/me',
   );
   const loading = oooLoading || membersLoading || meLoading;
+  const oooFailed = Boolean(oooError) && !oooData;
+  const oooStale = Boolean(oooError) && Boolean(oooData);
+  const oooReason = oooError?.message || 'no response from the server';
+  const membersFailed = Boolean(membersError) && !membersData;
+  const membersStale = Boolean(membersError) && Boolean(membersData);
+  const membersReason = membersError?.message || 'no response from the server';
+  const meFailed = Boolean(meError) && !meData;
+  const meStale = Boolean(meError) && Boolean(meData);
+  const meReason = meError?.message || 'no response from the server';
   const meId = meData?.user?.id ?? null;
   const members = useMemo(
     () => (membersData?.data ?? []).map((m) => ({ user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email })),
@@ -96,6 +111,21 @@ export default function OutOfOfficePage() {
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
+  // #2872: the config read owns this whole editor — every field is seeded from it. When
+  // it never answered we must NOT render the form at DEFAULT (the "Available / No
+  // upcoming out-of-office" all-clear below is exactly what a failed read would fake),
+  // because Save would write the defaults over the stored config. This is the terminal
+  // Loading screen gaining a failed arm; a stale read (below) keeps the editor alive.
+  if (oooFailed) return (
+    <div className="space-y-4 animate-fade-in">
+      <h1 className="text-xl font-bold flex items-center gap-2"><Plane className="w-5 h-5 text-violet-600" />Out of Office</h1>
+      <InlineErrorState
+        message={`Could not load your out-of-office settings (${oooReason}) — this is a failed request, not a "you are available" answer. The editor is withheld so a save cannot write the defaults over your stored config.`}
+        onRetry={() => void refetchOoo()}
+      />
+    </div>
+  );
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
@@ -104,6 +134,15 @@ export default function OutOfOfficePage() {
           Tell NuCRM you're away. Optionally reassign your work to a teammate while you're out.
         </p>
       </div>
+
+      {/* #2872: a refused refresh of the config keeps the form on screen — the rows the
+          operator can still act on are the last good read, so say so above them. */}
+      {oooStale && (
+        <InlineErrorState
+          message={`Could not refresh your out-of-office settings, so the window, delegate and reply below are the last read: ${oooReason}. If you changed this from another device since, this form still holds the older version — saving writes what you see here.`}
+          onRetry={() => void refetchOoo()}
+        />
+      )}
 
       {/* Status banner */}
       <div className={cn(
@@ -175,6 +214,29 @@ export default function OutOfOfficePage() {
 
       {/* Delegate */}
       <Section icon={User} title="Delegate">
+        {/* #2872: the roster and identity reads own the picker below. Reachability kept:
+            neither failure disables the toggle or Save — only the delegate choice degrades,
+            and the picker says why rather than silently looking empty. */}
+        {membersFailed && (
+          <InlineErrorState
+            message={`Could not load your teammates (${membersReason}) — this is a failed request, not a workspace with no one to hand work to. Pick a delegate after a retry succeeds.`}
+            onRetry={() => void refetchMembers()}
+          />
+        )}
+        {membersStale && (
+          <InlineErrorState
+            message={`Could not refresh the teammate list, so the delegate options below are the last read: ${membersReason}. A teammate added or removed recently may not be reflected here.`}
+            onRetry={() => void refetchMembers()}
+          />
+        )}
+        {(meFailed || meStale) && (
+          <InlineErrorState
+            message={meFailed
+              ? `Could not confirm which teammate you are (${meReason}) — the delegate list below may still include yourself.`
+              : `Could not refresh who you are, so the delegate list below may still include yourself from the last read: ${meReason}.`}
+            onRetry={() => void refetchMe()}
+          />
+        )}
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">Hand work to</label>
           <select
