@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { SCOPES, visibleForRole,
   type SettingsScope, type SettingsGroup, type SettingsItem,
 } from '@/components/tenant/settings/settings-config';
@@ -42,12 +43,17 @@ export default function SettingsIndex() {
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). Both
   // endpoints are optional/admin-aware so failures fall back to safe defaults
   // (retry disabled to avoid retrying expected 403/404s).
-  const { data: meData } = useApiQuery<{ is_admin?: boolean }>(
+  // #2872: `error`/`refetch` now bound. `useApiQuery` keeps `data` through a refused
+  // revalidation, so a bare `error` cannot tell an outage from a stale read — and here a
+  // failed role read collapsed `isAdmin` to false (hiding the admin scopes as though the
+  // tenant had none) and a failed summary read printed `0 / 0 / 0` ("nothing needs
+  // attention"), the all-clear a dead read has no authority to give.
+  const { data: meData, error: meError, refetch: refetchMe } = useApiQuery<{ is_admin?: boolean }>(
     ['tenant', 'me'],
     '/api/tenant/me',
     { retry: false },
   );
-  const { data: statusData } = useApiQuery<{
+  const { data: statusData, error: statusError, refetch: refetchStatus } = useApiQuery<{
     statuses?: Record<string, StatusEntry>;
     summary?: { configured: number; default: number; attention: number; unknown: number };
   }>(
@@ -55,6 +61,12 @@ export default function SettingsIndex() {
     '/api/tenant/settings-status',
     { retry: false },
   );
+  const meFailed = Boolean(meError) && !meData;
+  const meStale = Boolean(meError) && Boolean(meData);
+  const meReason = meError?.message || 'no response from the server';
+  const statusFailed = Boolean(statusError) && !statusData;
+  const statusStale = Boolean(statusError) && Boolean(statusData);
+  const statusReason = statusError?.message || 'no response from the server';
 
   const isAdmin = meData?.is_admin ?? false;
   const statuses = useMemo(() => statusData?.statuses ?? {}, [statusData]);
@@ -85,6 +97,34 @@ export default function SettingsIndex() {
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
+      {/* #2872: the two reads only decorate this control center — the setting cards below
+          come from static config — so a failed read adds a caveat rather than blanking the
+          page. Reachability kept: every card link and the search still work over a stale read. */}
+      {meFailed && (
+        <InlineErrorState
+          message={`Could not confirm your role (${meReason}) — workspace admin settings may be missing from the list below. This is a failed read, not a tenant with no admin settings.`}
+          onRetry={() => void refetchMe()}
+        />
+      )}
+      {meStale && (
+        <InlineErrorState
+          message={`Could not refresh your role, so which settings are visible below is the last read: ${meReason}. An admin-only page may be missing or shown until this recovers.`}
+          onRetry={() => void refetchMe()}
+        />
+      )}
+      {statusFailed && (
+        <InlineErrorState
+          message={`Could not load the settings health summary (${statusReason}) — the "—" counts by the title are a failed request, not a tenant with nothing configured.`}
+          onRetry={() => void refetchStatus()}
+        />
+      )}
+      {statusStale && (
+        <InlineErrorState
+          message={`Could not refresh the settings health summary, so the counts by the title are the last read: ${statusReason}.`}
+          onRetry={() => void refetchStatus()}
+        />
+      )}
+
       {/* Hero — title + health summary + search */}
       <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
         <div>
@@ -97,9 +137,9 @@ export default function SettingsIndex() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <HealthChip n={summary.attention}  label="Need attention" tone="amber"   />
-          <HealthChip n={summary.configured} label="Configured"     tone="emerald" />
-          <HealthChip n={summary.default}    label="Default"        tone="slate"   />
+          <HealthChip n={summary.attention}  label="Need attention" tone="amber"   unread={statusFailed} />
+          <HealthChip n={summary.configured} label="Configured"     tone="emerald" unread={statusFailed} />
+          <HealthChip n={summary.default}    label="Default"        tone="slate"   unread={statusFailed} />
         </div>
       </div>
 
@@ -232,8 +272,11 @@ function ItemRow({ item, status }: { item: SettingsItem; status?: StatusEntry })
   );
 }
 
-function HealthChip({ n, label, tone }: { n: number; label: string; tone: 'emerald' | 'amber' | 'slate' }) {
-  if (n === 0 && tone === 'slate') return null;
+function HealthChip({ n, label, tone, unread }: { n: number; label: string; tone: 'emerald' | 'amber' | 'slate'; unread?: boolean }) {
+  // #2872: an unanswered summary read must print `—`, never a `0` that reads as "none
+  // here". The slate chip hides on a real 0 but is kept while `unread`, so the operator
+  // sees the gap instead of a partial row that looks like a settled answer.
+  if (!unread && n === 0 && tone === 'slate') return null;
   const colors = {
     emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
     amber:   'bg-amber-50   text-amber-700   dark:bg-amber-950/30   dark:text-amber-400   border-amber-200   dark:border-amber-800',
@@ -241,7 +284,7 @@ function HealthChip({ n, label, tone }: { n: number; label: string; tone: 'emera
   };
   return (
     <span className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border-2 shadow-sm', colors[tone])}>
-      <span className="font-black tabular-nums text-foreground">{n}</span> {label}
+      <span className="font-black tabular-nums text-foreground">{unread ? '—' : n}</span> {label}
     </span>
   );
 }
