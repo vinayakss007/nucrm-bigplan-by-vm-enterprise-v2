@@ -8,10 +8,11 @@ import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import {
-  AlertTriangle, Plus, Save, AlertCircle, Loader2, Trash2, Edit2, 
+  AlertTriangle, Plus, Save, Loader2, Trash2, Edit2, 
   Clock, Zap, MessageSquare, Info
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
 type AtRiskRule = {
@@ -44,7 +45,7 @@ export default function AtRiskRulesPage() {
   const [editing, setEditing] = useState<Partial<AtRiskRule> | null>(null);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: rulesData, isLoading: rulesLoading, error: rulesError } = useApiQuery<AtRiskRule[]>(
+  const { data: rulesData, isLoading: rulesLoading, error: rulesError, refetch: refetchRules } = useApiQuery<AtRiskRule[]>(
     AT_RISK_QUERY,
     '/api/tenant/admin/at-risk',
   );
@@ -55,7 +56,17 @@ export default function AtRiskRulesPage() {
   const rules: AtRiskRule[] = useMemo(() => rulesData ?? [], [rulesData]);
   const pipelines: Pipeline[] = pipelinesData?.data ?? [];
   const loading = rulesLoading || pipelinesLoading;
-  const queryErrorMsg = rulesError ? (rulesError.message || 'Failed to load rules') : null;
+  // #2872: this used to fold the error back into one derived string, which is the spelling
+  // `scripts/check-panel-error-state.mjs` cannot see and which collapses the two states into
+  // one message. Both writes here end in `load()`, an invalidate of this very key, and
+  // `useApiQuery` keeps `data` when that refresh is refused, so "rules on screen + an error"
+  // is the ordinary state right after a save. It was reported as a load failure over the rows
+  // the operator had just written; and a read that never answered printed that banner *and*
+  // "No at-risk rules defined" — a refusal called an absence, on the panel whose emptiness is
+  // what makes the nightly engine fall back to 14 days for every stage in the tenant.
+  const failed = Boolean(rulesError) && !rulesData;
+  const stale = Boolean(rulesError) && Boolean(rulesData);
+  const reason = rulesError?.message || 'no response from the server';
 
   const load = () => queryClient.invalidateQueries({ queryKey: AT_RISK_QUERY });
 
@@ -131,11 +142,20 @@ export default function AtRiskRulesPage() {
         </div>
       </div>
 
-      {(error || queryErrorMsg) && (
-        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3 text-destructive">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm font-medium">{error || queryErrorMsg}</div>
-        </div>
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load at-risk rules: ${reason}`}
+          onRetry={() => void refetchRules()}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the rules below are the last read: ${reason}. A rule you just created, edited or deleted is still shown the way this page last saw it.`}
+          onRetry={() => void refetchRules()}
+        />
+      )}
+      {error !== null && (
+        <InlineErrorState message={error || 'The server refused the change'} />
       )}
 
       {loading ? (
@@ -145,7 +165,9 @@ export default function AtRiskRulesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {rules.length === 0 && !editing && (
+          {/* #2872: only an answered-empty read may say there are none. A last read that came
+              back empty still says it, beside the caveat above; a refusal says it nowhere. */}
+          {!failed && rules.length === 0 && !editing && (
             <div className="p-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center bg-muted/30">
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
                 <AlertTriangle className="w-6 h-6 text-muted-foreground" />
