@@ -468,7 +468,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(gen, 'the write gate drifted onto the kept read — a last read must stay saveable')
       .not.toMatch(/disabled=\{[^}]*\|\| stale\}/);
     expect(gen, 'the plan sentence is asserted about an unread read again')
-      .toMatch(/\{!failed && tenant\?\.plan_id !== 'enterprise' && \(/);
+      .toMatch(/\{!failed && tenant\?\.planId !== 'enterprise' && \(/);
     // Nothing on this page derives a figure from the read, so nothing may be dashed.
     expect(gen, 'general invented a dash for a total it never had').not.toMatch(/\? '—'/);
   });
@@ -591,13 +591,19 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(srcOf(two829), `${two829} now speaks about a last read`).not.toMatch(/last read/);
     expect(srcOf(two829)).toMatch(/Failed to load your localization settings/);
 
-    // And no other suite has started mounting these two pages.
+    // And no other suite has started mounting these two pages. #2949's suite joined
+    // the roster legitimately — it mounts the general page to pin the camelCase seed,
+    // a different concern — so it is listed here and checked for the one thing that
+    // would make two suites claim one page's outage copy.
+    const seeded = 'tests/unit/settings-general-camelcase-seed-2949.test.tsx';
+    expect(srcOf(seeded), `${seeded} now speaks about a last read`).not.toMatch(/last read/);
     const mounted = readdirSync(join(ROOT, 'tests/unit'))
       .filter((f) => f.endsWith('.test.tsx'))
       .filter((f) => /settings\/(general|localization)\/page/.test(srcOf(`tests/unit/${f}`)));
     expect(mounted.sort()).toEqual([
       'panel-page-error-not-empty-general-localization-stale-2872.test.tsx',
       'panel-page-error-not-empty-tenant-settings-2829.test.tsx',
+      'settings-general-camelcase-seed-2949.test.tsx',
     ].sort());
   });
 });

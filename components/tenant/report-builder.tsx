@@ -10,9 +10,8 @@ import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } fr
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-// Derive the Tooltip `formatter` type from the installed recharts Tooltip so it
-// matches the resolved version (recharts' type aliases aren't reliably exported
-// from root); coerce in-body to preserve exact output.
+// Derive the Tooltip `formatter` type from the installed recharts Tooltip — its type
+// aliases aren't reliably exported from root — and coerce in-body to keep the output.
 type TooltipFormatter = NonNullable<ComponentProps<typeof Tooltip>['formatter']>;
 
 // ── Types ────────────────────────────────────────────────────────────────────

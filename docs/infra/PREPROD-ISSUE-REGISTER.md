@@ -5395,8 +5395,9 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `failed` with its real result. The tenant half of that filter is the **#2525** convention, not an
   invention of this PR.
 - **What the console does with a reaped row, with no client change.**
-  `app/tenant/settings/compliance/page.tsx:285` and `:332` render `r.status`, coloured by the two-way test
-  at `:282-283` / `:329-330`, so a reaped row turns yellow→red on its own. `staleReason` is **not**
+  `app/tenant/settings/compliance/page.tsx:340` and `:399` render `r.status`, coloured by the two-way test
+  at `:337-338` / `:396-397` (re-pinned from 285 / 332 and 282-283 / 329-330 on 2026-10-22 by **#2957**,
+  which put the two-way split above them), so a reaped row turns yellow→red on its own. `staleReason` is **not**
   displayed: the row now says *failed* where it should say *failed, and this is why*. That is a UI
   follow-up, not a correctness gap, and it is left open here.
 - **Measured:** `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests. The evidence is the

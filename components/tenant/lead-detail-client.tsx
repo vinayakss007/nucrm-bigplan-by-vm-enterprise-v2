@@ -19,13 +19,7 @@ import { openExternalUrl } from '@/lib/sanitize';
 import { clientLogError } from '@/lib/client-logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 

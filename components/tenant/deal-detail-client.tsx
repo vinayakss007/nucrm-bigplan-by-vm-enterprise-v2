@@ -21,13 +21,8 @@ import DealTimeline from '@/components/tenant/deal-timeline';
 import DealForecast from '@/components/tenant/deal-forecast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 
 const DEFAULT_STAGES = [
