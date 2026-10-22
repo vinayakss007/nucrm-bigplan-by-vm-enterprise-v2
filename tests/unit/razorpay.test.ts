@@ -275,8 +275,7 @@ describe('lib/razorpay', () => {
           JSON.stringify({ error: { code: 'BAD_REQUEST_ERROR', description: 'Invalid amount' } }),
           { status: 400 },
         );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      }) as any;
+      }) as typeof fetch;
 
       const { createOrder, RazorpayApiError } = await import('@/lib/razorpay');
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockFindFirst, mockSelectChain } = vi.hoisted(() => ({
@@ -9,19 +8,19 @@ const { mockFindFirst, mockSelectChain } = vi.hoisted(() => ({
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
-      tenants: { findFirst: (..._args: any[]) => mockFindFirst('tenants', ..._args) },
-      tenantModules: { findFirst: (..._args: any[]) => mockFindFirst('tenantModules', ..._args) },
-      modules: { findFirst: (..._args: any[]) => mockFindFirst('modules', ..._args) },
+      tenants: { findFirst: (..._args: unknown[]) => mockFindFirst('tenants', ..._args) },
+      tenantModules: { findFirst: (..._args: unknown[]) => mockFindFirst('tenantModules', ..._args) },
+      modules: { findFirst: (..._args: unknown[]) => mockFindFirst('modules', ..._args) },
     },
     select: mockSelectChain,
-    insert: (..._args: any[]) => ({
-      values: (..._valArgs: any[]) => ({
+    insert: (..._args: unknown[]) => ({
+      values: (..._valArgs: unknown[]) => ({
         onConflictDoNothing: vi.fn(() => ({ then: vi.fn() })),
       }),
     }),
-    update: (..._args: any[]) => ({
-      set: (..._setArgs: any[]) => ({
-        where: (..._whereArgs: any[]) => undefined,
+    update: (..._args: unknown[]) => ({
+      set: (..._setArgs: unknown[]) => ({
+        where: (..._whereArgs: unknown[]) => undefined,
       }),
     }),
     transaction: vi.fn(),
@@ -60,8 +59,8 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((_col: any, _val: any) => `eq(${String(_val)})`),
-  and: vi.fn((..._args: any[]) => 'and()'),
+  eq: vi.fn((_col: unknown, _val: unknown) => `eq(${String(_val)})`),
+  and: vi.fn((..._args: unknown[]) => 'and()'),
 }));
 
 import { ModuleRegistry, BUILTIN_MODULES } from '@/lib/modules/registry';
