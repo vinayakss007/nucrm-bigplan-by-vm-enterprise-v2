@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from 'vitest';
 import { TemplateSDK } from '@/lib/sdk/templates';
 
-function makeMockRequest(responses: Record<string, any> = {}) {
+function makeMockRequest(responses: Record<string, unknown> = {}) {
   return vi.fn(async (method: string, path: string, _body?: unknown) => {
     const key = `${method} ${path}`;
     if (key in responses) return responses[key];
