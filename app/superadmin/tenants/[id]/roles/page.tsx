@@ -13,6 +13,7 @@ import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, 
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const DANGER_COLORS: Record<string, string> = { safe: 'text-emerald-500', moderate: 'text-amber-500', danger: 'text-red-500' };
@@ -46,9 +47,33 @@ export default function TenantRolesPage() {
     { enabled: !!tenantId },
   );
   const loading = tenantQuery.isLoading || rolesQuery.isLoading;
+  const tenantData = tenantQuery.data;
+  const rolesData = rolesQuery.data;
   const tenant: { id: string; name: string } | null =
     (tenantQuery.data?.data ?? (tenantQuery.data as { id: string; name: string } | undefined)) ?? null;
   const roles: Role[] = rolesQuery.data?.data ?? [];
+
+  // #2872: all three writes — `saveRole`'s PATCH, `createRoleMutation`'s POST, `deleteRoleMutation`'s
+  // DELETE — end in `invalidateRoles()`, which re-reads BOTH keys, so "rows kept, error set" is the
+  // ordinary state right after the operator creates, edits or retires a role, and `useQuery` keeps
+  // the previous `data` when a revalidation rejects (no `keepPreviousData` here; it is the default).
+  // This page bound neither read's `error` to anything, so the roster just sat there. The tenant key
+  // is the detail page's too (`['superadmin', 'tenant', tenantId]` in app/superadmin/tenants/[id]/page.tsx).
+  // The three writes are named by their handler, not by their line: this page's own failure handling
+  // is what moved those lines, and a number only the file's next editor can keep true is a claim.
+  const tenantFailed = Boolean(tenantQuery.error) && !tenantData;
+  const tenantStale = Boolean(tenantQuery.error) && Boolean(tenantData);
+  const tenantReason = tenantQuery.error?.message || 'no response from the server';
+  const rolesFailed = Boolean(rolesQuery.error) && !rolesData;
+  const rolesStale = Boolean(rolesQuery.error) && Boolean(rolesData);
+  const rolesReason = rolesQuery.error?.message || 'no response from the server';
+  // A 404 is an answer about the RECORD, and only one read here can give it: GET
+  // /api/superadmin/tenants/[id] replies 'Tenant not found' for an id that does not resolve
+  // (route.ts:25, :59), while the roles route answers 200 with an empty list for a tenant that
+  // has no roles (:80). "No response from the server" about a deleted tenant is wrong twice
+  // over, and "Try again" cannot fix it.
+  const notFound = (tenantFailed && tenantQuery.error?.status === 404)
+    || (rolesFailed && rolesQuery.error?.status === 404);
 
   const invalidateRoles = () => {
     queryClient.invalidateQueries({ queryKey: ['superadmin', 'tenant', tenantId] });
@@ -128,6 +153,24 @@ export default function TenantRolesPage() {
     );
   }
 
+  // The record is gone: the server answered, and what it answered is that there is no tenant
+  // here — nothing below may offer to create a role for it.
+  if (notFound) {
+    return (
+      <div className="space-y-4 max-w-6xl">
+        <Link href="/superadmin/tenants" className="p-2 rounded-lg hover:bg-accent text-muted-foreground inline-flex">
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+        <div className="admin-card p-8 text-center space-y-2">
+          <p className="font-semibold">No tenant with this id</p>
+          <p className="text-sm text-muted-foreground">
+            The organization this page was opened for does not exist, so there is nothing here to manage.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Header */}
@@ -138,7 +181,7 @@ export default function TenantRolesPage() {
         <div className="flex-1">
           <h1 className="text-lg font-bold flex items-center gap-2">
             <Shield className="w-5 h-5 text-violet-500" />
-            {tenant?.name} — Role Permissions
+            {tenant?.name ?? 'This organization'} — Role Permissions
           </h1>
           <p className="text-sm text-muted-foreground">Manage granular permissions for this organization</p>
         </div>
@@ -153,9 +196,55 @@ export default function TenantRolesPage() {
         </button>
       </div>
 
+      {/* The organization read feeds only the name above, and still gets its own banner and its
+          own retry. The writes stay offered over it: every route here addresses the tenant by the
+          path id and checks it server-side (roles/route.ts:48, [roleId]/route.ts:62, :142), so
+          none of them needs a name this page did not read. */}
+      {tenantFailed && (
+        <InlineErrorState
+          message={`Failed to load this organization: ${tenantReason}. Its name is all this page could not read — the role list comes from a different request and is shown on its own terms below.`}
+          onRetry={() => void tenantQuery.refetch()}
+        />
+      )}
+      {tenantStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the organization name above is the last read: ${tenantReason}. A rename or a status change made since then is not shown here, and it does not change which role rows or permissions the list below holds.`}
+          onRetry={() => void tenantQuery.refetch()}
+        />
+      )}
+
+      {/* #2872: the operator's own create / save / delete all end in `invalidateRoles()`, which
+          re-reads this key, so this is the ordinary state after a write that succeeded. What the
+          refusal hides, per control: a role created since is missing, one retired since is still
+          listed and still clickable, and each card's permission tally and member count were
+          computed off this read. Create stays live — POST refuses a taken name rather than
+          writing a second role (roles/route.ts:109-131, 409) — and Delete stays live, acting on
+          the row's own id, which the server 404s once it is gone ([roleId]/route.ts:181). The
+          PATCH that replaces a role's whole permission map is the write nothing can refuse: its
+          guard is opted into by a field this page never sends ([roleId]/route.ts:85-87, :95;
+          lib/api/concurrency.ts:31), so the cost is said in the editor's own caveat — and that
+          editor only opens from a card, which requires this read to have answered. */}
+      {rolesStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the role cards below are the last read: ${rolesReason}. A role created since this was fetched is missing, one retired since is still listed and still clickable, and the permission tally and member count on each card are what this read saw — saving from a card rewrites that role's whole permission map from them.`}
+          onRetry={() => void rolesQuery.refetch()}
+        />
+      )}
+
       {/* Roles List */}
       <div className="space-y-4">
-        {roles.map(role => {
+        {rolesFailed && (
+          <InlineErrorState
+            message={`Failed to load this organization's roles: ${rolesReason}. This is not "there are none" — the read never answered, so nothing here can show what already exists. New Role still creates, and the server refuses a name that is taken rather than letting a second one through; what no one can tell you is whether one already had it.`}
+            onRetry={() => void rolesQuery.refetch()}
+          />
+        )}
+        {!rolesFailed && roles.length === 0 && (
+          <div className="admin-card p-6 text-center text-sm text-muted-foreground">
+            No roles configured for this organization.
+          </div>
+        )}
+        {!rolesFailed && roles.map(role => {
           const grantedCount = role.permissions?.['all'] === true
             ? PERMISSIONS.length
             : Object.values(role.permissions || {}).filter(Boolean).length;
@@ -221,6 +310,8 @@ export default function TenantRolesPage() {
       {showEditor && (
         <RoleEditorModal
           role={editRole}
+          rolesStale={rolesStale}
+          rolesReason={rolesReason}
           onSave={(roleData) => {
             if (editRole) {
               saveRole(editRole.id, roleData.permissions);
@@ -236,8 +327,10 @@ export default function TenantRolesPage() {
   );
 }
 
-function RoleEditorModal({ role, onSave, onClose }: {
+function RoleEditorModal({ role, rolesStale, rolesReason, onSave, onClose }: {
   role: Role | null;
+  rolesStale: boolean;
+  rolesReason: string;
   onSave: (data: { name?: string; description?: string; permissions: Record<string, boolean> }) => void;
   onClose: () => void;
 }) {
@@ -267,6 +360,17 @@ function RoleEditorModal({ role, onSave, onClose }: {
           <div>
             <h2 className="font-semibold">{role ? `Edit: ${role.name}` : 'New Role'}</h2>
             <p className="text-xs text-muted-foreground">{granted}/{PERMISSIONS.length} permissions</p>
+            {/* This form's write is a whole-map replace of one role's permissions
+                ([roleId]/route.ts:80 — `patch.permissions` overwrites the column) built from the
+                row it was opened on, so over a refused refresh the cost is said here, where the
+                checkboxes are, and not only in the banner up the page. */}
+            {role && rolesStale && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                These checkboxes start from the permission map this list last read ({rolesReason}).
+                Saving replaces that whole map on the server, so a permission granted elsewhere
+                since the read is not on this screen and cannot be kept by this save.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-accent flex items-center justify-center text-muted-foreground">
             <X className="w-4 h-4" />
