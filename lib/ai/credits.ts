@@ -75,7 +75,9 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
     ),
   });
 
-  // Auto-create if not exists (period rollover)
+  // Auto-create if not exists (period rollover). #3081: the bare insert raced
+  // the tenant_id_billing_period_key unique index — N concurrent first calls
+  // of a month turned the losers into raw 23505s on an AI request.
   if (!credits) {
     [credits] = await db.insert(tenantAiCredits).values({
       tenantId,
@@ -87,7 +89,15 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
       hardCapEnabled: true,
       softCapPct: 80,
       status: 'active',
-    }).returning();
+    }).onConflictDoNothing().returning();
+    if (!credits) {
+      credits = await db.query.tenantAiCredits.findFirst({
+        where: and(
+          eq(tenantAiCredits.tenantId, tenantId),
+          eq(tenantAiCredits.billingPeriod, period),
+        ),
+      });
+    }
   }
 
   return {
@@ -167,6 +177,7 @@ export async function deductCredits(params: {
           usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
           usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
           status: sql`CASE 
+            WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
             WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
             ELSE 'active'
           END`,
@@ -268,7 +279,9 @@ export async function allocateCredits(params: {
         allocatedCostCents: sql`${tenantAiCredits.allocatedCostCents} + ${params.costCents ?? 0}`,
         hardCapEnabled: params.hardCapEnabled ?? true,
         softCapPct: params.softCapPct ?? 80,
-        status: 'active',
+        // #3081: topping up an exhausted pool re-activates it, but a
+        // suspension is an admin enforcement — only `reactivate` clears it.
+        status: sql`CASE WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended' ELSE 'active' END`,
         allocationNotes: params.notes,
         allocatedBy: params.allocatedBy,
         setBy: params.allocatedBy,
@@ -277,6 +290,34 @@ export async function allocateCredits(params: {
     });
 
   return getCreditBalance(params.tenantId);
+}
+
+/**
+ * #3081: set the enforcement status for the CURRENT period, creating the
+ * row if none exists yet. The superadmin suspend used to be a bare UPDATE —
+ * on a fresh billing period there is no row, zero rows changed, and the
+ * route still answered success while the tenant's next AI call auto-created
+ * an 'active' row. An upsert makes the intent unconditional.
+ */
+export async function setCreditStatus(
+  tenantId: string,
+  status: 'active' | 'suspended',
+): Promise<void> {
+  const period = getCurrentPeriod();
+  await db.insert(tenantAiCredits).values({
+    tenantId,
+    allocatedTokens: 0,
+    usedTokens: 0,
+    allocatedCostCents: 0,
+    usedCostCents: 0,
+    billingPeriod: period,
+    hardCapEnabled: true,
+    softCapPct: 80,
+    status,
+  }).onConflictDoUpdate({
+    target: [tenantAiCredits.tenantId, tenantAiCredits.billingPeriod],
+    set: { status, updatedAt: new Date() },
+  });
 }
 
 /**
