@@ -40,8 +40,10 @@ type DraftResp = {
   body: string;
   provider: string;
   model: string;
-  tokens_used: number;
-  latency_ms: number;
+  // #2872: two fields the payload may leave out. They are printed below, and a blank next to
+  // "tokens" reads as an answer the server never gave, so they arrive as `number | null`.
+  tokens_used: number | null;
+  latency_ms: number | null;
   fallbacks_used: number;
   activity_id: string | null;
   template: string;
@@ -78,11 +80,26 @@ export default function AIDraftPage() {
       '/api/tenant/admin/ai-templates',
       { retry: false },
     );
+  // #2872: at base this memo returned [] on ANY error, so a refused refresh took the rows the
+  // read had already answered with and handed the picker an empty list — under a banner saying
+  // they could not be loaded. `apiFetcher` keeps `data` through a failed revalidation, so the
+  // list is simply what the payload said, and the failure states below decide what is said
+  // about it.
   const templates: Template[] | null = useMemo(() => {
     if (templatesLoading) return null;
-    if (templatesError) return [];
     return [...(templatesData?.templates ?? []), ...(templatesData?.seeds ?? [])];
-  }, [templatesData, templatesLoading, templatesError]);
+  }, [templatesData, templatesLoading]);
+  // Three states, keyed on the payload and not on the flag: a read that never answered, and a
+  // read that answered and then had this refresh refused.
+  const is404 = templatesError?.status === 404;
+  const templatesFailed = Boolean(templatesError) && !templatesData && !is404;
+  const templatesStale = Boolean(templatesError) && Boolean(templatesData) && !is404;
+  const templatesReason = templatesError?.message || 'no response from the server';
+  // #1328 documented this endpoint as admin-only, so a 404 genuinely IS the answer "you have no
+  // templates to pick" — it is neither of the two failures above.
+  const templatesOutageMessage = `Failed to load your AI templates: ${templatesReason}. The picker is unanswered, and this is not a statement that you have nothing to pick.`;
+  const templatesStaleMessage = `Could not refresh your AI templates, so the list below is the last read: ${templatesReason}. A template added, edited or removed since that read is missing or wrong here, and Generate drafts from what is listed.`;
+  const templatesStaleEmptyMessage = `Could not refresh your AI templates, so the empty picker below is the last read: ${templatesReason}. A template created since that read is not offered here, and this is not a statement that you have none.`;
   // Seed the initial selection once templates arrive.
   useEffect(() => {
     if (!templateSeeded && templates && templates.length > 0) {
@@ -100,7 +117,7 @@ export default function AIDraftPage() {
   // #1328: entity typeahead via TanStack Query (was a debounced fetch in an
   // effect). entityType + debounced search are part of the key.
   const searchCfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-  const { data: searchData } = useApiQuery<SearchResp>(
+  const { data: searchData, error: searchError, refetch: refetchSearch } = useApiQuery<SearchResp>(
     ['tenant', 'ai', 'draft-search', entityType, debouncedSearch],
     searchCfg.api + encodeURIComponent(debouncedSearch),
   );
@@ -121,6 +138,16 @@ export default function AIDraftPage() {
       return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
     });
   }, [searchData, entityType]);
+  // #2872: the same split for the second read, which at base bound no `error` at all. Its result
+  // only renders when it has rows, so a search that never answered and a search whose refresh was
+  // refused were both invisible — the type box sat there with nothing under it. Keyed on
+  // `searchData`, so the caveat is armed by whether the read ever answered and not by whether the
+  // last answer happened to have matches.
+  const searchFailed = Boolean(searchError) && !searchData;
+  const searchStale = Boolean(searchError) && Boolean(searchData);
+  const searchReason = searchError?.message || 'no response from the server';
+  const searchOutageMessage = `Failed to load the ${searchCfg.label} search: ${searchReason}. The match list is unanswered, and this is not a statement that nothing matched.`;
+  const searchStaleMessage = `Could not refresh the ${searchCfg.label} search, so what is listed below is the last read: ${searchReason}. An entity added, renamed or removed since that read is wrong here, and Generate drafts against it.`;
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -146,7 +173,10 @@ export default function AIDraftPage() {
       setEditedSubject(data.subject ?? '');
       setEditedBody(data.body);
     },
-    onError: (e: Error) => setError(e.message),
+    // #2872: the same fallback every other message on this page uses, applied where the failure
+    // enters state. A rejection with nothing to say put '' in state, and '' is falsy, so the box
+    // below did not arm at all: the draft simply never appeared and nothing said why.
+    onError: (e: Error) => setError(e.message || 'no response from the server'),
   });
   const busy: 'generate' | null = generateMutation.isPending ? 'generate' : null;
 
@@ -210,16 +240,25 @@ export default function AIDraftPage() {
         <div className="space-y-3">
           <Card title="1. Template">
             {templates === null && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-            {templatesError && templatesError.status !== 404 ? (
+            {templatesFailed ? (
               // #1328 documented this endpoint as admin-only, so a 404 really does mean "you
               // have no templates to pick". Anything else — a 500, a dead pool, an RLS refusal
               // — was being turned into [] and then into "No templates configured. Add one.",
               // which sends the tenant off to re-create a template they already have (#2829).
+              <InlineErrorState message={templatesOutageMessage} onRetry={refetchTemplates} />
+            ) : null}
+            {templatesStale ? (
+              // #2872: the read answered and this refresh was refused — the routine state after
+              // anything invalidates the key. The rows the tenant is looking at are real, so the
+              // banner sits ABOVE them and says which read they came from, instead of replacing
+              // them with an outage card.
               <InlineErrorState
-                message={`Failed to load your AI templates: ${templatesError.message || 'no response from the server'}`}
+                className="mb-2"
+                message={templates && templates.length === 0 ? templatesStaleEmptyMessage : templatesStaleMessage}
                 onRetry={refetchTemplates}
               />
-            ) : templates !== null && templates.length === 0 ? (
+            ) : null}
+            {!templatesFailed && !templatesStale && templates !== null && templates.length === 0 ? (
               <p className="text-sm text-muted-foreground">No templates configured. <Link href="/tenant/settings/ai-templates" className="text-violet-600 hover:underline">Add one</Link>.</p>
             ) : null}
             <div className="space-y-1.5">
@@ -271,6 +310,14 @@ export default function AIDraftPage() {
               placeholder={`Search ${entityType}s…`}
               className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-1 focus:ring-violet-500 text-sm"
             />
+            {searchFailed && (
+              <InlineErrorState className="mt-2" message={searchOutageMessage} onRetry={refetchSearch} />
+            )}
+            {searchStale && (
+              // #2872: the matches are the last read's, so they stay on screen with this said —
+              // and the empty list below is described as the answer it was, not as an outage.
+              <InlineErrorState className="mt-2" message={searchStaleMessage} onRetry={refetchSearch} />
+            )}
             {entityHits.length > 0 && (
               <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border">
                 {entityHits.map(h => (
@@ -324,9 +371,9 @@ export default function AIDraftPage() {
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
                 <span>{draft.provider}</span>
                 <span>·</span>
-                <span>{draft.tokens_used} tokens</span>
+                <span>{draft.tokens_used ?? '—'} tokens</span>
                 <span>·</span>
-                <span>{draft.latency_ms}ms</span>
+                <span>{draft.latency_ms ?? '—'}ms</span>
                 {draft.fallbacks_used > 0 && <><span>·</span><span className="text-amber-600">fallback</span></>}
               </div>
             )
