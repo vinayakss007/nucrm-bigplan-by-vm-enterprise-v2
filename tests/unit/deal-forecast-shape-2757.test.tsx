@@ -29,7 +29,11 @@
  * (route.ts:112-117). The close date and amount survive only because the client
  * omits `undefined` fields.
  *
- * `deal-detail-client.tsx:647` mounts this on every deal page.
+ * `deal-detail-client.tsx:643` mounts this on every deal page (re-pinned 2026-10-22: it read
+ * `:647` here while main carried it at `:648` already, and **#3016** collapsed two `lucide-react`
+ * imports above it and took the file from 789 lines to 784 — which is the point of #3014: a
+ * citation inside a test header is invisible to `check-register-coords.mjs`, whose only scanned
+ * file is `docs/infra/PREPROD-ISSUE-REGISTER.md`, so nothing failed when it went stale).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
