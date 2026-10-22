@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Coverage for the NuCRMClient resource namespaces in lib/integrations/sdk.ts.
  *
@@ -33,7 +32,7 @@ function lastRequest() {
 
 async function client(overrides: Record<string, unknown> = {}) {
   const { createNuCRM } = await import('@/lib/integrations/sdk');
-  return createNuCRM({ apiKey: 'ak_live_test', baseUrl: BASE, ...overrides } as any);
+  return createNuCRM({ apiKey: 'ak_live_test', baseUrl: BASE, ...overrides } as unknown as Parameters<typeof createNuCRM>[0]);
 }
 
 beforeEach(() => {
@@ -83,13 +82,13 @@ describe('request construction', () => {
       ok: false,
       status: 403,
       json: async () => ({ error: 'Forbidden: missing scope' }),
-    } as any);
+    } as never);
     const c = await client();
     await expect(c.contacts.list()).rejects.toThrow('Forbidden: missing scope');
   });
 
   it('falls back to the status code when the body carries no error field', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) } as any);
+    fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) } as never);
     const c = await client();
     await expect(c.deals.list()).rejects.toThrow('HTTP 502');
   });
@@ -99,7 +98,7 @@ describe('request construction', () => {
       ok: true,
       status: 200,
       json: async () => ({ data: [{ id: 'c1' }], total: 1 }),
-    } as any);
+    } as never);
     const c = await client();
     await expect(c.contacts.list()).resolves.toEqual({ data: [{ id: 'c1' }], total: 1 });
   });
@@ -130,7 +129,7 @@ describe('contacts', () => {
 
   it('create() POSTs the contact body', async () => {
     const c = await client();
-    await c.contacts.create({ first_name: 'Ann', last_name: 'Smith', email: 'ann@x.io' } as any);
+    await c.contacts.create({ first_name: 'Ann', last_name: 'Smith', email: 'ann@x.io' } as never);
     expect(lastRequest()).toMatchObject({
       path: '/api/tenant/contacts',
       method: 'POST',
@@ -140,7 +139,7 @@ describe('contacts', () => {
 
   it('update() PATCHes only the supplied fields', async () => {
     const c = await client();
-    await c.contacts.update('c-1', { email: 'new@x.io' } as any);
+    await c.contacts.update('c-1', { email: 'new@x.io' } as never);
     expect(lastRequest()).toMatchObject({
       path: '/api/tenant/contacts/c-1',
       method: 'PATCH',
@@ -188,7 +187,7 @@ describe('deals', () => {
 
   it('create() POSTs the deal body', async () => {
     const c = await client();
-    await c.deals.create({ title: 'Big one', amount: 5000 } as any);
+    await c.deals.create({ title: 'Big one', amount: 5000 } as never);
     expect(lastRequest()).toMatchObject({
       path: '/api/tenant/deals',
       method: 'POST',
@@ -222,7 +221,7 @@ describe('tasks', () => {
 
   it('create() POSTs the task body', async () => {
     const c = await client();
-    await c.tasks.create({ title: 'Follow up' } as any);
+    await c.tasks.create({ title: 'Follow up' } as never);
     expect(lastRequest()).toMatchObject({
       path: '/api/tenant/tasks',
       method: 'POST',
@@ -323,7 +322,7 @@ describe('forms', () => {
   });
 
   it('submit() posts to the public endpoint without the Authorization header', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) } as any);
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) } as never);
     const c = await client();
     await c.forms.submit('f-1', { email: 'lead@x.io' });
 
@@ -341,7 +340,7 @@ describe('forms', () => {
       ok: false,
       status: 422,
       json: async () => ({ error: 'validation failed' }),
-    } as any);
+    } as never);
     const c = await client();
     // submit() bypasses req(), so it has no ok-check: it hands the body back.
     await expect(c.forms.submit('f-1', {})).resolves.toEqual({ error: 'validation failed' });
@@ -386,7 +385,7 @@ describe('ping', () => {
       ok: true,
       status: 200,
       json: async () => ({ tenant_id: 'tenant-3' }),
-    } as any);
+    } as never);
     const c = await client();
     await expect(c.ping()).resolves.toEqual({ ok: true, tenant: 'tenant-3' });
   });
@@ -396,7 +395,7 @@ describe('ping', () => {
       ok: false,
       status: 401,
       json: async () => ({ error: 'Invalid API key' }),
-    } as any);
+    } as never);
     const c = await client();
     await expect(c.ping()).resolves.toEqual({ ok: false, error: 'Invalid API key' });
   });
