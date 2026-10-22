@@ -37,7 +37,7 @@
  *    whether they had already answered.
  *
  * The local `error` becomes what it always should have been — the **write** channel. A refused submit
- * still shows its piece (`Score must be 1-5`, route.ts:74) and keeps the screen it belongs to; a failed
+ * still shows its piece (`Score must be 1-5`, route.ts:73) and keeps the screen it belongs to; a failed
  * *read* never touches it again, which is why "Invalid survey link" is pinned absent from the source.
  * `retry: false` is pinned kept: #2383's throttle is why the page asks once, and this change is about
  * what a refusal says, not how often it asks.
