@@ -19,6 +19,7 @@
 
 import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
+import DevReadNotice, { type DevReadState } from './dev-read-notice';
 
 interface DashboardData {
   timestamp: string;
@@ -83,6 +84,19 @@ export default function DevelopmentDashboard() {
   const queries = queriesQuery.data?.queries ?? [];
   const errors = errorsQuery.data?.errors ?? [];
   const loading = dashboardQuery.isLoading || logsQuery.isLoading || queriesQuery.isLoading || errorsQuery.isLoading;
+
+  // Three channels per read, never folded together (#2872). Before, a read that never answered left
+  // its tab empty (or, for metrics, took the whole Overview blank behind `data && …`), so an outage
+  // on the error-log read read as "zero errors" and a refused refresh on a kept read stayed silent.
+  const readState = (q: { data?: unknown; error: { message?: string } | null }): DevReadState => ({
+    failed: Boolean(q.error) && !q.data,
+    stale: Boolean(q.error) && Boolean(q.data),
+    reason: q.error?.message || 'no response from the server',
+  });
+  const dash = readState(dashboardQuery);
+  const logs = readState(logsQuery);
+  const qrs = readState(queriesQuery);
+  const errs = readState(errorsQuery);
 
   const formatUptime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -156,7 +170,7 @@ export default function DevelopmentDashboard() {
           <div>
             <h1 className="text-4xl font-bold">🚀 Development Dashboard</h1>
             <p className="text-gray-400 mt-2">
-              Node.js {data?.nodeVersion} • Uptime: {data && formatUptime(data.uptime)}
+              Node.js {data?.nodeVersion ?? '—'} • Uptime: {data ? formatUptime(data.uptime) : '—'}
             </p>
           </div>
           <div className="flex gap-4">
@@ -195,8 +209,12 @@ export default function DevelopmentDashboard() {
         </div>
 
         {/* Overview Tab */}
+        {activeTab === 'overview' && dash.failed && (
+          <DevReadNotice read={dash} label="the dashboard metrics" onRetry={() => void dashboardQuery.refetch()} consequence="" />
+        )}
         {activeTab === 'overview' && data && (
           <div className="space-y-6">
+            <DevReadNotice read={dash} label="the metrics below" onRetry={() => void dashboardQuery.refetch()} consequence="Every counter, uptime figure and environment value here came from that older read." />
             {/* Security Notice */}
             <div className="bg-blue-900/50 border border-blue-500 rounded-lg p-4">
               <div className="flex items-start gap-3">
@@ -302,6 +320,7 @@ export default function DevelopmentDashboard() {
             {/* Recent Requests */}
             <div className="bg-gray-800 rounded-lg p-6">
               <h3 className="text-xl font-bold mb-4">📡 Recent Requests</h3>
+              <DevReadNotice read={logs} label="the recent requests below" onRetry={() => void logsQuery.refetch()} consequence="The traffic shown here stopped at that last read." />
               <div className="space-y-2">
                 {requests.slice(-10).reverse().map((req, i) => (
                   <div key={i} className="flex items-center gap-4 text-sm">
@@ -324,6 +343,7 @@ export default function DevelopmentDashboard() {
         {activeTab === 'requests' && (
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-xl font-bold mb-4">📡 All Requests</h3>
+            <DevReadNotice read={logs} label="the request log" onRetry={() => void logsQuery.refetch()} consequence="Requests logged since the last read are not shown here." />
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
               {requests.slice().reverse().map((req, i) => (
                 <div key={i} className="flex items-center gap-4 text-sm p-2 hover:bg-gray-700 rounded">
@@ -350,6 +370,7 @@ export default function DevelopmentDashboard() {
         {activeTab === 'queries' && (
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-xl font-bold mb-4">🗄️ Slow Database Queries</h3>
+            <DevReadNotice read={qrs} label="the slow-query log" onRetry={() => void queriesQuery.refetch()} consequence="Queries that turned slow since the last read are not shown here." />
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {queries.slice().reverse().map((q, i) => (
                 <div key={i} className="p-4 bg-gray-900 rounded">
@@ -376,6 +397,7 @@ export default function DevelopmentDashboard() {
         {activeTab === 'errors' && (
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-xl font-bold mb-4">❌ Error Logs</h3>
+            <DevReadNotice read={errs} label="the error log" onRetry={() => void errorsQuery.refetch()} consequence="An empty list here is not proof that nothing failed — errors since the last read are not shown." />
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {errors.slice().reverse().map((err, i) => (
                 <div key={i} className="p-4 bg-gray-900 rounded border-l-4 border-red-600">

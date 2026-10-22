@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Book, ArrowLeft, ThumbsUp, ThumbsDown, Clock, Eye } from 'lucide-react';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn, formatDate } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
 
@@ -36,7 +37,7 @@ export default function PortalKBArticlePage() {
     } catch { router.replace('/portal/login'); return; }
   }, [router]);
 
-  const { data, isLoading } = useApiQuery<{ data: KBArticle }>(
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: KBArticle }>(
     ['portal-kb-article', params.id],
     `/api/public/kb/articles/${params.id}`,
     { enabled: sessionReady },
@@ -44,10 +45,32 @@ export default function PortalKBArticlePage() {
   const article = data?.data ?? null;
   const loading = !sessionReady || isLoading;
 
+  // Three channels for the article read (#2872). Before, `!article` collapsed every non-success into
+  // "Article not found": a dead pool or a 500 sent a visitor looking for a known article to a not-found
+  // verdict, and a refused refresh over an already-loaded article said nothing about its freshness.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  const status = error?.status ?? null;
+  // A 404/410 is the server answering that the article is gone — the not-found state, never an outage.
+  // But a 404 arriving on top of a kept read is a refused refresh, not a vanished article.
+  const notFound = failed && (status === 404 || status === 410);
+
   if (loading) return (
     <div className="space-y-4 animate-fade-in max-w-3xl">
       <div className="h-8 w-64 bg-muted rounded animate-pulse" />
       <div className="h-64 bg-muted rounded-xl animate-pulse" />
+    </div>
+  );
+
+  // The read never answered and the server said nothing about the article: an outage. This is not a
+  // verdict that the article is gone — say what failed, and offer a retry bound to this read.
+  if (failed && !notFound) return (
+    <div className="max-w-3xl">
+      <InlineErrorState
+        message={`Could not load this article: ${reason}. This is not a verdict that it was removed — try again and the article will appear if the server answers.`}
+        onRetry={() => void refetch()}
+      />
     </div>
   );
 
@@ -61,6 +84,14 @@ export default function PortalKBArticlePage() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl">
+      {/* A refused refresh on top of an already-loaded article: the article stays on screen and the
+          helpful-vote stays reachable; name which read the visitor is looking at. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so this article is the last read: ${reason}. Its contents, view count and category may have changed since.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       <button onClick={() => router.push('/portal/kb')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to KB
       </button>
