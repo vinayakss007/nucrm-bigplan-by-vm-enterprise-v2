@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-this-alias */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -14,8 +13,27 @@ class MockEventSource {
   constructor(url: string) {
     this.url = url;
     MockEventSource.last = this;
-    esInstance = this;
+    esInstance = MockEventSource.last;
   }
+}
+
+/**
+ * Typed window onto RealtimeSDK's private state — the tests below assert on
+ * the internals the class deliberately hides (registered handlers, the live
+ * EventSource, reconnect flags).
+ */
+type RealtimeView = {
+  baseUrl: string;
+  apiKey: string;
+  reconnectInterval: number;
+  eventSource: { close: () => void } | null;
+  handlers: Map<string, Set<unknown>>;
+  channels: Set<string>;
+  shouldReconnect: boolean;
+};
+
+function view(sdk: unknown): RealtimeView {
+  return sdk as RealtimeView;
 }
 
 describe('sdk/realtime', () => {
@@ -24,7 +42,7 @@ describe('sdk/realtime', () => {
     vi.restoreAllMocks();
     esInstance = null;
     // Ensure EventSource is available for every test
-    (globalThis as any).EventSource = MockEventSource;
+    (globalThis as { EventSource?: unknown }).EventSource = MockEventSource;
     // Mock fetch for getTicket
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -36,15 +54,15 @@ describe('sdk/realtime', () => {
   it('constructor stores config and strips trailing slash', async () => {
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com/', apiKey: 'key-1' });
-    expect((sdk as any).baseUrl).toBe('https://example.com');
-    expect((sdk as any).apiKey).toBe('key-1');
-    expect((sdk as any).reconnectInterval).toBe(5000);
+    expect(view(sdk).baseUrl).toBe('https://example.com');
+    expect(view(sdk).apiKey).toBe('key-1');
+    expect(view(sdk).reconnectInterval).toBe(5000);
   });
 
   it('constructor uses custom reconnect interval', async () => {
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1', reconnectInterval: 3000 });
-    expect((sdk as any).reconnectInterval).toBe(3000);
+    expect(view(sdk).reconnectInterval).toBe(3000);
   });
 
   // ── on / off ───────────────────────────────────────────────────────
@@ -53,7 +71,7 @@ describe('sdk/realtime', () => {
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1' });
     const handler = vi.fn();
     sdk.on('event1', handler);
-    expect((sdk as any).handlers.get('event1')?.has(handler)).toBe(true);
+    expect(view(sdk).handlers.get('event1')?.has(handler)).toBe(true);
   });
 
   it('on creates new Set for first handler on event', async () => {
@@ -62,7 +80,7 @@ describe('sdk/realtime', () => {
     const handler = vi.fn();
     sdk.on('event1', handler);
     sdk.on('event1', handler);
-    expect((sdk as any).handlers.get('event1')?.size).toBe(1);
+    expect(view(sdk).handlers.get('event1')?.size).toBe(1);
   });
 
   it('off removes specific handler', async () => {
@@ -73,8 +91,8 @@ describe('sdk/realtime', () => {
     sdk.on('evt', h1);
     sdk.on('evt', h2);
     sdk.off('evt', h1);
-    expect((sdk as any).handlers.get('evt')?.has(h1)).toBe(false);
-    expect((sdk as any).handlers.get('evt')?.has(h2)).toBe(true);
+    expect(view(sdk).handlers.get('evt')?.has(h1)).toBe(false);
+    expect(view(sdk).handlers.get('evt')?.has(h2)).toBe(true);
   });
 
   it('off with no handler removes all handlers for event', async () => {
@@ -82,7 +100,7 @@ describe('sdk/realtime', () => {
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1' });
     sdk.on('evt', vi.fn());
     sdk.off('evt');
-    expect((sdk as any).handlers.has('evt')).toBe(false);
+    expect(view(sdk).handlers.has('evt')).toBe(false);
   });
 
   it('off deletes event set when last handler removed', async () => {
@@ -91,7 +109,7 @@ describe('sdk/realtime', () => {
     const h = vi.fn();
     sdk.on('evt', h);
     sdk.off('evt', h);
-    expect((sdk as any).handlers.has('evt')).toBe(false);
+    expect(view(sdk).handlers.has('evt')).toBe(false);
   });
 
   // ── subscribe / unsubscribe ────────────────────────────────────────
@@ -99,7 +117,7 @@ describe('sdk/realtime', () => {
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1' });
     sdk.subscribe('channel-1');
-    expect((sdk as any).channels.has('channel-1')).toBe(true);
+    expect(view(sdk).channels.has('channel-1')).toBe(true);
   });
 
   it('unsubscribe removes channel and its handlers', async () => {
@@ -108,8 +126,8 @@ describe('sdk/realtime', () => {
     sdk.subscribe('ch');
     sdk.on('ch', vi.fn());
     sdk.unsubscribe('ch');
-    expect((sdk as any).channels.has('ch')).toBe(false);
-    expect((sdk as any).handlers.has('ch')).toBe(false);
+    expect(view(sdk).channels.has('ch')).toBe(false);
+    expect(view(sdk).handlers.has('ch')).toBe(false);
   });
 
   // ── disconnect (standalone) ────────────────────────────────────────
@@ -117,12 +135,12 @@ describe('sdk/realtime', () => {
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1' });
     const closeMock = vi.fn();
-    (sdk as any).eventSource = { close: closeMock };
-    (sdk as any).shouldReconnect = true;
+    view(sdk).eventSource = { close: closeMock };
+    view(sdk).shouldReconnect = true;
     sdk.disconnect();
     expect(closeMock).toHaveBeenCalled();
-    expect((sdk as any).eventSource).toBeNull();
-    expect((sdk as any).shouldReconnect).toBe(false);
+    expect(view(sdk).eventSource).toBeNull();
+    expect(view(sdk).shouldReconnect).toBe(false);
   });
 
   it('disconnect is safe when no EventSource exists', async () => {
@@ -130,8 +148,8 @@ describe('sdk/realtime', () => {
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'key-1' });
     // Should not throw
     sdk.disconnect();
-    expect((sdk as any).eventSource).toBeNull();
-    expect((sdk as any).shouldReconnect).toBe(false);
+    expect(view(sdk).eventSource).toBeNull();
+    expect(view(sdk).shouldReconnect).toBe(false);
   });
 
   // ── connect: ticket fetch ──────────────────────────────────────────
@@ -180,14 +198,14 @@ describe('sdk/realtime', () => {
 
   // ── connect: throws without EventSource ────────────────────────────
   it('connect throws when EventSource is not available', async () => {
-    delete (globalThis as any).EventSource;
+    delete (globalThis as { EventSource?: unknown }).EventSource;
 
     const { RealtimeSDK } = await import('@/lib/sdk/realtime');
     const sdk = new RealtimeSDK({ baseUrl: 'https://example.com', apiKey: 'k' });
     await expect(sdk.connect()).rejects.toThrow('EventSource is not available');
 
     // Restore for other tests
-    (globalThis as any).EventSource = MockEventSource;
+    (globalThis as { EventSource?: unknown }).EventSource = MockEventSource;
   });
 
   // ── connect: onmessage dispatching ─────────────────────────────────
@@ -242,7 +260,7 @@ describe('sdk/realtime', () => {
 
     // EventSource should be closed and nulled
     expect(firstES!.close).toHaveBeenCalled();
-    expect((sdk as any).eventSource).toBeNull();
+    expect(view(sdk).eventSource).toBeNull();
 
     // Advance timer to trigger reconnect
     await vi.advanceTimersByTimeAsync(1100);
