@@ -104,7 +104,11 @@ export async function requestPasswordReset(
     // Send email (fire and forget, but log errors)
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
       try {
-        await sendEmail({
+        // #3045 doctrine: sendEmail resolves {success:false} on provider
+        // rejection and never throws, so the catch below never saw a failed
+        // send. #3076: check the result; the response body stays the
+        // enumeration-safe constant.
+        const emailResult = await sendEmail({
           to: user.email,
           subject: 'Reset your password — NuCRM',
           html: `
@@ -130,9 +134,13 @@ export async function requestPasswordReset(
           `,
           text: `Password Reset\n\nHi ${user.fullName || 'there'},\n\nWe received a request to reset your password. Visit this link to create a new password:\n\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_EXPIRY_HOURS} hour(s). If you didn't request this, you can safely ignore this email.`,
         });
-        
-        logger.info('Password reset email sent', { email: user.email });
+        if (emailResult.success) {
+          logger.info('Password reset email sent', { email: user.email });
+        } else {
+          devLogger.error(new Error(`[password-reset] reset email rejected: ${emailResult.error ?? 'unknown'}`), '[password-reset] Failed to send email');
+        }
       } catch (emailErr) {
+        // Genuine throws (a broken import, an unexpected rejection) still land here.
         devLogger.error(emailErr as Error, '[password-reset] Failed to send email');
       }
     } else {

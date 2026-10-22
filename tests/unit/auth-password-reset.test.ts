@@ -28,7 +28,8 @@ vi.mock('@/drizzle/db', () => ({
 }));
 vi.mock('@/drizzle/schema', () => ({ users: {}, passwordResets: {}, sessions: {} }));
 vi.mock('@/drizzle/relations', () => ({}));
-vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
+// #3076 (guardrails §4): mirror the real SendResult, not undefined.
+vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn().mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-mock' }) }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { log: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/auth/session', () => ({

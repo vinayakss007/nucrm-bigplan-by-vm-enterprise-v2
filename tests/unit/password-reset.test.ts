@@ -35,7 +35,9 @@ vi.mock('@/drizzle/db', () => ({
 }));
 
 vi.mock('@/lib/email/service', () => ({
-  sendEmail: vi.fn().mockResolvedValue(undefined),
+  // #3076 (guardrails §4): sendEmail resolves SendResult {success,...} and never
+  // throws; the old `mockResolvedValue(undefined)` was a lie about the contract.
+  sendEmail: vi.fn().mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-mock' }),
 }));
 
 vi.mock('@/lib/auth/session', () => ({
@@ -89,6 +91,28 @@ describe('Password Reset Module', () => {
           subject: expect.stringContaining('Reset'),
         })
       );
+
+      delete process.env.RESEND_API_KEY;
+    });
+
+    it('logs a provider rejection instead of claiming a send that did not happen (#3076)', async () => {
+      const { requestPasswordReset } = await import('@/lib/auth/password-reset');
+      const { sendEmail } = await import('@/lib/email/service');
+      const { devLogger } = await import('@/lib/dev-logger');
+      const { logger } = await import('@/lib/logger');
+
+      mockSelect.mockResolvedValue([{ id: 'user-1', email: 'test@co.com', fullName: 'Test User' }]);
+      (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: false, error: 'provider rejected the send' });
+      process.env.RESEND_API_KEY = 'test-key';
+
+      const result = await requestPasswordReset('test@co.com', 'https://app.nucrm.com');
+
+      // The response body stays enumeration-safe no matter what the provider said.
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('If that email exists');
+      // …but internally the rejection is logged, not reported as a sent email.
+      expect(logger.info).not.toHaveBeenCalledWith('Password reset email sent', expect.anything());
+      expect(devLogger.error).toHaveBeenCalled();
 
       delete process.env.RESEND_API_KEY;
     });
