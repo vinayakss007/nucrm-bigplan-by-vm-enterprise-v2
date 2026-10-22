@@ -6,7 +6,7 @@
 'use client';
 import { useApiQuery } from '@/lib/query/client';
 import {
-  Activity, AlertTriangle, CheckCircle, RefreshCw, Building2, Users,
+  Activity, AlertTriangle, CheckCircle, HelpCircle, RefreshCw, Building2, Users,
   DollarSign, Database, Server, Book,
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
@@ -52,11 +52,32 @@ export default function MonitoringPage() {
     ['superadmin', 'monitoring'], '/api/superadmin/monitoring', { refetchInterval: 30_000 },
   );
   const healthQuery = useApiQuery<HealthData>(
-    ['superadmin', 'health'], '/api/health', { refetchInterval: 30_000 },
+    // #3095: `['superadmin', 'health']` — this page used that key while pointing at /api/health,
+    // and app/superadmin/health/page.tsx:70 owns it for /api/superadmin/health, which answers
+    // `{data, checks, history}` (app/api/superadmin/health/route.ts:84). TanStack Query keys on the
+    // array, not the URL, and lib/query/client.tsx:47-58 keeps whatever the board put there fresh
+    // for thirty seconds: open the board, then this panel, and this panel renders a roster as a
+    // probe verdict and never re-reads its own endpoint. One key now means one URL — the same key
+    // the board itself uses for this endpoint (app/superadmin/health/page.tsx:76).
+    ['app', 'health'], '/api/health', { refetchInterval: 30_000 },
   );
 
   const data: MonitoringData | null = monitoringQuery.data ?? null;
-  const health: HealthData | null = healthQuery.data ?? null;
+  // #3095: `/api/health` answers with 503 for a system that is genuinely unhealthy
+  // (app/api/health/route.ts:98), and apiFetcher keeps that body on ApiQueryError.info
+  // (lib/query/client.tsx:26-44). The old `health = healthQuery.data ?? null` threw the answer away:
+  // the one reading that says `status:'error', db:'disconnected'` became `healthFailed` and the
+  // header said "Status not read" about a probe that had just explained the outage. A 503 with a
+  // body is therefore the *newest* reading and wins over what an older tick left in `data` — and a
+  // payload with no `status` is not a reading at all, which is what an empty body, or somebody
+  // else's payload, looks like.
+  const health503 = healthQuery.error?.status === 503
+    && typeof (healthQuery.error.info as HealthData | undefined)?.status === 'string'
+    ? (healthQuery.error.info as HealthData)
+    : null;
+  const rawProbe = health503 ?? healthQuery.data ?? null;
+  const health: HealthData | null = typeof rawProbe?.status === 'string' ? rawProbe : null;
+  const probeKnown = Boolean(health);
   const loading = monitoringQuery.isLoading || healthQuery.isLoading;
   const refreshing = monitoringQuery.isFetching || healthQuery.isFetching;
   // #2872: `dataUpdatedAt` is 0 until a read answers, and the `|| Date.now()` this line used
@@ -87,7 +108,9 @@ export default function MonitoringPage() {
   const monitoringFailed = Boolean(monitoringQuery.error) && !data;
   const monitoringStale = Boolean(monitoringQuery.error) && Boolean(data);
   const healthFailed = Boolean(healthQuery.error) && !health;
-  const healthStale = Boolean(healthQuery.error) && Boolean(health);
+  // #3095: the caveat is about the payload a previous tick produced, so it keys on `data` — and an
+  // answered 503 is excluded, because that tick answered: the reading below it is new, not old.
+  const healthStale = Boolean(healthQuery.error) && Boolean(healthQuery.data) && !health503;
   const monitoringReason = monitoringQuery.error?.message || 'no response from the server';
   const healthReason = healthQuery.error?.message || 'no response from the server';
   const allUp = hs.status==='ok' && !healthFailed;
@@ -145,9 +168,12 @@ export default function MonitoringPage() {
           <p className="text-xs text-white/30">Last updated {formatRelativeTime(lastRefresh)} · Auto-refreshes every 30s</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium',healthFailed?'border-white/10 bg-white/5 text-white/40':allUp?'border-emerald-500/20 bg-emerald-500/5 text-emerald-400':'border-red-500/20 bg-red-500/5 text-red-400')}>
-            {allUp?<CheckCircle className="w-3.5 h-3.5"/>:<AlertTriangle className="w-3.5 h-3.5"/>}
-            {healthFailed?'Status not read':allUp?'All Systems Operational':'Issues Detected'}
+          {/* #3095: the chip's colour and icon are claims too. Keying them on `healthFailed` left a
+              read that answered with no `status` — an empty body, or the colliding roster this page
+              used to inherit — saying "Status not read" in outage red with a warning triangle. */}
+          <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium',!probeKnown?'border-white/10 bg-white/5 text-white/40':allUp?'border-emerald-500/20 bg-emerald-500/5 text-emerald-400':'border-red-500/20 bg-red-500/5 text-red-400')}>
+            {!probeKnown?<HelpCircle className="w-3.5 h-3.5"/>:allUp?<CheckCircle className="w-3.5 h-3.5"/>:<AlertTriangle className="w-3.5 h-3.5"/>}
+            {!probeKnown?'Status not read':allUp?'All Systems Operational':'Issues Detected'}
           </div>
           <button onClick={()=>load()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-xs text-white/40 hover:text-white transition-colors">
             <RefreshCw className={cn('w-3.5 h-3.5',refreshing&&'animate-spin')}/>Refresh
@@ -185,8 +211,12 @@ export default function MonitoringPage() {
 
       {/* System health row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <ServiceBadge name="Database" unknown={healthFailed} ok={hs.db==='connected'}/>
-        <ServiceBadge name="App Server" unknown={healthFailed} ok={hs.status==='ok'}/>
+        {/* #3095: `unknown` is not only `healthFailed`. Every field on this probe is optional
+            (`:19-27`), so a read that answered without one has to say "not read" — `ok={false}` on
+            an unreported field is a red badge about a database nothing reported on. Schema already
+            worked this way (#3088); the two badges that name an outage did not. */}
+        <ServiceBadge name="Database" unknown={healthFailed || hs.db === undefined} ok={hs.db==='connected'}/>
+        <ServiceBadge name="App Server" unknown={healthFailed || hs.status === undefined} ok={hs.status==='ok'}/>
         <ServiceBadge name="Schema" unknown={healthFailed || hs.schema_ready===undefined} ok={hs.schema_ready===true}/>
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
           <Server className="w-3.5 h-3.5 text-white/30"/>
