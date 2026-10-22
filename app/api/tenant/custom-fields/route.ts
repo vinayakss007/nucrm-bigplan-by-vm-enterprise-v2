@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createCustomFieldSchema, updateCustomFieldSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/schema';
 import { featureRegistry } from '@/drizzle/schema';
@@ -325,6 +325,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   }
 
   // Create a custom field definition
+  // #3001: definitions are tenant-wide schema config — renaming, retyping or
+  // deleting one rewrites what every form, filter and integration sees for
+  // every member, so mutators require settings.manage. Reading fields and
+  // setting values on records stays member-open.
+  const permErr = requirePerm(ctx, 'settings.manage');
+  if (permErr) return permErr;
+
   const rawBody = await readJsonBody(req);
   const validated = validateBody(createCustomFieldSchema, rawBody);
   if (validated instanceof NextResponse) return validated;
@@ -396,6 +403,10 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
 
+  // #3001: definition update — settings.manage (see POST create gate).
+  const permErr = requirePerm(ctx, 'settings.manage');
+  if (permErr) return permErr;
+
   const rawBody = await readJsonBody(req);
   const validated = validateBody(updateCustomFieldSchema, rawBody);
   if (validated instanceof NextResponse) return validated;
@@ -454,6 +465,10 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
+
+  // #3001: dropping a definition orphans stored values — settings.manage.
+  const permErr = requirePerm(ctx, 'settings.manage');
+  if (permErr) return permErr;
 
   const { searchParams } = new URL(req.url);
   const fieldId = searchParams.get('fieldId');

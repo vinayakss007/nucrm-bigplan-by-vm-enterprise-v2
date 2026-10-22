@@ -85,7 +85,11 @@ vi.mock('@/lib/auth/middleware', () => ({
     tenantId: '11111111-1111-4111-8111-111111111111',
     email: 'a@b.com',
     isSuperAdmin: false,
+    isAdmin: true,
   }),
+  // #3001 gated the definition mutators with settings.manage; this suite pins
+  // key/tombstone semantics, not authorization (that is custom-fields-gate-3001).
+  requirePerm: () => null,
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: () => Promise.resolve(null) }));
 vi.mock('@/lib/api/concurrency', () => ({
