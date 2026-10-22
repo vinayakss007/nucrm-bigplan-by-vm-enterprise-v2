@@ -2152,7 +2152,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
-  `tests/unit/auth-middleware-require-auth.test.ts:550-559`.
+  `tests/unit/auth-middleware-require-auth.test.ts:549-558` (re-pinned 2026-10-22 from `:550-559`: `3bf7f648c` (#3073) deleted this file's top-of-file `eslint-disable @typescript-eslint/no-explicit-any` header, which moved every line beneath it up by one).
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
   is already computed (`lib/auth/middleware.ts:382`) but it cannot reject there — sentinel **reads** are what power
