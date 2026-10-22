@@ -28,8 +28,7 @@ describe('db/client', () => {
     delete process.env.DATABASE_URL;
     delete process.env.DATABASE_SSL;
     delete process.env.DATABASE_POOL_SIZE;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (global as any).__pgPool;
+    delete (global as { __pgPool?: unknown }).__pgPool;
   });
 
   afterEach(() => {
@@ -48,9 +47,8 @@ describe('db/client', () => {
       
       // Pool creation should not throw
       expect(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        try { getPool(); } catch (e: any) {
-          if (!e.message.includes('DATABASE_URL')) throw e;
+        try { getPool(); } catch (e) {
+          if (!(e instanceof Error && e.message.includes('DATABASE_URL'))) throw e;
         }
       }).not.toThrow();
     });
@@ -62,9 +60,8 @@ describe('db/client', () => {
       
       // Should not throw on valid config
       expect(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        try { getPool(); } catch (e: any) {
-          if (!e.message.includes('DATABASE_URL') && !e.message.includes('pool')) throw e;
+        try { getPool(); } catch (e) {
+          if (!(e instanceof Error && (e.message.includes('DATABASE_URL') || e.message.includes('pool')))) throw e;
         }
       }).not.toThrow();
     });
@@ -75,9 +72,8 @@ describe('db/client', () => {
       const { getPool } = await import('@/lib/db/client');
       
       expect(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        try { getPool(); } catch (e: any) {
-          if (!e.message.includes('DATABASE_URL')) throw e;
+        try { getPool(); } catch (e) {
+          if (!(e instanceof Error && e.message.includes('DATABASE_URL'))) throw e;
         }
       }).not.toThrow();
     });
