@@ -4,10 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Check, MessageSquare } from 'lucide-react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 export default function CSATResponsePage() {
   const params = useParams();
@@ -18,20 +19,28 @@ export default function CSATResponsePage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const { data, isLoading, error: queryError } = useApiQuery<{ data?: { respondedAt?: string }; error?: string }>(
+  const { data, isLoading, error: readError, refetch } = useApiQuery<{ data?: { respondedAt?: string }; error?: string }>(
     ['csat', token],
     `/api/public/csat/${token}`,
     { enabled: !!token, retry: false },
   );
   const loading = isLoading;
 
-  useEffect(() => {
-    if (queryError) { setError('Invalid survey link'); return; }
-    if (data) {
-      if (data.error) setError(data.error);
-      else if (data.data?.respondedAt) setError('You have already responded to this survey');
-    }
-  }, [data, queryError]);
+  // #2872: every outcome of this read used to be funnelled into one local string and printed as a
+  // verdict on the link — including the 400 `app/api/public/csat/[token]/route.ts:52` returns for
+  // a survey this person already answered and the 429 its own view throttle at `:30` raises before
+  // it looks anything up. The states are derived from the record and the status now, and the local
+  // `error` is left to the write it always described.
+  const failed = !data && !loading;
+  const stale = Boolean(readError) && Boolean(data);
+  const reason = readError?.message || 'no response from the server';
+  const status = readError?.status ?? null;
+  const isNotFound = failed && status === 404;
+  const isResponded = failed && status === 400;
+  // The same two answers can also arrive as a 2xx: the row saying it was answered, or the body
+  // carrying its own refusal.
+  const answeredInBody = Boolean(data?.data?.respondedAt);
+  const bodyRefusal = typeof data?.error === 'string' && data.error ? data.error : null;
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];
   const labels = ['Very Poor', 'Poor', 'Average', 'Good', 'Excellent'];
@@ -57,6 +66,48 @@ export default function CSATResponsePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // Two verdicts. The route answered both of these questions, so neither gets an alert and neither
+  // gets a retry: asking again cannot un-answer a survey or match a token to a row it does not match.
+  if (isResponded || answeredInBody) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20">
+        <div className="bg-card rounded-2xl border border-border p-8 max-w-md w-full text-center">
+          <p className="text-muted-foreground">You have already responded to this survey</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isNotFound || bodyRefusal) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20">
+        <div className="bg-card rounded-2xl border border-border p-8 max-w-md w-full text-center">
+          <p className="text-muted-foreground">{bodyRefusal ?? 'Survey not found'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Anything else is this visit failing to ask the question, which says nothing about the link.
+  // No faces, no comment box, no submit: nobody spends a rating on a survey this session could not
+  // read, and this visitor has no other way to ask.
+  if (!data) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20 p-4">
+        <div className="max-w-md w-full space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center mx-auto">
+            <MessageSquare className="w-6 h-6 text-violet-600" />
+          </div>
+          <h1 className="text-lg font-bold text-center">This survey is not on your screen yet</h1>
+          <InlineErrorState
+            message={`This survey could not be read: ${reason}. Whether it was still open for you is unanswered, and none of that is a verdict on your link.`}
+            onRetry={refetch}
+          />
+        </div>
       </div>
     );
   }
@@ -95,6 +146,13 @@ export default function CSATResponsePage() {
           <h1 className="text-xl font-bold">How was your experience?</h1>
           <p className="text-sm text-muted-foreground mt-1">Your feedback helps us improve</p>
         </div>
+
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so whether this survey was still open comes from the last read: ${reason}. The faces below are still yours to click and your answer still posts — it is only the confirmation that nobody has answered yet that may be behind.`}
+            onRetry={refetch}
+          />
+        )}
 
         <div className="flex justify-center gap-2 mb-6">
           {emojis.map((emoji, i) => (
