@@ -390,8 +390,10 @@ describe('the health page — the source stays in this shape', () => {
     expect((src.match(/useApiQuery</g) ?? []).length).toBe(1);
   });
 
-  it('no other suite mounted this page before this one', () => {
-    const hits = spawnSync('grep', ['-rlF', 'app/health/page', 'tests'], {
+  it('this is the only suite that mounts the page', () => {
+    // The marker is the import, not the path: another suite may name this file in prose
+    // (the #2872 ratchet list in the billing-subscription suite does) without rendering it.
+    const hits = spawnSync('grep', ['-rlF', "'@/app/health/page'", 'tests'], {
       cwd: process.cwd(), encoding: 'utf8',
     });
     expect((hits.stdout ?? '').trim().split('\n').sort()).toEqual([
