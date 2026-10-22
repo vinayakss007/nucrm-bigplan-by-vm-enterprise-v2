@@ -6,32 +6,39 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useApiQuery, ApiQueryError } from '@/lib/query/client';
+import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
-  Bot, Loader2, AlertCircle, CheckCircle2, Info,
+  Bot, Loader2, CheckCircle2, Info,
 } from 'lucide-react';
 
 type Settings = {
   autoAiEnabled: boolean;
 };
 
+const SETTINGS_QUERY = ['tenant', 'admin', 'ai-auto-followup'] as const;
+
 export default function AIAutoFollowupPage() {
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   // #1328: load settings via TanStack Query (was raw fetch + useEffect).
   // retry:false — admin-only endpoint that may 404 / 403.
-  const { data, isLoading: loading, error: loadError } = useApiQuery<Settings>(
-    ['tenant', 'admin', 'ai-auto-followup'],
+  const { data, isLoading: loading, error: loadError, refetch } = useApiQuery<Settings>(
+    SETTINGS_QUERY,
     '/api/tenant/admin/ai-auto-followup',
     { retry: false },
   );
   const autoAiEnabled = data?.autoAiEnabled ?? false;
-  const loadErrorMessage = loadError
-    ? ((loadError.info as { error?: string })?.error ?? loadError.message)
-    : null;
-  const displayError = error ?? loadErrorMessage;
+  // #2872: this page reads a config and PATCHes that same config, and it folded both
+  // failures into one variable printed by one banner — so a refresh refused after a
+  // save (onSuccess invalidates this page's own key, the ordinary state here) spoke with
+  // the mutation's words, and either failure could mask the other. It also reached for
+  // the error's `info` body, guessing at its shape, when `ApiQueryError.message` already
+  // carries the status.
+  const failed = Boolean(loadError) && !data;
+  const stale = Boolean(loadError) && Boolean(data);
+  const reason = loadError?.message || 'no response from the server';
 
   const toggleMutation = useMutation({
     mutationFn: async () => {
@@ -42,18 +49,19 @@ export default function AIAutoFollowupPage() {
       });
       if (!r.ok) {
         const info = await r.json().catch(() => ({}));
-        throw new ApiQueryError(info.error ?? `HTTP ${r.status}`, r.status, info);
+        throw new Error(info.error ?? `HTTP ${r.status}`);
       }
     },
-    onMutate: () => { setError(null); setSaved(false); },
+    onMutate: () => setSaved(false),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tenant', 'admin', 'ai-auto-followup'] });
+      queryClient.invalidateQueries({ queryKey: SETTINGS_QUERY });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
-    onError: (e: Error) => setError(e.message),
   });
   const saving = toggleMutation.isPending;
+  // The write's own channel and words: its message, never the read's, and never `undefined`.
+  const writeReason = toggleMutation.error?.message || 'no response from the server';
 
   function toggle() {
     toggleMutation.mutate();
@@ -73,11 +81,8 @@ export default function AIAutoFollowupPage() {
         </div>
       </div>
 
-      {displayError && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{displayError}</span>
-        </div>
+      {toggleMutation.error && (
+        <InlineErrorState message={`Failed to save the AI auto follow-up setting: ${writeReason}`} />
       )}
 
       {saved && (
@@ -87,11 +92,26 @@ export default function AIAutoFollowupPage() {
         </div>
       )}
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the auto follow-up settings, so what is below is the last read: ${reason}. A change someone else made to this switch since the fetch is not shown here, and toggling now writes over settings this page has not seen.`}
+          onRetry={refetch}
+        />
+      )}
+
       <div className="rounded-xl border border-border bg-card p-6 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
+        ) : failed ? (
+          // The `?? false` seed above is a DEFAULT, not the tenant's answer; showing the
+          // toggle over a read that never answered invites saving a configuration the
+          // tenant never set. The outage owns this gate — staleness does not.
+          <InlineErrorState
+            message={`Failed to load the AI auto follow-up settings: ${reason}`}
+            onRetry={refetch}
+          />
         ) : (
           <>
             <label className="flex items-center justify-between gap-4 cursor-pointer">
