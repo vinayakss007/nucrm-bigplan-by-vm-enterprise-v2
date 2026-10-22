@@ -3,7 +3,6 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { errorLogs } from '@/drizzle/schema/support';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { InvalidJsonBodyError } from '@/lib/errors-shared';
@@ -225,6 +224,10 @@ export async function logError(opts: {
         requestId: requestId ?? null,
       }));
     } else {
+      // Loaded with the driver rather than at module scope: `logger` imports this
+      // module, and `drizzle/schema/support` pulls in core/crm/comm/sla — which call
+      // the real `sql`/`relations` — into the graph of every file that logs.
+      const { errorLogs } = await import('@/drizzle/schema/support');
       await db.insert(errorLogs).values({
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,

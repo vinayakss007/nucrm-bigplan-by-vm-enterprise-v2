@@ -34,6 +34,8 @@ import * as schema from '../../drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
+type NodeLikeDrizzle = ReturnType<typeof drizzle<Record<string, never>>>;
+
 // Skip entire suite if no database is available
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -54,8 +56,7 @@ const dbAvailable = await isDatabaseAvailable();
 
 describe.skipIf(!dbAvailable)('Tenant Isolation (application-level scoping)', () => {
   let pool: Pool;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let db: any;
+  let db: NodeLikeDrizzle;
   let tenantAId: string;
   let tenantBId: string;
   let userAId: string;
@@ -180,10 +181,8 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (application-level scoping)', ()
       .where(sql`${schema.contacts.tenantId} IN (${tenantAId}, ${tenantBId})`);
 
     // Verify each contact belongs to exactly one tenant
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenantAContacts = allContacts.filter((c: any) => c.tenantId === tenantAId);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenantBContacts = allContacts.filter((c: any) => c.tenantId === tenantBId);
+    const tenantAContacts = allContacts.filter((c: { tenantId: string }) => c.tenantId === tenantAId);
+    const tenantBContacts = allContacts.filter((c: { tenantId: string }) => c.tenantId === tenantBId);
 
     expect(tenantAContacts.length).toBeGreaterThan(0);
     expect(tenantBContacts.length).toBeGreaterThan(0);
@@ -206,8 +205,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (application-level scoping)', ()
              (SELECT relforcerowsecurity FROM pg_class WHERE relname = 'contacts') AS forced
         FROM pg_roles WHERE rolname = current_user
     `);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const row = (Array.isArray(who) ? who[0] : (who as any)?.rows?.[0]) ?? {};
+    const row = (Array.isArray(who) ? who[0] : (who as { rows?: Record<string, unknown>[] })?.rows?.[0]) ?? {};
     const roleExempt = row.is_superuser === true || row.bypass_rls === true;
     const forced = row.forced === true;
     const rlsEnforcedForThisRole = !roleExempt && forced;
@@ -355,8 +353,7 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (application-level scoping)', ()
     `);
 
     // Document which tables have RLS enabled
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rlsRows = Array.isArray(rlsResult) ? rlsResult : (rlsResult as any)?.rows ?? [];
+    const rlsRows = Array.isArray(rlsResult) ? rlsResult : (rlsResult as { rows?: Record<string, unknown>[] })?.rows ?? [];
     const rlsStatus: Record<string, boolean> = {};
     for (const row of rlsRows) {
       rlsStatus[row.tablename as string] = row.rowsecurity === true;

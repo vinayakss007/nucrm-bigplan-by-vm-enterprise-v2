@@ -4,18 +4,16 @@ const mockTxExecute = vi.fn();
 const mockDbTransaction = vi.fn();
 const _mockDbTransactionThrow = vi.fn();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-mockDbTransaction.mockImplementation((cb: any) => cb({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  execute: (...args: any[]) => mockTxExecute(...args),
+type MockTx = { execute: (...args: unknown[]) => unknown };
+mockDbTransaction.mockImplementation((cb: (tx: MockTx) => Promise<unknown>) => cb({
+  execute: (...args: unknown[]) => mockTxExecute(...args),
 }));
 
 const mockSqlIdentifier = vi.fn((name: string) => ({ type: 'identifier', name }));
 const mockSqlJoin = vi.fn();
 const mockSqlRaw = vi.fn();
 const mockSql = Object.assign(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (strings: TemplateStringsArray, ...values: any[]) => ({
+  (strings: TemplateStringsArray, ...values: unknown[]) => ({
     query: strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? `$${i + 1}` : ''), ''),
     strings, values,
   }),
@@ -24,8 +22,7 @@ const mockSql = Object.assign(
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: (cb: any) => mockDbTransaction(cb),
+    transaction: (cb: (tx: MockTx) => Promise<unknown>) => mockDbTransaction(cb),
     execute: vi.fn(),
   },
 }));
@@ -35,10 +32,8 @@ vi.mock('drizzle-orm', () => ({ sql: mockSql }));
 describe('TenantDataImporter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockDbTransaction.mockImplementation((cb: any) => cb({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      execute: (...args: any[]) => mockTxExecute(...args),
+    mockDbTransaction.mockImplementation((cb: (tx: MockTx) => Promise<unknown>) => cb({
+      execute: (...args: unknown[]) => mockTxExecute(...args),
     }));
   });
 
@@ -46,8 +41,7 @@ describe('TenantDataImporter', () => {
     it('stores tenant id', async () => {
       const { TenantDataImporter } = await import('@/lib/tenant-data-import');
       const importer = new TenantDataImporter('tenant-1');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((importer as any).tenantId).toBe('tenant-1');
+      expect((importer as unknown as { tenantId: string }).tenantId).toBe('tenant-1');
     });
   });
 

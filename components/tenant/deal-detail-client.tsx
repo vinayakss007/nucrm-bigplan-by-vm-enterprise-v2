@@ -14,19 +14,15 @@ import {
   FileText, Plus, MoreHorizontal, CheckCircle, Target
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 import DocumentsPanel from '@/components/documents/documents-panel';
 import DealRelatedPanel from '@/components/tenant/deal-related-panel';
 import DealTimeline from '@/components/tenant/deal-timeline';
 import DealForecast from '@/components/tenant/deal-forecast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 
 const DEFAULT_STAGES = [
@@ -132,7 +128,7 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           })));
         }
       })
-      .catch(() => { /* keep defaults */ });
+      .catch((err) => clientLogError('deal:fetch-stages', err));
     return () => controller.abort();
   }, []);
   const router = useRouter();

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES } from '@/components/tenant/ai/ai-config';
 import { useEffect, useState } from 'react';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
+import { clientLogError } from '@/lib/client-logger';
 
 /**
  * AI Hub shell — sub-rail on lg+, horizontal scroll pills below lg.
@@ -26,7 +27,7 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
     fetch('/api/tenant/me', { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setIsAdmin(d.is_admin ?? false))
-      .catch(() => {});
+      .catch((err) => clientLogError('ai:fetch-me', err));
     return () => controller.abort();
   }, []);
 

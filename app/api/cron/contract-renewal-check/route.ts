@@ -10,6 +10,7 @@
  */
 import { verifySecret } from '@/lib/crypto';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { reminderWindows, utcDateStr } from '@/lib/cron/renewal-windows';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contracts, users, activities } from '@/drizzle/schema';
@@ -37,14 +38,12 @@ export async function POST(request: NextRequest) {
     let remindersSent = 0;
     let expiredCount = 0;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const targetStrs = REMINDER_DAYS.map((days) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() + days);
-      return d.toISOString().split('T')[0] as string;
-    });
+    // #2997: UTC calendar windows. The old form mixed local midnight with
+    // `toISOString()` (one day early east of Greenwich) and then recomputed
+    // `days` independently, so every window self-canceled on a TZ=IST host.
+    const windows = reminderWindows(new Date(), REMINDER_DAYS);
+    const daysByEndDate = new Map(windows.map((w) => [w.targetStr, w.days]));
+    const targetStrs = windows.map((w) => w.targetStr);
 
     // contracts, activities and notifications each enforce a plain
     // tenant_isolation policy with no super-admin branch, so the bare `db`
@@ -105,9 +104,12 @@ export async function POST(request: NextRequest) {
       }));
 
       for (const contract of endingSoon) {
-        const endDate = new Date(contract.endDate ?? new Date());
-        const days = Math.round((new Date(endDate.toDateString()).getTime() - today.getTime()) / 86400000);
-        if (!REMINDER_DAYS.includes(days)) continue;
+        // #2997: the day count comes from the same UTC window the SQL matched —
+        // no independent local-midnight recomputation that can disagree with it.
+        const days = contract.endDate == null
+          ? undefined
+          : daysByEndDate.get(utcDateStr(contract.endDate));
+        if (days === undefined) continue;
 
         // Deduplication: skip (contract + days) combos already reminded
         if (sentSet.has(`${contract.id}:${days}`)) continue;

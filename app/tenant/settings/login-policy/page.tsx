@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 type Policy = {
@@ -62,16 +63,40 @@ export default function LoginPolicyPage() {
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
   // editable copy is seeded once so the dirty-tracking + discard flow persists.
-  const { data: policyData, isLoading: policyLoading } = useApiQuery<{ login_policy?: Policy }>(
+  const {
+    data: policyData, isLoading: policyLoading, error: policyError, refetch: refetchPolicy,
+  } = useApiQuery<{ login_policy?: Policy }>(
     ['tenant', 'admin', 'login-policy'],
     '/api/tenant/admin/login-policy',
   );
-  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+  const {
+    data: meData, isLoading: meLoading, error: meError, refetch: refetchMe,
+  } = useApiQuery<{ is_admin?: boolean }>(
     ['tenant', 'me'],
     '/api/tenant/me',
   );
   const loading = policyLoading || meLoading;
   const isAdmin = meData?.is_admin ?? true;
+
+  // #2872: neither read bound `error`, so this page did not merely hide a failure —
+  // it answered with a fabrication. With `policyData` absent the seeding effect never
+  // runs, `pol` stays at `DEFAULTS`, and the whole editor renders NuCRM's built-in
+  // password, 2FA, session, IP-allowlist and sign-up rules as if they were the
+  // workspace's live policy; with `meData` absent, `isAdmin ?? true` opened the
+  // editor to a role the page never checked. The refused half is reachable without
+  // any write of the operator's own — this page's save deliberately does not
+  // invalidate, so it is the remount past the shared 30s `staleTime` (leave Settings
+  // and come back) and the default `refetchOnReconnect` that re-request
+  // `['tenant','admin','login-policy']`, and no other page invalidates that key or
+  // the shared `['tenant','me']`. TanStack Query keeps `policyData` through either,
+  // which is the state where a save is still correct — the form holds the last read
+  // plus the operator's own edits.
+  const policyFailed = Boolean(policyError) && !policyData;
+  const policyStale = Boolean(policyError) && Boolean(policyData);
+  const policyReason = policyError?.message || 'no response from the server';
+  const meFailed = Boolean(meError) && !meData;
+  const meStale = Boolean(meError) && Boolean(meData);
+  const meReason = meError?.message || 'no response from the server';
 
   useEffect(() => {
     if (policyData && original === null) {
@@ -113,7 +138,26 @@ export default function LoginPolicyPage() {
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
   const saving = saveMutation.isPending;
-  const save = () => saveMutation.mutate();
+  // #2872 / epic rule #1 — this PATCH is a whole-map replace the server cannot
+  // arbitrate. `mutationFn` sends all five sections of `pol` every time, and
+  // app/api/tenant/admin/login-policy/route.ts merges them section-wise
+  // (`settings->'login_policy' || ${safe}::jsonb`), so a section the body carries
+  // overwrites the stored one — `pol` straight from the effect is `DEFAULTS` when the
+  // read never answered, and that write turns a required-2FA, IP-allowlisted,
+  // invite-only workspace back into the shipped defaults. The route's
+  // `concurrencyGuard` (route.ts:120-123, :186) only engages on a body carrying
+  // `expectedUpdatedAt`, which this page has never sent, so nothing on the server can
+  // refuse the collision. Hence the write is blocked on `policyFailed` and stays live
+  // on `policyStale`, where the payload is the last read plus the operator's edits.
+  // Base left this Save unclickable over an unread read too, but only as a side
+  // effect: `dirty` compares against `original`, and the seeding effect leaves
+  // `original` null when the read never answered — which is also why the operator
+  // could type into a form of defaults with a Save that would never enable and no
+  // word anywhere about why. Naming `policyFailed` takes the guarantee off that quirk.
+  const save = () => {
+    if (policyFailed) return;
+    saveMutation.mutate();
+  };
 
   const addIp = () => {
     const v = newIp.trim();
@@ -140,6 +184,17 @@ export default function LoginPolicyPage() {
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
+  // #2872: an unread role check is not a granted one. The editor below is the admin
+  // surface for the workspace's lockout rules, and `isAdmin ?? true` handed it to
+  // anybody whose `/api/tenant/me` never came back — the same page then writing a
+  // whole policy map, so this is the read whose silence is load-bearing.
+  if (meFailed) return (
+    <InlineErrorState
+      message={`Could not confirm your role, so this page cannot show the security-policy editor: ${meReason}. The editor being absent is not a statement that you are not an administrator.`}
+      onRetry={() => void refetchMe()}
+    />
+  );
+
   if (!isAdmin) return (
     <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-5 flex items-start gap-3">
       <ShieldX className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
@@ -158,6 +213,25 @@ export default function LoginPolicyPage() {
           Workspace-wide rules for passwords, sessions, two-factor and network access. Changes apply on the next login.
         </p>
       </div>
+
+      {policyFailed && (
+        <InlineErrorState
+          message={`Could not load this workspace's security policy: ${policyReason}. The fields below are NuCRM's built-in defaults, not your saved policy, and the Save control is disabled because writing them back would replace the live password rules, 2FA enforcement, session limits, IP allowlist and sign-up domains.`}
+          onRetry={() => void refetchPolicy()}
+        />
+      )}
+      {policyStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the policy below is the last read: ${policyReason}. Saving now writes these five sections over anything another admin changed since — the route merges section-wise and this page sends no precondition, so the server will not answer for that collision.`}
+          onRetry={() => void refetchPolicy()}
+        />
+      )}
+      {meStale && (
+        <InlineErrorState
+          message={`Could not refresh your account check, so the admin gate on this editor is the last read: ${meReason}. If the role changed in the meantime, this page is still showing the answer it had.`}
+          onRetry={() => void refetchMe()}
+        />
+      )}
 
       {/* Password */}
       <Section icon={KeyRound} title="Password policy" extra={
@@ -231,7 +305,12 @@ export default function LoginPolicyPage() {
       </Section>
 
       {/* IP allowlist */}
-      <Section icon={Globe} title={`IP allowlist (${pol.network.ip_allowlist.length})`}>
+      {/* #2872: the tally is `pol`, which the seeding effect only fills from a read
+          that answered — so an unread read reports the shipped `DEFAULTS` length, and
+          `IP allowlist (0)` reads as "this workspace restricts no addresses". A real
+          zero from a read that answered still prints 0, and the last read kept by a
+          refused refresh still prints its own count. */}
+      <Section icon={Globe} title={`IP allowlist (${policyFailed ? '—' : pol.network.ip_allowlist.length})`}>
         <ToggleRow
           label="Restrict access to listed IPs"
           desc="Logins from outside the listed CIDR ranges are blocked. Add at least one entry before enabling."
@@ -314,7 +393,7 @@ export default function LoginPolicyPage() {
           className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>
-        <button onClick={save} disabled={saving || !dirty}
+        <button onClick={save} disabled={saving || !dirty || policyFailed}
           className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving…' : 'Save policy'}

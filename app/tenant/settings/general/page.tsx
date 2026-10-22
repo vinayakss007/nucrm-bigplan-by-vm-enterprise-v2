@@ -40,13 +40,19 @@ const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
 
 interface WorkspaceData {
   name?: string;
-  primary_color?: string;
+  // #2949: GET /api/tenant/workspace serializes the Drizzle row with
+  // camelCase aliases (primaryColor/customDomain/logoUrl/planId); only the
+  // joined plans/subscriptions columns are snake_case (plan_name, max_*,
+  // stripe_customer_id). Reading snake here silently yielded undefined, the
+  // `|| default` seeds fired, and the first save wrote them over the tenant's
+  // real brand colour and custom domain.
+  primaryColor?: string;
   industry?: string;
   subdomain?: string;
-  custom_domain?: string;
-  logo_url?: string;
-  favicon_url?: string;
-  plan_id?: string;
+  customDomain?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  planId?: string;
   settings?: { timezone?: string; currency?: string; autoInvoiceOnWon?: boolean };
   [key: string]: unknown;
 }
@@ -83,12 +89,15 @@ export default function TenantGeneralSettings() {
   const reason = error?.message || 'no response from the server';
 
   // Seed the editable form once the workspace loads.
+  // #2949: this is the read→write boundary — the GET answers camelCase, the
+  // PATCH contract (route.ts `body.primary_color` etc.) is snake_case, so the
+  // form keeps the write shape and only this mapping names both.
   useEffect(() => {
     if (fetchedTenant) {
       setForm({
-        name: fetchedTenant.name || '', primary_color: fetchedTenant.primary_color || '#7c3aed',
+        name: fetchedTenant.name || '', primary_color: fetchedTenant.primaryColor || '#7c3aed',
         industry: fetchedTenant.industry || '', subdomain: fetchedTenant.subdomain || '',
-        custom_domain: fetchedTenant.custom_domain || '',
+        custom_domain: fetchedTenant.customDomain || '',
         settings: {
           timezone: fetchedTenant.settings?.timezone || 'UTC',
           currency: fetchedTenant.settings?.currency || 'USD',
@@ -177,8 +186,8 @@ export default function TenantGeneralSettings() {
               <label className="block text-xs font-medium text-muted-foreground mb-2">Logo</label>
               <div className="flex items-center gap-3">
                 <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
-                  {logoPreview || (tenant && typeof tenant.logo_url === 'string' && tenant.logo_url) ? (
-                    <Image src={logoPreview || (tenant && typeof tenant.logo_url === 'string' ? tenant.logo_url : '')} className="w-full h-full object-contain" alt="Logo" width={64} height={64} />
+                  {logoPreview || (tenant && typeof tenant.logoUrl === 'string' && tenant.logoUrl) ? (
+                    <Image src={logoPreview || (tenant && typeof tenant.logoUrl === 'string' ? tenant.logoUrl : '')} className="w-full h-full object-contain" alt="Logo" width={64} height={64} />
                   ) : (
                     <Globe className="w-6 h-6 text-muted-foreground" />
                   )}
@@ -203,8 +212,8 @@ export default function TenantGeneralSettings() {
               <label className="block text-xs font-medium text-muted-foreground mb-2">Favicon</label>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border overflow-hidden">
-                  {faviconPreview || tenant?.favicon_url ? (
-                    <Image src={faviconPreview || (tenant?.favicon_url as string) || ''} className="w-full h-full object-contain" alt="Favicon" />
+                  {faviconPreview || tenant?.faviconUrl ? (
+                    <Image src={faviconPreview || (tenant?.faviconUrl as string) || ''} className="w-full h-full object-contain" alt="Favicon" />
                   ) : (
                     <Globe className="w-4 h-4 text-muted-foreground" />
                   )}
@@ -311,14 +320,12 @@ export default function TenantGeneralSettings() {
               onChange={e=>setForm(f=>({...f,custom_domain:e.target.value}))}
               className={inp}
               placeholder="crm.yourcompany.com"
-              disabled={tenant?.plan_id !== 'enterprise'}
+              disabled={tenant?.planId !== 'enterprise'}
             />
-            {/* #2872: `plan_id` comes off the same read, so an unread workspace may well be
-                on Enterprise — this sentence is a fact about the tenant's subscription. */}
-            {!failed && tenant?.plan_id !== 'enterprise' && (
+            {!failed && tenant?.planId !== 'enterprise' && (
               <p className="text-xs text-muted-foreground mt-1">Custom domains require the Enterprise plan. <a href="/tenant/settings/billing" className="text-violet-600 hover:underline">Upgrade →</a></p>
             )}
-            {form.custom_domain && tenant?.plan_id==='enterprise' && (
+            {form.custom_domain && tenant?.planId==='enterprise' && (
               <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground">DNS Setup Required</p>
                 <p className="text-xs text-muted-foreground">Add a CNAME record pointing to:</p>

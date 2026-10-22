@@ -5,6 +5,7 @@
  */
 'use server';
 import { redirect } from 'next/navigation';
+import { logError } from '@/lib/errors-server';
 
 export async function loginAction(formData: FormData) {
   const email = formData.get('email') as string;
@@ -19,7 +20,10 @@ export async function loginAction(formData: FormData) {
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
+      const body = await res.json().catch((err) => {
+        void logError({ error: err, context: 'auth/login:parse-body' });
+        return {};
+      });
       return { error: body.error || `Login failed (${res.status})` };
     }
 

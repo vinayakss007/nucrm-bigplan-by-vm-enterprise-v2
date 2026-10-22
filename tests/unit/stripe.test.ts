@@ -111,8 +111,7 @@ describe('lib/stripe', () => {
         trialDays: 14,
       });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const call = (global.fetch as any).mock.calls[0];
+      const call = vi.mocked(global.fetch).mock.calls[0];
       const body = call[1].body;
       expect(body).toContain('subscription_data');
       expect(body).toContain('trial_period_days');
@@ -127,8 +126,7 @@ describe('lib/stripe', () => {
       const result = await cancelSubscription('sub_123');
 
       expect(result).toHaveProperty('id');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const call = (global.fetch as any).mock.calls[0];
+      const call = vi.mocked(global.fetch).mock.calls[0];
       expect(call[1].body).toContain('cancel_at_period_end');
     });
 
@@ -138,8 +136,7 @@ describe('lib/stripe', () => {
 
       await cancelSubscription('sub_123', false);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const call = (global.fetch as any).mock.calls[0];
+      const call = vi.mocked(global.fetch).mock.calls[0];
       expect(call[1].method).toBe('DELETE');
     });
   });
@@ -231,9 +228,8 @@ describe('lib/stripe', () => {
 
       expect(result).toEqual({ scheduleId: 'sub_sched_123', effectiveAt: 1700000000 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const calls = (global.fetch as any).mock.calls;
-      const scheduleUpdate = calls.find((c: unknown[]) => String(c[0]).endsWith('/subscription_schedules/sub_sched_123'));
+      const calls = vi.mocked(global.fetch).mock.calls;
+      const scheduleUpdate = calls.find((c) => String(c[0]).endsWith('/subscription_schedules/sub_sched_123'));
       expect(scheduleUpdate).toBeDefined();
       const body = String(scheduleUpdate[1].body);
       // Phase 0 keeps the current price until period end…

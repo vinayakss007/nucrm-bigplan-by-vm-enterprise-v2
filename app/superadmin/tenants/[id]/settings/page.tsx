@@ -10,9 +10,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
-  Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, AlertCircle, Eye, Save, Pencil,
+  Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, Eye, Save, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface TenantSettingsData {
@@ -47,7 +48,6 @@ interface TenantSettingsData {
     picklists?: Record<string, { value: string; label: string }[]> | null;
     other_keys?: string[];
   };
-  error?: boolean;
 }
 
 export default function TenantSettingsAuditPage() {
@@ -64,19 +64,52 @@ export default function TenantSettingsAuditPage() {
     `/api/superadmin/tenant-settings?tenant_id=${tenantId}`,
     { enabled: !!tenantId, retry: false },
   );
-  const loading = settingsQuery.isLoading;
-  const data: TenantSettingsData | null = settingsQuery.data
-    ?? (settingsQuery.isError
-      ? { tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true }
-      : null);
+  const { data, error, isLoading: loading, refetch } = settingsQuery;
 
-  // Seed the editable settings snapshot whenever fresh data arrives.
+  // #2872: the base read `isError` off this query and, when it was set with nothing
+  // cached, answered the gap with a synthesised tenant — blank name, blank slug, blank
+  // plan and status, and four zero quotas — under a banner that named no reason and
+  // offered no retry. That fabrication dressed a read that never got through up as a
+  // record, and its zeros looked like counts. The half it never handled at all is the
+  // other one: a failed REFETCH keeps `data` (apiFetcher throws, useQuery parks the
+  // error and hands back the previous payload), so the whole configuration —
+  // localization, login policy including the two-factor enforcement and the ip_allowlist
+  // CIDR count, the member and quota figures, the picklists — stayed on screen called
+  // current, and the effect below seeded the editor from it. `failed` is the read that
+  // never answered; `stale` is the last read, kept, with the price of the refusal
+  // attached to it.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  // A 404 is an answer ABOUT THE RECORD, not an outage: GET replies `Tenant not found` for
+  // an id that no longer resolves (app/api/superadmin/tenant-settings/route.ts:52). Telling
+  // that operator to retry, or naming "no response from the server", would be false — so it
+  // gets its own branch, ahead of the outage one.
+  const notFound = failed && error?.status === 404;
+
+  // Seed the editable settings snapshot whenever fresh data arrives. `?? {}` is not
+  // decoration: JSON.parse(JSON.stringify(undefined)) throws, so a payload shaped
+  // without `settings` would have died here and left the editor holding nothing.
   useEffect(() => {
-    if (settingsQuery.data) {
-      setEditedSettings(JSON.parse(JSON.stringify(settingsQuery.data.settings)));
-    }
-  }, [settingsQuery.data]);
+    if (data) setEditedSettings(seedSnapshot(data.settings));
+  }, [data]);
 
+  // #2872 / rule #1 — where this write may be offered, read off what it actually does.
+  // The body is the whole `settings` map this page is holding, and the write replaces
+  // each sub-tree it carries with that copy: the handler re-reads the row
+  // (app/api/superadmin/tenant-settings/route.ts:101-105) only to merge, and every key
+  // present in the body overwrites the stored one wholesale (route.ts:117-125) — an
+  // incoming null DELETES the sub-tree (route.ts:120-121), which is what the read's own
+  // `localization: null` default (route.ts:75-78) turns into. Its optimistic guard is
+  // inert for this caller: `concurrencyGuard(..., body.expectedUpdatedAt)` (route.ts:109)
+  // returns null when the stamp is absent (lib/api/concurrency.ts:103) and this page
+  // sends none, so nothing can answer 409 over a collision. The only preconditions left
+  // are who may call it (403, route.ts:94) and whether the id exists (404, route.ts:107)
+  // — neither re-checks the picture on this screen. So: over `failed` the editor is not
+  // offered at all, because there is no snapshot to write back; over `stale` it stays
+  // enabled — saving is how the operator finishes what they came for, and hiding it would
+  // strand them on a page they cannot correct — with the loss said out loud above the
+  // settings it is about to replace.
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/superadmin/tenant-settings', {
@@ -124,14 +157,31 @@ export default function TenantSettingsAuditPage() {
     });
   };
 
+  // #2872: one read, so `loading` is its own first-answer wait and can stand in for
+  // neither arm below. The outage then OWNS the region the fabricated tenant sat in:
+  // the card header, the four quota figures, every section and the Edit control are all
+  // past this line, so none of their derived counts can render for a read that never
+  // answered, and no half a record can be offered for saving.
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
-  if (!data || data.error) return (
-    <div className="rounded-xl border border-red-300 bg-red-50 dark:bg-red-950/20 p-5 flex items-start gap-3">
-      <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-      <div>
-        <p className="font-semibold text-red-700 dark:text-red-300">Could not load tenant settings</p>
-        <Link href="/superadmin/tenants" className="text-xs text-red-700/70 dark:text-red-300/70 hover:underline">← back to tenants</Link>
-      </div>
+  if (notFound) return (
+    <div className="space-y-3">
+      <InlineErrorState
+        message={`No tenant with this id: the settings read answered that this organization does not exist, so there is no configuration here to audit or edit. Retrying will not change the answer.`}
+      />
+      <Link href="/superadmin/tenants" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> back to tenants
+      </Link>
+    </div>
+  );
+  if (failed || !data) return (
+    <div className="space-y-3">
+      <InlineErrorState
+        message={`Failed to load this tenant's settings: ${reason}. The name, plan and status, the member and quota figures, the localization, login policy and picklists are all unanswered here, which is not the same as a tenant with no overrides — and with nothing read there is no configuration to edit or save until it answers.`}
+        onRetry={refetch}
+      />
+      <Link href="/superadmin/tenants" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> back to tenants
+      </Link>
     </div>
   );
 
@@ -143,6 +193,15 @@ export default function TenantSettingsAuditPage() {
 
   return (
     <div className="space-y-5">
+      {/* #2872: the refused refresh sits ABOVE the configuration it did not replace, and
+          says what this page is about to do with it: `editedSettings` was seeded from
+          this same payload, and Save sends it back as the whole map. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this tenant's settings, so the tenant, the member and quota figures and every policy below are the last read: ${reason}. A member added since is not in that count and a login policy someone tightened since is not shown, and Save writes this snapshot back over the whole localization, login-policy, picklist and user-defaults block — reverting what another platform admin changed since this was fetched, and deleting an override they added since outright.`}
+          onRetry={refetch}
+        />
+      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -172,7 +231,7 @@ export default function TenantSettingsAuditPage() {
           ) : (
             <>
               <button
-                onClick={() => { setEditing(false); setEditedSettings(JSON.parse(JSON.stringify(data.settings))); }}
+                onClick={() => { setEditing(false); setEditedSettings(seedSnapshot(data.settings)); }}
                 className="text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel
@@ -318,12 +377,19 @@ export default function TenantSettingsAuditPage() {
 }
 
 function Stat({ label, value }: { label: string; value: string | number | null | undefined }) {
+  // #2872: a real zero the read returned still prints 0 (`??` does not catch it); the
+  // dash is for a counter the payload left null, which is not a count of nothing.
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-xl font-bold tabular-nums mt-0.5">{value ?? 0}</p>
+      <p className="text-xl font-bold tabular-nums mt-0.5">{value ?? '—'}</p>
     </div>
   );
+}
+
+/** A deep copy the editor can dirty without touching the read's payload. */
+function seedSnapshot(src: TenantSettingsData['settings'] | undefined): TenantSettingsData['settings'] {
+  return JSON.parse(JSON.stringify(src ?? {})) as TenantSettingsData['settings'];
 }
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {

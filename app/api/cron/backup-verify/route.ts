@@ -381,7 +381,7 @@ export async function POST(request: NextRequest) {
         `Backup ${backup.id} (${backup.backupType}, ${backup.completedAt?.toISOString()}) failed verification:\n\n` +
         failures.map((f) => `  - ${f}`).join('\n') +
         '\n\nAn unrestorable backup is not a backup. Investigate immediately.'
-      ).catch(() => { /* best-effort */ });
+      ).catch((err) => logError({ error: err, context: 'backup-verify:alert-resolve-best-effort' }));
     } else {
       // A passing restore is the evidence that closes the alert trail.
       await resolveVerifyAlerts();
@@ -414,7 +414,7 @@ export async function POST(request: NextRequest) {
       await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         failures.map((f) => `  - ${f}`).join('\n')
-      ).catch(() => {});
+      ).catch((err) => logError({ error: err, context: 'backup-verify:alert-fail' }));
       return NextResponse.json({ ok: false, failures }, { status: 500 });
     }
     // An unexpected throw here used to leave no trace beyond the 500 that
@@ -428,7 +428,7 @@ export async function POST(request: NextRequest) {
     // Always clean up the scratch database.
     if (scratchDb) {
       await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}" WITH (FORCE)`).catch(async () => {
-        await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}"`).catch(() => {});
+        await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}"`).catch((err) => logError({ error: err, context: 'backup-verify:scratch-cleanup' }));
       });
     }
     if (workDir) rmSync(workDir, { recursive: true, force: true });

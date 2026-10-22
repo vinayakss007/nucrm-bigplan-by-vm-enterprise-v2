@@ -16,15 +16,10 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/sanitize';
+import { clientLogError } from '@/lib/client-logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
@@ -145,7 +140,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
     fetch('/api/tenant/pipelines', { signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (signal.aborted) return; setPipelinesData(d.data ?? d.pipelines ?? d ?? []); })
-      .catch(() => {});
+      .catch((err) => clientLogError('lead:fetch-pipelines', err));
     return () => controller.abort();
   }, []);
 
