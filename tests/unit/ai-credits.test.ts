@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockFindFirst = vi.fn();
 const mockReturning = vi.fn();
-const mockValues = vi.fn(() => ({ returning: mockReturning, onConflictDoUpdate: vi.fn() }));
+const mockOnConflictDoUpdate = vi.fn(() => ({ returning: mockReturning }));
+const mockOnConflictDoNothing = vi.fn(() => ({ returning: mockReturning }));
+const mockValues = vi.fn(() => ({
+  returning: mockReturning,
+  onConflictDoUpdate: mockOnConflictDoUpdate,
+  onConflictDoNothing: mockOnConflictDoNothing,
+}));
 const mockInsert = vi.fn(() => ({ values: mockValues }));
 
 const mockLimit = vi.fn(() => Promise.resolve([]));
@@ -89,6 +95,63 @@ describe('ai/credits', () => {
     const { getCreditBalance } = await import('@/lib/ai/credits');
     const balance = await getCreditBalance('tenant-1');
     expect(balance.remainingTokens).toBe(0);
+  });
+
+  // #3081 — the auto-create was a bare check-then-insert against the
+  // (tenant_id, billing_period) unique index: concurrent first calls of a
+  // month made N-1 of them take a raw 23505 out of .returning() and 500.
+  describe('#3081 credit status lifecycle', () => {
+    beforeEach(() => {
+      mockOnConflictDoNothing.mockClear();
+      mockOnConflictDoUpdate.mockClear();
+      mockValues.mockClear();
+    });
+
+    it('getCreditBalance survives a lost insert race via onConflictDoNothing + re-SELECT', async () => {
+      const row = { allocatedTokens: 1000, usedTokens: 50, allocatedCostCents: 100, usedCostCents: 5, hardCapEnabled: true, softCapPct: 80, status: 'active' };
+      // 1st findFirst: pre-check misses. Then the insert loses the race
+      // (onConflictDoNothing -> returning() = []). 2nd findFirst: re-SELECT
+      // reads the row the winner inserted.
+      mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(row);
+      mockReturning.mockResolvedValueOnce([]);
+      const { getCreditBalance } = await import('@/lib/ai/credits');
+      const balance = await getCreditBalance('tenant-1');
+      expect(mockOnConflictDoNothing).toHaveBeenCalled();
+      expect(mockFindFirst).toHaveBeenCalledTimes(2);
+      expect(balance.remainingTokens).toBe(950);
+    });
+
+    it('deductCredits keeps a suspended tenant suspended instead of flipping it to active', async () => {
+      const { sql } = await import('drizzle-orm');
+      const mockSet = vi.fn(() => ({ where: vi.fn() }));
+      const balance = { allocatedTokens: 100000, usedTokens: 100, allocatedCostCents: 5000, usedCostCents: 10, hardCapEnabled: true, softCapPct: 80, status: 'suspended' };
+      mockReturning.mockResolvedValue([]);
+      (sql as ReturnType<typeof vi.fn>).mockClear();
+      mockCreditsTx.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({
+        select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([balance]) })) })) })),
+        update: vi.fn(() => ({ set: mockSet })),
+        insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) })),
+      }));
+      const { deductCredits } = await import('@/lib/ai/credits');
+      const result = await deductCredits({ tenantId: 'tenant-1', userId: 'user-1', action: 'chat', provider: 'openai', model: 'gpt-4', tokensIn: 50, tokensOut: 150, costCents: 2, activityId: 'act-1' });
+      expect(result.success).toBe(true);
+      // The status CASE must preserve an existing suspension; before #3081 it
+      // only had exhausted/active branches, so any deduction un-suspended.
+      const statusSqlCall = (sql as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) => (call[0] as readonly string[]).join('').includes('suspended'),
+      );
+      expect(statusSqlCall, 'deduct CASE never mentions suspended — it overwrites the status').toBeDefined();
+    });
+
+    it('allocateCredits top-up does not overwrite the status of an existing row', async () => {
+      const balance = { allocatedTokens: 100000, usedTokens: 0, allocatedCostCents: 5000, usedCostCents: 0, hardCapEnabled: true, softCapPct: 80, status: 'suspended' };
+      mockFindFirst.mockResolvedValue(balance);
+      const { allocateCredits } = await import('@/lib/ai/credits');
+      await allocateCredits({ tenantId: 'tenant-1', allocatedBy: 'admin-1', tokens: 50000, costCents: 2500 });
+      expect(mockOnConflictDoUpdate).toHaveBeenCalled();
+      const cfg = mockOnConflictDoUpdate.mock.calls[0]![0] as { set: Record<string, unknown> };
+      expect(cfg.set, 'top-up still writes status — it lifts the suspend without reactivate').not.toHaveProperty('status');
+    });
   });
 
   it('checkCredits allows when sufficient balance', async () => {

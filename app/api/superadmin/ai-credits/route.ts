@@ -133,13 +133,36 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       if (!tenant_id) return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
 
       const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-      await db
-        .update(tenantAiCredits)
-        .set({ status: 'suspended', updatedAt: new Date() })
-        .where(and(
-          eq(tenantAiCredits.tenantId, tenant_id),
-          eq(tenantAiCredits.billingPeriod, period),
-        ));
+      // #3081: this used to be a bare UPDATE keyed on (tenant, current period).
+      // getCreditBalance creates that row lazily, so for a fresh billing period
+      // zero rows matched, nothing was suspended, and the route still answered
+      // success — and the tenant's next AI call then auto-created the row with
+      // status 'active', inverting the suspension. Upsert instead, and fail
+      // honestly if no row was written.
+      const suspended = await db
+        .insert(tenantAiCredits)
+        .values({
+          tenantId: tenant_id,
+          allocatedTokens: 0,
+          usedTokens: 0,
+          allocatedCostCents: 0,
+          usedCostCents: 0,
+          billingPeriod: period,
+          hardCapEnabled: true,
+          softCapPct: 80,
+          status: 'suspended',
+        })
+        .onConflictDoUpdate({
+          target: [tenantAiCredits.tenantId, tenantAiCredits.billingPeriod],
+          set: { status: 'suspended', updatedAt: new Date() },
+        })
+        .returning({ tenantId: tenantAiCredits.tenantId });
+      if (suspended.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to suspend tenant AI access' },
+          { status: 500 },
+        );
+      }
 
       return NextResponse.json({ success: true, message: 'Tenant AI access suspended' });
     }

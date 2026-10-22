@@ -75,9 +75,14 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
     ),
   });
 
-  // Auto-create if not exists (period rollover)
+  // Auto-create if not exists (period rollover). onConflictDoNothing +
+  // re-SELECT (#3081): this was a bare check-then-insert against the
+  // (tenant_id, billing_period) unique index, so N concurrent first calls of
+  // a month all missed the SELECT and N-1 of them took a raw 23505 out of
+  // .returning() — a 500 on an AI request. A lost race now falls back to
+  // reading the row the winner inserted.
   if (!credits) {
-    [credits] = await db.insert(tenantAiCredits).values({
+    const created = await db.insert(tenantAiCredits).values({
       tenantId,
       allocatedTokens: 0,
       usedTokens: 0,
@@ -87,7 +92,15 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
       hardCapEnabled: true,
       softCapPct: 80,
       status: 'active',
+    }).onConflictDoNothing({
+      target: [tenantAiCredits.tenantId, tenantAiCredits.billingPeriod],
     }).returning();
+    credits = created[0] ?? await db.query.tenantAiCredits.findFirst({
+      where: and(
+        eq(tenantAiCredits.tenantId, tenantId),
+        eq(tenantAiCredits.billingPeriod, period),
+      ),
+    });
   }
 
   return {
@@ -167,6 +180,7 @@ export async function deductCredits(params: {
           usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
           usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
           status: sql`CASE 
+            WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
             WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
             ELSE 'active'
           END`,
@@ -268,7 +282,9 @@ export async function allocateCredits(params: {
         allocatedCostCents: sql`${tenantAiCredits.allocatedCostCents} + ${params.costCents ?? 0}`,
         hardCapEnabled: params.hardCapEnabled ?? true,
         softCapPct: params.softCapPct ?? 80,
-        status: 'active',
+        // #3081: no status here on purpose. A superadmin top-up used to write
+        // status:'active' unconditionally, which silently lifted a suspend
+        // without the explicit `reactivate` action that exists for it.
         allocationNotes: params.notes,
         allocatedBy: params.allocatedBy,
         setBy: params.allocatedBy,
