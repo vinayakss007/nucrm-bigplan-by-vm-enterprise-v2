@@ -8,9 +8,15 @@
  * authenticated tenant user. Registering or patching a plugin stores an
  * attacker-chosen baseUrl plus encrypted credentials that execute/test then
  * fire server-side requests with; delete disables a tenant integration. All
- * five now require admin, mirroring the webhooks (route.ts:76) and dunning
- * twins. These tests pin the 403 for non-admins and the pass-through for
- * admins on each handler.
+ * five now require admin, matching the `if (!ctx.isAdmin) … 403` that already
+ * guards the twin surfaces — the `POST` in `app/api/tenant/webhooks/route.ts`,
+ * both handlers in `app/api/tenant/webhooks/[id]/route.ts`, and the two in
+ * `app/api/tenant/billing/dunning/route.ts`, all of which write the same exact
+ * sentence out of the same shape (`Admin required`, 101 uses across `app/api`).
+ * These tests pin the 403 for non-admins and the pass-through for admins on
+ * each handler: passing through is proved by the status the gate's absence
+ * would have let the body reach, not by asserting the response is 2xx, so the
+ * pin also says the gate sits before validation rather than after it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
@@ -124,5 +130,24 @@ describe('plugin routes require admin (#2999)', () => {
     mockRequireAuth.mockResolvedValueOnce({ tenantId: 'tenant-1', userId: 'user-1', isAdmin: true });
     const adminRes = await POST(jsonRequest('/api/tenant/plugins/plugin-1/execute', {}), idContext);
     expect(adminRes.status).toBe(400); // past the gate; fails 'action is required'
+  });
+
+  it('leaves both GETs open to the same non-admin — the gate is on writes and execution, not on reading', async () => {
+    // The issue is that a non-admin can STORE a baseUrl + credentials and FIRE
+    // them server-side. Reading the tenant's own plugin list is not that, and
+    // the tenant's plugins page depends on it: gating the GETs would take the
+    // panel away from everyone below admin. Pinned so the next pass that
+    // "finishes" the job by gating GET has to say why out loud.
+    const { GET: LIST } = await import('@/app/api/tenant/plugins/route');
+    const { GET: ONE } = await import('@/app/api/tenant/plugins/[id]/route');
+
+    const listRes = await LIST(jsonRequest('/api/tenant/plugins', undefined, 'GET'));
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual({ data: [] });
+
+    // Same non-admin, and the record simply is not there — 404, not the 403 the
+    // write handlers answer with, so the read never claims a permission problem.
+    const oneRes = await ONE(jsonRequest('/api/tenant/plugins/plugin-1', undefined, 'GET'), idContext);
+    expect(oneRes.status).toBe(404);
   });
 });
