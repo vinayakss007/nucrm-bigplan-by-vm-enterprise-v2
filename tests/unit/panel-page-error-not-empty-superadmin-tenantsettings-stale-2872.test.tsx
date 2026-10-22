@@ -63,28 +63,28 @@
  * is read off `ApiQueryError` (`lib/query/client.tsx:27-41`), so a transport failure that
  * carries none still falls through to the outage arm.
  *
- * RED AT BASE — measured on `ffef1659` (this branch's base) with
+ * RED AT BASE — measured on `5f53fe71` (this branch's base, i.e. repaired main) with
  * `app/superadmin/tenants/[id]/settings/page.tsx` rewound to what main carries and this
- * file as committed: **20 failed | 4 passed (24)**. Twelve of the twenty put the read in a
+ * file as committed: **19 failed | 5 passed (24)**. Eleven of the nineteen put the read in a
  * state the class is about: the null quota base printed as a zero, the refused refresh that
  * kept the configuration silently, what that refusal costs, the save fired off the kept
  * snapshot, the outage that at base still printed its reason-less sentence with the
  * fabricated tenant's header and Edit control reachable, the Edit control across all three
- * states, both messageless refusals (which printed `undefined`), the good → refused →
- * good walk, and — for the gone record — the 404 that base called unanswered with a retry
- * button on it, plus the 503 with no status that must still reach the outage arm. The other
- * eight are the source ratchets — the three-state split, the gone branch keyed off the
- * status and ordered ahead of the outage, the fabricated tenant's retirement, the dash keyed
- * off a null counter rather than a zero, the banner-before-content ordering, the three
- * banners, the retry that names this read, and the guard's blindness to the class before and
- * after the split is rewound. The twentieth is not this slice's:
- * `stays inside the line ceiling the page is allowed` spawns `scripts/check-file-size.mjs`,
- * and #2986 left three grandfathered components past their baseline on main, so that pin is
- * red at base, red here and red in the 67 other suites that run the guard — **#3016**
- * returns it to green (measured: 24 passed on top of it, 23 of them this file's own). The 4
- * that pass at base are the behaviour this slice must not regress: the healthy read that says
- * nothing about freshness, the first-load spinner, #2829's guard + baseline, and the
- * overlap-hygiene pin that leaves this page to exactly one suite.
+ * states, both messageless refusals (which printed `undefined`), and the good → refused →
+ * good walk. Two more are the gone record: the 404 base called unanswered with a retry button
+ * on it, and the 503 that carries no status and must still reach the outage arm — the pair is
+ * pinned together because a branch keyed off the flag instead of the status fails only one of
+ * them. The remaining eight are the source ratchets — the three-state split, the gone branch
+ * keyed off `error?.status` and ordered ahead of the outage, the fabricated tenant's
+ * retirement, the dash keyed off a null counter rather than a zero, the banner-before-content
+ * ordering, the three-banner census, the retry that names this read, and the guard's blindness
+ * to the class before and after the split is rewound. The 5 that pass at base are the
+ * behaviour this slice must not regress — the healthy read that says nothing about freshness,
+ * the first-load spinner, #2829's guard + baseline, the overlap-hygiene pin that leaves this
+ * page to exactly one suite — plus `stays inside the line ceiling the page is allowed`, which
+ * spawns `scripts/check-file-size.mjs`: #2986 left three grandfathered components past their
+ * baseline and that made this case, and the 67 other suites that run the guard, red on main
+ * from #2986 until **#3016** returned those three files under it.
  *
  * Fixtures are documentation-only (RFC 2606 names, TEST-NET CIDRs).
  */
