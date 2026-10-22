@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -30,11 +29,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const m = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   for (const method of ['select', 'from', 'innerJoin', 'leftJoin', 'where', 'orderBy', 'limit', 'offset']) {
     chain[method] = vi.fn(() => chain);
   }
-  chain.then = (onOk: any, onErr: any) =>
+  chain.then = (onOk?: (v: unknown) => unknown, onErr?: (reason: unknown) => unknown) =>
     Promise.resolve(selectResults.length > 0 ? selectResults.shift() : []).then(onOk, onErr);
   chain.query = {
     sessions: { findFirst: vi.fn() },

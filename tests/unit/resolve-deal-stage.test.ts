@@ -3,7 +3,6 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Unit tests for resolveDealStage() (#658 / HIGH #8).
  *
@@ -59,7 +58,7 @@ const exec: StageResolverExecutor = {
   select: () => {
     const rec: { where?: unknown } = {};
     captured.push(rec);
-    const self: any = {
+    const self: Record<string, unknown> = {
       from: () => self,
       innerJoin: () => self,
       where: (c: unknown) => {

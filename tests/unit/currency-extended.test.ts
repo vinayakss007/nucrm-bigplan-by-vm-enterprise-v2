@@ -426,13 +426,11 @@ describe('Currency Module - Extended', () => {
       const { setRateCache } = await import('@/lib/currency');
 
       expect(() =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setRateCache({} as any)
+        setRateCache({} as never)
       ).not.toThrow();
 
       expect(() =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setRateCache({ rates: {}, baseCurrency: 'USD' } as any)
+        setRateCache({ rates: {}, baseCurrency: 'USD' } as never)
       ).not.toThrow();
     });
 

@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-let mockQueryResult: any[] = [];
+let mockQueryResult: unknown[] = [];
 
-const mockChain: any = vi.hoisted(() => {
-  const chain: any = {};
+const mockChain: Record<string, ReturnType<typeof vi.fn>> = vi.hoisted(() => {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {};
   chain.select = vi.fn().mockReturnValue(chain);
   chain.from = vi.fn().mockReturnValue(chain);
   chain.innerJoin = vi.fn().mockReturnValue(chain);
@@ -17,7 +16,7 @@ const mockChain: any = vi.hoisted(() => {
   chain.update = vi.fn().mockReturnValue(chain);
   chain.insert = vi.fn().mockReturnValue(chain);
   chain.delete = vi.fn().mockReturnValue(chain);
-  chain.transaction = vi.fn((cb: (tx: any) => Promise<any>) => cb(chain));
+  chain.transaction = vi.fn((cb: (tx: Record<string, unknown>) => unknown) => cb(chain));
   return chain;
 });
 
@@ -82,14 +81,14 @@ describe('tryApiKeyAuth', () => {
 
   it('returns null when no Bearer ak_ header', async () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
-    const req = { headers: { get: () => null } } as any;
+    const req = { headers: { get: () => null } } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
 
   it('returns null for non-ak_ Bearer token', async () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
-    const req = { headers: { get: (h: string) => h === 'authorization' ? 'Bearer sk_abc123' : null } } as any;
+    const req = { headers: { get: (h: string) => h === 'authorization' ? 'Bearer sk_abc123' : null } } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
@@ -101,7 +100,7 @@ describe('tryApiKeyAuth', () => {
       headers: {
         get: (h: string) => h === 'authorization' ? 'Bearer ak_live_abc123def456' : null,
       },
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
@@ -128,7 +127,7 @@ describe('tryApiKeyAuth', () => {
       },
       nextUrl: { pathname: '/api/contacts' },
       method: 'GET',
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).not.toBeNull();
     expect(result!.userId).toBe('u1');
@@ -159,7 +158,7 @@ describe('tryApiKeyAuth', () => {
       },
       nextUrl: { pathname: '/api/contacts' },
       method: 'GET',
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result!.permissions['all']).toBe(true);
     expect(result!.isAdmin).toBe(true);
@@ -186,7 +185,7 @@ describe('tryApiKeyAuth', () => {
       },
       nextUrl: { pathname: '/api/deals' },
       method: 'POST',
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result!.permissions['all']).toBe(true);
     expect(result!.isAdmin).toBe(true);
@@ -213,7 +212,7 @@ describe('tryApiKeyAuth', () => {
       },
       nextUrl: { pathname: '/api/contacts' },
       method: 'GET',
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).not.toBeNull();
     // Even though the owning user is a super-admin, the key context must not
@@ -244,7 +243,7 @@ describe('tryApiKeyAuth', () => {
       },
       nextUrl: { pathname: '/api/contacts' },
       method: 'GET',
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).not.toBeNull();
     expect(result!.isAdmin).toBe(true);
@@ -316,7 +315,7 @@ describe('validateApiKey (format validation)', () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
     const req = {
       headers: { get: (h: string) => h === 'authorization' ? 'Bearer sk_live_abc123' : null },
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
@@ -325,7 +324,7 @@ describe('validateApiKey (format validation)', () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
     const req = {
       headers: { get: () => '' },
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
@@ -334,7 +333,7 @@ describe('validateApiKey (format validation)', () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
     const req = {
       headers: { get: (h: string) => h === 'authorization' ? 'Bearer randomtoken123' : null },
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });
@@ -343,7 +342,7 @@ describe('validateApiKey (format validation)', () => {
     const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
     const req = {
       headers: { get: (h: string) => h === 'authorization' ? 'Basic ak_live_abc123' : null },
-    } as any;
+    } as never;
     const result = await tryApiKeyAuth(req);
     expect(result).toBeNull();
   });

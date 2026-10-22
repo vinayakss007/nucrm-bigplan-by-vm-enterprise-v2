@@ -22,8 +22,7 @@ vi.mock('@/lib/ai/gateway', async (importOriginal) => {
 });
 
 vi.mock('@/drizzle/db', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db: any = {
+  const db: Record<string, unknown> = {
     query: {
       leadScoringRules: { findMany: vi.fn(() => mockDbFindMany()) },
       contacts: { findFirst: vi.fn(() => mockDbFindFirst()) },
@@ -42,8 +41,7 @@ vi.mock('@/drizzle/db', () => {
   // scoreLead() persists the score and syncs it back to contacts inside a
   // single db.transaction(). The callback gets this same mock so tx.insert /
   // tx.update resolve against the definitions above.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db.transaction = vi.fn(async (cb: (tx: any) => unknown) => cb(db));
+  db.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => cb(db));
 
   return { db };
 });

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #2432 — two plan quotas that could never be seen, let alone enforced.
  *
@@ -36,13 +35,13 @@ const m = vi.hoisted(() => {
     executeRows: [{ bytes: '0' }] as { bytes: string | null }[],
     fromTables: [] as unknown[],
     whereClauses: [] as unknown[],
-    executed: [] as any[],
+    executed: [] as unknown[],
   };
   const shift = (): unknown[] =>
     state.selectResults.length > 0 ? (state.selectResults.shift() as unknown[]) : [];
 
-  const makeChain = (): any => {
-    const chain: any = {};
+  const makeChain = (): Record<string, unknown> => {
+    const chain: Record<string, unknown> = {};
     chain.from = vi.fn((t: unknown) => { state.fromTables.push(t); return chain; });
     chain.innerJoin = vi.fn(() => chain);
     chain.leftJoin = vi.fn(() => chain);
@@ -78,7 +77,7 @@ const GIB = 1024 ** 3;
 
 const dialect = new PgDialect();
 
-function sqlOf(fragment: any): { text: string; params: unknown[] } {
+function sqlOf(fragment: unknown): { text: string; params: unknown[] } {
   // SQL fragments only compile through a dialect; `fragment.toQuery()` needs the
   // session this code never builds. PgDialect is the same one drizzle-pg uses.
   const q = dialect.sqlToQuery(fragment);

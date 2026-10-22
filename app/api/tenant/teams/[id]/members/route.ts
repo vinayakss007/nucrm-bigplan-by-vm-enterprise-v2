@@ -41,29 +41,25 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     const role = body?.role === 'manager' ? 'manager' : 'member';
     if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 });
 
-    // Re-activate a previously-removed membership rather than creating a second
-    // row (the unique index is on team_id+user_id).
-    const [existing] = await db
-      .select({ id: teamMembers.id })
-      .from(teamMembers)
-      .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)))
-      .limit(1);
-
-    let member;
-    if (existing) {
-      [member] = await db.update(teamMembers)
-        .set({ role, deletedAt: null, updatedAt: new Date(), updatedBy: ctx.userId })
-        .where(eq(teamMembers.id, existing.id))
-        .returning();
-    } else {
-      [member] = await db.insert(teamMembers).values({
+    // One statement, no read-then-insert window (#3082): re-activating a
+    // previously-removed membership is an on-conflict update of the same
+    // row the idx_team_members_team_user unique index protects. A
+    // double-submit used to take the insert branch twice and the loser got
+    // a raw 23505 → 500. Same pattern as accept-invite (#89-98).
+    const [member] = await db
+      .insert(teamMembers)
+      .values({
         tenantId: ctx.tenantId,
         teamId,
         userId,
         role,
         createdBy: ctx.userId,
-      }).returning();
-    }
+      })
+      .onConflictDoUpdate({
+        target: [teamMembers.teamId, teamMembers.userId],
+        set: { role, deletedAt: null, updatedAt: new Date(), updatedBy: ctx.userId },
+      })
+      .returning();
 
     return NextResponse.json({ data: member }, { status: 201 });
   } catch (err) { return apiError(err); }

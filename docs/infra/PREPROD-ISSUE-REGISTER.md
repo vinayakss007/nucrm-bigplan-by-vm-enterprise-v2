@@ -2123,7 +2123,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   calls `.insert(`** — the 23503 class — by area: **Settings/platform 47 · CRM objects 38 · Comms+integrations 19 ·
   Billing 14 · AI 2**. The other **50** are update/delete-only: `tenant_id = sentinel` matches no row, so they
   answer 404 or a silent no-op and never reach the FK. 116 of the 120 are `/api/tenant/**`, 4 are `/api/v1/**`.
-  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:367` (re-pinned from the `:342` this line carried on 2026-10-17 — **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still lands on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
+  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
   `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:186` (re-pinned 2026-10-22 from `:181`: `d78d7698` (#2973) put the money-math comment block above it), `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
@@ -2153,7 +2153,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
-  `tests/unit/auth-middleware-require-auth.test.ts:550-559`.
+  `tests/unit/auth-middleware-require-auth.test.ts:549-558` (re-pinned 2026-10-22 from `:550-559`: `3bf7f648c` (#3073) deleted this file's top-of-file `eslint-disable @typescript-eslint/no-explicit-any` header, which moved every line beneath it up by one).
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
   is already computed (`lib/auth/middleware.ts:382`) but it cannot reject there — sentinel **reads** are what power
@@ -3034,7 +3034,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
     before it), which is the actual verification that PR wanted.
   - `duplicate-fk-declarations-2259` failed with `expected 113 to be 114` — this worktree's branch
     has no 0114 journal entry; **#2345** rewrites exactly that assertion. Not a new finding.
-  - `rate-limit.test.ts:310` failed with `TypeError: Cannot read properties of null (reading
+  - `rate-limit.test.ts:309` (re-pinned 2026-10-22 from `:310`: `6f18254b9` (#3036) deleted two `eslint-disable-next-line` lines above this block, so the comment slid one line up) failed with `TypeError: Cannot read properties of null (reading
 'headers')` — a **third instance of the same environment-dependency class** as #2359, filed
     below.
   - Two files could not be collected: `Error: Cannot find module
@@ -3045,7 +3045,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
     vitest. Consequence for every future sweep: **a `tests/unit` run in the shared worktree is not
     attributable**; it has to come from its own clone, the way the CI-equivalent worktrees do.
 - **The third env-dependent assertion (found inside this measurement).**
-  `tests/unit/rate-limit.test.ts:310` calls `checkRateLimit(null, { action: 'test' })` and expects
+  `tests/unit/rate-limit.test.ts:309` (re-pinned 2026-10-22 from `:310`, same one-line slide as the citation above) calls `checkRateLimit(null, { action: 'test' })` and expects
   `null`. That reaches `getClientIp` (`lib/client-ip.ts:14`), which returns the string `'unknown'`
   **before** touching the request unless `TRUST_PROXY === 'true'` — with the flag set it
   dereferences `request.headers` and throws on `null`. `.env.local:48` sets `TRUST_PROXY=true`;
@@ -3111,7 +3111,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   (a) + (b) together are what makes "the suite is green" mean the suite is green again.
 - **Files:** `docs/infra/PREPROD-ISSUE-REGISTER.md` only. Evidence read: `df -h/-k /tmp`,
   `du -xsh /tmp/*`, `stat -c %y` on the 88 dirs, `lsof +D /tmp`, the two aborted-and-retried
-  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:308-311`,
+  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:307-310 (re-pinned 2026-10-22 from `:308-311`: `6f18254b9` (#3036) deleted two `eslint-disable-next-line` lines above this block)`,
   `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
   `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the

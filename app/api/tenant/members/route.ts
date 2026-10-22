@@ -243,7 +243,11 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
-      await db.transaction(async (tx) => {
+      // #3079: the guard's 409 must reach the CLIENT. `return stale` inside a
+      // transaction callback only resolves the transaction — the old shape
+      // discarded it, committed, killed the target's sessions and answered
+      // ok:true for a role change that matched zero rows.
+      const staleResponse = await db.transaction(async (tx) => {
         const [updated] = await tx.update(tenantMembers)
           .set({ roleSlug, roleId: role?.id || null })
           .where(and(...whereConditions))
@@ -253,7 +257,9 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         if (stale) return stale;
           
         await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'role_change', entityType: 'member', entityId: target.userId, newData: { role: roleSlug }, dbOrTx: tx as DbClient });
+        return null;
       });
+      if (staleResponse) return staleResponse;
 
       // Invalidate session cache so the role/permission change takes effect immediately
       // (the middleware re-checks DB on cache miss, but this forces it)
