@@ -467,8 +467,14 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(gen, 'the submit handler no longer refuses an unread read').toMatch(/if \(failed\) return;/);
     expect(gen, 'the write gate drifted onto the kept read — a last read must stay saveable')
       .not.toMatch(/disabled=\{[^}]*\|\| stale\}/);
+    // The gate being pinned is `!failed` — that the plan sentence is asserted only about a
+    // workspace the read answered. Its field spelling moved on 2026-10-21 when e96643cb (#2949)
+    // corrected the seed to the camelCase the route actually answers with, so the gate reads
+    // `tenant?.planId` now; a snake_case `plan_id` on that line would mean the fix was reverted.
     expect(gen, 'the plan sentence is asserted about an unread read again')
-      .toMatch(/\{!failed && tenant\?\.plan_id !== 'enterprise' && \(/);
+      .toMatch(/\{!failed && tenant\?\.planId !== 'enterprise' && \(/);
+    expect(gen, 'the gate is back on the snake_case field the route never answers with')
+      .not.toMatch(/tenant\?\.plan_id/);
     // Nothing on this page derives a figure from the read, so nothing may be dashed.
     expect(gen, 'general invented a dash for a total it never had').not.toMatch(/\? '—'/);
   });
@@ -598,6 +604,14 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(mounted.sort()).toEqual([
       'panel-page-error-not-empty-general-localization-stale-2872.test.tsx',
       'panel-page-error-not-empty-tenant-settings-2829.test.tsx',
+      // `settings-general-camelcase-seed-2949` joined on 2026-10-21 (#2962). It mounts the
+      // workspace form to pin what the form HOLDS and what its PATCH sends when the route
+      // answers camelCase — a different claim from this file's, and it is held to the same
+      // boundary as #2829's below: it must not start asserting the freshness copy.
+      'settings-general-camelcase-seed-2949.test.tsx',
     ].sort());
+    expect(srcOf('tests/unit/settings-general-camelcase-seed-2949.test.tsx'),
+      'the #2949 seed suite has started speaking about a last read')
+      .not.toMatch(/last read|Could not refresh|Failed to load/);
   });
 });

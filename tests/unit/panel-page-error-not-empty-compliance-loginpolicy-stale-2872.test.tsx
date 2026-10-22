@@ -609,17 +609,21 @@ describe('the ratchet this slice is measured by (#2872)', () => {
       expect(bare).toMatch(/errorFlag/);
       expect(bare, `${f}: the rewind left a failed arm standing, so blindness proves nothing`)
         .not.toMatch(/\w+Failed && \(|if \(\w+Failed\)|const \w+Failed = /);
+      // And the rewind has to leave a page with NO split of any kind in it — that unsplit
+      // shape is what the guard was blind to before this slice existed, so asserting the
+      // rewind reaches it is the same claim the history read used to make.
+      expect(bare, `${f}: the rewind left a three-state split standing, so it is not the base shape`)
+        .not.toMatch(/Boolean\(\w+Error\) && !\w+Data/);
       expect(inspect(f, bare).offends, `${f} would be caught with the flags rewound`).toBe(false);
     }
 
-    // The strongest form of the blindness: the guard looked at these exact sources at
-    // base, with no split at all, and reported nothing.
-    for (const f of [COMPLIANCE, LOGIN]) {
-      const shown = spawnSync('git', ['show', `origin/main:${f}`], { cwd: ROOT, encoding: 'utf8' });
-      expect(shown.status, shown.stderr).toBe(0);
-      expect(shown.stdout).not.toMatch(/Boolean\(\w+Error\) && !\w+Data/);
-      expect(inspect(f, shown.stdout).offends, `${f} offended at base — this slice is not the class`).toBe(false);
-    }
+    // What used to be read out of history here — `git show origin/main:<page>`, asserting the
+    // guard had looked at these exact sources unsplit and said nothing — cannot survive the
+    // slice it was measuring: #2957 merged, so `origin/main` now carries the split and is no
+    // longer a base, and this job checks out at depth 1, so no pre-slice revision is fetchable
+    // to pin it against instead (`register-drift-screen-2416` documents what a truncated
+    // history does to a question like this). The `bare` rewind above is the same claim about
+    // the same source, and it holds at any depth, against whatever `main` becomes.
   });
 
   it('keeps #2829’s guard green and adds nothing to its baseline', () => {
