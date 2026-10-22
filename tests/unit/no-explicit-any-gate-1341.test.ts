@@ -27,7 +27,10 @@ import { collect, isLintedSource } from '../../scripts/check-any-suppressions.mj
  * with each other and neither agreed with eslint.
  */
 
-const SUPPRESSION = /eslint-disable(?:-next-line|-line)?[^\n]*no-explicit-any/g;
+// `[y]` keeps the detector text from matching its own pattern: an unbroken
+// `no-explicit-any` literal on this line would make this file count as one of
+// the suppressions the ratchet grandfatheres.
+const SUPPRESSION = /eslint-disable(?:-next-line|-line)?[^\n]*no-explicit-an[y]/g;
 
 /** The `ignores` array of the flat config, read from the file that declares it. */
 const configIgnores = (): string[] => {

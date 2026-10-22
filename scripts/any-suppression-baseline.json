@@ -1,10 +1,6 @@
 {
   "drizzle/schema/utils.ts": 5,
   "lib/api/validate.ts": 1,
-  "tests/dashboard/widgets/widget-wrapper.test.tsx": 1,
-  "tests/helpers/auth-mock.ts": 1,
-  "tests/integration/backup-integrity.test.ts": 1,
-  "tests/setup.ts": 1,
   "tests/unit/ai/scoring.test.ts": 2,
   "tests/unit/ai-auto-followup.test.ts": 1,
   "tests/unit/api-key-auth-lookup.test.ts": 1,
@@ -30,7 +26,6 @@
   "tests/unit/lead-warming-engine.test.ts": 1,
   "tests/unit/leaderboards-column-contract-2388.test.ts": 1,
   "tests/unit/module-registry.test.ts": 1,
-  "tests/unit/no-explicit-any-gate-1341.test.ts": 1,
   "tests/unit/notification-deep-links.test.ts": 1,
   "tests/unit/pipelines-stage-safety.test.ts": 1,
   "tests/unit/plan-offerings-api.test.ts": 1,
