@@ -50,6 +50,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3000: retry/retry_all/purge/purge_old mutate the delivery queue —
+    // admin-only, exactly like the webhooks/retry and webhooks/[id] twins.
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(request);
     const { action, ids, days } = body;

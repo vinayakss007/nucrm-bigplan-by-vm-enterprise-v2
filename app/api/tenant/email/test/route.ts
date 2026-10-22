@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { testEmailSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { sendEmail } from '@/lib/email/service';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -19,6 +19,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3000: sends provider-authenticated mail to any address — its own twin
+    // email/test-send does the identical sendEmail() behind requirePerm.
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(testEmailSchema, rawBody);

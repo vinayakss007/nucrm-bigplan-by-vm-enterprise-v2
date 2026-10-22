@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { sendWhatsAppSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations, whatsappConversations, whatsappMessages } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
@@ -22,6 +22,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3000: this spends the tenant's Meta access_token to message arbitrary
+    // numbers — gate like email/bulk (requirePerm), not bare requireAuth.
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     const rawBody = await readJsonBody(req);
     const validated = validateBody(sendWhatsAppSchema, rawBody);
