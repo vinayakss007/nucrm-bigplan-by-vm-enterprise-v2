@@ -32,7 +32,7 @@
  * revalidation is a tick, not an operator action, and what stays on screen is the previous tick's
  * figures. The copy says exactly that ("the previous tick — the last read"), and every derived
  * figure — MRR/ARR, active tenants, total users, open errors, the ten backup and restore
- * counters, the uptime clock, the two charts, the "Last updated" stamp and the
+ * counters, the probe version cell, the two charts, the "Last updated" stamp and the
  * "All Systems Operational" badge — now keys off `…Failed` per read, so a real `0` from a read
  * that answered still prints `0` while an unread one prints `—`. Before this, an unread health
  * probe answered "Issues Detected" (a false alarm) while its Schema badge answered green (a
@@ -121,7 +121,9 @@ const MONITORING = {
   recentBackups: [{ id: 'b1', status: 'completed', backup_name: 'nightly', size_bytes: 2097152, created_at: '2026-02-03T02:00:00.000Z' }],
   recentErrors: [{ id: 'e1', level: 'fatal', message: 'pool exhausted', created_at: '2026-02-03T03:00:00.000Z' }],
 };
-const HEALTH = { status: 'ok', db: 'connected', db_latency_ms: 12, schema_ready: true, uptime_s: 7200 };
+// #3071: the producer's real shape (`app/api/health/route.ts:88-98`). The old fixture carried
+// db_latency_ms/uptime_s, which this endpoint has never emitted as JSON.
+const HEALTH = { status: 'ok', db: 'connected', schema_ready: true, service: 'nucrm-app', version: '1.2.0', sentry: 'configured', timestamp: '2026-02-03T03:00:00.000Z' };
 
 const ok = (data: unknown): QueryResult => ({ data, error: null, isLoading: false, refetch: vi.fn() });
 /** A read that never answered. */
@@ -154,7 +156,7 @@ const counterText = (caption: RegExp, nth = 0) => {
   return els[nth]?.closest('div')?.textContent ?? '';
 };
 const chartCard = (title: string) => screen.getByText(title).parentElement?.textContent ?? '';
-const uptimeText = () => screen.getByText(/^Uptime:/).textContent ?? '';
+const versionText = () => screen.getByText(/^Version:/).textContent ?? '';
 
 const button = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
 const offered = (name: RegExp) => button(name).disabled === false;
@@ -315,12 +317,12 @@ describe('settings: a refused refresh keeps the last read and says what the next
 // ──────────────────────────────────────────────────────────────────────────────────
 
 describe('monitoring: both ticks answered shows the platform (#2872)', () => {
-  it('prints the real figures, the real uptime and no failure affordance', () => {
+  it('prints the real figures, the real probe version and no failure affordance', () => {
     mountMonitoring(ok(MONITORING), ok(HEALTH));
     expect(cardText('Monthly Revenue')).toContain('$1,234');
     expect(cardText('Active Tenants')).toContain('7');
     expect(cardText('Total Users')).toContain('42');
-    expect(uptimeText()).toBe('Uptime: 2h 0m');
+    expect(versionText()).toBe('Version: 1.2.0');
     expect(screen.getByText('All Systems Operational')).toBeTruthy();
     expect(counterText(/^Failed$/)).toContain('0');   // a real zero, from a read that answered
     expect(alerts()).toBe('');
@@ -366,13 +368,14 @@ describe('monitoring: a tick that never answered is an outage, and not a set of 
     expect(alerts()).not.toMatch(/health probe/i);
     expect(screen.getByText('All Systems Operational')).toBeTruthy();
     expect(screen.queryByText('not read')).toBeNull();
-    expect(uptimeText()).toBe('Uptime: 2h 0m');
+    expect(versionText()).toBe('Version: 1.2.0');
   });
 
-  it('still prints a real 0 that the answered read produced', () => {
-    // The dash belongs to `failed`, never to the bare flag: uptime 0h 0m is a measurement.
-    mountMonitoring(failed(), ok({ ...HEALTH, uptime_s: 0 }));
-    expect(uptimeText()).toBe('Uptime: 0h 0m');
+  it('still prints a real value the answered read produced', () => {
+    // The dash belongs to `failed`, never to the bare flag: an absent probe version is
+    // reported as such, but a read that answered is never dashed.
+    mountMonitoring(failed(), ok({ ...HEALTH, version: '0.9.0' }));
+    expect(versionText()).toBe('Version: 0.9.0');
   });
 
   it('dashes the "Last updated" stamp instead of inventing one', () => {
@@ -387,7 +390,7 @@ describe('monitoring: a refused tick keeps the previous tick and says so (#2872)
     mountMonitoring(staleRead(MONITORING), ok(HEALTH));
     expect(cardText('Active Tenants')).toContain('7');
     expect(counterText(/^Total$/, 0)).toContain('10');
-    expect(uptimeText()).toBe('Uptime: 2h 0m');
+    expect(versionText()).toBe('Version: 1.2.0');
     expect(alerts()).toContain(
       'Could not refresh platform monitoring, so the figures below are the previous tick — the last read: Request failed (504).',
     );
@@ -435,8 +438,8 @@ describe('health probe: the same split on the other read (#2872)', () => {
     expect(alerts()).toContain('Failed to load the health probe: Request failed (503)');
     expect(screen.queryByText('Issues Detected')).toBeNull();
     expect(screen.getByText('Status not read')).toBeTruthy();
-    expect(screen.getAllByText('not read')).toHaveLength(2);   // Database and Schema, both unread
-    expect(uptimeText()).toBe('Uptime: —');
+    expect(screen.getAllByText('not read')).toHaveLength(3);   // Database, App Server and Schema, all unread
+    expect(versionText()).toBe('Version: —');
     // …and the monitoring read is untouched: it answered, so its figures stand.
     expect(cardText('Active Tenants')).toContain('7');
     expect(alerts()).not.toMatch(/platform monitoring/);
@@ -446,7 +449,7 @@ describe('health probe: the same split on the other read (#2872)', () => {
     mountMonitoring(ok(MONITORING), staleRead(HEALTH));
     expect(screen.getByText('All Systems Operational')).toBeTruthy();
     expect(screen.queryByText('not read')).toBeNull();
-    expect(uptimeText()).toBe('Uptime: 2h 0m');
+    expect(versionText()).toBe('Version: 1.2.0');
     expect(alerts()).toContain('the service badges below are the previous tick — the last read');
     expect(alerts()).not.toContain('Failed to load the health probe');
     expect(alerts()).not.toMatch(/this probe never ran/);
@@ -457,6 +460,33 @@ describe('health probe: the same split on the other read (#2872)', () => {
     expect(screen.getByText('Issues Detected')).toBeTruthy();
     expect(screen.getByText('Database')).toBeTruthy();
     expect(alerts()).toBe('');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────
+// app/superadmin/monitoring/page.tsx — field fidelity (#3071)
+// ──────────────────────────────────────────────────────────────────────────────────
+
+describe('monitoring: only fields /api/health actually emits (#3071)', () => {
+  it('renders no uptime clock and no invented latency on a healthy read', () => {
+    mountMonitoring(ok(MONITORING), ok(HEALTH));
+    expect(document.body.textContent).not.toMatch(/Uptime:/);
+    expect(document.body.textContent).not.toMatch(/undefinedms/);
+    expect(document.body.textContent).not.toMatch(/\b12ms\b/); // the old fixture's invented latency
+  });
+
+  it('backs the App Server badge with the probe status, so it can go red', () => {
+    mountMonitoring(ok(MONITORING), ok({ status: 'error', db: 'connected', schema_ready: true }));
+    expect(screen.getByText('App Server')).toBeTruthy();
+    expect(screen.getByText('Issues Detected')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Uptime:/);
+  });
+
+  it('renders the Schema badge as unread when the probe answered without the field', () => {
+    // `schema_ready !== false` used to turn an absent field into a green light.
+    mountMonitoring(ok(MONITORING), ok({ status: 'ok', db: 'connected' }));
+    const schema = screen.getByText('Schema').closest('div');
+    expect(schema?.textContent).toContain('not read');
   });
 });
 
@@ -502,14 +532,16 @@ describe('the ratchet (#2872)', () => {
       /monitoringFailed \? '—' : data\?\.backupStatus\?\.total \?\? 0/,
       /monitoringFailed \? '—' : data\?\.backupStatus\?\.failed \?\? 0/,
       /monitoringFailed \? '—' : data\?\.restoreStatus\?\.failed \?\? 0/,
-      /healthFailed \? '—' : `/,
+      /healthFailed \? '—' : hs\.version \?\? 'not reported'/,
       /healthFailed\?'Status not read':allUp/,
       /monitoringFailed \? \(\s*<p className="text-white\/30 text-sm text-center py-8">—<\/p>/,
     ]) {
       expect(monitoring, `a derived figure stopped keying off failed (${figure.source})`).toMatch(figure);
     }
     // `?? 0`, not `|| 0`: a real zero stays a zero instead of silently re-appearing as one.
-    expect(monitoring, 'a count went back to `|| 0`').not.toMatch(/backupStatus\?\.total \|\| 0|restoreStatus\?\.failed \|\| 0|hs\.uptime_s\|\|0/);
+    // #3071: the probe's invented fields may not come back either — no read of them survives.
+    expect(monitoring, 'a count went back to `|| 0`, or a #3071 phantom field was re-read')
+      .not.toMatch(/backupStatus\?\.total \|\| 0|restoreStatus\?\.failed \|\| 0|hs\.uptime_s\|\|0|hs\.db_latency_ms|hs\.uptime_s|hs\.node|hs\.missing_tables/);
     // The `|| Date.now()` fallback stamped an unread panel as read "just now".
     expect(monitoring, 'the header invented a timestamp again').not.toMatch(/const lastRefresh = [^\n]*Date\.now\(\)/);
     expect(monitoring).toMatch(/const lastRefresh = lastReadAt \? new Date\(lastReadAt\)\.toISOString\(\) : null;/);
