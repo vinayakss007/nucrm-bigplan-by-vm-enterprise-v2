@@ -13,14 +13,17 @@ import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
+// #3071: exactly what GET /api/health answers (app/api/health/route.ts:88-98) — the old
+// db_latency_ms/uptime_s/node/missing_tables were Prometheus metric keys, never JSON fields
+// of this response, and rendered confident zeros and hard-coded greens.
 interface HealthData {
   status?: string;
   db?: string;
-  db_latency_ms?: number;
   schema_ready?: boolean;
-  uptime_s?: number;
-  node?: string;
-  missing_tables?: string[];
+  service?: string;
+  version?: string;
+  sentry?: string;
+  timestamp?: string;
 }
 
 interface MonitoringData {
@@ -182,12 +185,12 @@ export default function MonitoringPage() {
 
       {/* System health row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <ServiceBadge name="Database" unknown={healthFailed} ok={hs.db==='connected'} latency={healthFailed ? undefined : hs.db_latency_ms}/>
-        <ServiceBadge name="App Server" ok={true} latency={0}/>
-        <ServiceBadge name="Schema" unknown={healthFailed} ok={hs.schema_ready!==false}/>
+        <ServiceBadge name="Database" unknown={healthFailed} ok={hs.db==='connected'}/>
+        <ServiceBadge name="App Server" unknown={healthFailed} ok={hs.status==='ok'}/>
+        <ServiceBadge name="Schema" unknown={healthFailed || hs.schema_ready===undefined} ok={hs.schema_ready===true}/>
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
           <Server className="w-3.5 h-3.5 text-white/30"/>
-          <span className="text-xs text-white/40">Uptime: <span className="text-white font-medium">{healthFailed ? '—' : `${Math.floor((hs.uptime_s ?? 0)/3600)}h ${Math.floor(((hs.uptime_s ?? 0)%3600)/60)}m`}</span></span>
+          <span className="text-xs text-white/40">Version: <span className="text-white font-medium">{healthFailed ? '—' : hs.version ?? 'not reported'}</span></span>
         </div>
       </div>
 

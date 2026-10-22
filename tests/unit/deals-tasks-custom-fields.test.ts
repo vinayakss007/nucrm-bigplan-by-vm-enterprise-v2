@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Regression tests for custom_fields on `deals` and `tasks`.
  *
@@ -42,12 +41,12 @@ vi.mock('@/drizzle/db', async () => {
 
   const reader = () => {
     let table: unknown = null;
-    const self: any = {
+    const self: Record<string, unknown> = {
       from: (t: unknown) => {
         table = t;
         return self;
       },
-      then: (res: any, rej?: any) => {
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => {
         const rows =
           table === pipelines ? [{ id: h.pipelineId }]
           : table === dealStages ? [{ id: h.stageId, pipelineId: h.pipelineId }]
@@ -62,9 +61,9 @@ vi.mock('@/drizzle/db', async () => {
   };
 
   const record = (op: string, table: unknown) => {
-    const rec: any = { op, table };
+    const rec: { op: string; table: unknown; payload?: unknown } = { op, table };
     h.ops.push(rec);
-    const chain: any = {
+    const chain: Record<string, unknown> = {
       set: (p: unknown) => {
         rec.payload = p;
         return chain;
@@ -75,12 +74,12 @@ vi.mock('@/drizzle/db', async () => {
       },
       where: () => chain,
       returning: async () => h.returningQueue.shift() ?? [{ id: 'new-id' }],
-      then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
     };
     return chain;
   };
 
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: () => reader(),
     insert: (table: unknown) => record('insert', table),
     update: (table: unknown) => record('update', table),
@@ -93,7 +92,7 @@ vi.mock('@/drizzle/db', async () => {
       deals: { findFirst: async () => h.findFirst['deals'] },
       tasks: { findFirst: async () => h.findFirst['tasks'] },
     },
-    transaction: async (cb: any) => cb(db),
+    transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };
 });

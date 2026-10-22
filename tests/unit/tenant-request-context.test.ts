@@ -110,8 +110,7 @@ describe('tenant/request-context', () => {
 
       const { withRequestContext, setContext, getOrFetchContext } = await import('@/lib/tenant/request-context');
       const result = withRequestContext('req-1', async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (globalThis as any).__request_ctx = ctx;
+        (globalThis as { __request_ctx?: unknown }).__request_ctx = ctx;
         setContext('req-1', ctx);
         return getOrFetchContext('req-1', 'hash', fetchFn);
       });
