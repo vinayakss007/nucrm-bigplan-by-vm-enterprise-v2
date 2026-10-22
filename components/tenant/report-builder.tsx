@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, type ComponentProps } from 'react';
 import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 // Derive the Tooltip `formatter` type from the installed recharts Tooltip — its type
 // aliases aren't reliably exported from root — and coerce in-body to keep the output.
@@ -65,14 +66,17 @@ export default function ReportBuilder() {
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configReload, setConfigReload] = useState(0);
   const [result, setResult] = useState<ReportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load available dimensions/metrics
   useEffect(() => {
     const abort = new AbortController();
+    setConfigLoading(true); setConfigError(null);
     fetch('/api/tenant/reports/builder', { credentials: 'include', signal: abort.signal })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`the catalogue read answered ${r.status}`)))
       .then(d => {
         if (abort.signal.aborted) return;
         setEntities(d.entities || []);
@@ -83,9 +87,9 @@ export default function ReportBuilder() {
         }
         setConfigLoading(false);
       })
-      .catch((err) => clientLogError('report-builder:load-config', err));
+      .catch((err) => { if (abort.signal.aborted) return; clientLogError('report-builder:load-config', err); setConfigError(`Could not load the report builder's fields and metrics: ${(err as Error)?.message || 'no response from the server'}. No entity, dimension or metric here is a fact this page has, so there is nothing to configure until that read answers — try again re-runs only this read.`); setConfigLoading(false); });
     return () => abort.abort();
-  }, []);
+  }, [configReload]);
 
   // Get current entity config
   const entityConfig = entities.find(e => e.id === selectedEntity);
@@ -172,13 +176,8 @@ export default function ReportBuilder() {
     URL.revokeObjectURL(url);
   };
 
-  if (configLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (configLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  if (configError) return <div className="max-w-6xl py-10"><InlineErrorState message={configError} onRetry={() => setConfigReload(n => n + 1)} /></div>;
 
   return (
     <div className="space-y-6 max-w-6xl animate-fade-in">
