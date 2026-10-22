@@ -208,6 +208,9 @@ const PUBLIC_PATHS = [
   '/portal', '/portal/tickets', '/portal/invoices', '/portal/kb',
   '/api/auth/login', '/api/auth/signup', '/api/auth/logout',
   '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-email',
+  // #3076: /api/auth/password-reset/{request,confirm} were the #2415 class the
+  // sweep missed — a logged-out caller got the edge 401 before the handler ran.
+  '/api/auth/password-reset',
   '/api/auth/resend-verification', '/api/auth/accept-invite', '/api/auth/invite-details',
   '/api/auth/2fa/setup', '/api/auth/2fa/verify', '/api/auth/2fa/disable',
   '/api/auth/csrf-token', '/api/auth/sso',

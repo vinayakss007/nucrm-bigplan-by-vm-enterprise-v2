@@ -51,7 +51,8 @@
 >   includes `/api/tenant` — and a key that is not in `api_keys` falls through to `requireAuth()`'s
 >   own cookie path (`lib/auth/middleware.ts:241` → `:262`), i.e. a cookie-authenticated mutation no
 >   CSRF check has ever inspected; reachability is bounded by `setCORS` echoing only listed
->   `ALLOWED_ORIGINS` (`proxy.ts:307-319`, fail-closed and `*`-fatal in production at `:282-284`), not
+>   `ALLOWED_ORIGINS` (`proxy.ts:310-322`, re-pinned 2026-10-22: **#3076** shifted it from
+>   `:307-319`; fail-closed and `*`-fatal in production at `:285-287`, was `:282-284`), not
 >   by anything the request itself controls. This PR puts the in-handler check on the three
 >   plugin-engine writers — exempt on the verified `ctx.authMethod`, never on the client-settable
 >   `x-auth-method` header — and rewrites `guard:csrf` from a guard that asserted blanket coverage
@@ -5230,7 +5231,8 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   ambient `nucrm_session` cookie. That request is a cookie-authenticated mutation no CSRF check
   has ever inspected. Reachability is bounded, not zero: a cross-site page cannot set the header
   without a preflight, and the preflight only succeeds for an origin `setCORS` echoes
-  (`proxy.ts:307-319`, from a fail-closed `ALLOWED_ORIGINS` that `proxy.ts:282-284` makes fatal as
+  (`proxy.ts:310-322`, re-pinned 2026-10-22: **#3076** shifted it from `:307-319`, from a
+  fail-closed `ALLOWED_ORIGINS` that `proxy.ts:285-287` — was `:282-284` — makes fatal as
   `*` in production) — so the reachable set is origins the deployment itself trusts, plus
   anything running on the site's own origin. Filed as **#2579** with the one-line fix; an
   in-handler check is what closes it per route, which is what #2561 asked for.
