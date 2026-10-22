@@ -215,7 +215,10 @@ vi.mock("@/lib/api/mutating-rate-limit", () => ({
   rateLimitMutating: vi.fn(async () => null),
 }));
 
-const sendEmail = vi.fn(async () => undefined);
+// sendEmail never throws — it resolves SendResult (lib/email/service.ts:46), so
+// the mock has to too. Resolving undefined made #3045's result check at
+// app/api/tenant/tickets/[id]/route.ts:287 read `.success` off nothing.
+const sendEmail = vi.fn(async () => ({ success: true, provider: 'mock', messageId: 'mock-message' }));
 vi.mock("@/lib/email/service", () => ({
   sendEmail: (...args: unknown[]) => sendEmail(...(args as [never])),
 }));
