@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockDbSelectResult: any[] = [];
+const mockDbSelectResult: unknown[] = [];
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -28,8 +27,7 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((a: any, b: any) => ({ a, b })),
+  eq: vi.fn((a: unknown, b: unknown) => ({ a, b })),
 }));
 
 describe('Branding Engine', () => {
@@ -166,10 +164,8 @@ describe('Branding Engine', () => {
     it('rejects null/undefined', async () => {
       const { validateCustomDomain } = await import('@/lib/branding');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect(validateCustomDomain(null as any).valid).toBe(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect(validateCustomDomain(undefined as any).valid).toBe(false);
+      expect(validateCustomDomain(null as never).valid).toBe(false);
+      expect(validateCustomDomain(undefined as never).valid).toBe(false);
     });
 
     it('rejects empty string', async () => {

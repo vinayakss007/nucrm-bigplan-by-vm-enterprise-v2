@@ -39,8 +39,7 @@ const m = vi.hoisted(() => {
   };
   const updateSet = vi.fn();
   const whereAfterUpdate = vi.fn();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db: any = {
+  const db: Record<string, unknown> = {
     execute: vi.fn().mockResolvedValue({ rows: [] }),
     transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
     insert: vi.fn(() => ({
@@ -119,18 +118,15 @@ const PRICE_ENV: Record<string, string> = {
   STRIPE_PRICE_ENTERPRISE_YEARLY: 'price_enterprise_yearly',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeRequest(event: any): any {
+function makeRequest(event: unknown) {
   const body = JSON.stringify(event);
   return {
     headers: { get: (h: string) => (h === 'stripe-signature' ? 't=1,v1=sig' : null) },
     text: async () => body,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function checkoutEvent(object: Record<string, any>) {
+function checkoutEvent(object: Record<string, unknown>) {
   return {
     id: `evt_${Math.random().toString(36).slice(2)}`,
     type: 'checkout.session.completed',
