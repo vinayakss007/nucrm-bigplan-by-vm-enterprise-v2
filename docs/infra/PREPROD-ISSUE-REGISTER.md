@@ -3110,7 +3110,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   (a) + (b) together are what makes "the suite is green" mean the suite is green again.
 - **Files:** `docs/infra/PREPROD-ISSUE-REGISTER.md` only. Evidence read: `df -h/-k /tmp`,
   `du -xsh /tmp/*`, `stat -c %y` on the 88 dirs, `lsof +D /tmp`, the two aborted-and-retried
-  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:308-311`,
+  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:436 (re-pinned 2026-10-22 from `:422`: #3077 grew the AUTH_RATE_ACTIONS header above it; originally re-pinned 2026-10-15 from `:411` for #2630/#2635)`, `tests/unit/rate-limit.test.ts:308-311`,
   `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
   `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
