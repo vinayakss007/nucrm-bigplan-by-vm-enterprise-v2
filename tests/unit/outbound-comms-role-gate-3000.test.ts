@@ -27,6 +27,10 @@ const MATRIX: MatrixRow[] = [
   { file: 'app/api/tenant/integrations/telegram/test/route.ts', handler: 'POST', gate: /ctx\.isAdmin/, gateName: 'isAdmin' },
   { file: 'app/api/tenant/email/test/route.ts', handler: 'POST', gate: /requirePerm\(/, gateName: "requirePerm('contacts.edit')" },
   { file: 'app/api/tenant/webhooks/dlq/route.ts', handler: 'POST', gate: /ctx\.isAdmin/, gateName: 'isAdmin' },
+  // #3001 follow-on rows: definition mutators moved behind settings.manage.
+  { file: 'app/api/tenant/custom-fields/route.ts', handler: 'POST', gate: /requirePerm\(ctx, 'settings\.manage'\)/, gateName: "requirePerm('settings.manage')" },
+  { file: 'app/api/tenant/custom-fields/route.ts', handler: 'PUT', gate: /requirePerm\(ctx, 'settings\.manage'\)/, gateName: "requirePerm('settings.manage')" },
+  { file: 'app/api/tenant/custom-fields/route.ts', handler: 'DELETE', gate: /requirePerm\(ctx, 'settings\.manage'\)/, gateName: "requirePerm('settings.manage')" },
 ];
 
 /** Slice of source belonging to a single exported handler. */
