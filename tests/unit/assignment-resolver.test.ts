@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- the drizzle tx mock is intentionally loosely typed */
 import { describe, it, expect } from 'vitest';
 import { resolveAssignee } from '@/lib/assignment-resolver';
 
@@ -10,23 +9,23 @@ import { resolveAssignee } from '@/lib/assignment-resolver';
  *   tx.update().set(vals).where()                               -> records vals
  *   tx.insert().values(vals)                                    -> records vals
  */
-function makeTx(rules: any[], roster: any[] = []) {
-  const calls = { updates: [] as any[], inserts: [] as any[] };
+function makeTx(rules: unknown[], roster: unknown[] = []) {
+  const calls = { updates: [] as unknown[], inserts: [] as unknown[] };
   // The rules query ends in .for('update') and returns rules synchronously. The
   // team-roster query ends in .where() and is awaited, so the chain is thenable
   // and resolves to the roster.
-  const selectChain: any = {
+  const selectChain: Record<string, unknown> = {
     from: () => selectChain,
     where: () => selectChain,
     orderBy: () => selectChain,
     limit: () => selectChain,
     for: () => rules,
-    then: (resolve: (v: any[]) => void) => resolve(roster),
+    then: (resolve: (v: unknown[]) => void) => resolve(roster),
   };
-  const tx: any = {
+  const tx: Record<string, unknown> = {
     select: () => selectChain,
     update: () => ({
-      set: (vals: any) => ({
+      set: (vals: unknown) => ({
         where: () => {
           calls.updates.push(vals);
           return Promise.resolve();
@@ -34,7 +33,7 @@ function makeTx(rules: any[], roster: any[] = []) {
       }),
     }),
     insert: () => ({
-      values: (vals: any) => {
+      values: (vals: unknown) => {
         calls.inserts.push(vals);
         return Promise.resolve();
       },

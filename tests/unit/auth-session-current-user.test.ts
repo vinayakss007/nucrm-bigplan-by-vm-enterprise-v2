@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Coverage for lib/auth/session.ts `getCurrentUser` and the JWT_SECRET guard.
  *
@@ -37,12 +36,12 @@ vi.mock('jose', () => ({
 vi.mock('bcryptjs', () => ({ default: { hash: vi.fn(), compare: vi.fn() } }));
 
 /** Rows the session/users join will resolve to. */
-let sessionRows: any[] = [];
+let sessionRows: unknown[] = [];
 /** Captures the `.limit()` argument so we can assert the query is bounded. */
 let limitArg: number | undefined;
 
 vi.mock('@/drizzle/db', () => {
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.innerJoin = vi.fn(() => chain);
@@ -54,7 +53,7 @@ vi.mock('@/drizzle/db', () => {
   // The lookup runs inside withAuthLookupContext, which opens a transaction and
   // SETs the pre-auth GUC on it before handing it to the query.
   chain.execute = vi.fn(async () => ({ rows: [] }));
-  chain.transaction = vi.fn(async (fn: any) => fn(chain));
+  chain.transaction = vi.fn(async (fn: (tx: Record<string, unknown>) => unknown) => fn(chain));
   return { db: chain };
 });
 

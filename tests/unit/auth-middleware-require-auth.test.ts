@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for the authentication / tenant-scoping entry point:
  *   requireAuth, requireCsrf, requireModule, requireFeature  (lib/auth/middleware.ts)
@@ -21,7 +20,7 @@ const m = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
   const shift = (): unknown[] => (selectResults.length > 0 ? (selectResults.shift() as unknown[]) : []);
 
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.innerJoin = vi.fn(() => chain);
@@ -30,7 +29,7 @@ const m = vi.hoisted(() => {
   chain.orderBy = vi.fn(() => chain);
   chain.limit = vi.fn(() => Promise.resolve(shift()));
   // Awaiting the chain itself (e.g. `await db.select().from().where()`) resolves a result.
-  chain.then = (onOk: any, onErr: any) => Promise.resolve(shift()).then(onOk, onErr);
+  chain.then = (onOk?: (v: unknown) => unknown, onErr?: (reason: unknown) => unknown) => Promise.resolve(shift()).then(onOk, onErr);
   chain.query = {
     sessions: { findFirst: vi.fn() },
     users: { findFirst: vi.fn() },
