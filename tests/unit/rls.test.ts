@@ -7,8 +7,7 @@ vi.mock('@/drizzle/db', () => ({
     execute: mockExecute,
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: vi.fn(async (cb: any) => {
+    transaction: vi.fn(async (cb: (tx: { execute: (...args: unknown[]) => unknown }) => Promise<unknown>) => {
       const tx = { execute: vi.fn() };
       return cb(tx);
     }),
@@ -174,10 +173,8 @@ describe('db/rls', () => {
     it('refuses an impersonation context with no workspace or no actor', async () => {
       const { setImpersonationContext } = await import('@/lib/db/rls');
       const tx = { execute: vi.fn() };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(setImpersonationContext('', 'user-1', tx as any)).rejects.toThrow('empty tenantId or userId');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(setImpersonationContext('tenant-1', '', tx as any)).rejects.toThrow('empty tenantId or userId');
+      await expect(setImpersonationContext('', 'user-1', tx as never)).rejects.toThrow('empty tenantId or userId');
+      await expect(setImpersonationContext('tenant-1', '', tx as never)).rejects.toThrow('empty tenantId or userId');
       expect(tx.execute).not.toHaveBeenCalled();
     });
   });

@@ -26,14 +26,12 @@ const m = vi.hoisted(() => {
   const updateReturning: unknown[][] = [];
   const state = { updateErrorCode: null as string | null, updateCallCount: 0 };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
   chain.limit = vi.fn(() => Promise.resolve(next()));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  chain.then = (ok: any, err: any) => Promise.resolve(next()).then(ok, err);
+  chain.then = (ok?: (v: unknown) => unknown, err?: (reason: unknown) => unknown) => Promise.resolve(next()).then(ok, err);
 
   chain.update = vi.fn(() => {
     state.updateCallCount += 1;
@@ -55,8 +53,7 @@ const m = vi.hoisted(() => {
       },
     };
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  chain.transaction = vi.fn(async (cb: any) => cb(chain));
+  chain.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => cb(chain));
 
   return { db: chain, selects, updateSet, updateReturning, state };
 });
