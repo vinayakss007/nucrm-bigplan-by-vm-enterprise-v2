@@ -102,6 +102,10 @@ export default function SuperAdminTokenControl() {
   const budgetsUnread = Boolean(budgetsQuery.error);
   const alertsUnread = Boolean(alertsQuery.error);
   const keysUnread = Boolean(keysQuery.error);
+  const spendersUnread = Boolean(spendersQuery.error);
+  /* #2872: only a refusal that left nothing behind may be reported as an absence. */
+  const spendersUnanswered = spendersUnread && !spendersQuery.data;
+  const alertsUnanswered = alertsUnread && !alertsQuery.data;
 
   const formatCurrency = (cents: number) => {
     const rupees = cents / 100;
@@ -194,8 +198,8 @@ export default function SuperAdminTokenControl() {
       {!loading && activeTab === 'budgets' && (
         <div className="space-y-4">
           {budgetsUnread && (
-            <ReadFailure what="token budgets" error={budgetsQuery.error} emptyMeans="no service has a budget"
-              onRetry={() => void budgetsQuery.refetch()} />
+            <ReadFailure what="token budgets" error={budgetsQuery.error} data={budgetsQuery.data}
+              emptyMeans="no service has a budget" onRetry={() => void budgetsQuery.refetch()} />
           )}
           {budgets.map(budget => {
             const monthlyBudget = budget.monthly_budget_cents ?? 0;
@@ -266,6 +270,10 @@ export default function SuperAdminTokenControl() {
       {/* ── Top Spenders Tab ────────────────────────────────────────────── */}
       {!loading && activeTab === 'tenants' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          {spendersUnread && (
+            <ReadFailure what="top spenders" error={spendersQuery.error} data={spendersQuery.data}
+              emptyMeans="no tenant has spending recorded" onRetry={() => void spendersQuery.refetch()} />
+          )}
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-800">
@@ -301,16 +309,12 @@ export default function SuperAdminTokenControl() {
           {/* #2823: "No spending data yet" is a claim about the tenants, so a read
               that did not succeed says so instead of making it. (#2880 wrote the
               handler this URL has been calling since #1328; before that the branch
-              below was the only thing this tab ever rendered on a real install.) */}
-          {topTenants.length === 0 && (
-            spendersQuery.error ? (
-              <div role="alert" className="m-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300">
-                Failed to load top spenders: {spendersQuery.error.message}. An empty list would mean no
-                tenant has spending recorded; this message means the request did not succeed.
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500">No spending data yet</div>
-            )
+              below was the only thing this tab ever rendered on a real install.)
+              #2872: the naming banner is the shared ReadFailure above the table,
+              which now words a refused refresh apart from a read that never
+              answered — and offers the retry this tab did not have. */}
+          {topTenants.length === 0 && !spendersUnanswered && (
+            <div className="text-center py-12 text-gray-500">No spending data yet</div>
           )}
         </div>
       )}
@@ -373,7 +377,8 @@ export default function SuperAdminTokenControl() {
                 ))}
                 {keysUnread && (
                   <tr><td colSpan={6} className="p-0"><ReadFailure what="API keys" error={keysQuery.error}
-                    emptyMeans="no key is live" onRetry={() => void keysQuery.refetch()} /></td></tr>
+                    data={keysQuery.data} emptyMeans="no key is live"
+                    onRetry={() => void keysQuery.refetch()} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -391,6 +396,10 @@ export default function SuperAdminTokenControl() {
             </div>
           </div>
 
+          {alertsUnread && (
+            <ReadFailure what="usage alerts" error={alertsQuery.error} data={alertsQuery.data}
+              emptyMeans="no budget has been exceeded" onRetry={() => void alertsQuery.refetch()} />
+          )}
           <div className="space-y-2">
             {alerts.map(alert => (
               <div key={alert.id} className={`bg-gray-900 border rounded-xl p-4 flex items-center justify-between ${
@@ -424,15 +433,12 @@ export default function SuperAdminTokenControl() {
             ))}
           </div>
 
-          {alerts.length === 0 && (alertsUnread ? (
-            <ReadFailure what="usage alerts" error={alertsQuery.error}
-              emptyMeans="no budget has been exceeded" onRetry={() => void alertsQuery.refetch()} />
-          ) : (
+          {alerts.length === 0 && !alertsUnanswered && (
             <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
               <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
               <p className="text-gray-400">No alerts — everything is within budget</p>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
@@ -442,15 +448,25 @@ export default function SuperAdminTokenControl() {
 /**
  * #2841 — the shape #2823 introduced for the Top Spenders tab, reused for the
  * three reads on this page that had no failure branch at all.
+ *
+ * #2872 — `useApiQuery` keeps the previous `data` when a revalidation rejects, so
+ * `error` alone cannot say whether this page ever saw an answer. Refusing to
+ * refresh a list that is still on screen is not the same fact as never having
+ * read it, and the banner used to claim the latter over the former. The `—` the
+ * summary cards print stays for both states: the page will not present a figure
+ * it can no longer vouch for as current.
  */
-function ReadFailure({ what, error, emptyMeans, onRetry }: {
-  what: string; error: Error | null; emptyMeans: string; onRetry: () => void;
+function ReadFailure({ what, error, data, emptyMeans, onRetry }: {
+  what: string; error: Error | null; data: unknown; emptyMeans: string; onRetry: () => void;
 }) {
+  const reason = error?.message || 'no response from the server';
+  const stale = Boolean(error) && Boolean(data);
   return (
     <div role="alert" className="m-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300 flex items-start justify-between gap-3">
       <span>
-        Failed to load {what}: {error?.message}. An empty list would mean {emptyMeans};
-        this message means the request did not succeed.
+        {stale
+          ? `Could not refresh the ${what}, so what is on screen is the last read: ${reason}. That read succeeded, so what it shows is real — just not current.`
+          : `Failed to load ${what}: ${reason}. An empty list would mean ${emptyMeans}; this message means the request did not succeed.`}
       </span>
       <button onClick={onRetry} className="underline shrink-0">Try again</button>
     </div>

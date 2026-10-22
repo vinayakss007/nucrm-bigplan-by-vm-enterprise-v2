@@ -23,7 +23,7 @@ function AcceptInviteContent() {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const { data, isLoading, error: queryError } = useApiQuery<Invitation & { error?: string; isLoggedIn?: boolean }>(
+  const { data, isLoading, error: queryError, refetch } = useApiQuery<Invitation & { error?: string; isLoggedIn?: boolean }>(
     ['invite-details', token],
     `/api/auth/invite-details?token=${token}`,
     { enabled: !!token, retry: false },
@@ -34,8 +34,18 @@ function AcceptInviteContent() {
   // the CTA can never interpolate "undefined". `resolvedInvitation` comes from
   // the query data directly so a valid invite skips the invalid state during
   // the one frame before the seeding effect runs.
+  /* #2872: `getInviteView` turns any bound error into the "Invitation Invalid"
+     screen, and a revalidation that rejects keeps the resolved invitation in
+     `data`. A re-check that never reached the server is not the server changing
+     its mind about the invitation — only an answer (a 400/404 that carries its
+     own message, see `inviteErrorMessage`) may take a readable invitation off
+     the screen. Anything else keeps the form and says out loud which read the
+     visitor is looking at. */
+  const answered = Boolean((queryError as { info?: unknown } | null)?.info);
+  const unrefreshed = Boolean(queryError) && Boolean(data) && !answered;
+  const reason = queryError?.message || 'no response from the server';
   const resolvedInvitation = data && !data.error ? data : null;
-  const lookupError = queryError ? inviteErrorMessage(queryError) : data?.error ?? '';
+  const lookupError = unrefreshed ? data?.error ?? '' : queryError ? inviteErrorMessage(queryError) : data?.error ?? '';
   const view = getInviteView({ token, loading: isLoading, invitation: resolvedInvitation, error: lookupError });
 
   useEffect(() => {
@@ -88,6 +98,13 @@ function AcceptInviteContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {unrefreshed && (
+          <div role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            Could not re-check this invitation: {reason}. The details on this page come from the read
+            that did answer, so the invitation is still good — only the re-check failed.
+            <button type="button" onClick={() => void refetch()} className="block mt-1 underline font-medium">Re-check</button>
+          </div>
+        )}
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 text-white text-xl font-bold shadow-lg" style={{ background: accent }}>
             {view.avatarInitial}
