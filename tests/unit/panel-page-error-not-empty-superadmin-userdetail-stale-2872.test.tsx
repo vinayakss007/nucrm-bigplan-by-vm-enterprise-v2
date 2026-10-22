@@ -51,8 +51,10 @@
  * the route does send one (`app/api/superadmin/users/[id]/route.ts:53`, COALESCE'd), so the honest
  * zero stays honest and the missing field becomes `—`.
  *
- * RED AT BASE — measured on `5f53fe71` (this branch's base) with the page rewound to what main
- * carries and this file as committed: **18 failed / 9 passed (27)**. Seven of the eighteen are the
+ * RED AT BASE — measured on `5f53fe71` and again on this branch's base after the rebase,
+ * `34ae7808`, with the page rewound to what main
+ * carries and this file as committed: **18 failed / 9 passed (27)** (unchanged by **#3018**,
+ * which rewrote a different page). Seven of the eighteen are the
  * refused refresh (kept rows with nothing saying so, the caveat's own retry, the caveat over an
  * empty last answer, the messageless refusal that printed nothing, the count a payload left out,
  * the internals pin, and the finding that this page issues no write to gate), four are the outage
