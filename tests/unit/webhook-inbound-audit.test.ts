@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Regression tests for the inbound webhook audit log
  * (POST /api/webhooks/inbound → webhook_inbound_logs).
@@ -30,7 +29,7 @@ import { NextRequest } from 'next/server';
 import { webhookInboundLogs, contacts } from '@/drizzle/schema';
 
 const h = vi.hoisted(() => ({
-  inserts: [] as Array<{ table: unknown; values: any }>,
+  inserts: [] as Array<{ table: unknown; values: unknown }>,
   returningQueue: [] as unknown[][],
   /** Insert against this table rejects, simulating a Postgres error. */
   failInsertTable: null as unknown,
@@ -39,15 +38,15 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/drizzle/db', () => {
-  const db: any = {
+  const db: Record<string, unknown> = {
     insert: (table: unknown) => {
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         values: (payload: unknown) => {
           h.inserts.push({ table, values: payload });
           if (h.failInsertTable !== null && table === h.failInsertTable) {
-            const rejected: any = {
+            const rejected: Record<string, unknown> = {
               returning: () => Promise.reject(new Error('null value in column "record_id"')),
-              then: (res: any, rej?: any) =>
+              then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) =>
                 Promise.reject(new Error('null value in column "record_id"')).then(res, rej),
             };
             return rejected;
@@ -55,15 +54,15 @@ vi.mock('@/drizzle/db', () => {
           return chain;
         },
         returning: async () => h.returningQueue.shift() ?? [],
-        then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
       };
       return chain;
     },
     update: () => {
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         set: () => chain,
         where: () => chain,
-        then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
       };
       return chain;
     },
@@ -75,7 +74,7 @@ vi.mock('@/drizzle/db', () => {
       companies: { findFirst: async () => undefined },
       tasks: { findFirst: async () => undefined },
     },
-    transaction: async (cb: any) => cb(db),
+    transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };
 });
@@ -108,8 +107,10 @@ const API_KEY_ID = '22222222-2222-4222-8222-222222222222';
 const USER_ID = '33333333-3333-4333-8333-333333333333';
 
 /** Rows inserted into webhook_inbound_logs by the code under test. */
-function logRows(): any[] {
-  return h.inserts.filter((i) => i.table === webhookInboundLogs).map((i) => i.values);
+function logRows(): Record<string, unknown>[] {
+  return h.inserts
+    .filter((i) => i.table === webhookInboundLogs)
+    .map((i) => i.values as Record<string, unknown>);
 }
 
 function baseInput(over: Record<string, unknown> = {}) {

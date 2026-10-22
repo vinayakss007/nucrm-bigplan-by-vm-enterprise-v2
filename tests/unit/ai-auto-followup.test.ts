@@ -159,8 +159,7 @@ describe('PATCH /api/tenant/admin/ai-auto-followup', () => {
    *   db.select({updatedAt}).from(tenants).where(...).limit(1)
    *   db.update(tenants).set(...).where(...).returning({id})
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function stubOptimisticUpdate(db: any) {
+  function stubOptimisticUpdate(db: { select: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> }) {
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({

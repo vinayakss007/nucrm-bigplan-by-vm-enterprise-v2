@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #2215 — `ak_` API keys bypassed tenant/permission scoping on the v1 surface.
  *
@@ -24,7 +23,7 @@ const m = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
   const shift = (): unknown[] => (selectResults.length > 0 ? (selectResults.shift() as unknown[]) : []);
 
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.innerJoin = vi.fn(() => chain);
@@ -35,7 +34,8 @@ const m = vi.hoisted(() => {
   // awaiting the chain itself resolves the next queued result.
   chain.limit = vi.fn(() => chain);
   chain.offset = vi.fn(() => Promise.resolve(shift()));
-  chain.then = (onOk: any, onErr: any) => Promise.resolve(shift()).then(onOk, onErr);
+  chain.then = (onOk?: (v: unknown) => unknown, onErr?: (reason: unknown) => unknown) =>
+    Promise.resolve(shift()).then(onOk, onErr);
   chain.query = {
     sessions: { findFirst: vi.fn() },
     users: { findFirst: vi.fn() },
