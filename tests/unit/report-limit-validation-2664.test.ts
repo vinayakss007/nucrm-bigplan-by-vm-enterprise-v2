@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -21,13 +20,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const h = vi.hoisted(() => ({ limits: [] as unknown[] }));
 
 vi.mock('@/drizzle/db', () => {
-  const chain: any = {
+  const chain: Record<string, unknown> = {
     from: () => chain,
     where: () => chain,
     groupBy: () => chain,
     orderBy: () => chain,
     limit: (n: unknown) => { h.limits.push(n); return chain; },
-    then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+    then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
   };
   return { db: { select: () => chain } };
 });

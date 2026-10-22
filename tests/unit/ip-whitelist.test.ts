@@ -25,10 +25,8 @@ vi.mock('@/drizzle/schema', () => ({
   platformSettings: { id: 'id', tenantId: 'tenant_id', key: 'key', value: 'value' },
 }));
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((...args: any[]) => ['eq', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: vi.fn((...args: any[]) => ['and', ...args]),
+  eq: vi.fn((...args: unknown[]) => ['eq', ...args]),
+  and: vi.fn((...args: unknown[]) => ['and', ...args]),
 }));
 vi.mock('@/lib/db/rls', () => ({
   withTenantContext: (...args: unknown[]) => withTenantContext(...(args as [string, string, (t: unknown) => Promise<unknown>])),

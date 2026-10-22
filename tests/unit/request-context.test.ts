@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock redis cache
@@ -8,9 +7,9 @@ const mockCacheDel = vi.fn();
 
 vi.mock('@/lib/cache/index', () => ({
   cache: {
-    get: (...args: any[]) => mockCacheGet(...args),
-    set: (...args: any[]) => mockCacheSet(...args),
-    del: (...args: any[]) => mockCacheDel(...args),
+    get: (...args: unknown[]) => mockCacheGet(...args),
+    set: (...args: unknown[]) => mockCacheSet(...args),
+    del: (...args: unknown[]) => mockCacheDel(...args),
   },
 }));
 
