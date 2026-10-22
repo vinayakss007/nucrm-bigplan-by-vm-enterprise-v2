@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #2389 — the aggregate reports must exclude tombstones, like the row reports do.
  *
@@ -20,13 +19,13 @@ import { deals } from '@/drizzle/schema';
 const h = vi.hoisted(() => ({ wheres: [] as unknown[], table: null as unknown }));
 
 vi.mock('@/drizzle/db', () => {
-  const chain: any = {
+  const chain: Record<string, unknown> = {
     from: (t: unknown) => { h.table = t; return chain; },
     where: (w: unknown) => { h.wheres.push(w); return chain; },
     groupBy: () => chain,
     orderBy: () => chain,
     limit: () => chain,
-    then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+    then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
   };
   return { db: { select: () => chain } };
 });
