@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch globally
@@ -10,6 +9,36 @@ beforeEach(() => {
   vi.resetModules();
   mockFetch.mockClear();
 });
+
+/**
+ * Typed window onto the GrafanaClient singleton's private-ish state — these
+ * tests drive the buffer/flush lifecycle directly, so they need the internal
+ * fields and methods the module hides behind getGrafanaClient().
+ */
+type MetricPoint = { metric: string; value: number; timestamp?: number; labels: Record<string, unknown> };
+type LogPoint = { level: string; message: string; timestamp?: number; labels: Record<string, unknown>; context?: Record<string, unknown> };
+
+type GrafanaClientView = {
+  enabled: boolean;
+  buffer: MetricPoint[];
+  logBuffer: LogPoint[];
+  otlpEndpoint?: string;
+  otlpHeaders?: Record<string, string>;
+  flushInterval?: ReturnType<typeof setInterval> | null;
+  sanitizePath?(path: string): string;
+  increment(name: string, value?: number, labels?: Record<string, unknown>): void;
+  gauge(name: string, value: number, labels?: Record<string, unknown>): void;
+  histogram(name: string, value: number, labels?: Record<string, unknown>): void;
+  log(level: string, message: string, context?: unknown): void;
+  logError(error: Error, context?: Record<string, unknown>): void;
+  flush(): Promise<void>;
+  flushLogs(): Promise<void>;
+  close(): Promise<void>;
+};
+
+function view(client: unknown): GrafanaClientView {
+  return client as GrafanaClientView;
+}
 
 describe('Grafana OTLP Client', () => {
   it('module exports metrics convenience object', async () => {
@@ -71,7 +100,7 @@ describe('Grafana OTLP Client', () => {
     metrics.logError(err, { context: 'test' });
     expect(consoleSpy).toHaveBeenCalled();
     // Find the call that contains '[Log]'
-    const logCall = consoleSpy.mock.calls.find((c: any[]) => String(c[0]).includes('[Log]'));
+    const logCall = consoleSpy.mock.calls.find((c: unknown[]) => String(c[0]).includes('[Log]'));
     expect(logCall).toBeDefined();
     consoleSpy.mockRestore();
   });
@@ -104,9 +133,9 @@ describe('Grafana OTLP Client', () => {
 
   it('grafana client sanitizePath removes UUIDs and numeric IDs', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     // Access private method via prototype
-    const sanitize = (client as any).sanitizePath?.bind(client);
+    const sanitize = client.sanitizePath?.bind(client);
     if (sanitize) {
       expect(sanitize('/api/users/550e8400-e29b-41d4-a716-446655440000')).toBe('/api/users/:id');
       expect(sanitize('/api/deals/12345')).toBe('/api/deals/:id');
@@ -116,7 +145,7 @@ describe('Grafana OTLP Client', () => {
 
   it('grafana client buffer is empty initially', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     expect(client.buffer).toEqual([]);
     expect(client.logBuffer).toEqual([]);
   });
@@ -125,7 +154,7 @@ describe('Grafana OTLP Client', () => {
     process.env.GRAFANA_ENABLED = 'true';
     process.env.OTLP_ENDPOINT = 'http://localhost:4318';
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.buffer = []; // reset
     client.enabled = true;
     client.increment('my_metric', 1, { tag: 'val' });
@@ -140,7 +169,7 @@ describe('Grafana OTLP Client', () => {
 
   it('metrics.gauge adds to buffer when enabled', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.buffer = [];
     client.enabled = true;
     client.gauge('queue_depth', 7);
@@ -151,7 +180,7 @@ describe('Grafana OTLP Client', () => {
 
   it('metrics.histogram adds 3 points when enabled', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.buffer = [];
     client.enabled = true;
     client.histogram('latency', 200);
@@ -164,7 +193,7 @@ describe('Grafana OTLP Client', () => {
 
   it('metrics.log adds to logBuffer when enabled', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.logBuffer = [];
     client.enabled = true;
     client.log('warn', 'something happened', { extra: 1 });
@@ -176,7 +205,7 @@ describe('Grafana OTLP Client', () => {
 
   it('error log flushes immediately', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.logBuffer = [];
     client.enabled = true;
     // flushLogs needs LOKI_URL to do anything, but it should still be called
@@ -188,7 +217,7 @@ describe('Grafana OTLP Client', () => {
 
   it('metrics.logError delegates to log with error context', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.logBuffer = [];
     client.enabled = true;
     const err = new Error('boom');
@@ -203,7 +232,7 @@ describe('Grafana OTLP Client', () => {
     process.env.GRAFANA_ENABLED = 'true';
     process.env.OTLP_ENDPOINT = 'http://localhost:4318';
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.enabled = true;
     client.otlpEndpoint = 'http://localhost:4318';
     client.otlpHeaders = { 'Content-Type': 'application/json' };
@@ -224,7 +253,7 @@ describe('Grafana OTLP Client', () => {
 
   it('flush skips when buffer is empty', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.buffer = [];
     client.otlpEndpoint = 'http://localhost:4318';
     await client.flush();
@@ -236,7 +265,7 @@ describe('Grafana OTLP Client', () => {
     process.env.LOKI_USERNAME = 'user';
     process.env.LOKI_PASSWORD = 'pass';
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.enabled = true;
     client.logBuffer = [
       { level: 'info', message: 'test', timestamp: Date.now(), labels: { app: 'nucrm-saas' }, context: {} },
@@ -254,7 +283,7 @@ describe('Grafana OTLP Client', () => {
 
   it('flushLogs skips when logBuffer is empty', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.logBuffer = [];
     await client.flushLogs();
     expect(mockFetch).not.toHaveBeenCalled();
@@ -263,7 +292,7 @@ describe('Grafana OTLP Client', () => {
   it('flushLogs skips when LOKI_URL not set', async () => {
     delete process.env.LOKI_URL;
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.logBuffer = [
       { level: 'info', message: 'test', timestamp: Date.now(), labels: {}, context: {} },
     ];
@@ -277,7 +306,7 @@ describe('Grafana OTLP Client', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockRejectedValueOnce(new Error('network error'));
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.enabled = true;
     client.otlpEndpoint = 'http://localhost:4318';
     client.otlpHeaders = {};
@@ -293,7 +322,7 @@ describe('Grafana OTLP Client', () => {
 
   it('close clears interval and flushes', async () => {
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     client.flushInterval = setInterval(() => {}, 10000);
     client.buffer = [];
     client.logBuffer = [];
@@ -309,7 +338,7 @@ describe('Grafana OTLP Client', () => {
     delete process.env.GRAFANA_ENABLED;
     delete process.env.OTLP_ENDPOINT;
     const { getGrafanaClient } = await import('@/lib/grafana');
-    const client = getGrafanaClient() as any;
+    const client = view(getGrafanaClient());
     // When disabled, enabled should be false and client initializes with empty buffers
     expect(client.enabled).toBe(false);
     expect(client.buffer).toEqual([]);
