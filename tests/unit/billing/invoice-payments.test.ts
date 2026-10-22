@@ -13,15 +13,13 @@ const m = vi.hoisted(() => {
   const selects: unknown[][] = [];
   const next = (): unknown[] => (selects.length ? (selects.shift() as unknown[]) : []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
   chain.orderBy = vi.fn(() => Promise.resolve(next()));
   chain.limit = vi.fn(() => Promise.resolve(next()));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  chain.then = (ok: any, err: any) => Promise.resolve(next()).then(ok, err);
+  chain.then = (ok?: (v: unknown) => unknown, err?: (reason: unknown) => unknown) => Promise.resolve(next()).then(ok, err);
 
   const updateSet = vi.fn();
   /**
@@ -44,8 +42,7 @@ const m = vi.hoisted(() => {
       return { returning: () => Promise.resolve([{ id: 'pay-new', ...(values as object) }]) };
     },
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  chain.transaction = vi.fn(async (cb: any) => cb(chain));
+  chain.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => cb(chain));
 
   return { db: chain, selects, updateSet, inserts };
 });

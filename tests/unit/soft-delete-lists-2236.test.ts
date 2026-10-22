@@ -120,8 +120,10 @@ const DELETED_CONTRACT = { id: 'con-deleted', tenantId: TENANT, title: 'Deleted'
 const ACTIVE_SCHEDULE = { id: 'sch-active', tenantId: TENANT, name: 'Weekly', deletedAt: null };
 const DELETED_SCHEDULE = { id: 'sch-deleted', tenantId: TENANT, name: 'Stale', deletedAt: new Date() };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test shim: withApiRoute widens the handler signature (Promise<Response | void | undefined>) and each route has its own context type
-async function getJson(url: string, route: { GET: (...args: any[]) => Promise<any> }): Promise<{ res: Response; body: Record<string, unknown> }> {
+type GetRouteShim = {
+  GET: (req: NextRequest, ctx?: { params: Promise<Record<string, string>> }) => Promise<Response | void | undefined>;
+};
+async function getJson(url: string, route: GetRouteShim): Promise<{ res: Response; body: Record<string, unknown> }> {
   const res = await route.GET(new Request(url) as NextRequest) as Response;
   const text = await res.text();
   return { res, body: text ? JSON.parse(text) : {} };
@@ -217,8 +219,7 @@ describe('contract PDF export (#2236)', () => {
   // case plants exactly the row the route is looking for.
   it('serves the PDF for a live contract', async () => {
     harness.state.tables.contracts = [ACTIVE_CONTRACT];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped handler context type is void|Response|undefined
-    const res = await (contractPdfRoute.GET as any)(
+    const res = await (contractPdfRoute.GET as GetRouteShim['GET'])(
       new Request(`http://localhost/api/tenant/contracts/con-active/pdf`) as NextRequest,
       { params: Promise.resolve({ id: 'con-active' }) },
     ) as Response;
@@ -228,8 +229,7 @@ describe('contract PDF export (#2236)', () => {
 
   it('404s for a soft-deleted contract instead of exporting it', async () => {
     harness.state.tables.contracts = [DELETED_CONTRACT];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped handler context type is void|Response|undefined
-    const res = await (contractPdfRoute.GET as any)(
+    const res = await (contractPdfRoute.GET as GetRouteShim['GET'])(
       new Request(`http://localhost/api/tenant/contracts/con-deleted/pdf`) as NextRequest,
       { params: Promise.resolve({ id: 'con-deleted' }) },
     ) as Response;

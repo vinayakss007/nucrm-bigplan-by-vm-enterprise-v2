@@ -27,8 +27,7 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
     activeElement: null,
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vi.stubGlobal('requestAnimationFrame', vi.fn((cb: (...args: any[]) => any) => cb()));
+  vi.stubGlobal('requestAnimationFrame', vi.fn((cb: (...args: unknown[]) => unknown) => cb()));
 });
 
 afterEach(() => {
@@ -40,9 +39,8 @@ afterEach(() => {
 describe('focusElement', () => {
   it('calls focus and sets tabindex on element', async () => {
     const { focusElement } = await import('@/lib/a11y');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const el = { focus: vi.fn(), setAttribute: vi.fn() } as any;
-    focusElement(el);
+    const el = { focus: vi.fn(), setAttribute: vi.fn() };
+    focusElement(el as never);
     expect(el.focus).toHaveBeenCalledOnce();
     expect(el.setAttribute).toHaveBeenCalledWith('tabindex', '-1');
   });
@@ -54,8 +52,7 @@ describe('focusElement', () => {
 
   it('does nothing when element is undefined', async () => {
     const { focusElement } = await import('@/lib/a11y');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(() => focusElement(undefined as any)).not.toThrow();
+    expect(() => focusElement(undefined as never)).not.toThrow();
   });
 });
 

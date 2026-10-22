@@ -32,15 +32,13 @@ vi.mock('@/app/api/tenant/reports/run/route', async (importOriginal) => {
   return { ...mod, runReportForTenant: (...args: unknown[]) => mockRunReport(...args) };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let insertValues: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let insertResult: any[] = [];
+type InsertCall = { table: unknown; value: Record<string, unknown> };
+let insertValues: InsertCall | null = null;
+let insertResult: unknown[] = [];
 let lookupRows: unknown[] = [];
 const updated: unknown[][] = [];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const dbDouble: any = {
+const dbDouble: Record<string, unknown> = {
   select: () => ({
     from: () => ({
       where: () => ({
@@ -49,7 +47,7 @@ const dbDouble: any = {
     }),
   }),
   insert: (table: unknown) => ({
-    values: (value: unknown) => {
+    values: (value: Record<string, unknown>) => {
       insertValues = { table, value };
       return { returning: () => insertResult };
     },
