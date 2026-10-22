@@ -2511,7 +2511,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
   `lib/errors-server.ts:231` (re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
-  paths: `app/api/cron/subscription-renewal-check/route.ts:145`, `contract-renewal-check/route.ts:161` (re-pinned 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
+  paths: `app/api/cron/subscription-renewal-check/route.ts:157` (re-pinned 2026-10-22 from `:145`: **#3045** put the `emailResult` check and the `emailRejected` guard above the insert), `contract-renewal-check/route.ts:161` (re-pinned 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
   `backup-verify/route.ts:351,384,417 (re-pinned 2026-10-15: **#2599/#2603** shifted them)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
@@ -2622,7 +2622,7 @@ which Postgres ignores for such a role` at 07:13, 09:58 and again 2026-10-03 05:
   the PP-028 point) found `invoices_total=1` in each of 12 tenants and **`recurring_with_next_date=0`, `due_on_or_before_today=0`
   everywhere**. Nothing is being missed today; the first tenant that marks an invoice recurring will be missed silently.
   Baseline re-checked after the probe: a bare session still sees `invoices = 0` (nothing leaked; the loop was read-only).
-- **Why CI cannot see this.** `tests/unit/contract-renewal.test.ts:202,209` and `tests/unit/follow-up-cron.test.ts:120,130`
+- **Why CI cannot see this.** `tests/unit/contract-renewal.test.ts:204,211` (re-pinned 2026-10-22 from `:202,209`: **#3045** added the result-check comment above the `contract renewal cron scheduler` describe block) and `tests/unit/follow-up-cron.test.ts:120,130`
   read both `scripts/cron-scheduler.ts` and `deploy/cron/crontab` as strings and assert a job name appears in each — the house
   pattern exists and is right in shape, but it covers **2 of 22** routes and treats the dead file as an authority. Nothing
   enumerates `app/api/cron/*` against the live schedule, which is precisely how five gaps became invisible.
