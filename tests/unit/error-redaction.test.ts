@@ -101,9 +101,8 @@ vi.mock('fs', () => ({
   default: { promises: { stat: vi.fn().mockResolvedValue({ size: 0 }), appendFile: vi.fn().mockResolvedValue(undefined), unlink: vi.fn(), rename: vi.fn() } },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function lastRow(): any {
-  return valuesMock.mock.calls.at(-1)?.[0];
+function lastRow(): Record<string, unknown> {
+  return valuesMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
 }
 
 describe('logError stores a DB failure without its parameters', () => {

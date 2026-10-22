@@ -27,9 +27,8 @@ const grafanaLogMock = vi.fn();
 vi.mock('@/lib/grafana', () => ({ metrics: { log: (...a: unknown[]) => grafanaLogMock(...a) } }));
 
 // Grab the row object from the most recent db.insert(...).values(row) call.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function lastInsertedRow(): any {
-  return valuesMock.mock.calls.at(-1)?.[0];
+function lastInsertedRow(): Record<string, unknown> {
+  return valuesMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
 }
 
 describe('logError (server)', () => {

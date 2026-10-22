@@ -54,8 +54,7 @@ describe('db/cache (server-side LRU)', () => {
   it('getCacheSize returns current size', async () => {
     const mod = await import('@/lib/db/cache');
     const { dbCache } = mod;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const getCacheSize = (mod as any).getCacheSize;
+    const getCacheSize = (mod as { getCacheSize?: unknown }).getCacheSize;
     // Skip if not exported
     if (typeof getCacheSize !== 'function') return;
     const fetcher = vi.fn(async () => 'val');

@@ -79,8 +79,7 @@ vi.mock('@/lib/auth/middleware', () => ({
 }));
 
 vi.mock('@/lib/api-error', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  apiError: vi.fn((err: any) => new Response(JSON.stringify({ error: String(err?.message ?? err) }), { status: 500 })),
+  apiError: vi.fn((err: unknown) => new Response(JSON.stringify({ error: String((err as { message?: string })?.message ?? err) }), { status: 500 })),
 }));
 
 function makeRequest(url: string): NextRequest {
