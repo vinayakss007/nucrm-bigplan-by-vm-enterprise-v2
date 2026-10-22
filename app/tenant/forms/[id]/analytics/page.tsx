@@ -5,11 +5,12 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { ArrowLeft, Eye, Send, TrendingUp, Loader2, BarChart3, Hash, List, Type, CheckSquare, Star } from 'lucide-react';
 import Link from 'next/link';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TimeSeriesPoint {
@@ -60,18 +61,32 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
 
 export default function FormAnalyticsPage() {
   const params = useParams();
-  const router = useRouter();
   const formId = params.id as string;
 
   const [days, setDays] = useState(30);
 
   // #1328: analytics via TanStack Query (was raw fetch + useEffect). formId +
-  // days are part of the key. On error, fall back to the forms list (as before).
-  const { data, isLoading: loading, error } = useApiQuery<AnalyticsData>(
+  // days are part of the key.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<AnalyticsData>(
     ['tenant', 'forms', formId, 'analytics', { days }],
     `/api/tenant/forms/${formId}/analytics?days=${days}`,
   );
-  useEffect(() => { if (error) router.push('/tenant/forms'); }, [error, router]);
+
+  // #2872: this page used to answer a refused read by leaving the record — an effect keyed on the
+  // error called the list route for any failure. TanStack keeps `data` when a refetch of a query
+  // that already answered fails, so that was not an outage-only path: reading 90-day analytics, then
+  // switching the window (or any revalidation) over a refused refresh threw the operator back to the
+  // forms list, reset the `days` they had picked and never said the read had failed. Navigation is an
+  // irreversible action, so it cannot be a side effect of a flag; leaving is a click on the back
+  // link. `failed` is the read that never answered, `stale` keeps every figure the last read carried
+  // and names them as such. One response feeds this whole screen — name, both counters, the derived
+  // conversion rate, the series and each field's completion — so one refusal stales all of it.
+  // `route.ts:105,112` reserves 404 for an id that matches no form of this tenant, which is an answer
+  // about this record and keeps a "Form not found" card.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  const notFound = failed && error?.status === 404;
 
   if (loading) {
     return (
@@ -80,6 +95,41 @@ export default function FormAnalyticsPage() {
       </div>
     );
   }
+
+  // Nothing on this screen was answered: no counters, no window picker, no chart drawn from an empty
+  // array. A refused read is not evidence that the form has no submissions.
+  if (failed && !notFound) return (
+    <div className="p-6 max-w-5xl mx-auto space-y-4">
+      <Link
+        href="/tenant/forms"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to forms
+      </Link>
+      <InlineErrorState
+        message={`Failed to load this form's analytics: ${reason}. Views, submissions, the conversion rate, the submissions-over-time series and every field's completion ride on this one response, so none of them is answered — and this is not a statement that the form has no submissions.`}
+        onRetry={refetch}
+      />
+    </div>
+  );
+
+  // The server answered about this id and there is no form behind it.
+  if (notFound) return (
+    <div className="p-6 max-w-5xl mx-auto space-y-4">
+      <Link
+        href="/tenant/forms"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to forms
+      </Link>
+      <div className="text-center py-12">
+        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Form not found</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          This form does not exist for your organization.
+        </p>
+      </div>
+    </div>
+  );
 
   if (!data) return null;
 
@@ -96,6 +146,14 @@ export default function FormAnalyticsPage() {
       >
         <ArrowLeft className="h-4 w-4" /> Back to forms
       </Link>
+
+      {stale && (
+        <InlineErrorState
+          className="mb-4"
+          message={`Could not refresh this form's analytics, so the figures below are the last read: ${reason}. A submission that arrived since that read is missing here, and the conversion rate and the per-field completion are the numbers that read reported, not what they are now.`}
+          onRetry={refetch}
+        />
+      )}
 
       <div className="flex items-center justify-between mb-6">
         <div>
