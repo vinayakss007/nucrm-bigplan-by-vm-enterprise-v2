@@ -25,8 +25,7 @@ export function clearStripeEnv() {
 /**
  * Create a mock Stripe webhook event payload.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createMockWebhookEvent(type: string, data: any = {}) {
+export function createMockWebhookEvent(type: string, data: unknown = {}) {
   return {
     id: `evt_${Date.now()}`,
     type,
@@ -38,8 +37,7 @@ export function createMockWebhookEvent(type: string, data: any = {}) {
 /**
  * Mock global fetch for Stripe API calls.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function mockStripeFetch(responses: Record<string, any> = {}) {
+export function mockStripeFetch(responses: Record<string, unknown> = {}) {
   const originalFetch = global.fetch;
 
   global.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
@@ -78,8 +76,7 @@ export function mockStripeFetch(responses: Record<string, any> = {}) {
 
     // Pass through non-Stripe requests
     return originalFetch(url, options);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }) as any;
+  }) as typeof fetch;
 
   return () => { global.fetch = originalFetch; };
 }

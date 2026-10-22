@@ -121,8 +121,7 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await resolveGatewayTenant(nextReq as any);
+      const result = await resolveGatewayTenant(nextReq as never); // partial NextRequest fixture
       expect(result).toBeNull();
     });
 
@@ -145,8 +144,7 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await resolveGatewayTenant(nextReq as any);
+      const result = await resolveGatewayTenant(nextReq as never); // partial NextRequest fixture
       expect(result).not.toBeNull();
       expect(result!.tenantId).toBe('tenant-abc-123');
       expect(result!.source).toBe('header');
@@ -168,8 +166,7 @@ describe('API Gateway', () => {
         cookies: { get: () => undefined },
       });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await resolveGatewayTenant(nextReq as any);
+      const result = await resolveGatewayTenant(nextReq as never); // partial NextRequest fixture
       expect(result).toBeNull();
     });
   });
