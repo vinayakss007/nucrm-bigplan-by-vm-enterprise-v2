@@ -407,7 +407,10 @@ async function handleDealWon(ctx: AuthContext, dealId: string, row: typeof deals
         .limit(1);
 
       if (contactData?.email) {
-        await sendEmail({
+        // #3045: sendEmail resolves {success:false} on provider rejection —
+        // the .catch() could never fire, so deal-won emails failing silently
+        // was invisible.
+        const emailResult = await sendEmail({
           to: contactData.email,
           subject: `Great news from ${contactData.tenantName}!`,
           html: `<div style="font-family:sans-serif;max-width:600px">
@@ -417,7 +420,10 @@ async function handleDealWon(ctx: AuthContext, dealId: string, row: typeof deals
             <br/>
             <p>Best regards,<br/>${contactData.tenantName} Team</p>
           </div>`,
-        }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
+        });
+        if (!emailResult.success) {
+          await logError({ error: new Error(`Deal-won email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'tenant/deals/[id] deal-won email' });
+        }
       }
     } catch (e) {
       await logError({ error: e, context: 'tenant/deals/[id] deal-won email' });

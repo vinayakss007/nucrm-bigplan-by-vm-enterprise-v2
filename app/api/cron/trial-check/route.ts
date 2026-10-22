@@ -60,22 +60,28 @@ export async function POST(request: NextRequest) {
       const ownersMap = new Map(owners.map(o => [o.id, o]));
 
       for (const t of justExpired) {
-        expired++;
         const owner = ownersMap.get(t.id);
         const to = t.billingEmail || owner?.ownerEmail;
-        if (to) {
-          await sendEmail({
-            to,
-            subject: `Your NuCRM trial has ended — upgrade to keep access`,
-            html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+        if (!to) continue;
+        // #3045: sendEmail resolves {success:false} instead of throwing, so
+        // the old .catch() never fired and expired++ was counted even when the
+        // provider rejected. Count only delivered notices.
+        const result = await sendEmail({
+          to,
+          subject: `Your NuCRM trial has ended — upgrade to keep access`,
+          html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
               <h2 style="color:#111827">Your free trial has ended</h2>
               <p style="color:#6b7280">Hi ${owner?.ownerName||'there'}, your ${t.name} workspace trial has expired.</p>
               <p style="color:#6b7280">Your data is safe — upgrade within 30 days to regain full access.</p>
               <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">Upgrade Now →</a>
             </div>`,
-            text: `Your NuCRM trial for ${t.name} has ended. Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
-          }).catch((err) => logError({ error: err, context: 'cron/trial-check async side-effect' }));
+          text: `Your NuCRM trial for ${t.name} has ended. Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
+        });
+        if (!result.success) {
+          void logError({ error: new Error(`Trial-expiry email rejected: ${result.error ?? 'provider failure'}`), context: 'cron/trial-check expiry email' });
+          continue;
         }
+        expired++;
       }
     }
 
@@ -116,11 +122,14 @@ export async function POST(request: NextRequest) {
 
     for (const t of expiringSoon) {
       if (!t.trialEndsAt) continue;
-      warned++;
       const daysLeft = Math.max(1, Math.ceil((new Date(t.trialEndsAt).getTime()-Date.now())/86400000));
       const to = t.billingEmail || t.ownerEmail;
+      // #3045: a rejected send must NOT write the dedup marker — the marker
+      // suppressed retries for 4 days, so one provider failure silently
+      // un-warned a trialing tenant for the whole warning window.
+      let rejected = false;
       if (to) {
-        await sendEmail({
+        const result = await sendEmail({
           to,
           subject: `⏰ Your NuCRM trial expires in ${daysLeft} day${daysLeft>1?'s':''}`,
           html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
@@ -130,8 +139,15 @@ export async function POST(request: NextRequest) {
             <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Plans →</a>
           </div>`,
           text: `Your NuCRM trial for ${t.name} expires in ${daysLeft} day(s). Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
-        }).catch((err) => logError({ error: err, context: 'cron/trial-check async side-effect' }));
+        });
+        if (!result.success) {
+          rejected = true;
+          void logError({ error: new Error(`Trial warning email rejected: ${result.error ?? 'provider failure'}`), context: 'cron/trial-check warn email' });
+        } else {
+          warned++;
+        }
       }
+      if (rejected) continue;
       // Mark warned. The dedup marker must be written UNCONDITIONALLY: it does
       // not depend on ownerId. activities.userId is nullable (references users
       // with onDelete 'set null'), so owner-less tenants get a tenant-scoped

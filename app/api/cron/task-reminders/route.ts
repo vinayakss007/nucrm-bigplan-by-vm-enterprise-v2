@@ -159,12 +159,15 @@ export async function POST(request: NextRequest) {
         // the marker (or fails to insert) never re-emails for the same day.
         if (daysOverdue === 1 && task.email && overdueDelivered) {
           const dueStr = new Date(task.dueDate).toISOString().split('T')[0];
-          await sendEmail({
+          // #3045: sendEmail resolves {success:false} — the .catch() could
+          // never fire, so provider rejections were fully silent.
+          const emailResult = await sendEmail({
             to: task.email,
             subject: `Overdue task: ${task.title}`,
             html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px"><h3 style="color:#dc2626">Task overdue: ${task.title}</h3><p style="color:#6b7280">This task was due ${dueStr} and is now overdue.</p><a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Tasks →</a></div>`,
             text: `Task overdue: ${task.title} (due ${dueStr}). View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks`,
-          }).catch((err) => logError({ error: err, context: 'cron/task-reminders async side-effect' }));
+          });
+          if (!emailResult.success) void logError({ error: new Error(`Task-reminders email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/task-reminders overdue email' });
         }
         if (overdueDelivered) { notified++; remindedKeys.add(marker); } else notifyFailed++;
       }

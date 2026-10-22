@@ -67,7 +67,10 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
       .limit(1);
     const owner = ownerRow[0];
     if (owner?.email) {
-      sendEmail({
+      // #3045: sendEmail never throws — the .catch() was dead code, so an
+      // owner limit alert rejected by the provider was silent even though
+      // the violation row was already marked notified.
+      void sendEmail({
         to: owner.email,
         subject,
         html: `
@@ -76,11 +79,13 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
           <p>To keep adding records, upgrade your plan from the billing page:</p>
           <p><a href="${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/tenant/settings/billing">Upgrade plan</a></p>
         `,
-      }).catch((err) => {
-        logger.warn('[notifications] Failed to send email notification', {
-          tenantId: hit.tenantId, channel: 'email',
-          error: err instanceof Error ? err.message : String(err),
-        });
+      }).then((result) => {
+        if (!result.success) {
+          logger.warn('[notifications] Owner limit-alert email rejected by provider', {
+            tenantId: hit.tenantId, channel: 'email',
+            error: result.error ?? 'provider failure',
+          });
+        }
       });
     }
   }

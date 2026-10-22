@@ -32,7 +32,9 @@ vi.mock('@/lib/notifications', async (importOriginal) => ({
   createNotification: (opts: unknown) => mockCreateNotification(opts),
 }));
 
-const mockSendEmail = vi.fn(async () => ({ id: 'msg-1' }));
+// #3045: the route now checks result.success, so the mock must return a real
+// SendResult shape ({success:false,error} on rejection — sendEmail never throws).
+const mockSendEmail = vi.fn(async () => ({ success: true, provider: 'resend', id: 'msg-1' }));
 vi.mock('@/lib/email/service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/email/service')>()),
   sendEmail: (opts: unknown) => mockSendEmail(opts),
@@ -272,6 +274,21 @@ describe('POST /api/cron/contract-renewal-check', () => {
       entityId: 'c-1',
       eventType: 'contract_renewal_reminder',
     });
+  });
+
+  it('withholds the dedup marker and counter when the provider rejects the email (#3045)', async () => {
+    mockSendEmail.mockResolvedValueOnce({ success: false, error: '403 forbidden' });
+    rowsByTable.set(contracts, [contractRow({})]);
+    rowsByTable.set(activities, []);
+    rowsByTable.set(users, [{ userId: 'user-1', email: 'ada@example.com', fullName: 'Ada' }]);
+
+    const res = await runCron();
+
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    // The activities insert is the dedup marker — writing it on rejection
+    // suppressed retries for the whole window (#3045).
+    expect(inserts).toHaveLength(0);
+    expect(res.body).toMatchObject({ remindersSent: 0 });
   });
 
   it('does not re-remind a (contract, days) combo already logged', async () => {

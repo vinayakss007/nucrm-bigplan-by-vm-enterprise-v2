@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
           const endDate = new Date(sub.currentPeriodEnd ?? new Date());
           const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+          let emailRejected = false;
           for (const member of members) {
             await createNotification({
               userId: member.userId,
@@ -120,7 +121,10 @@ export async function POST(request: NextRequest) {
             }).catch((err) => logError({ error: err, context: 'subscription-renewal-notification' }));
 
             if (member.email) {
-              await sendEmail({
+              // #3045: sendEmail resolves {success:false} — the .catch() could
+              // never fire, so a rejected reminder was silent AND the dedup
+              // marker below still suppressed every retry.
+              const emailResult = await sendEmail({
                 to: member.email,
                 subject: `Subscription "${sub.name}" renews in ${days} days`,
                 html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
@@ -131,9 +135,17 @@ export async function POST(request: NextRequest) {
                 <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/subscriptions/${sub.id}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Subscription →</a>
               </div>`,
                 text: `Subscription "${sub.name}" renews on ${dateStr} (${days} days). Amount: $${Number(sub.amount || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/subscriptions/${sub.id}`,
-              }).catch((err) => logError({ error: err, context: 'subscription-renewal-email' }));
+              });
+              if (!emailResult.success) {
+                emailRejected = true;
+                void logError({ error: new Error(`Renewal reminder email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/subscription-renewal-check email' });
+              }
             }
           }
+
+          // #3045: withhold the dedup marker when any send was rejected, so
+          // the next run retries instead of permanently skipping this sub.
+          if (emailRejected) continue;
 
           await db.insert(activities).values({
             tenantId: sub.tenantId,

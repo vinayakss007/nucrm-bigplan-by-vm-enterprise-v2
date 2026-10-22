@@ -81,7 +81,9 @@ export async function POST(request: NextRequest) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
         const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
 
-        await sendEmail({
+        // #3045: sendEmail resolves {success:false} on provider rejection —
+        // log it, or the user waits forever for a reset link nobody sent.
+        const emailResult = await sendEmail({
           to: email,
           subject: 'Reset your NuCRM password',
           html: `
@@ -96,6 +98,9 @@ export async function POST(request: NextRequest) {
         </div>`,
           text: `Reset your NuCRM password: ${resetUrl} (expires in 1 hour)`,
         });
+        if (!emailResult.success) {
+          void logError({ error: new Error(`Password reset email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'auth/forgot-password email send', requestUrl: request.url, requestMethod: request.method });
+        }
       } catch (bgErr) {
         void logError({ error: bgErr, context: 'auth/forgot-password background token/email', requestUrl: request.url, requestMethod: request.method });
       }
