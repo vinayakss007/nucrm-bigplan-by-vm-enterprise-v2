@@ -24,10 +24,12 @@ function _resolve() {
 }
 
 // ── Mock DB (thenable) ──
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createMockDb(): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db: any = {
+type MockDbChain = Record<string, unknown> & {
+  then?: (onfulfilled?: (v: unknown) => unknown) => unknown;
+};
+
+function createMockDb(): MockDbChain {
+  const db: MockDbChain = {
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
@@ -67,8 +69,7 @@ function createMockDb(): any {
       supportTickets: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
       webhooks: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: vi.fn(async (cb: any) => cb(db)),
+    transaction: vi.fn(async (cb: (tx: MockDbChain) => unknown) => cb(db)),
   };
 
   // Thenable: `await mockDb` resolves to resolver()

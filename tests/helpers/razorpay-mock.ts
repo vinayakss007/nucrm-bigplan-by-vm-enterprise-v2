@@ -20,8 +20,7 @@ export function clearRazorpayEnv() {
 /**
  * Create a mock Razorpay webhook event payload.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createMockRazorpayWebhookEvent(event: string, payload: any = {}) {
+export function createMockRazorpayWebhookEvent(event: string, payload: unknown = {}) {
   return {
     entity: 'event',
     event,
@@ -33,8 +32,7 @@ export function createMockRazorpayWebhookEvent(event: string, payload: any = {})
 /**
  * Mock global fetch for Razorpay API calls.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function mockRazorpayFetch(responses: Record<string, any> = {}) {
+export function mockRazorpayFetch(responses: Record<string, unknown> = {}) {
   const originalFetch = global.fetch;
 
   global.fetch = vi.fn(async (url: string | URL | Request) => {
@@ -125,8 +123,7 @@ export function mockRazorpayFetch(responses: Record<string, any> = {}) {
 
     // Pass through non-Razorpay requests
     return originalFetch(url);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }) as any;
+  }) as typeof fetch;
 
   return () => { global.fetch = originalFetch; };
 }
