@@ -61,8 +61,7 @@ describe('WidgetShell', () => {
     error: null,
     data: { items: [] },
     onRefresh: vi.fn(),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    children: vi.fn(({ data }: any) => <div>Content: {JSON.stringify(data)}</div>),
+    children: vi.fn(({ data }: { data: unknown }) => <div>Content: {JSON.stringify(data)}</div>),
   };
 
   it('renders children with data when loaded', () => {

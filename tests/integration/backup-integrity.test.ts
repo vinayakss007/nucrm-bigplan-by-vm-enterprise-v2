@@ -174,8 +174,9 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
     for (const table of CRITICAL_TABLES.slice(0, 5)) { // Test first 5 tables
       try {
         const result = await sourceDb.execute(sql`SELECT count(*)::int FROM ${sql.identifier(table)}`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rows = Array.isArray(result) ? result : (result as any)?.rows ?? [];
+        const rows: Array<{ count?: number }> = Array.isArray(result)
+          ? (result as Array<{ count?: number }>)
+          : (result as { rows?: Array<{ count?: number }> })?.rows ?? [];
         sourceCounts[table] = rows[0]?.count ?? 0;
       } catch {
         sourceCounts[table] = 0;
