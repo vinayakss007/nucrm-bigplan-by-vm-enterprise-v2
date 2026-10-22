@@ -3,7 +3,6 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Regression tests for the audit LIST endpoint filter bugs (#661 / HIGH #9).
  *
@@ -31,7 +30,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/drizzle/db', () => {
   const reader = () => {
-    const self: any = {
+    const self: Record<string, unknown> = {
       from: () => self,
       leftJoin: () => self,
       where: (c: unknown) => {
@@ -41,7 +40,8 @@ vi.mock('@/drizzle/db', () => {
       orderBy: () => self,
       offset: async () => h.queue.shift() ?? [],
       // `where` is terminal for the count query; support both awaited shapes.
-      then: (res: any, rej?: any) => Promise.resolve(h.queue.shift() ?? []).then(res, rej),
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) =>
+        Promise.resolve(h.queue.shift() ?? []).then(res, rej),
       limit: () => self,
     };
     return self;

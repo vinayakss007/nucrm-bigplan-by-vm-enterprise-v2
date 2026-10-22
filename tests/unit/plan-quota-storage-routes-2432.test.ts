@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -154,7 +153,7 @@ const DOCUMENT_BODY = { name: 'quote.pdf', mimeType: 'application/pdf', sizeByte
 
 /** drizzle `db.select(...)` chain resolving to the legacy tenants/plans row. */
 function selectChain(rows: unknown[]) {
-  const chain: any = {};
+  const chain: Record<string, unknown> = {};
   for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'orderBy', 'limit', 'offset']) {
     chain[method] = vi.fn(() => chain);
   }
