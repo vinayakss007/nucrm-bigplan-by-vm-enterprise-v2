@@ -9,7 +9,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations, whatsappTemplates } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
@@ -81,6 +81,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3000: template creation posts to Meta with the tenant's credentials —
+    // gate like the send/bulk twins instead of bare requireAuth.
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     // #2563: `config` is the only column this handler reads, and `integrations`
     // is the credential store (#2521/#2522/#2559) — keep this projected rather

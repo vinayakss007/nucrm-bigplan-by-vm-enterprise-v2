@@ -18,6 +18,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3000: connector test relays to api.telegram.org with a caller-supplied
+    // bot token and stamps the tenant id into the message — admin-only, like
+    // the integrations POST twin (integrations/route.ts:76).
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(req);
     const { bot_token, chat_id } = body;
