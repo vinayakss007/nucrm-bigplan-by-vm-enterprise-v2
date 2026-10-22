@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #2385 / #2386 — app/api/tenant/custom-fields must treat tombstones as
  * invisible AND inert.
@@ -25,40 +24,40 @@ const h = vi.hoisted(() => ({
   executes: [] as unknown[],
   executeRows: [] as unknown[][],
   defWheres: [] as unknown[],
-  inserts: [] as Array<{ table: unknown; payload: any }>,
-  updates: [] as Array<{ table: unknown; payload: any; where: unknown }>,
+  inserts: [] as Array<{ table: unknown; payload: Record<string, unknown> }>,
+  updates: [] as Array<{ table: unknown; payload: Record<string, unknown>; where: unknown }>,
   defRow: null as unknown,
   defRows: [] as unknown[][],
 }));
 
 vi.mock('@/drizzle/db', () => {
-  const selectChain: any = {
+  const selectChain: Record<string, unknown> = {
     from: () => selectChain,
     where: () => selectChain,
     orderBy: () => selectChain,
     limit: async () => [],
-    then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+    then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
   };
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: () => selectChain,
     execute: (node: unknown) => {
       h.executes.push(node);
       return Promise.resolve({ rows: h.executeRows.shift() ?? [], rowCount: 0 });
     },
     insert: (table: unknown) => {
-      const rec = { table, payload: undefined as any };
+      const rec = { table, payload: undefined as Record<string, unknown> | undefined };
       h.inserts.push(rec);
-      const chain: any = {
-        values: (p: unknown) => { rec.payload = p; return chain; },
+      const chain: Record<string, unknown> = {
+        values: (p: unknown) => { rec.payload = p as Record<string, unknown>; return chain; },
         returning: async () => [{ id: 'def-1', fieldKey: rec.payload?.fieldKey, fieldType: rec.payload?.fieldType }],
       };
       return chain;
     },
     update: (table: unknown) => {
-      const rec = { table, payload: undefined as any, where: undefined as unknown };
+      const rec = { table, payload: undefined as Record<string, unknown> | undefined, where: undefined as unknown };
       h.updates.push(rec);
-      const chain: any = {
-        set: (p: unknown) => { rec.payload = p; return chain; },
+      const chain: Record<string, unknown> = {
+        set: (p: unknown) => { rec.payload = p as Record<string, unknown>; return chain; },
         where: (w: unknown) => { rec.where = w; return chain; },
         returning: async () => [{ id: 'def-1' }],
       };
@@ -66,14 +65,14 @@ vi.mock('@/drizzle/db', () => {
     },
     query: {
       customFieldDefs: {
-        findFirst: async ({ where }: any) => { h.defWheres.push(where); return h.defRow; },
-        findMany: async ({ where }: any) => { h.defWheres.push(where); return h.defRows.shift() ?? []; },
+        findFirst: async ({ where }: { where?: unknown }) => { h.defWheres.push(where); return h.defRow; },
+        findMany: async ({ where }: { where?: unknown }) => { h.defWheres.push(where); return h.defRows.shift() ?? []; },
       },
       webhookFieldMappings: { findFirst: async () => null },
       apiKeys: { findFirst: async () => null },
       featureRegistry: { findMany: async () => [] },
     },
-    transaction: async (cb: any) => cb(db),
+    transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };
 });

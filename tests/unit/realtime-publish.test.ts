@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Coverage for lib/realtime/publish.ts — the server-side half of #644.
  *
@@ -19,7 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { REALTIME_CHANNEL, RealtimeEvent, isRealtimeMessage } from '@/lib/realtime/events';
 
 const h = vi.hoisted(() => ({
-  ctorCalls: [] as Array<[string, Record<string, any>]>,
+  ctorCalls: [] as Array<[string, Record<string, unknown>]>,
   publish: vi.fn(async () => 1),
   quit: vi.fn(async () => 'OK'),
   disconnect: vi.fn(),
@@ -29,11 +28,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock('ioredis', () => ({
   Redis: class {
-    constructor(url: string, opts: Record<string, any>) {
+    constructor(url: string, opts: Record<string, unknown>) {
       h.ctorCalls.push([url, opts]);
       h.instances += 1;
     }
-    publish = (...args: any[]) => h.publish.apply(null, args as any);
+    publish = (...args: unknown[]) => h.publish.apply(null, args as unknown[]);
     quit = () => h.quit();
     disconnect = () => h.disconnect();
     on(event: string, cb: (err: Error) => void) {
