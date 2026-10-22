@@ -287,7 +287,13 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     'app/tenant/settings/billing/page.tsx',
     'app/tenant/ai/page.tsx',
     'app/tenant/ai/summarize/page.tsx',
-    'app/health/page.tsx',
+    // `app/health/page.tsx` leaves this list to #3066. The regex below is the shape this
+    // slice wrote for a read whose every non-2xx is a dead line; the health route answers
+    // 503 WITH a body naming the failed probe (`app/api/health/route.ts:88-97`), and that
+    // is an answer, so its page derives `failed` from the read, not from `error`. Pinning
+    // the old expression here would have re-broken the thing #3066 fixes — and this slice's
+    // fixtures for that page were `database`/`queue`/`email`/`auth`/`worker` sub-objects no
+    // route in this app produces, which is why AGENT_GUARDRAILS §4 says mocks mirror exports.
   ];
 
   it('bought its room by splitting the modals out, and came off the size baseline', () => {

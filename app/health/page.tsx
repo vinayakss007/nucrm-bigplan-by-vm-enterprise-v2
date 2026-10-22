@@ -5,17 +5,24 @@
  */
 'use client';
 
-import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu, type LucideIcon } from 'lucide-react';
+import { CheckCircle, AlertCircle, XCircle, HelpCircle, Loader2, Database, Cpu, ShieldCheck, Tag, type LucideIcon } from 'lucide-react';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
+/**
+ * The shape `GET /api/health` actually answers (app/api/health/route.ts): a flat body, and a 503
+ * status line when the database is not connected or the schema is not ready. It has never returned
+ * per-component sub-objects, so no card may read one.
+ */
 interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  database: { status: 'ok' | 'error'; message?: string; tables?: number };
-  queue: { status: 'ok' | 'warning' | 'error'; provider?: string; message?: string };
-  email: { status: 'ok' | 'warning' | 'error'; provider?: string; message?: string };
-  auth: { status: 'ok' | 'warning' | 'error'; users?: number; superAdmin?: boolean; message?: string };
-  worker: { status: 'ok' | 'warning' | 'error'; running?: boolean; message?: string };
+  status: 'ok' | 'error';
+  db?: string;
+  schema_ready?: boolean;
+  service?: string;
+  version?: string;
+  sentry?: string;
+  message?: string;
+  timestamp?: string;
 }
 
 const statusIcons = {
@@ -25,6 +32,7 @@ const statusIcons = {
   error: XCircle,
   unhealthy: XCircle,
   degraded: AlertCircle,
+  unknown: HelpCircle,
 };
 
 const statusColors = {
@@ -34,45 +42,25 @@ const statusColors = {
   error: 'text-red-500',
   unhealthy: 'text-red-500',
   degraded: 'text-amber-500',
+  unknown: 'text-gray-400',
 };
 
 export default function HealthPage() {
-  const { data, isLoading, isFetching, error, refetch } = useApiQuery<HealthStatus>(['health'], '/api/health');
-  const health = data ?? null;
+  const { data, error, isLoading, isFetching, refetch } = useApiQuery<HealthStatus>(['health'], '/api/health');
   const loading = isLoading;
-  // #2872: `error` was never bound, and every card defaulted through `health?.x.status ||
-  // 'error'`. So a probe that never answered — a restart, a refused TCP connection, the API
-  // still warming up — rendered a red cross, "System Unhealthy" and four failed components: an
-  // alarm that sends someone to the database, printed by the page whose job is to say whether
-  // the database is down. The defaults were also why a refused refresh was silent: `data` is
-  // kept, so the cards stayed and looked live.
-  const failed = Boolean(error) && !health;
-  const stale = Boolean(error) && Boolean(health);
+
+  // The route answers 503 with a body naming which probe failed, and apiFetcher throws on any
+  // non-2xx — so the 503 is taken from the body the fetcher carried, not treated as a dead read.
+  const answered503 = error?.status === 503 && typeof (error.info as HealthStatus | undefined)?.status === 'string';
+  const health = answered503 ? (error.info as HealthStatus) : data ?? null;
+  const failed = !health && !loading;
+  const stale = Boolean(error) && Boolean(data) && !answered503;
   const reason = error?.message || 'no response from the server';
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
-      </div>
-    );
-  }
-
-  if (failed) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Health</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Real-time status of all system components
-            </p>
-          </div>
-          <InlineErrorState
-            message={`Could not read system health: ${reason}. No component status is known, so this page says nothing about the system being up or down — the probe never answered.`}
-            onRetry={refetch}
-          />
-        </div>
       </div>
     );
   }
@@ -97,88 +85,110 @@ export default function HealthPage() {
           </button>
         </div>
 
-        {/* #2872: the reading stays on screen — the operator is looking at the last probe, not a live one. */}
-        {stale && (
-          <InlineErrorState
-            className="mb-8"
-            message={`Could not refresh system health, so the cards below are the last read: ${reason}. A component that broke or recovered since that read is still shown as it was then; Refresh re-probes and every link below still works.`}
-            onRetry={refetch}
-          />
+        {failed && (
+          /* Nothing was read, so nothing is asserted: no verdict and no component card. */
+          <div className="p-6 rounded-xl border-2 mb-8 bg-gray-50 dark:bg-gray-900/40 border-gray-300 dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-3">
+              <HelpCircle className="w-8 h-8 text-gray-400" />
+              <div>
+                <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">No reading to report</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  The health request did not answer, so this page shows you nothing rather than a guess.
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Anything printed here would be a read that never happened — that is how a throttled
+              request, a proxy timeout or a browser that could not reach the app all looked like a
+              broken database. Try the read again; the page stays put either way.
+            </p>
+            <InlineErrorState message={`Health has not been read: ${reason}.`} onRetry={refetch} />
+          </div>
         )}
 
-        {/* Overall Status */}
-        <div className={`p-6 rounded-xl border-2 mb-8 ${
-          health?.status === 'healthy' 
-            ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' 
-            : health?.status === 'degraded'
-            ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
-            : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-        }`}>
-          <div className="flex items-center gap-3">
-            {(() => {
-              const Icon = statusIcons[health?.status || 'error'];
-              return <Icon className={`w-8 h-8 ${statusColors[health?.status || 'error']}`} />;
-            })()}
-            <div>
-              <p className={`text-lg font-semibold ${statusColors[health?.status || 'error']}`}>
-                System {health?.status === 'healthy' ? 'Healthy' : health?.status === 'degraded' ? 'Degraded' : 'Unhealthy'}
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {health?.status === 'healthy' 
-                  ? 'All systems operational' 
-                  : 'Some components need attention'}
-              </p>
+        {health && (
+          <>
+            {/* Overall Status */}
+            <div className={`p-6 rounded-xl border-2 mb-8 ${
+              health.status === 'ok'
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+                : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const Icon = health.status === 'ok' ? CheckCircle : XCircle;
+                  return <Icon className={`w-8 h-8 ${health.status === 'ok' ? 'text-emerald-500' : 'text-red-500'}`} />;
+                })()}
+                <div>
+                  <p className={`text-lg font-semibold ${health.status === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                    System {health.status === 'ok' ? 'Healthy' : 'Unhealthy'}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {health.status !== 'ok'
+                      ? 'Some components need attention'
+                      : stale
+                        ? 'This verdict is the last reading, not a current one'
+                        : 'All systems operational'}
+                  </p>
+                  {health.message && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{health.message}</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Component Cards */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Database */}
-          <HealthCard
-            icon={Database}
-            title="Database"
-            status={health?.database.status || 'error'}
-            details={[
-              health?.database.tables ? `${health.database.tables} tables` : undefined,
-              health?.database.message,
-            ].filter(Boolean).join(' • ')}
-          />
+            {stale && (
+              <InlineErrorState
+                className="mb-8"
+                message={`Could not refresh, so Database, Schema, Sentry and Release below are the last read (${reason}). The system may have gone down or come back up since, and this page cannot tell you which.`}
+                onRetry={refetch}
+              />
+            )}
 
-          {/* Queue */}
-          <HealthCard
-            icon={Cpu}
-            title="Queue / Worker"
-            status={health?.queue.status || 'error'}
-            details={[
-              health?.queue.provider,
-              health?.queue.message,
-            ].filter(Boolean).join(' • ')}
-          />
+            {/* Component Cards */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Database — the route answers `db`, nothing finer. */}
+              <HealthCard
+                icon={Database}
+                title="Database"
+                status={health.db === 'connected' ? 'ok' : health.db ? 'error' : 'unknown'}
+                details={[health.db, health.status !== 'ok' && health.db === 'disconnected'
+                  ? 'the connection probe the route runs did not return'
+                  : undefined].filter(Boolean).join(' • ')}
+              />
 
-          {/* Email */}
-          <HealthCard
-            icon={Mail}
-            title="Email"
-            status={health?.email.status || 'error'}
-            details={[
-              health?.email.provider ? `Provider: ${health.email.provider}` : undefined,
-              health?.email.message,
-            ].filter(Boolean).join(' • ')}
-          />
+              {/* Schema — whether the migrations in this build are applied. */}
+              <HealthCard
+                icon={Cpu}
+                title="Schema"
+                status={health.schema_ready === true ? 'ok' : health.schema_ready === false ? 'error' : 'unknown'}
+                details={[
+                  health.schema_ready === undefined
+                    ? undefined
+                    : health.schema_ready
+                      ? 'the schema this build expects is present'
+                      : 'the schema this build expects is not present',
+                ].filter(Boolean).join(' • ')}
+              />
 
-          {/* Auth */}
-          <HealthCard
-            icon={User}
-            title="Authentication"
-            status={health?.auth.status || 'error'}
-            details={[
-              health?.auth.users !== undefined ? `${health.auth.users} users` : undefined,
-              health?.auth.superAdmin ? 'Super admin configured' : 'No super admin',
-              health?.auth?.message,
-            ].filter(Boolean).join(' • ')}
-          />
-        </div>
+              {/* Sentry — error reporting is a degraded/ok distinction, not a broken one. */}
+              <HealthCard
+                icon={ShieldCheck}
+                title="Sentry"
+                status={health.sentry === 'configured' ? 'ok' : health.sentry ? 'warning' : 'unknown'}
+                details={[health.sentry].filter(Boolean).join(' • ')}
+              />
+
+              {/* Release — which build answered, and when. */}
+              <HealthCard
+                icon={Tag}
+                title="Release"
+                status={health.service && health.version ? 'ok' : 'unknown'}
+                details={[health.service, health.version, health.timestamp].filter(Boolean).join(' • ')}
+              />
+            </div>
+          </>
+        )}
 
         {/* Quick Actions */}
         <div className="mt-8 p-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -229,8 +239,8 @@ function HealthCard({
   status: string; 
   details: string;
 }) {
-  const StatusIcon = statusIcons[status as keyof typeof statusIcons] || XCircle;
-  const statusColor = statusColors[status as keyof typeof statusColors] || 'text-red-500';
+  const StatusIcon = statusIcons[status as keyof typeof statusIcons] || HelpCircle;
+  const statusColor = statusColors[status as keyof typeof statusColors] || 'text-gray-400';
 
   return (
     <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
