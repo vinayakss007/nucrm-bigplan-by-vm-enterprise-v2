@@ -7,6 +7,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -44,15 +45,20 @@ export default function TenantModulesPage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   const queryKey = ['superadmin', 'tenant-modules', tenantId] as const;
-  const { data, isLoading, refetch } = useApiQuery<ModulesResponse>(
+  const { data, isLoading, error: modulesError, refetch } = useApiQuery<ModulesResponse>(
     queryKey,
     `/api/superadmin/tenants/${tenantId}/modules`,
     { enabled: !!tenantId },
   );
 
   const modules: ModuleData[] = data?.data ?? [];
-  const plan = data?.plan ?? 'free';
   const loading = isLoading;
+  // Three channels for this read (#2872). Before, a read that never answered fell through to an empty
+  // grid and a header that read "Plan: free · 0/0 active" — an unread tenant reported as a bare one on
+  // the page whose buttons install and disable modules.
+  const failed = Boolean(modulesError) && !data;
+  const stale = Boolean(modulesError) && Boolean(data);
+  const reason = modulesError?.message || 'no response from the server';
 
   const toggleMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
@@ -88,7 +94,7 @@ export default function TenantModulesPage() {
             <Zap className="w-5 h-5 text-violet-400" />Tenant Modules
           </h1>
           <p className="text-xs text-white/40">
-            Plan: <span className="capitalize font-semibold text-white/60">{plan}</span> · {totalEnabled}/{modules.length} active
+            Plan: <span className="capitalize font-semibold text-white/60">{data ? (data.plan ?? 'free') : '—'}</span> · {data ? `${totalEnabled}/${modules.length} active` : '—'}
           </p>
         </div>
         <button onClick={() => refetch()} className="p-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
@@ -96,10 +102,22 @@ export default function TenantModulesPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the modules below and their status badges are the last read: ${reason}. Toggling one acts on that older badge.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {loading ? (
         Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-20 rounded-xl animate-pulse bg-white/5" />
         ))
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load this tenant's modules: ${reason}. The grid shows nothing because this read never answered — it is not a verdict that the tenant has no modules.`}
+          onRetry={() => void refetch()}
+        />
       ) : (
         <div className="space-y-2">
           {modules.map(mod => {
