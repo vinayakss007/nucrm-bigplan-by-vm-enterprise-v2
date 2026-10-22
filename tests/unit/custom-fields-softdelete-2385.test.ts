@@ -86,6 +86,9 @@ vi.mock('@/lib/auth/middleware', () => ({
     email: 'a@b.com',
     isSuperAdmin: false,
   }),
+  // #3001 added a settings.manage gate to the definition mutators; this suite pins
+  // tombstone behaviour, not authorization, so the caller is treated as permitted.
+  requirePerm: () => null,
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: () => Promise.resolve(null) }));
 vi.mock('@/lib/api/concurrency', () => ({
