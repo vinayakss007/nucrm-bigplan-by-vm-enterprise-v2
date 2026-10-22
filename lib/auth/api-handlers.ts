@@ -437,13 +437,19 @@ export async function POST_signup(request: NextRequest) {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         }).then(() => {
           const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${vToken}`;
-          sendEmail({
+          // #3045: sendEmail never throws — it resolves {success:false}, so
+          // the old .catch() was dead code and a rejected verification email
+          // was silent. Keep it fire-and-forget (awaiting here would hold the
+          // transaction open across an external HTTP call), but check result.
+          void sendEmail({
             to: email,
             subject: 'Verify your email address — NuCRM',
             html: `<p>Welcome to NuCRM! Click the link below to verify your email address:</p>
                    <a href="${verifyUrl}">${verifyUrl}</a>
                    <p>This link expires in 24 hours.</p>`,
-          }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to send verification email'));
+          }).then((result) => {
+            if (!result.success) devLogger.error(new Error(result.error ?? 'provider failure'), '[auth/signup] Verification email NOT sent');
+          });
         }).catch((err: unknown) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
       }
     });

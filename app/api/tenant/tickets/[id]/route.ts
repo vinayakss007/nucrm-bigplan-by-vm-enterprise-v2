@@ -263,7 +263,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
       const surveyUrl = `${baseUrl}/public/csat/${surveyToken}`;
       const name = surveyContactName || 'there';
 
-      sendEmail({
+      // #3045: sendEmail never throws — the .catch() was dead code and a
+      // rejected CSAT survey was invisible. Check the resolved result instead.
+      void sendEmail({
         to: surveyContactEmail,
         subject: `How was your support experience? — ${ticketSubject}`,
         html: `
@@ -281,10 +283,12 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
             <p style="color: #999; font-size: 12px;">Your feedback helps us improve our support quality.</p>
           </div>
         `,
-      }).catch((err) => {
-        logger.warn('[ticket-survey] Failed to send satisfaction survey', {
-          ticketId: id, error: err instanceof Error ? err.message : String(err),
-        });
+      }).then((result) => {
+        if (!result.success) {
+          logger.warn('[ticket-survey] Survey email rejected by provider', {
+            ticketId: id, error: result.error ?? 'provider failure',
+          });
+        }
       });
     }
 

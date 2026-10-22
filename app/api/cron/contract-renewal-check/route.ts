@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
         const dateStr = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
         // Member sends run concurrently (each guarded); DB reads above are done.
+        let emailRejected = false;
         await Promise.allSettled(members.map(async (member) => {
           // In-app notification
           await createNotification({
@@ -135,7 +136,10 @@ export async function POST(request: NextRequest) {
 
           // Email
           if (member.email) {
-            await sendEmail({
+            // #3045: sendEmail resolves {success:false} — the .catch() could
+            // never fire and allSettled reports it as fulfilled, so rejected
+            // reminder emails were doubly invisible.
+            const emailResult = await sendEmail({
               to: member.email,
               subject: `Contract "${contract.title}" expires in ${days} days`,
               html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
@@ -146,9 +150,17 @@ export async function POST(request: NextRequest) {
               <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Contract →</a>
             </div>`,
               text: `Contract "${contract.title}" expires on ${dateStr} (${days} days). Total value: $${Number(contract.totalValue || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}`,
-            }).catch((err) => logError({ error: err, context: 'contract-renewal-email' }));
+            });
+            if (!emailResult.success) {
+              emailRejected = true;
+              void logError({ error: new Error(`Contract reminder email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/contract-renewal-check email' });
+            }
           }
         }));
+
+        // Withhold the dedup marker when any send was rejected so the next
+        // run retries this contract+days combo instead of skipping forever.
+        if (emailRejected) continue;
 
         // Log activity for deduplication
         await db.insert(activities).values({

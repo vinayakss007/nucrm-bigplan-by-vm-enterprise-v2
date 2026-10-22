@@ -263,7 +263,9 @@ async function sendBreachNotification(
       .limit(1);
 
     if (user?.email) {
-      await sendEmail({
+      // #3045: sendEmail resolves {success:false} — the .catch() could never
+      // fire, so escalation emails rejected by the provider were invisible.
+      const emailResult = await sendEmail({
         to: user.email,
         subject: `[SLA ${severity}] ${breachLabel} overdue: ${ticket.subject}`,
         html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px">
@@ -274,7 +276,8 @@ async function sendBreachNotification(
           <p><strong>Escalation level:</strong> ${escalationLevel}</p>
           <a href="${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/tenant/support" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Ticket →</a>
         </div>`,
-      }).catch((err) => logError({ error: err, context: 'async-catch:sla-email' }));
+      });
+      if (!emailResult.success) void logError({ error: new Error(`SLA escalation email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/sla-check escalation email' });
     }
   }
 }
