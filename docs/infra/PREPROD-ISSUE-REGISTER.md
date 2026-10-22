@@ -1503,7 +1503,7 @@ inferred.
     `Sentry.setContext`/`setExtra`/`setTag`/`withScope`/`configureScope` at all (the `setUserContext`
     and `setContext` hits are this project's own RLS/ALS helpers), and `event.request.data` has zero
     writers on top of `httpBodies: []`. `event.user.id` is kept: every writer resolves to a `users.id`
-    uuid (or the static `'demo-user'`), never an address — `lib/errors-server.ts:62` is the only door.
+    uuid (or the static `'demo-user'`), never an address — `lib/errors-server.ts:61` (re-pinned 2026-10-22 from `:62`: **#3016** deleted the module-scope `errorLogs` import at `:6`, which lifts every line below it by one) is the only door.
 - **Session Replay: the option is set, the integration is not — measured, not assumed.** Both client
   files set `replaysSessionSampleRate: 0.1` / `replaysOnErrorSampleRate: 1.0` with a comment claiming
   "10 % of all sessions". In v11 those numbers are only read by `@sentry/replay` itself
@@ -2505,7 +2505,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   sweep scope, so its writes queue onto the same client via `serializeClientQueries` (`request-connection.ts:136-160`) and
   `drainClientQueries` (`:167-181`) holds the release until they finish — extending the hold instead of running in parallel.
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
-  `lib/errors-server.ts:228`). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
+  `lib/errors-server.ts:231` (re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
   paths: `app/api/cron/subscription-renewal-check/route.ts:145`, `contract-renewal-check/route.ts:161` (re-pinned 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
   `backup-verify/route.ts:351,384,417 (re-pinned 2026-10-15: **#2599/#2603** shifted them)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
@@ -2534,7 +2534,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `lib/db/request-connection.ts:31-42,136-181,202-249`, `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
   `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:36-67,73-119,129,326`
   (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1; again 2026-10-18 from `:35-66,72-118,128,297` — **#2795**/**#2810** added one more line above `POST` *and* 28 lines between `:129` and `:326`, so the far coordinate moved 29, not 1),
-  `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:228`,
+  `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:231` (same #3016 shift),
   `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
   `deploy/pgbouncer/pgbouncer.ini:2,10,20`, `deploy/docker-compose.preprod.yml:36,47,144,152`. Related: **PP-028** (the 200 ms
   budget), **PP-030/PP-049** (cron honesty), **PP-036/037/039** (the same latency on the request side), **PP-051** (which
