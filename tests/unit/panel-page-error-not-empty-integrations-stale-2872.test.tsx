@@ -41,7 +41,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import type { ReactNode } from 'react';
 
 type QueryResult = {
   data?: unknown;
