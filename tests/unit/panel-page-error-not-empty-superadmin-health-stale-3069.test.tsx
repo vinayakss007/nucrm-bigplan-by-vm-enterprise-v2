@@ -496,7 +496,11 @@ describe('the superadmin health board — the source stays in this shape', () =>
   });
 
   it('no other suite mounted this page before this one', () => {
-    const hits = spawnSync('grep', ['-rlF', 'app/superadmin/health/page', 'tests'], {
+    // This guard is about a suite that imports and renders the board. It grepped the bare path,
+    // which also matches prose: #3095 cites `app/superadmin/health/page.tsx:70` to document the
+    // cache-key collision it found, while mounting the *monitoring* page. The import specifier is
+    // what a second mount would have to spell, so that is what now has to be unique.
+    const hits = spawnSync('grep', ['-rlE', "from '@/app/superadmin/health/page'", 'tests'], {
       cwd: process.cwd(), encoding: 'utf8',
     });
     expect((hits.stdout ?? '').trim().split('\n').sort()).toEqual([
