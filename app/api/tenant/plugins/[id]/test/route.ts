@@ -21,6 +21,9 @@ export const POST = withApiRoute(async (request: NextRequest, context: RouteCont
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2999: test fires server-side requests to the plugin baseUrl with its
+    // stored credentials — admin-only, like the integrations/test twins.
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await context.params;
 
