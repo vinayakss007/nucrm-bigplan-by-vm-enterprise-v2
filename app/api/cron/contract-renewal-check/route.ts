@@ -106,9 +106,8 @@ export async function POST(request: NextRequest) {
       for (const contract of endingSoon) {
         // #2997: the day count comes from the same UTC window the SQL matched —
         // no independent local-midnight recomputation that can disagree with it.
-        const days = contract.endDate == null
-          ? undefined
-          : daysByEndDate.get(utcDateStr(contract.endDate));
+        const endStr = utcDateStr(contract.endDate);
+        const days = endStr === null ? undefined : daysByEndDate.get(endStr);
         if (days === undefined) continue;
 
         // Deduplication: skip (contract + days) combos already reminded
