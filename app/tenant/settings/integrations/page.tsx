@@ -171,6 +171,16 @@ export default function IntegrationsPage() {
     '/api/tenant/integrations',
   );
   const integrations: ConnectedIntegration[] = data?.data ?? [];
+  // #2872: connecting, removing or switching an integration off ends in `reload()`, which
+  // re-reads this key, and `useApiQuery` keeps the previous `data` when a revalidation
+  // rejects. Branching on `error` alone therefore answered the ordinary post-save state
+  // with "Failed to load integrations" over a list the page was still showing. A refusal
+  // that left no data is an outage; a refusal that left data is a last read, and the
+  // difference is worth saying out loud because the stale answer is safe to act on — the
+  // connectors below are real, they are just not necessarily current.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'integrations'] });
 
@@ -215,8 +225,14 @@ export default function IntegrationsPage() {
       </div>
 
       {/* Connected integrations */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the connected integrations, so the list below is the last read: ${reason}. A connector you just added, removed or switched off is still shown here in its old state — the tiles above still work, and a new read will replace this list when one succeeds.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? <div className="admin-card p-5 animate-pulse h-20"/>
-      : error ? <InlineErrorState message={`Failed to load integrations: ${error.message || 'no response from the server'}`} onRetry={refetch} />
+      : failed ? <InlineErrorState message={`Failed to load integrations: ${reason}`} onRetry={refetch} />
       : integrations.length > 0 && (
         <div className="admin-card overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border"><p className="text-sm font-semibold">Connected ({integrations.length})</p></div>
@@ -246,7 +262,7 @@ export default function IntegrationsPage() {
           </div>
         </div>
       )}
-      {!loading && !error && !integrations.length && (
+      {!loading && !failed && !integrations.length && (
         <div className="text-center py-10"><Plug className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3"/><p className="font-semibold text-sm mb-1">No integrations yet</p><p className="text-sm text-muted-foreground">Connect a tool above to get started</p></div>
       )}
 
