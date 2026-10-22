@@ -30,7 +30,19 @@ export function reminderWindows(now: Date, reminderDays: readonly number[]): Rem
   });
 }
 
-/** Calendar-day string of a `date`-column value, whatever shape the driver returns. */
+/**
+ * Calendar-day string of a `date`-column value, whatever shape the driver returns.
+ *
+ * Two overloads rather than one `string | null` signature: the null in the return
+ * type exists for callers whose column may genuinely be null, and a caller that has
+ * already excluded null had no way to say so. `app/api/cron/contract-renewal-check`
+ * narrowed `contract.endDate` in its own ternary and still got `string | null` back
+ * on the line that feeds a `Map.get`, which is a type error (#2997's CI red) and was
+ * only ever going to be answered there with a redundant `?? ''` — a key that cannot
+ * exist, invented to satisfy a signature that was lying.
+ */
+export function utcDateStr(value: Date | string): string;
+export function utcDateStr(value: Date | string | null | undefined): string | null;
 export function utcDateStr(value: Date | string | null | undefined): string | null {
   if (value == null) return null;
   return typeof value === 'string' ? value.slice(0, 10) : value.toISOString().slice(0, 10);

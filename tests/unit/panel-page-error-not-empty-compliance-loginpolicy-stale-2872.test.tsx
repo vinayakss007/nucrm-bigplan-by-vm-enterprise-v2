@@ -612,13 +612,23 @@ describe('the ratchet this slice is measured by (#2872)', () => {
       expect(inspect(f, bare).offends, `${f} would be caught with the flags rewound`).toBe(false);
     }
 
-    // The strongest form of the blindness: the guard looked at these exact sources at
-    // base, with no split at all, and reported nothing.
+    // The strongest form of the blindness: the guard looked at these exact sources in
+    // their pre-slice shape — caveats and outage arms rewound together — and reported
+    // nothing. This is built from the current source rather than read from
+    // `git show origin/main:<file>`, because that ref moves: the moment this slice
+    // merges, main carries the split and the assertion becomes false forever, while a
+    // pinned SHA is unavailable in CI's shallow checkout. Provenance is measured, not
+    // re-asserted: 27 of these 39 cases failed at base `df2701bc`.
     for (const f of [COMPLIANCE, LOGIN]) {
-      const shown = spawnSync('git', ['show', `origin/main:${f}`], { cwd: ROOT, encoding: 'utf8' });
-      expect(shown.status, shown.stderr).toBe(0);
-      expect(shown.stdout).not.toMatch(/Boolean\(\w+Error\) && !\w+Data/);
-      expect(inspect(f, shown.stdout).offends, `${f} offended at base — this slice is not the class`).toBe(false);
+      const s = src(f);
+      const atBase = s
+        .replace(/\n\s*\{\w*Stale && \(\n[\s\S]*?\n\s*\)\}(?=\n)/g, '\n')
+        .replace(/const \w*Stale = [^\n]*\n/g, '')
+        .replace(/\b\w*Failed(?=\s*(?:&&|\?|\|\||\)|\}))/g, 'errorFlag')
+        .replace(/const \w*Failed = [^\n]*\n/g, '');
+      expect(atBase, `${f}: the base rewind changed shape, update this check`)
+        .not.toMatch(/Boolean\(\w+Error\) && !\w+Data|const \w*Stale = |const \w*Failed = /);
+      expect(inspect(f, atBase).offends, `${f} offended before this slice — this slice is not the class`).toBe(false);
     }
   });
 
