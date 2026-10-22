@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createCustomFieldSchema, updateCustomFieldSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/schema';
 import { featureRegistry } from '@/drizzle/schema';
@@ -159,8 +159,6 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     });
 
     return NextResponse.json({ entityType, fields });
- 
- 
   } catch (err) {
     return apiError(err);
   }
@@ -325,6 +323,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   }
 
   // Create a custom field definition
+  // #3001: a field def is tenant-wide schema config — creating one needs settings.manage (admins pass via can()).
+  const permErr = requirePerm(ctx, 'settings.manage'); if (permErr) return permErr;
   const rawBody = await readJsonBody(req);
   const validated = validateBody(createCustomFieldSchema, rawBody);
   if (validated instanceof NextResponse) return validated;
@@ -395,6 +395,9 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
+  // #3001: PUT rewrites an existing field definition (type/label/options) that
+  // every form, list and integration in the tenant reads — settings.manage only.
+  const permErr = requirePerm(ctx, 'settings.manage'); if (permErr) return permErr;
 
   const rawBody = await readJsonBody(req);
   const validated = validateBody(updateCustomFieldSchema, rawBody);
@@ -406,9 +409,6 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ error: 'fieldId is required' }, { status: 400 });
   }
 
- 
- 
- 
   const expectedUpdatedAt = (validated.data as Record<string, unknown>).expectedUpdatedAt ? new Date((validated.data as Record<string, unknown>).expectedUpdatedAt as string) : null;
   const guard = await concurrencyGuard(db, customFieldDefs, fieldId, ctx.tenantId, expectedUpdatedAt);
   if (guard) return guard;
@@ -454,6 +454,9 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
+  // #3001: DELETE tombstones the definition and orphans stored values for the
+  // whole tenant — settings.manage only.
+  const permErr = requirePerm(ctx, 'settings.manage'); if (permErr) return permErr;
 
   const { searchParams } = new URL(req.url);
   const fieldId = searchParams.get('fieldId');
