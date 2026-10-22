@@ -74,6 +74,15 @@ export default function PluginsPage() {
     '/api/tenant/plugins',
   );
   const plugins: Plugin[] = data?.data ?? [];
+  // #2872: useApiQuery keeps `data` when a revalidation of a read that already
+  // succeeded fails. Toggle/delete/create/test/execute all invalidate PLUGINS_QUERY,
+  // so a refused refresh right after a save left the rows on screen while
+  // `pluginsError` was set — and the old `pluginsError ?` branch replaced those kept
+  // rows with the outage card, claiming "Failed to load your plugins" over a list
+  // that had answered. Split the two states so each says its own truth.
+  const failed = Boolean(pluginsError) && !data;
+  const stale = Boolean(pluginsError) && Boolean(data);
+  const reason = pluginsError?.message || 'no response from the server';
   const loadPlugins = () => queryClient.invalidateQueries({ queryKey: PLUGINS_QUERY });
 
   // Per-plugin execution logs are loaded on demand (on expand) into a local map.
@@ -164,7 +173,7 @@ export default function PluginsPage() {
             <button key={key} onClick={() => setTab(key as Tab)}
               className={cn('whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors',
                 tab === key ? 'border-violet-500 text-violet-600 dark:text-violet-400' : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground')}>
-              {label} {key === 'my_plugins' && `(${plugins.length})`}
+              {label} {key === 'my_plugins' && `(${data ? plugins.length : '—'})`}
             </button>
           ))}
         </nav>
@@ -173,18 +182,30 @@ export default function PluginsPage() {
       {tab === 'my_plugins' && (
         loading ? (
           <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />)}</div>
-        ) : plugins.length === 0 ? (
-          pluginsError
-            ? <InlineErrorState message={`Failed to load your plugins: ${pluginsError.message}`} onRetry={refetchPlugins} />
-            : <div className="text-center py-12 border border-dashed border-border rounded-2xl">
-            <Puzzle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-            <p className="font-medium">No plugins yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Create your first plugin or start from a template</p>
-            <button onClick={() => setTab('create')} className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold">Create Plugin</button>
-          </div>
         ) : (
-          <div className="space-y-3">
-            {plugins.map((plugin) => (
+          <>
+            {stale && (
+              <InlineErrorState
+                message={plugins.length > 0
+                  ? `Could not refresh the plugins, so the list below is the last read: ${reason}. A plugin you created, edited, deleted or tested since this was fetched is not reflected here.`
+                  : `Could not refresh the plugins: ${reason}. This is the last read, which had none — a plugin created since then may not appear here.`}
+                onRetry={refetchPlugins}
+              />
+            )}
+            {failed ? (
+              <InlineErrorState message={`Failed to load your plugins: ${reason}`} onRetry={refetchPlugins} />
+            ) : plugins.length === 0 ? (
+              stale ? null : (
+                <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+                  <Puzzle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-medium">No plugins yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Create your first plugin or start from a template</p>
+                  <button onClick={() => setTab('create')} className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold">Create Plugin</button>
+                </div>
+              )
+            ) : (
+              <div className="space-y-3">
+                {plugins.map((plugin) => (
               <div key={plugin.id} className="admin-card rounded-xl overflow-hidden">
                 <div className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
@@ -282,6 +303,8 @@ export default function PluginsPage() {
               </div>
             ))}
           </div>
+            )}
+          </>
         )
       )}
 
