@@ -3033,7 +3033,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
     before it), which is the actual verification that PR wanted.
   - `duplicate-fk-declarations-2259` failed with `expected 113 to be 114` — this worktree's branch
     has no 0114 journal entry; **#2345** rewrites exactly that assertion. Not a new finding.
-  - `rate-limit.test.ts:310` failed with `TypeError: Cannot read properties of null (reading
+  - `rate-limit.test.ts:309` (re-pinned 2026-10-22 from `:310`: `6f18254b9` (#3036) deleted two `eslint-disable-next-line` lines above this block, so the comment slid one line up) failed with `TypeError: Cannot read properties of null (reading
 'headers')` — a **third instance of the same environment-dependency class** as #2359, filed
     below.
   - Two files could not be collected: `Error: Cannot find module
@@ -3044,7 +3044,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
     vitest. Consequence for every future sweep: **a `tests/unit` run in the shared worktree is not
     attributable**; it has to come from its own clone, the way the CI-equivalent worktrees do.
 - **The third env-dependent assertion (found inside this measurement).**
-  `tests/unit/rate-limit.test.ts:310` calls `checkRateLimit(null, { action: 'test' })` and expects
+  `tests/unit/rate-limit.test.ts:309` (re-pinned 2026-10-22 from `:310`, same one-line slide as the citation above) calls `checkRateLimit(null, { action: 'test' })` and expects
   `null`. That reaches `getClientIp` (`lib/client-ip.ts:14`), which returns the string `'unknown'`
   **before** touching the request unless `TRUST_PROXY === 'true'` — with the flag set it
   dereferences `request.headers` and throws on `null`. `.env.local:48` sets `TRUST_PROXY=true`;
@@ -3110,7 +3110,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   (a) + (b) together are what makes "the suite is green" mean the suite is green again.
 - **Files:** `docs/infra/PREPROD-ISSUE-REGISTER.md` only. Evidence read: `df -h/-k /tmp`,
   `du -xsh /tmp/*`, `stat -c %y` on the 88 dirs, `lsof +D /tmp`, the two aborted-and-retried
-  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:308-311`,
+  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:307-310 (re-pinned 2026-10-22 from `:308-311`: `6f18254b9` (#3036) deleted two `eslint-disable-next-line` lines above this block)`,
   `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
   `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
