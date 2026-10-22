@@ -10,6 +10,7 @@ import {
   ShieldCheck, FileText, Eye,
 } from 'lucide-react';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useQuery } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
 
@@ -62,7 +63,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
   const [declineForm, setDeclineForm] = useState({ email: '', reason: '' });
   const [submittedStatus, setSubmittedStatus] = useState<'accepted' | 'declined' | null>(null);
 
-  const { data, isLoading, error } = useQuery<OfferData, ApiQueryError>({
+  const { data, isLoading, error, refetch } = useQuery<OfferData, ApiQueryError>({
     queryKey: ['public-offer', publicToken],
     enabled: !!publicToken,
     retry: false,
@@ -77,6 +78,16 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
   });
   const loading = isLoading;
   const errorStatus = error?.status ?? null;
+  // `failed` is "nothing was ever put on this screen"; `stale` is "something is on this screen and
+  // the refresh of it was refused". They are different accidents and a buyer can only be told what
+  // to do about them separately. A 404 or a 410 is the server answering about the offer itself, so
+  // those stay an answer even though `data` came back empty — but only while nothing is on screen:
+  // a 404 that arrives on top of a kept read is that refused refresh, not a vanished offer.
+  const failed = !data && !loading;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  const isExpired = failed && errorStatus === 410;
+  const isNotFound = failed && errorStatus === 404;
 
   async function accept() {
     setBusy('accept');
@@ -126,23 +137,40 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
     );
   }
 
-  if (error || !data) {
-    const isExpired = errorStatus === 410;
-    const isNotFound = errorStatus === 404;
+  // An empty screen is two answers, and only one of them came from the server.
+  if (!data) {
+    if (isExpired || isNotFound) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
+          <div className="max-w-md w-full text-center space-y-3">
+            <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+              {isExpired ? <Clock className="w-7 h-7 text-amber-600" /> : <AlertCircle className="w-7 h-7 text-amber-600" />}
+            </div>
+            <h1 className="text-xl font-bold">
+              {isExpired ? 'This offer has expired' : 'Offer not found'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {isExpired
+                ? 'The window to respond to this offer has closed. Please contact the sender if you still wish to proceed.'
+                : 'The link may have been cancelled or is incorrect. Please check the link or contact the sender.'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Everything else — a 500, a 429 from the public rate limit this route applies before it looks
+    // anything up, a 503, a fetch the buyer's own connection refused, a 2xx whose body came back
+    // empty — said nothing about the offer, and this query does not retry itself. A buyer has no
+    // other way to ask, so this screen has to carry the asking.
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
-        <div className="max-w-md w-full text-center space-y-3">
-          <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
-            {isExpired ? <Clock className="w-7 h-7 text-amber-600" /> : <AlertCircle className="w-7 h-7 text-amber-600" />}
-          </div>
-          <h1 className="text-xl font-bold">
-            {isExpired ? 'This offer has expired' : isNotFound ? 'Offer not found' : 'Unable to load offer'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isExpired
-              ? 'The window to respond to this offer has closed. Please contact the sender if you still wish to proceed.'
-              : 'The link may have been cancelled or is incorrect. Please check the link or contact the sender.'}
-          </p>
+        <div className="max-w-md w-full space-y-3">
+          <h1 className="text-xl font-bold text-center">The offer is not on your screen yet</h1>
+          <InlineErrorState
+            message={`This offer could not be read: ${reason}. Nothing about it is answered — not the items, not the total, not whether it is still open — and none of that is a verdict on your link.`}
+            onRetry={refetch}
+          />
         </div>
       </div>
     );
@@ -178,6 +206,18 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 sm:py-10 space-y-5">
+        {/* What is below came out of a read that answered, and the refresh of it was refused. It is
+            still the truth this session has — but the offer on the server may have moved since, and
+            responding is deliberately left possible: accept/route.ts re-reads the row and refuses a
+            state that cannot be accepted, so the caveat names the risk instead of taking the choice
+            away from the buyer halfway through signing. */}
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so the offer below is the last read: ${reason}. Its items, its total and whether it is still open all came from that read, and the seller may have changed or withdrawn it since.`}
+            onRetry={refetch}
+          />
+        )}
+
         {/* Final-state banner */}
         {finalStatus === 'accepted' && (
           <div className="rounded-xl border border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/20 p-5 flex items-start gap-3">

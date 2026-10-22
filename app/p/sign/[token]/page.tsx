@@ -9,6 +9,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, FileText, PenLine,
 } from 'lucide-react';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useQuery } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
 
@@ -27,7 +28,7 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
   const [typedName, setTypedName] = useState('');
   const [submitted, setSubmitted] = useState<'signed' | 'declined' | null>(null);
 
-  const { data, isLoading, error } = useQuery<SignData, ApiQueryError>({
+  const { data, isLoading, error, refetch } = useQuery<SignData, ApiQueryError>({
     queryKey: ['public-sign', token],
     enabled: !!token,
     retry: false,
@@ -42,6 +43,15 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
   });
   const loading = isLoading;
   const errorStatus = error?.status ?? null;
+  // `failed` is "nothing was ever put on this screen"; `stale` is "the document is on this screen and
+  // the refresh of it was refused". A 404 is the server answering about the token itself, so it stays
+  // an answer — but only while nothing is on screen. A 404 that arrives on top of a kept read is that
+  // refused refresh, and this page is where someone types a legal signature: it must not answer that
+  // by telling them their own link is wrong and taking the name box away.
+  const failed = !data && !loading;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  const isNotFound = failed && errorStatus === 404;
 
   async function act(action: 'sign' | 'decline') {
     setBusy(action);
@@ -70,18 +80,36 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
     );
   }
 
-  if (error || !data) {
-    const isNotFound = errorStatus === 404;
+  // An empty screen is two answers, and only one of them came from the server.
+  if (!data) {
+    if (isNotFound) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
+          <div className="max-w-md w-full text-center space-y-3">
+            <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+              <AlertCircle className="w-7 h-7 text-amber-600" />
+            </div>
+            <h1 className="text-xl font-bold">Document not found</h1>
+            <p className="text-sm text-muted-foreground">
+              The link may have been cancelled or is incorrect. Please check the link or contact the sender.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // A 500, a 429 from the rate limit this route applies before it resolves the token, a 503, a
+    // fetch the signer's own connection refused, or a 2xx whose body came back empty: none of them
+    // said anything about the document, and this query does not retry itself. Nothing is on screen
+    // to sign, so nothing here invites a signature.
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
-        <div className="max-w-md w-full text-center space-y-3">
-          <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
-            <AlertCircle className="w-7 h-7 text-amber-600" />
-          </div>
-          <h1 className="text-xl font-bold">{isNotFound ? 'Document not found' : 'Unable to load document'}</h1>
-          <p className="text-sm text-muted-foreground">
-            The link may have been cancelled or is incorrect. Please check the link or contact the sender.
-          </p>
+        <div className="max-w-md w-full space-y-3">
+          <h1 className="text-xl font-bold text-center">The document is not on your screen yet</h1>
+          <InlineErrorState
+            message={`This document could not be read: ${reason}. Not its name, not who it is addressed to, not whether it has already been signed — nothing here is answered, and none of it is a verdict on your link.`}
+            onRetry={refetch}
+          />
         </div>
       </div>
     );
@@ -120,6 +148,18 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 sm:py-10 space-y-5">
+        {/* What is below came out of a read that answered, and the refresh of it was refused. It is
+            still the truth this session has, but the document on the server may have moved since.
+            Signing stays deliberately possible: route.ts re-reads the request when the name is posted
+            and refuses one this signer already resolved, so the caveat names the risk instead of
+            taking the decision away from the signer halfway through typing it. */}
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so the document below is the last read: ${reason}. Its name, who it is addressed to, whether it has already been signed and the activity list all came from that read.`}
+            onRetry={refetch}
+          />
+        )}
+
         {finalState === 'signed' && (
           <div className="rounded-xl border border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/80 dark:bg-emerald-950/20 p-5 flex items-start gap-3">
             <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
