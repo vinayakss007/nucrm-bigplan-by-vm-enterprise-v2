@@ -7,6 +7,9 @@ vi.mock('@/drizzle/db', () => {
     const proxy = new Proxy(fn, {
       get(_t, prop) {
         if (prop === Symbol.toPrimitive || prop === 'then') return undefined;
+        // #3048: resetMonthlyCounters awaits .returning() and reads .length;
+        // keep the generic chain array-shaped enough for that.
+        if (prop === 'length') return 0;
         if (prop === 'transaction' && handleTransaction) {
           return (cb: (tx: unknown) => Promise<unknown>) => cb(makeChain());
         }
@@ -128,8 +131,8 @@ describe('lead-warming engine', () => {
   });
 
   describe('resetMonthlyCounters', () => {
-    it('completes without error', async () => {
-      await expect(resetMonthlyCounters()).resolves.toBeUndefined();
+    it('returns the reset row count without error (#3048)', async () => {
+      await expect(resetMonthlyCounters()).resolves.toBe(0);
     });
   });
 });

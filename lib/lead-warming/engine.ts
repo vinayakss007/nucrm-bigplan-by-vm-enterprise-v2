@@ -699,12 +699,25 @@ export async function seedSystemEvents(): Promise<number> {
 // ── Monthly Reset ─────────────────────────────────────────────────────────
 
 /**
- * Reset monthly counters for all schedule entries.
- * Called on the 1st of each month by cron.
+ * #3048: idempotent, catch-up-capable monthly reset.
+ *
+ * The old design was a one-shot reset that ran ONLY on a host-local
+ * `getDate() === 1` cron run: a single failed day-1 run (lock refused,
+ * deploy mid-run, DB blip) left the counters stale for the whole month, and
+ * the UTC month boundary drifted with server timezone.
+ *
+ * Now the staleness predicate lives in SQL — a row resets when its counter
+ * is non-zero and its last send predates the current UTC month. The cron
+ * calls this before processing on EVERY run, so any successful run on or
+ * after the 1st performs the reset, and a row already current this month is
+ * untouched. Returns the number of rows reset (0 on a normal mid-month run).
  */
-export async function resetMonthlyCounters(): Promise<void> {
-  await db.update(leadWarmingSchedule)
+export async function resetMonthlyCounters(): Promise<number> {
+  const reset = await db.update(leadWarmingSchedule)
     .set({ messagesThisMonth: 0, updatedAt: new Date() })
-    .where(sql`1=1`);
-  console.log('[lead-warming] Monthly counters reset');
+    .where(sql`${leadWarmingSchedule.messagesThisMonth} > 0 AND (${leadWarmingSchedule.lastMessageAt} IS NULL OR ${leadWarmingSchedule.lastMessageAt} < (date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'))`)
+    .returning({ id: leadWarmingSchedule.id });
+  const count = Array.isArray(reset) ? reset.length : 0;
+  if (count > 0) console.log(`[lead-warming] Monthly counters reset for ${count} schedule rows`);
+  return count;
 }

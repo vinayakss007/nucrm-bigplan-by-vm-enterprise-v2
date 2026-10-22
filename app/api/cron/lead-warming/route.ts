@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
       skippedContacts: 0,
     };
     const replyTotals = { processed: 0, errors: 0 };
-
-    const today = new Date();
-    const isMonthlyResetDay = today.getDate() === 1;
-    let monthlyReset = false;
+    let monthlyResetRows = 0;
 
     // lead_warming_campaigns, lead_warming_messages, lead_warming_schedule,
     // lead_warming_replies and contacts all enforce a plain tenant_isolation
@@ -56,6 +53,13 @@ export async function POST(req: NextRequest) {
     // returned a clean result. Each step therefore runs once per tenant under
     // that tenant's own context — see lib/cron/tenant-scope.ts.
     const sweep = await sweepTenants('cron/lead-warming', async () => {
+      // 0. #3048: monthly catch-up runs on EVERY cron execution, before the
+      // sends — the reset is idempotent (its SQL predicate only matches rows
+      // whose counter predates the current UTC month), so a failed day-1 run
+      // no longer stalls throttling until next month, and it must zero stale
+      // counts before today's sends read them.
+      monthlyResetRows += await resetMonthlyCounters();
+
       // 1. Process lead warming (send messages for today's events)
       const warmingResult = await processLeadWarming();
       warmingTotals.campaignsProcessed += warmingResult.campaignsProcessed;
@@ -69,20 +73,16 @@ export async function POST(req: NextRequest) {
       const replyResult = await analyzeUnprocessedReplies(50);
       replyTotals.processed += replyResult.processed;
       replyTotals.errors += replyResult.errors;
-
-      // 3. Reset monthly counters on the 1st of each month. lead_warming_schedule
-      // is tenant-isolated, so this has to run inside the tenant scope to touch
-      // anything; RLS limits each call to the current tenant's rows.
-      if (isMonthlyResetDay) {
-        await resetMonthlyCounters();
-        monthlyReset = true;
-      }
     });
 
-    const results: Record<string, unknown> = { warming: warmingTotals, replies: replyTotals };
-    if (monthlyReset) {
-      results['monthlyReset'] = true;
-    }
+    const results: Record<string, unknown> = {
+      warming: warmingTotals,
+      replies: replyTotals,
+      // #3048: keep the flag, add the row count so a stuck month is visible
+      // in the response instead of hinging on which calendar day ran.
+      monthlyReset: monthlyResetRows > 0,
+      monthlyResetRows,
+    };
 
     console.log('[cron/lead-warming] Completed:', JSON.stringify(results));
 
