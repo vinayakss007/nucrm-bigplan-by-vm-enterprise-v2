@@ -4,10 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockChat = vi.fn();
 const mockDbQuery = vi.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let dbUpdateChain: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _mockUpdateWhere: any;
+let dbUpdateChain: { set: ReturnType<typeof vi.fn> };
 
 vi.mock('@/lib/ai/gateway', () => ({
   chat: mockChat,

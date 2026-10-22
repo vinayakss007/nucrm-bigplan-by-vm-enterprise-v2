@@ -13,8 +13,7 @@ vi.stubGlobal('fetch', mockFetch);
 describe('notifications - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockChain: any = {
+    const mockChain: Record<string, unknown> = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
@@ -331,8 +330,7 @@ describe('metrics - comprehensive', () => {
 describe('webhooks - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockChain: any = {
+    const mockChain: Record<string, unknown> = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),

@@ -62,10 +62,8 @@ describe('formatCurrency', () => {
   });
 
   it('handles undefined/null gracefully', () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(formatCurrency(undefined as any)).toBeDefined();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(formatCurrency(null as any)).toBeDefined();
+    expect(formatCurrency(undefined as never)).toBeDefined();
+    expect(formatCurrency(null as never)).toBeDefined();
   });
 });
 

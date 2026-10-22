@@ -131,16 +131,17 @@ const DELETED_KB = { id: 'kb-deleted', tenantId: TENANT, title: 'Gone', slug: 'g
 const ACTIVE_ANN = { id: 'ann-active', title: 'Maintenance', content: 'c', type: 'info', isActive: true, target: 'all', startsAt: new Date(), endsAt: null, createdAt: new Date(), updatedAt: new Date(), deletedAt: null };
 const DELETED_ANN = { id: 'ann-deleted', title: 'Old News', content: 'c', type: 'info', isActive: false, target: 'all', startsAt: new Date(), endsAt: null, createdAt: new Date(), updatedAt: new Date(), deletedAt: new Date() };
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- test shim: withApiRoute widens each handler signature per route context type */
-async function getJson(url: string, route: { GET: (...args: any[]) => Promise<any> }, params?: string): Promise<{ res: Response; body: Record<string, unknown> }> {
+type GetRouteShim = {
+  GET: (req: NextRequest, ctx?: { params: Promise<Record<string, string>> }) => Promise<Response | void | undefined>;
+};
+async function getJson(url: string, route: GetRouteShim, params?: string): Promise<{ res: Response; body: Record<string, unknown> }> {
   const fetchRes = params
-    ? await (route.GET as any)(new Request(url) as NextRequest, { params: Promise.resolve({ id: params }) })
+    ? await route.GET(new Request(url) as NextRequest, { params: Promise.resolve({ id: params }) })
     : await route.GET(new Request(url) as NextRequest);
   const res = fetchRes as Response;
   const text = await res.text();
   return { res, body: text ? JSON.parse(text) : {} };
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -226,8 +227,8 @@ describe('segments reads (#2291)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sequence_id: '00000000-0000-4000-8000-000000000000' }),
     }) as NextRequest;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped handler signature
-    const res = await (segmentEnrollRoute.POST as any)(req, { params: Promise.resolve({ id: '50000000-0000-0000-0000-0000000000a2' }) }) as Response;
+    const post = segmentEnrollRoute.POST as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+    const res = await post(req, { params: Promise.resolve({ id: '50000000-0000-0000-0000-0000000000a2' }) });
     expect(res.status).toBe(404);
   });
 });
