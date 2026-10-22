@@ -11,7 +11,7 @@ import { tenantAiCredits } from '@/drizzle/schema/ai';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory } from '@/lib/ai/credits';
+import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory, setCreditStatus } from '@/lib/ai/credits';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { parseLimitOffset } from '@/lib/api/query-params';
@@ -132,14 +132,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (!tenant_id) return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
 
-      const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-      await db
-        .update(tenantAiCredits)
-        .set({ status: 'suspended', updatedAt: new Date() })
-        .where(and(
-          eq(tenantAiCredits.tenantId, tenant_id),
-          eq(tenantAiCredits.billingPeriod, period),
-        ));
+      // #3081: upsert, not a bare UPDATE — on a fresh billing period no row
+      // existed yet, the update matched 0 rows, and the route lied that the
+      // tenant was suspended until the next auto-created 'active' row.
+      await setCreditStatus(tenant_id, 'suspended');
 
       return NextResponse.json({ success: true, message: 'Tenant AI access suspended' });
     }
@@ -151,14 +147,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (!tenant_id) return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
 
-      const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-      await db
-        .update(tenantAiCredits)
-        .set({ status: 'active', updatedAt: new Date() })
-        .where(and(
-          eq(tenantAiCredits.tenantId, tenant_id),
-          eq(tenantAiCredits.billingPeriod, period),
-        ));
+      await setCreditStatus(tenant_id, 'active');
 
       return NextResponse.json({ success: true, message: 'Tenant AI access reactivated' });
     }
