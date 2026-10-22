@@ -104,8 +104,7 @@ async function notifyWith(
     type: 'system',
     title: 'Something happened',
     ...overrides,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any);
+  } as never);
   expect(lastInsertValues).not.toBeNull();
   return lastInsertValues as Record<string, unknown>;
 }

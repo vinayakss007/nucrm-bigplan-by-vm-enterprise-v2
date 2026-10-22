@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Regression tests for handleDeal() in app/api/webhooks/inbound/route.ts.
  *
@@ -36,10 +35,12 @@ const h = vi.hoisted(() => ({
   returningQueue: [] as unknown[][],
 }));
 
+type OpRec = { op: string; table?: unknown; payload?: unknown; where?: unknown };
+
 vi.mock('@/drizzle/db', () => {
   const reader = () => {
-    const rec: any = { op: 'select' };
-    const self: any = {
+    const rec: OpRec = { op: 'select' };
+    const self: Record<string, unknown> = {
       from: (t: unknown) => {
         rec.table = t;
         h.ops.push(rec);
@@ -49,7 +50,7 @@ vi.mock('@/drizzle/db', () => {
         rec.where = c;
         return self;
       },
-      then: (res: any, rej?: any) => Promise.resolve(h.selectQueue.shift() ?? []).then(res, rej),
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(h.selectQueue.shift() ?? []).then(res, rej),
     };
     for (const m of ['innerJoin', 'leftJoin', 'groupBy', 'orderBy', 'limit', 'offset']) {
       self[m] = () => self;
@@ -58,9 +59,9 @@ vi.mock('@/drizzle/db', () => {
   };
 
   const record = (op: string, table: unknown) => {
-    const rec: any = { op, table };
+    const rec: OpRec = { op, table };
     h.ops.push(rec);
-    const chain: any = {
+    const chain: Record<string, unknown> = {
       set: (p: unknown) => {
         rec.payload = p;
         return chain;
@@ -71,12 +72,12 @@ vi.mock('@/drizzle/db', () => {
       },
       where: () => chain,
       returning: async () => h.returningQueue.shift() ?? [{ id: 'new-id' }],
-      then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
     };
     return chain;
   };
 
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: () => reader(),
     insert: (table: unknown) => record('insert', table),
     update: (table: unknown) => record('update', table),
@@ -89,7 +90,7 @@ vi.mock('@/drizzle/db', () => {
       deals: { findFirst: async () => h.findFirst['deals'] },
       tasks: { findFirst: async () => h.findFirst['tasks'] },
     },
-    transaction: async (cb: any) => cb(db),
+    transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };
 });

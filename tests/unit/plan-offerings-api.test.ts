@@ -39,8 +39,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('Plan Offerings API', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockDb: any;
+  let mockDb: { select: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     vi.clearAllMocks();
