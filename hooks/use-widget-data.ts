@@ -56,7 +56,7 @@ export function useWidgetData<T = unknown>(
   options?: UseWidgetDataOptions
 ): DashboardDataState<T> & { refresh: () => void } {
   const [state, setState] = useState<DashboardDataState<T>>({
-    data: null, loading: true, error: null, stale: false,
+    data: null, loading: true, error: null, stale: false, lastUpdatedAt: null,
   })
 
   const cacheKey = `dash_widget_${endpoint}`
@@ -73,9 +73,17 @@ export function useWidgetData<T = unknown>(
     try {
       const cached = sessionStorage.getItem(cacheKey)
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached)
+        const { data, timestamp } = JSON.parse(cached) as { data: T; timestamp: number }
         if (Date.now() - timestamp < ttl) {
-          setState({ data, loading: false, error: null, stale: false })
+          // #2872: `error` is deliberately NOT cleared here. This branch paints a
+          // payload that was read successfully, but it says nothing about the
+          // refresh about to run on top of it — if that refresh fails again, the
+          // refusal the tile already reported is still the truth, and blanking it
+          // for the length of every round-trip would make the caveat blink once
+          // per interval. The success below is what clears it.
+          setState(prev => ({
+            ...prev, data, loading: false, stale: false, lastUpdatedAt: timestamp,
+          }))
           showedCache = true
         }
       }
@@ -92,23 +100,42 @@ export function useWidgetData<T = unknown>(
     try {
       // #1993: shared round-trip per endpoint instead of one fetch per widget.
       const payload = await dedupedWidgetFetch(endpoint)
+      // One clock reading for this successful fetch, shared with the cache entry so
+      // the payload the tile paints and the `lastUpdatedAt` the caveat quotes cannot
+      // drift apart.
+      const readAt = Date.now()
 
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify({
-          data: payload, timestamp: Date.now(),
+          data: payload, timestamp: readAt,
         }))
       } catch { /* Fallback to default on corrupted storage data */ }
 
       if (!abort.signal.aborted) {
-        setState({ data: payload as T, loading: false, error: null, stale: false })
+        setState({
+          data: payload as T, loading: false, error: null, stale: false,
+          lastUpdatedAt: readAt,
+        })
       }
     } catch (err) {
       if (abort.signal.aborted) return
+      const message = (err as Error).message
       if (!isBackground) {
-        setState(prev => ({
-          ...prev, error: (err as Error).message, loading: false,
-        }))
+        setState(prev => ({ ...prev, error: message, loading: false }))
+        return
       }
+      // #2872: this used to be `if (!isBackground) { …record… }` with no `else`, so
+      // a BACKGROUND failure was dropped on the floor — `error` stayed `null` and
+      // `data` stayed whatever the last successful read had returned, and the tile
+      // went on reporting those figures as though nothing had happened. Background is
+      // the normal path on a live dashboard, not a rare one: `setInterval(() =>
+      // doFetch(true), ttl)` runs on every registered widget's own `refreshInterval`
+      // (twice a minute for `stats-contacts`), and the #1993 visibility handler calls
+      // `doFetch(true)` too. Record the refusal; leave `data` alone, because what is
+      // on screen really is the last read. `loading` is left alone as well — a tick
+      // that failed after the payload landed is not a load, and flipping it would
+      // swap the tile's caveat for a skeleton over a screen the user is reading.
+      setState(prev => ({ ...prev, error: message, stale: true }))
     }
   }, [endpoint, cacheKey, ttl])
 

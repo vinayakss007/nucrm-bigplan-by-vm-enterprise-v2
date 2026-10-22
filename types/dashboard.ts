@@ -33,6 +33,16 @@ export interface DashboardDataState<T> {
   loading: boolean
   error: string | null
   stale: boolean
+  /**
+   * When `data` was last successfully read, in epoch milliseconds — the same value
+   * the hook writes into its `sessionStorage` entry, so a payload and its read time
+   * come from one clock reading instead of two.
+   *
+   * #2872: a tile still holding a payload whose refresh was refused has to say how
+   * old that payload is, and `Date.now()` at render is not that number — it would
+   * date the caveat, not the read. `null` means nothing has landed yet.
+   */
+  lastUpdatedAt: number | null
 }
 
 export type LayoutSource = 'user' | 'admin' | 'industry' | 'plan' | 'role'
