@@ -14,12 +14,10 @@ vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
 
 const executeMock = vi.fn();
 vi.mock('@/drizzle/db', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: { execute: (...args: any[]) => executeMock(...args) },
+  db: { execute: (...args: unknown[]) => executeMock(...args) },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeReq(params: Record<string, string> = {}): any {
+function makeReq(params: Record<string, string> = {}) {
   return { nextUrl: { searchParams: new URLSearchParams(params) } };
 }
 
