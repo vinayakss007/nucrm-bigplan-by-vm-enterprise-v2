@@ -52,6 +52,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2999: registering a plugin stores attacker-chosen baseUrl + encrypted
+    // credentials that later runs execute — admin-only, like the webhooks twin.
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(request) as Record<string, unknown>;
 
