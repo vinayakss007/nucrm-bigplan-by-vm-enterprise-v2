@@ -20,7 +20,7 @@
 > own **22 pending at `32d252b9`** and PP-060's 24 — see PP-057's 2026-10-12 bullet. And the deploy-hop
 > history now has its full walk (**1,359 runs · 3 successes**, **#2582**), superseding PP-060's windowed
 > 778/0 and PP-063's 1,319. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
-> rule's line here (`docs/infra/PREPROD-ISSUE-REGISTER.md:5429`, re-pinned 2026-10-22 from `:5428`: **#2938**'s PP-045 re-pin grew this file above it and nothing re-read the number — it was already off by one on main when **#2957**'s re-pin pass found it, which is the nineteenth such re-pin and the one #3014 wants to be the last: a pointer from this file into itself can only be kept true by whoever next edits the header, and the permanent fix is to name the rule by its heading text instead of a line; re-pinned 2026-10-18 from `:5312`: **#2825**, **#2829**, **#2587** and **#2530** part 2 each grew this file above it; re-pinned again 2026-10-21 from `:5425`: this tree's own PP-045 re-pin added three lines above it) — the eighteenth such re-pin; **#2566**,
+> rule's line here (the keep-the-entry bullet, at `:5433` as this sentence was written; the superseded numbers were `:5312` → `:5428` → `:5429`, and **#3011** re-pinned it twice in one pass — `check-register-coords` caught the second within the same edit, because the sentence above it that names the `tenant_id` call grew four lines — which is the eighteenth, nineteenth and twentieth re-pin of a pointer this file holds on itself, and the demonstration #3014 asks to be taken seriously: a self-citation in a document that grows at the top cannot be kept true, so from here the rule is named by its heading text and the number is carried only as history, not as a live coordinate; the earlier chain was re-pinned 2026-10-18 from `:5312`: **#2825**, **#2829**, **#2587** and **#2530** part 2 each grew this file above it; re-pinned again 2026-10-21 from `:5425`: this tree's own PP-045 re-pin added three lines above it) — the eighteenth such re-pin; **#2566**,
 > **#2569**, **#2578** and **#2581** each re-pin the same sentence from their own trees, so whichever docs
 > PR merges last re-derives it. Filed beside the host inventory **#2585**. **PP-075** and **PP-077** sit
 > with the open PRs **#2569** and **#2578**; **PP-076** shipped as **#2581**, so this takes **078** and **079** is free.
@@ -2132,7 +2132,11 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   admins (`:437`, `:444`, `:454`). Of the 120 insert routes, **0** carry a workspace guard.
 - **The per-tenant super-admin panel is unaffected — the useful distinction.** Of **52** route files under
   `app/api/superadmin/**`, **0** write `ctx.tenantId` into a tenant column; they take the target tenant from the
-  request (`tenant_id` from body/query at 12 sites), e.g. `app/superadmin/tenants/[id]/settings/page.tsx:85`.
+  request (`tenant_id` from body/query at 12 sites), e.g. the `saveMutation` body in
+  `app/superadmin/tenants/[id]/settings/page.tsx` (measured at `:85` on 2026-10-19; the line number is
+  deliberately not carried forward — #2872's slices keep rewriting that page's failure handling and the
+  body is a few lines below it each time, so the sentence names the call by what it is, which is what
+  #3014 asks for on a pointer that has no owner other than the file it points into).
   Only 4 superadmin routes touch `ctx.tenantId` at all (`tickets`, `backups`, `me`, `join-tenant`). The panel's
   real exposure is the **2** pages that call `/api/tenant/*` directly — `app/superadmin/settings/page.tsx` (2
   calls) and `app/superadmin/billing/dunning/page.tsx` (1) — the same shape PP-045 flagged.
