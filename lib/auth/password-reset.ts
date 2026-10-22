@@ -101,10 +101,11 @@ export async function requestPasswordReset(
     // Build reset URL
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
     
-    // Send email (fire and forget, but log errors)
+    // Send email. #3076: sendEmail resolves {success} and never throws
+    // (#2422 doctrine), so the old try/catch was dead code and the "sent"
+    // log fired even on provider rejection.
     if (process.env.RESEND_API_KEY || process.env.SMTP_HOST) {
-      try {
-        await sendEmail({
+        const emailResult = await sendEmail({
           to: user.email,
           subject: 'Reset your password — NuCRM',
           html: `
@@ -130,11 +131,9 @@ export async function requestPasswordReset(
           `,
           text: `Password Reset\n\nHi ${user.fullName || 'there'},\n\nWe received a request to reset your password. Visit this link to create a new password:\n\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_EXPIRY_HOURS} hour(s). If you didn't request this, you can safely ignore this email.`,
         });
-        
-        logger.info('Password reset email sent', { email: user.email });
-      } catch (emailErr) {
-        devLogger.error(emailErr as Error, '[password-reset] Failed to send email');
-      }
+
+        if (emailResult.success) logger.info('Password reset email sent', { email: user.email });
+        else devLogger.error(new Error(`Password reset email rejected: ${emailResult.error ?? 'provider failure'}`), '[password-reset] email NOT sent');
     } else {
       // In development without email configured, surface the token in the
       // server console only — never the full reset URL (#1259: URLs leak via

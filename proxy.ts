@@ -208,6 +208,11 @@ const PUBLIC_PATHS = [
   '/portal', '/portal/tickets', '/portal/invoices', '/portal/kb',
   '/api/auth/login', '/api/auth/signup', '/api/auth/logout',
   '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-email',
+  // #3076 (#2415 class): /api/auth/password-reset/{request,confirm} were the
+  // only reset endpoints missing from this list — a logged-out caller, the
+  // ONLY audience for password reset, was 401'd at the edge before the
+  // handler ran. Both self-limit via checkRateLimit.
+  '/api/auth/password-reset',
   '/api/auth/resend-verification', '/api/auth/accept-invite', '/api/auth/invite-details',
   '/api/auth/2fa/setup', '/api/auth/2fa/verify', '/api/auth/2fa/disable',
   '/api/auth/csrf-token', '/api/auth/sso',

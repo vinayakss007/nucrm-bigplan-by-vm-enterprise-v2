@@ -152,6 +152,10 @@ describe('proxy middleware', () => {
     const credentialRoutes = [
       '/api/auth/oauth/token',
       '/api/auth/oauth/revoke',
+      // #3076: password reset is by definition an unauthenticated flow —
+      // the edge 401'ing it meant no caller could ever reach the handler.
+      '/api/auth/password-reset/request',
+      '/api/auth/password-reset/confirm',
       '/api/webhooks/razorpay',
       '/api/webhooks/payu',
       '/api/webhooks/telegram/bot',
