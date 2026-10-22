@@ -16,8 +16,8 @@ import type { NextRequest } from 'next/server';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OTHER = '99999999-9999-4999-8999-999999999999';
@@ -27,14 +27,14 @@ const HOOK_ID = '33333333-3333-4333-8333-333333333333';
 const SECRET = 'whsec_test_secret';
 
 const dialect = new PgDialect();
-const render = (node: unknown) => dialect.sqlToQuery(node as Any).sql;
-const paramsOf = (node: unknown) => dialect.sqlToQuery(node as Any).params;
+const render = (node: unknown) => dialect.sqlToQuery(node as Loose).sql;
+const paramsOf = (node: unknown) => dialect.sqlToQuery(node as Loose).params;
 
 const h = vi.hoisted(() => ({
   nodes: [] as Array<{ kind: string; table: unknown; where?: unknown; set?: unknown }>,
   // Which rows each SELECT answers, chosen by the table it reads from.
   rows: { webhookQueue: [] as unknown[], integrations: [] as unknown[] },
-  sent: [] as Array<{ url: string; init: Any }>,
+  sent: [] as Array<{ url: string; init: Loose }>,
   // What an UPDATE ... RETURNING answers. `[]` means "the write matched no row",
   // which the handler has to be able to observe. Reset per case in beforeEach,
   // because this object survives across tests in the file.
@@ -43,25 +43,25 @@ const h = vi.hoisted(() => ({
   throwKind: null as string | null,
 }));
 
-function makeChain(kind: string, table: unknown): Any {
+function makeChain(kind: string, table: unknown): Loose {
   let where: unknown;
   let set: unknown;
   const record = () => h.nodes.push({ kind, table, where, set });
-  const self: Any = {
+  const self: Loose = {
     from: (t: unknown) => makeChain(kind, t),
     where: (w: unknown) => { where = w; return self; },
     set: (s: unknown) => { set = s; return self; },
     limit: () => self,
     orderBy: () => self,
     returning: () => { record(); return Promise.resolve(h.returning); },
-    then: (res: Any, rej?: Any) => {
+    then: (res: Loose, rej?: Loose) => {
       record();
       const rows = kind === 'select'
         ? (table === webhookQueue ? h.rows.webhookQueue : h.rows.integrations)
         : [{}];
       return Promise.resolve(rows).then(res, rej);
     },
-    catch: (rej: Any) => Promise.resolve([]).catch(rej),
+    catch: (rej: Loose) => Promise.resolve([]).catch(rej),
   };
   return self;
 }
@@ -98,7 +98,7 @@ vi.mock('@/lib/security/ssrf', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/security/ssrf')>();
   return {
     ...actual,
-    safeFetch: async (url: string, init: Any) => {
+    safeFetch: async (url: string, init: Loose) => {
       h.sent.push({ url, init });
       if (h.throwKind === 'ssrf') throw new actual.SsrfBlockedError('private address');
       if (h.throwKind === 'network') throw new Error('fetch failed: ECONNREFUSED');
@@ -107,7 +107,7 @@ vi.mock('@/lib/security/ssrf', async (importOriginal) => {
   };
 });
 
-const queueRow = (over: Any = {}) => ({
+const queueRow = (over: Loose = {}) => ({
   id: QUEUE_ID,
   webhookId: HOOK_ID,
   url: 'https://hooks.example/crm',
@@ -118,7 +118,7 @@ const queueRow = (over: Any = {}) => ({
   attempt: 1,
   ...over,
 });
-const parentRow = (over: Any = {}) => ({
+const parentRow = (over: Loose = {}) => ({
   id: HOOK_ID, isActive: true, deletedAt: null, config: { url: 'https://hooks.example/crm', secret: SECRET },
   ...over,
 });

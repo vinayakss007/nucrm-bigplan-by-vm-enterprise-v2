@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/usage/tracker', () => ({
@@ -10,7 +9,7 @@ vi.mock('@/lib/usage/notifications', () => ({
 }));
 vi.mock('next/server', () => ({
   NextResponse: {
-    json: vi.fn((body: any, init?: any) => ({
+    json: vi.fn((body: unknown, init?: { status?: number }) => ({
       _body: body,
       _status: init?.status ?? 200,
       json: async () => body,
@@ -22,7 +21,7 @@ vi.mock('next/server', () => ({
 import { getUsageReport, recordViolation } from '@/lib/usage/tracker';
 import { notifyLimitHit } from '@/lib/usage/notifications';
 
-function ctx(overrides: Partial<any> = {}) {
+function ctx(overrides: Record<string, unknown> = {}) {
   return {
     userId: 'u1',
     tenantId: 't1',
@@ -31,7 +30,7 @@ function ctx(overrides: Partial<any> = {}) {
     isAdmin: false,
     isSuperAdmin: false,
     ...overrides,
-  } as any;
+  } as never;
 }
 
 beforeEach(() => {

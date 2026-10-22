@@ -58,15 +58,9 @@
   "tests/unit/tenant-audit-api.test.ts": 1,
   "tests/unit/tenant-audit-filters.test.ts": 1,
   "tests/unit/tenant-request-context.test.ts": 1,
-  "tests/unit/usage-middleware.test.ts": 1,
   "tests/unit/use-notifications.test.ts": 1,
-  "tests/unit/webhook-aliveness-lib-2390.test.ts": 1,
-  "tests/unit/webhook-delete-route-2390.test.ts": 1,
   "tests/unit/webhook-inbound-audit.test.ts": 1,
-  "tests/unit/webhook-retry-schema-2391.test.ts": 1,
-  "tests/unit/webhook-test-signature-2399.test.ts": 1,
   "tests/unit/webhooks-delivery-fix.test.ts": 1,
-  "tests/unit/write-atomicity-2530.test.ts": 1,
   "types/dashboard.ts": 1,
   "sentry-pii-scrub.ts": 1
 }

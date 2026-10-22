@@ -22,8 +22,8 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const HOOK = '33333333-3333-4333-8333-333333333333';
@@ -43,14 +43,14 @@ const h = vi.hoisted(() => ({
 }));
 
 const dialect = new PgDialect();
-const render = (node: unknown) => dialect.sqlToQuery(node as Any).sql;
+const render = (node: unknown) => dialect.sqlToQuery(node as Loose).sql;
 
 /** A chainable recorder: drizzle builds the statement, we keep the pieces. */
-function makeChain(kind: string, table: unknown): Any {
+function makeChain(kind: string, table: unknown): Loose {
   let where: unknown;
   let set: unknown;
   const record = () => h.nodes.push({ kind, table, where, set });
-  const self: Any = {
+  const self: Loose = {
     from: (t: unknown) => makeChain(kind, t),
     where: (w: unknown) => { where = w; return self; },
     set: (s: unknown) => { set = s; return self; },
@@ -62,22 +62,22 @@ function makeChain(kind: string, table: unknown): Any {
     innerJoin: () => self,
     leftJoin: () => self,
     returning: () => { record(); return Promise.resolve(h.updateRows); },
-    then: (res: Any, rej?: Any) => {
+    then: (res: Loose, rej?: Loose) => {
       record();
       const out = kind.endsWith('update') || kind.endsWith('insert') ? h.updateRows : h.selectRows;
       return Promise.resolve(out).then(res, rej);
     },
-    catch: (rej: Any) => Promise.resolve(h.selectRows).catch(rej),
+    catch: (rej: Loose) => Promise.resolve(h.selectRows).catch(rej),
   };
   return self;
 }
 
 vi.mock('@/drizzle/db', () => {
-  const db: Any = {
+  const db: Loose = {
     select: () => { const c = makeChain('select', undefined); c.from = (t: unknown) => makeChain('select', t); return c; },
     insert: (t: unknown) => makeChain('insert', t),
     update: (t: unknown) => makeChain('update', t),
-    transaction: (fn: Any) => fn({
+    transaction: (fn: Loose) => fn({
       select: () => { const c = makeChain('tx.select', undefined); c.from = (t: unknown) => makeChain('tx.select', t); return c; },
       update: (t: unknown) => makeChain('tx.update', t),
       insert: (t: unknown) => makeChain('tx.insert', t),
@@ -198,7 +198,7 @@ describe('drainDeletedWebhookQueue (#2390)', () => {
     expect(h.sent).toEqual([]);
     const upd = stmt('update', webhookQueue);
     expect(upd.set).toMatchObject({ status: 'dead_letter', nextRetryAt: null });
-    expect(typeof (upd.set as Any).errorMessage).toBe('string');
+    expect(typeof (upd.set as Loose).errorMessage).toBe('string');
   });
 
   it('drains only a deleted parent — a paused one keeps its queue', async () => {
@@ -232,7 +232,7 @@ describe('retry status vocabulary (#2390)', () => {
     await retryFailedWebhooks();
 
     expect(h.sent).toEqual(['https://customer.example/hook']);
-    const statuses = h.nodes.filter((n) => n.kind === 'update').map((n) => (n.set as Any).status);
+    const statuses = h.nodes.filter((n) => n.kind === 'update').map((n) => (n.set as Loose).status);
     // 'success' was a second spelling of the state the send path and the
     // delivered_count subquery call 'delivered'.
     expect(statuses).toContain('delivered');
