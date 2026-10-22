@@ -239,8 +239,7 @@ function stripeEvent(type: string, object: Record<string, unknown>): NextRequest
   return {
     headers: { get: (h: string) => (h === 'stripe-signature' ? 't=1,v1=sig' : null) },
     text: async () => body,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  } as unknown as NextRequest;
 }
 
 beforeEach(() => {

@@ -24,8 +24,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const HOOK = '33333333-3333-4333-8333-333333333333';
@@ -35,19 +35,19 @@ const TARGET = 'https://receiver.example/hook';
 const h = vi.hoisted(() => ({
   findFirst: null as unknown,
   findFirstWhere: undefined as unknown,
-  safeFetch: [] as Array<{ url: string; init: Any }>,
+  safeFetch: [] as Array<{ url: string; init: Loose }>,
   rateLimitArgs: [] as string[],
   rateLimitResult: null as unknown,
 }));
 
 const dialect = new PgDialect();
-const render = (node: unknown) => dialect.sqlToQuery(node as Any).sql;
+const render = (node: unknown) => dialect.sqlToQuery(node as Loose).sql;
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
       integrations: {
-        findFirst: (opts: Any) => {
+        findFirst: (opts: Loose) => {
           h.findFirstWhere = opts?.where;
           return Promise.resolve(h.findFirst);
         },
@@ -70,7 +70,7 @@ vi.mock('@/lib/api/mutating-rate-limit', () => ({
   },
 }));
 vi.mock('@/lib/security/ssrf', () => ({
-  safeFetch: (url: string, init: Any) => {
+  safeFetch: (url: string, init: Loose) => {
     h.safeFetch.push({ url, init });
     return Promise.resolve({ ok: true, status: 200, text: async () => 'accepted' });
   },

@@ -20,8 +20,8 @@ import type { NextRequest } from 'next/server';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -37,13 +37,13 @@ const h = vi.hoisted(() => ({
 }));
 
 const dialect = new PgDialect();
-const render = (node: unknown) => dialect.sqlToQuery(node as Any).sql;
+const render = (node: unknown) => dialect.sqlToQuery(node as Loose).sql;
 
-function makeChain(kind: string, table: unknown): Any {
+function makeChain(kind: string, table: unknown): Loose {
   let where: unknown;
   let set: unknown;
   const record = () => h.nodes.push({ kind, table, where, set });
-  const self: Any = {
+  const self: Loose = {
     from: (t: unknown) => makeChain(kind, t),
     where: (w: unknown) => { where = w; return self; },
     set: (s: unknown) => { set = s; return self; },
@@ -53,11 +53,11 @@ function makeChain(kind: string, table: unknown): Any {
     offset: () => self,
     groupBy: () => self,
     returning: () => { record(); return Promise.resolve(h.updateRows); },
-    then: (res: Any, rej?: Any) => {
+    then: (res: Loose, rej?: Loose) => {
       record();
       return Promise.resolve(kind.endsWith('update') ? h.updateRows : h.selectRows).then(res, rej);
     },
-    catch: (rej: Any) => Promise.resolve(h.selectRows).catch(rej),
+    catch: (rej: Loose) => Promise.resolve(h.selectRows).catch(rej),
   };
   return self;
 }
@@ -67,7 +67,7 @@ vi.mock('@/drizzle/db', () => ({
     select: () => { const c = makeChain('select', undefined); c.from = (t: unknown) => makeChain('select', t); return c; },
     update: (t: unknown) => makeChain('update', t),
     insert: (t: unknown) => makeChain('insert', t),
-    transaction: (fn: Any) => {
+    transaction: (fn: Loose) => {
       h.txUsed = true;
       return fn({
         select: () => { const c = makeChain('tx.select', undefined); c.from = (t: unknown) => makeChain('tx.select', t); return c; },
@@ -75,7 +75,7 @@ vi.mock('@/drizzle/db', () => ({
         insert: (t: unknown) => makeChain('tx.insert', t),
       });
     },
-    query: { integrations: { findFirst: (opts: Any) => { h.findFirstWhere = opts?.where; return Promise.resolve(h.findFirst); } } },
+    query: { integrations: { findFirst: (opts: Loose) => { h.findFirstWhere = opts?.where; return Promise.resolve(h.findFirst); } } },
   },
 }));
 
@@ -90,7 +90,7 @@ vi.mock('@/lib/api/validate', () => ({
   readJsonBody: (req: Request) => Promise.resolve(req.json().catch(() => ({}))),
   // `validateBody` is synchronous in the real module; returning a Promise here
   // would make `validated.data` undefined and turn the route into a 500.
-  validateBody: (_schema: Any, body: Any) => ({ data: body ?? {} }),
+  validateBody: (_schema: Loose, body: Loose) => ({ data: body ?? {} }),
 }));
 vi.mock('@/lib/api/schemas', () => ({
   createWebhookSchema: {}, updateWebhookSchema: {},
@@ -101,7 +101,7 @@ vi.mock('@/lib/api-error', () => ({
   apiError: (err: unknown) => NextResponse.json({ error: String(err) }, { status: 500 }),
 }));
 
-function req(url: string, init?: Any) {
+function req(url: string, init?: Loose) {
   return new Request(url, init) as unknown as NextRequest;
 }
 const params = { params: Promise.resolve({ id: HOOK }) };
