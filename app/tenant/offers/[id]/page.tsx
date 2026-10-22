@@ -13,6 +13,7 @@ import {
   AlertCircle, Mail, Calendar, Loader2, ExternalLink, Ban,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
 interface Quote {
@@ -71,7 +72,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   // #1328: detail read via TanStack Query (offer is backed by the quote record).
   const OFFER_QUERY = ['tenant', 'offers', id] as const;
-  const { data, isLoading: loading, error: loadError } = useApiQuery<OfferResponse | Quote>(
+  const { data, isLoading: loading, error: loadError, refetch } = useApiQuery<OfferResponse | Quote>(
     OFFER_QUERY,
     `/api/tenant/quotes/${id}`,
     { enabled: !!id },
@@ -81,8 +82,17 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
     resp && 'quote' in resp ? resp.quote : (data as Quote | undefined);
   const items: LineItem[] = resp?.line_items ?? resp?.lineItems ?? [];
 
-  // Displayed error combines the initial load failure and any action error.
-  const error = actionError ?? (loadError ? (loadError.message || 'Failed to load offer') : null);
+  // #2872: the read and the writes used to share one displayed-error variable, the action's
+  // message falling back to a generic outage sentence. A refresh refused right after a send
+  // therefore announced that the offer could not be loaded, over an offer the page was still
+  // showing — and an action failure hid the read failure whenever both were set. The write keeps
+  // its own `actionError` channel below; the read gets the two states one flag could not express.
+  // Neither send nor cancel is gated on staleness: both post to this offer's id, and the server
+  // answers 409 from the row's real status.
+  const failed = Boolean(loadError) && !data;
+  const notFound = failed && loadError?.status === 404;
+  const stale = Boolean(loadError) && Boolean(data);
+  const reason = loadError?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: OFFER_QUERY });
 
@@ -121,7 +131,9 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
   const sentToEmail = (offerMeta['sent_to_email'] ?? null) as string | null;
   const acceptedByEmail = (offerMeta['accepted_by_email'] ?? null) as string | null;
   const declineReason = (offerMeta['decline_reason'] ?? null) as string | null;
-  const viewedCount = Number(offerMeta['viewed_count'] ?? 0);
+  // #2872: the view counter is optional metadata, so an offer whose payload never carried it
+  // prints `—` in the Lifecycle card rather than claiming the buyer did not open it.
+  const viewedCount = offerMeta['viewed_count'] == null ? null : Number(offerMeta['viewed_count']);
 
   const publicLink = publicToken
     ? (typeof window !== 'undefined'
@@ -158,8 +170,31 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
   if (loading) {
     return <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading…</div>;
   }
+  // The read never answered, and the server was never asked whether this offer exists — so the
+  // sentence below is not available here, and no action may be offered against an id whose
+  // status this session did not read. A 404 is the opposite: the answer was "no such offer".
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <Link href="/tenant/offers" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" />Back to offers
+        </Link>
+        <InlineErrorState message={`Failed to load this offer: ${reason}`} onRetry={() => void refetch()} />
+      </div>
+    );
+  }
   if (!quote) {
-    return <div className="text-center py-12 text-muted-foreground">Offer not found</div>;
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. The offer may have been cancelled or deleted since it last answered — that is not the same as never loading.`}
+            onRetry={() => void refetch()}
+          />
+        )}
+        <div className="text-center py-12 text-muted-foreground">Offer not found</div>
+      </div>
+    );
   }
 
   const status = quote.status;
@@ -175,6 +210,14 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
         <ArrowLeft className="w-4 h-4" />Back to offers
       </Link>
 
+      {/* The offer stayed on screen; only the refresh after a send or a cancel was refused. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this offer, so what is below is the last read: ${reason}. A view, an acceptance or a decline the buyer made on the link since this was fetched is not shown here, and neither is an edit made elsewhere or a cancel that took the link down — the actions below still go to the server, which answers on the offer's real status.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-mono text-muted-foreground mb-1">{quote.quoteNumber ?? '—'}</p>
@@ -187,7 +230,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
                 Sent to <span className="font-medium">{sentToEmail}</span>
               </span>
             )}
-            {viewedCount > 0 && (
+            {(viewedCount ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400">
                 <Eye className="w-3 h-3" />Viewed {viewedCount}×
               </span>
@@ -225,10 +268,12 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+      {/* The page's own writes, in their own words: what a refused send or cancel reported,
+          never what the read could not confirm. */}
+      {actionError && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{actionError}</span>
         </div>
       )}
 
@@ -346,7 +391,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Lifecycle</h2>
             <Field icon={Calendar} label="Created"  value={new Date(quote.createdAt).toLocaleString()} />
             <Field icon={Send}     label="Sent"     value={quote.sentAt ? new Date(quote.sentAt).toLocaleString() : '—'} />
-            <Field icon={Eye}      label="Views"    value={String(viewedCount)} />
+            <Field icon={Eye}      label="Views"    value={viewedCount === null ? '—' : String(viewedCount)} />
             <Field icon={CheckCircle2} label="Accepted" value={quote.acceptedAt ? new Date(quote.acceptedAt).toLocaleString() : '—'} />
             <Field icon={XCircle}  label="Declined" value={quote.declinedAt ? new Date(quote.declinedAt).toLocaleString() : '—'} />
             <Field icon={Clock}    label="Expires"  value={quote.expiresAt ? new Date(quote.expiresAt).toLocaleString() : '—'} />
