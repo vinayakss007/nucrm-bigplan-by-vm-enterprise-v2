@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * `tryApiKeyAuth` used to read `api_keys` on the bare `db` handle. The only
  * policy on that table is `tenant_isolation`, which compares tenant_id to
@@ -17,8 +16,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const order: string[] = [];
 
-const chain: any = vi.hoisted(() => {
-  const c: any = {};
+const chain: Record<string, unknown> = vi.hoisted(() => {
+  const c: Record<string, unknown> = {};
   c.select = vi.fn(() => c);
   c.from = vi.fn(() => c);
   c.innerJoin = vi.fn(() => c);
@@ -27,7 +26,7 @@ const chain: any = vi.hoisted(() => {
   c.set = vi.fn(() => c);
   c.insert = vi.fn(() => c);
   c.values = vi.fn(async () => { order.push('usage-insert'); return c; });
-  c.transaction = vi.fn(async (cb: (tx: any) => Promise<any>) => {
+  c.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => {
     order.push('usage-tx');
     return cb(c);
   });
@@ -46,7 +45,7 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
 vi.mock('@/lib/db/rls', () => ({
-  withAuthLookupContext: vi.fn(async (fn: (tx: any) => Promise<any>) => {
+  withAuthLookupContext: vi.fn(async (fn: (tx: Record<string, unknown>) => unknown) => {
     lookupRan = true;
     order.push('auth-lookup');
     return fn(chain);
@@ -56,7 +55,7 @@ vi.mock('@/lib/db/rls', () => ({
   }),
 }));
 
-function request(key: string): any {
+function request(key: string) {
   return {
     headers: { get: (h: string) => (h === 'authorization' ? `Bearer ${key}` : null) },
     nextUrl: { pathname: '/api/tenant/leads' },
