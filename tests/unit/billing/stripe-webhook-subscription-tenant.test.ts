@@ -40,8 +40,7 @@ const m = vi.hoisted(() => {
   // Tenant returned for the terminal-status guard lookup in updated().
   let statusLookupTenant: { status: string } | null = null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db: any = {
+  const db: Record<string, unknown> = {
     execute: vi.fn().mockResolvedValue({ rows: [] }),
     transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
     // The claim wins: a returned row means this delivery is the one that processes.
@@ -127,18 +126,15 @@ const CUSTOMER = 'cus_mapped_123';
 const RESOLVED_TENANT = 'tenant-from-customer';
 const METADATA_TENANT = 'tenant-from-metadata';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeRequest(event: any): any {
+function makeRequest(event: unknown) {
   const body = JSON.stringify(event);
   return {
     headers: { get: (h: string) => (h === 'stripe-signature' ? 't=1,v1=sig' : null) },
     text: async () => body,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function updatedEvent(over: Record<string, any> = {}) {
+function updatedEvent(over: Record<string, unknown> = {}) {
   return {
     id: `evt_${Math.random().toString(36).slice(2)}`,
     type: 'customer.subscription.updated',
@@ -146,8 +142,7 @@ function updatedEvent(over: Record<string, any> = {}) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deletedEvent(over: Record<string, any> = {}) {
+function deletedEvent(over: Record<string, unknown> = {}) {
   return {
     id: `evt_${Math.random().toString(36).slice(2)}`,
     type: 'customer.subscription.deleted',
