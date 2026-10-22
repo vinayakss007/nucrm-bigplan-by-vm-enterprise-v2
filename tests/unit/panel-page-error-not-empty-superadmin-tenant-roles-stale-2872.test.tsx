@@ -20,9 +20,8 @@
  *
  * The trigger is the operator's own write. `invalidateRoles()` is the `onSuccess` of the
  * permission PATCH, the create POST and the delete DELETE, and it re-reads BOTH
- * `['superadmin','tenant',tenantId]` — the very key `superadmin/tenants/[id]/page.tsx`
- * holds, so that page's Save revalidates this header too — and
- * `['superadmin','tenant-roles',tenantId]`. And `useQuery` keeps the previous `data` when a
+ * `['superadmin','tenant',tenantId]` — the very key the tenant detail page holds, so that
+ * page's Save revalidates this header too — and `['superadmin','tenant-roles',tenantId]`. And `useQuery` keeps the previous `data` when a
  * revalidation rejects (no `keepPreviousData` is set anywhere in `lib/query/client.tsx`,
  * and none is needed: retaining `data` beside a fresh `error` is the default), so "rows
  * kept, error set" is the ordinary state right after a write that succeeded.
