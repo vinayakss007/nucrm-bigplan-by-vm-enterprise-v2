@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 const mockSelectResult = vi.fn().mockResolvedValue([]);
-const mockSelectWhere = vi.fn().mockReturnValue({ limit: mockSelectResult });
+// #3047: the due-scan became an ordered keyset loop — where() now chains
+// through orderBy() before limit().
+const mockSelectWhere = vi.fn().mockReturnValue({ orderBy: () => ({ limit: mockSelectResult }) });
 const mockSelectFrom = vi.fn().mockReturnValue({ where: mockSelectWhere });
 const mockUpdateWhere = vi.fn().mockResolvedValue([]);
 const mockUpdateSet = vi.fn().mockReturnValue({ where: mockUpdateWhere });
@@ -71,6 +73,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn(() => true),
   and: vi.fn(() => true),
   isNull: vi.fn(() => true),
+  gt: vi.fn(() => true),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => `SQL(${values.join(',')})`),
 }));
 
@@ -423,5 +426,43 @@ describe('scheduled report delivery cron', () => {
     expect(logError).toHaveBeenCalledWith(expect.objectContaining({
       context: 'scheduled-report-delivery',
     }));
+  });
+
+  // #3047: the due-scan is an ordered keyset loop (sla-check shape), not the
+  // old single nondeterministic .limit(50).
+  it('walks past a 50-report backlog with the keyset loop instead of starving the rest', async () => {
+    const row = (i: number) => ({
+      id: `r${i}`, tenantId: 't1', name: `Report ${i}`, type: 'contacts',
+      frequency: 'daily', recipients: ['a@b.com'], format: 'csv',
+    });
+    mockSelectResult
+      .mockResolvedValueOnce(Array.from({ length: 50 }, (_, i) => row(i)))
+      .mockResolvedValueOnce([row(50)]);
+
+    const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
+    const res = await POST(makeRequest());
+    const body = await res.json();
+
+    expect(body.delivered).toBe(51);
+    expect(body.capped_tenants).toBe(0);
+    // The second page must resume past the last id of the first page.
+    const { gt } = await import('drizzle-orm');
+    expect(gt).toHaveBeenCalledWith('id', 'r49');
+  });
+
+  it('bounds each tenant at the per-run cap and reports the cap instead of hiding it', async () => {
+    const row = (i: number) => ({
+      id: `r${i}`, tenantId: 't1', name: `Report ${i}`, type: 'contacts',
+      frequency: 'daily', recipients: ['a@b.com'], format: 'csv',
+    });
+    // A permanently-full page: only the cap can end the loop.
+    mockSelectResult.mockResolvedValue(Array.from({ length: 50 }, (_, i) => row(i)));
+
+    const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
+    const res = await POST(makeRequest());
+    const body = await res.json();
+
+    expect(body.delivered).toBe(500); // 10 pages x 50
+    expect(body.capped_tenants).toBe(1);
   });
 });
