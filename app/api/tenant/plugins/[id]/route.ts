@@ -87,6 +87,8 @@ export const PATCH = withApiRoute(async (request: NextRequest, context: RouteCon
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2999: PATCH can rewrite baseUrl/authConfig of a plugin that execute runs — admin-only.
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await context.params;
     const body = await readJsonBody(request) as Record<string, unknown>;
@@ -158,6 +160,8 @@ export const DELETE = withApiRoute(async (request: NextRequest, context: RouteCo
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2999: deleting a tenant's integration is admin-only.
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { id } = await context.params;
 
