@@ -12,7 +12,7 @@ import { renderReportPdf } from '@/lib/pdf/render';
 import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, gt } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
 import { cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
@@ -163,31 +163,65 @@ export async function POST(req: NextRequest) {
 
   let delivered = 0;
   let totalDue = 0;
+  const capHitTenants: string[] = [];
   try {
     // scheduled_reports — and the entity tables generateExportData reads through
     // the shared db handle — enforce plain tenant_isolation with no super-admin
     // branch, so this job must run its body once per tenant. See
     // lib/cron/tenant-scope.ts.
     const sweep = await sweepTenants('cron/scheduled-report-delivery', async (tenantId) => {
-      const dueRows = await db
-        .select({
-          id: scheduledReports.id,
-          tenantId: scheduledReports.tenantId,
-          name: scheduledReports.name,
-          type: scheduledReports.type,
-          frequency: scheduledReports.frequency,
-          recipients: scheduledReports.recipients,
-          format: scheduledReports.format,
-          config: scheduledReports.config,
-        })
-        .from(scheduledReports)
-        .where(and(
+      // #3047: bounded keyset scan in the sla-check shape (#2229). The old
+      // single .limit(50) with no ORDER BY picked a nondeterministic 50 of
+      // the due reports each run, so tenants with a backlog could starve the
+      // same unlucky reports forever. The per-run cap bounds cron runtime,
+      // and hitting it is reported instead of hidden.
+      const PAGE_SIZE = 50;
+      const MAX_REPORTS_PER_TENANT = 500;
+      interface DueReportRow {
+        id: string;
+        tenantId: string;
+        name: string;
+        type: string;
+        frequency: string;
+        recipients: unknown;
+        config: unknown;
+        format: string | null;
+      }
+      const dueRows: DueReportRow[] = [];
+      let lastId: string | null = null;
+      for (;;) {
+        const dueConditions = [
           eq(scheduledReports.tenantId, tenantId),
           eq(scheduledReports.status, 'active'),
           isNull(scheduledReports.deletedAt),
-          sql`${scheduledReports.nextRunAt} <= NOW()`
-        ))
-        .limit(50);
+          sql`${scheduledReports.nextRunAt} <= NOW()`,
+        ];
+        if (lastId !== null) {
+          dueConditions.push(gt(scheduledReports.id, lastId));
+        }
+        const page: DueReportRow[] = await db
+          .select({
+            id: scheduledReports.id,
+            tenantId: scheduledReports.tenantId,
+            name: scheduledReports.name,
+            type: scheduledReports.type,
+            frequency: scheduledReports.frequency,
+            recipients: scheduledReports.recipients,
+            format: scheduledReports.format,
+            config: scheduledReports.config,
+          })
+          .from(scheduledReports)
+          .where(and(...dueConditions))
+          .orderBy(scheduledReports.id)
+          .limit(PAGE_SIZE);
+        dueRows.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        lastId = page[page.length - 1]!.id;
+        if (dueRows.length >= MAX_REPORTS_PER_TENANT) {
+          capHitTenants.push(tenantId);
+          break;
+        }
+      }
 
       totalDue += dueRows.length;
 
@@ -300,6 +334,9 @@ export async function POST(req: NextRequest) {
       ok: sweep.failed.length === 0,
       delivered,
       skipped: totalDue - delivered,
+      // #3047: a tenant that hit the per-run cap still has due reports left
+      // over — surface that instead of letting `ok:true` hide a backlog.
+      capped_tenants: capHitTenants.length,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
