@@ -7,6 +7,7 @@
 
 import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu, type LucideIcon } from 'lucide-react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -36,14 +37,42 @@ const statusColors = {
 };
 
 export default function HealthPage() {
-  const { data, isLoading, isFetching, refetch } = useApiQuery<HealthStatus>(['health'], '/api/health');
+  const { data, isLoading, isFetching, error, refetch } = useApiQuery<HealthStatus>(['health'], '/api/health');
   const health = data ?? null;
   const loading = isLoading;
+  // #2872: `error` was never bound, and every card defaulted through `health?.x.status ||
+  // 'error'`. So a probe that never answered — a restart, a refused TCP connection, the API
+  // still warming up — rendered a red cross, "System Unhealthy" and four failed components: an
+  // alarm that sends someone to the database, printed by the page whose job is to say whether
+  // the database is down. The defaults were also why a refused refresh was silent: `data` is
+  // kept, so the cards stayed and looked live.
+  const failed = Boolean(error) && !health;
+  const stale = Boolean(error) && Boolean(health);
+  const reason = error?.message || 'no response from the server';
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+      </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-8">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Health</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              Real-time status of all system components
+            </p>
+          </div>
+          <InlineErrorState
+            message={`Could not read system health: ${reason}. No component status is known, so this page says nothing about the system being up or down — the probe never answered.`}
+            onRetry={refetch}
+          />
+        </div>
       </div>
     );
   }
@@ -67,6 +96,15 @@ export default function HealthPage() {
             Refresh
           </button>
         </div>
+
+        {/* #2872: the reading stays on screen — the operator is looking at the last probe, not a live one. */}
+        {stale && (
+          <InlineErrorState
+            className="mb-8"
+            message={`Could not refresh system health, so the cards below are the last read: ${reason}. A component that broke or recovered since that read is still shown as it was then; Refresh re-probes and every link below still works.`}
+            onRetry={refetch}
+          />
+        )}
 
         {/* Overall Status */}
         <div className={`p-6 rounded-xl border-2 mb-8 ${

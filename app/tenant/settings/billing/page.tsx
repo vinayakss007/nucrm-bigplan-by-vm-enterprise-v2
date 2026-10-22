@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText, type LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface BillingPlan {
@@ -31,9 +32,12 @@ interface BillingWorkspace {
   trial_ends_at?: string | null;
 }
 
-function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number; icon: LucideIcon }) {
-  const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
-  const unlimited = max <= 0;
+function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number | null; icon: LucideIcon }) {
+  // #2872: `max` is null when the plan catalogue never answered. The caller's `?? 500` used to
+  // stand in for a tenant cap nobody read, and the percentage — and its red "over 90%" colour —
+  // were computed from it.
+  const unlimited = max !== null && max <= 0;
+  const pct = max !== null && max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   return (
     <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30">
       <Icon className="w-5 h-5 text-muted-foreground shrink-0" />
@@ -41,19 +45,20 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
         <div className="flex items-center justify-between text-sm mb-1.5">
           <span className="font-medium">{label}</span>
           <span className="text-muted-foreground text-xs">
-            {used.toLocaleString()} / {unlimited ? '∞' : max.toLocaleString()}
+            {used.toLocaleString()} / {max === null ? '—' : unlimited ? '∞' : max.toLocaleString()}
           </span>
         </div>
-        {!unlimited && (
+        {!unlimited && max !== null && (
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div className={cn('h-full rounded-full transition-all', pct>=90?'bg-red-500':pct>=70?'bg-amber-500':'bg-violet-500')}
               style={{width:`${pct}%`}}/>
           </div>
         )}
         {unlimited && <div className="h-1.5 bg-emerald-200 dark:bg-emerald-900/40 rounded-full"/>}
+        {max === null && <div className="h-1.5 bg-muted rounded-full"/>}
       </div>
-      <span className={cn('text-xs font-semibold shrink-0', unlimited?'text-emerald-600':pct>=90?'text-red-500':pct>=70?'text-amber-500':'text-muted-foreground')}>
-        {unlimited ? 'Unlimited' : `${pct}%`}
+      <span className={cn('text-xs font-semibold shrink-0', max === null?'text-muted-foreground':unlimited?'text-emerald-600':pct>=90?'text-red-500':pct>=70?'text-amber-500':'text-muted-foreground')}>
+        {max === null ? 'Not read' : unlimited ? 'Unlimited' : `${pct}%`}
       </span>
     </div>
   );
@@ -61,11 +66,11 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
 
 export default function BillingPage() {
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: wsData, isLoading: wsLoading } = useApiQuery<{ data?: BillingWorkspace | null }>(
+  const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace } = useApiQuery<{ data?: BillingWorkspace | null }>(
     ['tenant', 'workspace'],
     '/api/tenant/workspace',
   );
-  const { data: plansData, isLoading: plansLoading } = useApiQuery<{ data?: BillingPlan[] }>(
+  const { data: plansData, isLoading: plansLoading, error: plansError, refetch: refetchPlans } = useApiQuery<{ data?: BillingPlan[] }>(
     ['tenant', 'plans'],
     '/api/tenant/plans',
     { retry: false },
@@ -73,6 +78,17 @@ export default function BillingPage() {
   const loading = wsLoading || plansLoading;
   const workspace = wsData?.data ?? null;
   const plans = plansData?.data ?? [];
+  // #2872: neither read bound `error`. A workspace read that failed fell into
+  // `if (!workspace) return null` — a blank screen, the same arm an answered "this tenant has
+  // no workspace row" takes — and a plans read that failed left `currentPlan` undefined, so the
+  // usage bars printed the caller's invented `?? 500` / `?? 1` caps and "Upgrade Your Plan"
+  // vanished: a catalogue that did not load, claiming it had nothing in it.
+  const workspaceFailed = Boolean(wsError) && !wsData;
+  const workspaceStale = Boolean(wsError) && Boolean(wsData);
+  const workspaceReason = wsError?.message || 'no response from the server';
+  const plansFailed = Boolean(plansError) && !plansData;
+  const plansStale = Boolean(plansError) && Boolean(plansData);
+  const plansReason = plansError?.message || 'no response from the server';
 
   // Not data fetching — the ?upgraded query-param success toast (kept as-is).
   useEffect(() => {
@@ -117,6 +133,19 @@ export default function BillingPage() {
   const openingPortal = portalMutation.isPending;
 
   if (loading) return <div className="animate-pulse space-y-4"><div className="h-8 w-40 bg-muted rounded"/><div className="admin-card h-48"/></div>;
+  // A read that never answered is not the same screen as a tenant with no workspace row, and
+  // the blank `return null` below was both. This region owns the whole page only while the
+  // workspace is unread; the plan catalogue's failure states are banners inside the page,
+  // because the Stripe controls on the plan card do not come from that read.
+  if (workspaceFailed) return (
+    <div className="space-y-4 animate-fade-in">
+      <div><h1 className="text-lg font-bold">Billing &amp; Subscription</h1></div>
+      <InlineErrorState
+        message={`Failed to load this workspace's billing state: ${workspaceReason}. Nothing here was read — that is not a statement that you have no plan or no usage.`}
+        onRetry={refetchWorkspace}
+      />
+    </div>
+  );
   if (!workspace) return null;
 
   const currentPlan = plans.find(p => p.id === workspace.plan_id);
@@ -127,6 +156,25 @@ export default function BillingPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div><h1 className="text-lg font-bold">Billing & Subscription</h1><p className="text-sm text-muted-foreground">Manage your plan and usage</p></div>
+
+      {workspaceStale && (
+        <InlineErrorState
+          message={`Could not refresh this workspace's billing state, so the plan and usage below are the last read: ${workspaceReason}. A payment, plan change or trial extension made since that read is not shown here.`}
+          onRetry={refetchWorkspace}
+        />
+      )}
+      {plansFailed && (
+        <InlineErrorState
+          message={`Failed to load the plan list: ${plansReason}. No upgrade options are shown because the catalogue was never read — not because there is nothing to move to.`}
+          onRetry={refetchPlans}
+        />
+      )}
+      {plansStale && (
+        <InlineErrorState
+          message={`Could not refresh the plan list, so the prices and limits below are the last read: ${plansReason}. A plan created or repriced since that read is missing or wrong here, and the usage caps are the ones this read gave.`}
+          onRetry={refetchPlans}
+        />
+      )}
 
       {/* Current plan */}
       <div className="admin-card p-6">
@@ -165,8 +213,8 @@ export default function BillingPage() {
 
         {/* Usage bars */}
         <div className="space-y-2.5">
-          <UsageBar label="Contacts" used={workspace.current_contacts??0} max={currentPlan?.max_contacts??500} icon={Database}/>
-          <UsageBar label="Team Members" used={workspace.current_users??0} max={currentPlan?.max_users??1} icon={Users}/>
+          <UsageBar label="Contacts" used={workspace.current_contacts??0} max={plansFailed ? null : (currentPlan?.max_contacts??500)} icon={Database}/>
+          <UsageBar label="Team Members" used={workspace.current_users??0} max={plansFailed ? null : (currentPlan?.max_users??1)} icon={Users}/>
           {(currentPlan?.max_automations??0)>0 && <UsageBar label="Automations" used={0} max={currentPlan?.max_automations ?? 0} icon={Zap}/>}
         </div>
       </div>
@@ -180,6 +228,11 @@ export default function BillingPage() {
       )}
 
       {/* Upgrade options */}
+      {!isEnterprise && !plansFailed && upgradablePlans.length === 0 && (
+        // Only reachable when the catalogue answered (#2872): an unread plan list is the banner
+        // above, not a claim that there is nowhere to move to.
+        <p className="text-xs text-muted-foreground">No further plan to upgrade to — the catalogue only lists the one you are on.</p>
+      )}
       {!isEnterprise && upgradablePlans.length > 0 && (
         <div className="admin-card p-6">
           <h2 className="text-sm font-semibold mb-4">Upgrade Your Plan</h2>

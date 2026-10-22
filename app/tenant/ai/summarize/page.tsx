@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { logError } from '@/lib/errors-client';
 
 type EntityHit = {
@@ -60,7 +61,9 @@ export default function AISummarizePage() {
   // effect). entityType + debounced search are part of the key so results are
   // cached per query and stale requests are superseded automatically.
   const searchCfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-  const { data: searchData } = useApiQuery<SearchResp>(
+  const {
+    data: searchData, error: searchError, isLoading: searchLoading, refetch: refetchSearch,
+  } = useApiQuery<SearchResp>(
     ['tenant', 'ai', 'summarize-search', entityType, debouncedSearch],
     searchCfg.api + encodeURIComponent(debouncedSearch),
   );
@@ -81,6 +84,16 @@ export default function AISummarizePage() {
       return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
     });
   }, [searchData, entityType]);
+
+  // #2872: the pick list is rendered behind `entityHits.length > 0`, and `error` was never
+  // bound, so every failure of the search read looked like "nobody matched" — a bare box with
+  // no reason and no retry. Three channels, keyed on the payload: an outage, a refused refresh
+  // over the rows TanStack kept, and a 404 with nothing kept (an ANSWER — the record is not
+  // there), which belongs with the absence sentence rather than with either failure.
+  const searchNotFound = !searchData && (searchError?.status === 404 || searchError?.status === 410);
+  const searchFailed = Boolean(searchError) && !searchData && !searchNotFound;
+  const searchStale = Boolean(searchError) && Boolean(searchData);
+  const searchReason = searchError?.message || 'no response from the server';
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -163,6 +176,25 @@ export default function AISummarizePage() {
               placeholder={`Search ${entityType}s…`}
               className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-1 focus:ring-violet-500 text-sm"
             />
+            {searchFailed && (
+              <InlineErrorState
+                className="mt-2"
+                message={`Failed to load the ${searchCfg.label} search: ${searchReason}. The pick list is unanswered — this is not a statement that nothing matched.`}
+                onRetry={refetchSearch}
+              />
+            )}
+            {searchStale && (
+              <InlineErrorState
+                className="mt-2"
+                message={`Could not refresh the ${searchCfg.label} search, so the records below are the last read: ${searchReason}. A contact, deal or company created, renamed or deleted since that read is missing or wrong here, and Generate runs against what is listed.`}
+                onRetry={refetchSearch}
+              />
+            )}
+            {!searchLoading && !searchFailed && entityHits.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No {searchCfg.label.toLowerCase()} records came back for this search.
+              </p>
+            )}
             {entityHits.length > 0 && (
               <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border">
                 {entityHits.map(h => (

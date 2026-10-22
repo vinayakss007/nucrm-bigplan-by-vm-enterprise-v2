@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { AI_CAPABILITIES, AI_PROVIDER_PRESETS, getProviderLabel } from '@/components/tenant/ai/ai-config';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 
@@ -35,10 +36,18 @@ export default function AIHubPage() {
   const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
   // #1328: status via TanStack Query (was raw fetch + useEffect).
-  const { data: status, isLoading: loading } = useApiQuery<Status>(
+  const { data: status, isLoading: loading, error, refetch } = useApiQuery<Status>(
     ['tenant', 'ai', 'status'],
     '/api/tenant/ai/status',
   );
+
+  // #2872: `error` was never bound here, so a status read that failed was indistinguishable
+  // from a quiet day — `status?.draft_count_today ?? 0` printed `0` and the provider pill
+  // announced "0 / N providers configured". Two channels, keyed on the payload: the hub that
+  // never got an answer, and the hub whose refresh was refused while yesterday's numbers stay.
+  const failed = Boolean(error) && !status;
+  const stale = Boolean(error) && Boolean(status);
+  const reason = error?.message || 'no response from the server';
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
@@ -49,6 +58,18 @@ export default function AIHubPage() {
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load the AI Hub status: ${reason}. The counters and provider list are unanswered — this is not a statement that nothing ran today.`}
+          onRetry={refetch}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the AI Hub status, so everything below is the last read: ${reason}. A draft, scoring run or at-risk deal created since that read is not counted here, and the cards are still what the gateway answered.`}
+          onRetry={refetch}
+        />
+      )}
       {/* Hero */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -60,7 +81,7 @@ export default function AIHubPage() {
           </p>
         </div>
 
-        {!loading && (
+        {!failed && (
           <div className={cn(
             'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium',
             providersUp > 0
@@ -75,11 +96,11 @@ export default function AIHubPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
-        <Stat icon={FileEdit}      label="Drafts today"     value={status?.draft_count_today ?? 0} />
-        <Stat icon={Target}        label="Scoring runs"     value={status?.scoring_runs_today ?? 0} />
-        <Stat icon={AlertTriangle} label="At-risk deals"    value={status?.at_risk_count ?? 0} accent={(status?.at_risk_count ?? 0) > 0 ? 'amber' : undefined} />
-        <Stat icon={Activity}      label="Tokens today"     value={(status?.tokens_today ?? 0).toLocaleString()} />
-        <Stat icon={BrainCircuit}  label="Providers"        value={`${providersUp}/${totalProviders}`} />
+        <Stat icon={FileEdit}      label="Drafts today"     value={failed ? '—' : (status?.draft_count_today ?? 0)} />
+        <Stat icon={Target}        label="Scoring runs"     value={failed ? '—' : (status?.scoring_runs_today ?? 0)} />
+        <Stat icon={AlertTriangle} label="At-risk deals"    value={failed ? '—' : (status?.at_risk_count ?? 0)} accent={!failed && (status?.at_risk_count ?? 0) > 0 ? 'amber' : undefined} />
+        <Stat icon={Activity}      label="Tokens today"     value={failed ? '—' : (status?.tokens_today ?? 0).toLocaleString()} />
+        <Stat icon={BrainCircuit}  label="Providers"        value={failed ? '—' : `${providersUp}/${totalProviders}`} />
         <Stat icon={Sparkles}      label="Time saved"       value="—" sub="coming soon" />
       </div>
 
@@ -179,6 +200,11 @@ export default function AIHubPage() {
             Manage <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
+        {failed && (
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Provider readiness was not read, so the empty row below is not a statement that none are configured.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {(status?.providers ?? []).map(p => {
             const ready = p.enabled && p.status === 'ready';
