@@ -4,12 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { ArrowLeft, User, Mail, Shield, Calendar, Globe, Palette, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
 
 interface UserDetail {
   id: string;
@@ -39,7 +38,7 @@ export default function UserDetailPage() {
   const userId = params['id'] as string;
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data, isLoading, error } = useApiQuery<{ data?: UserDetail }>(
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: UserDetail }>(
     ['superadmin', 'user', userId],
     `/api/superadmin/users/${userId}`,
     { enabled: !!userId, retry: false },
@@ -47,12 +46,24 @@ export default function UserDetailPage() {
   const user: UserDetail | null = data?.data ?? null;
   const loading = isLoading;
 
-  useEffect(() => {
-    if (error) {
-      const info = error.info as { error?: string } | undefined;
-      toast.error(info?.error || error.message || 'Failed to load user');
-    }
-  }, [error]);
+  // #2872: this read has three states, not two, and at base the page collapsed them into one by
+  // branching only on the payload. `apiFetcher` keeps `.data` when a revalidation of an
+  // already-answered read fails, so `error` alone says nothing about whether anything was ever
+  // loaded: a gateway timeout that never got through printed "User not found" — a claim about
+  // whether this account exists, made by a request that never reached the table — while a refresh
+  // refused after the account loaded kept the fields and said nothing at all (the effect toast was
+  // the whole channel, and it fades in four seconds). The id is in the key, so the server's own
+  // answer about this id (`app/api/superadmin/users/[id]/route.ts:25` and `:61`) is a third arm:
+  // `ApiQueryError` carries the status it saw, so a refused refresh is never reported as a missing
+  // account and a genuinely missing account is never reported as an outage.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  const notFound = failed && error?.status === 404;
+
+  const outageMessage = `Failed to load this user: ${reason}. The profile, tenant count and memberships are unanswered, and this is not a statement that the account does not exist.`;
+  const staleRowsMessage = `Could not refresh this user, so the profile, tenant count and memberships below are the last read: ${reason}. A membership added, removed or re-roled since that read is missing here, and the count is the number that read reported.`;
+  const staleEmptyMessage = `Could not refresh this user, so the answer below is the last read: ${reason}. An account created or restored since that read would not appear here.`;
 
   if (loading) {
     return (
@@ -62,9 +73,21 @@ export default function UserDetailPage() {
     );
   }
 
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 max-w-4xl">
+        <Link href="/superadmin/users" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" /> Back to Users
+        </Link>
+        <InlineErrorState message={outageMessage} onRetry={refetch} />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="space-y-4">
+        {stale && <InlineErrorState message={staleEmptyMessage} onRetry={refetch} />}
         <Link href="/superadmin/users" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> Back to Users
         </Link>
@@ -77,6 +100,9 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* #2872: the caveat sits above everything it is holding still, and the row links stay live
+          because each destination re-reads for itself — this page issues no write at all. */}
+      {stale && <InlineErrorState message={staleRowsMessage} onRetry={refetch} />}
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/superadmin/users" className="p-2 rounded-lg hover:bg-accent text-muted-foreground">
@@ -148,7 +174,9 @@ export default function UserDetailPage() {
         {/* Memberships */}
         <div className="admin-card p-5 space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Memberships</h3>
-          <p className="text-sm">{user.membership_count ?? 0} active tenant{user.membership_count !== 1 ? 's' : ''}</p>
+          {/* #2872 rule 6: a count the payload did not carry is not a zero. The route COALESCEs it
+              (app/api/superadmin/users/[id]/route.ts:53), so an answered read still reports a real 0. */}
+          <p className="text-sm">{user.membership_count ?? '—'} active tenant{user.membership_count !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
