@@ -297,8 +297,7 @@ describe('lib/audit logAudit', () => {
 
   it('logs AND re-throws when the caller provided dbOrTx', async () => {
     const error = new Error('tx audit write failed');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tx = failingTx(error) as any;
+    const tx = failingTx(error) as never;
 
     await expect(
       logAudit({
@@ -319,8 +318,7 @@ describe('lib/audit logAudit', () => {
     const tx = {
       select: () => chain(() => Promise.resolve([{ hash: 'prev-hash' }])),
       insert: () => ({ values: () => Promise.reject(new Error('insert in tx failed')) }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    } as never;
 
     await expect(
       logAudit({ tenantId: 'tenant-1', action: 'create', entityType: 'deal', dbOrTx: tx }),

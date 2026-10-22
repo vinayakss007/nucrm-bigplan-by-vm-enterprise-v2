@@ -35,8 +35,7 @@ vi.mock('@/lib/cache/index', () => {
       del: vi.fn(async (key: string) => {
         store.delete(key);
       }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      set: vi.fn(async (key: string, value: any, ttl: number) => {
+      set: vi.fn(async (key: string, value: number, ttl: number) => {
         store.set(key, { value, expires: Date.now() + ttl * 1000 });
       }),
     },
@@ -127,13 +126,13 @@ describe('RateLimiter', () => {
     await limiter.enforce('err-key');
     try {
       await limiter.enforce('err-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
+    } catch (e) {
       expect(e).toBeInstanceOf(RateLimitError);
-      expect(e.result).toBeDefined();
-      expect(e.result.allowed).toBe(false);
-      expect(e.result.limit).toBe(1);
-      expect(e.name).toBe('RateLimitError');
+      const err = e as InstanceType<typeof RateLimitError>;
+      expect(err.result).toBeDefined();
+      expect(err.result.allowed).toBe(false);
+      expect(err.result.limit).toBe(1);
+      expect(err.name).toBe('RateLimitError');
     }
   });
 

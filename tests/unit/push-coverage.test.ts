@@ -261,8 +261,7 @@ describe('email/router.ts', () => {
 describe('auth/api-key - generateApiKey', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockChain: any = {
+    const mockChain: Record<string, unknown> = {
       values: vi.fn().mockResolvedValue(undefined),
     };
     vi.doMock('@/drizzle/db', () => ({
@@ -281,8 +280,7 @@ describe('auth/api-key - generateApiKey', () => {
 describe('webhooks - fireWebhooks', () => {
   beforeEach(() => {
     vi.resetModules();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockChain: any = {
+    const mockChain: Record<string, unknown> = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
