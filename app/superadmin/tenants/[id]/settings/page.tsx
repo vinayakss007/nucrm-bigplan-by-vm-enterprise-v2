@@ -81,6 +81,11 @@ export default function TenantSettingsAuditPage() {
   const failed = Boolean(error) && !data;
   const stale = Boolean(error) && Boolean(data);
   const reason = error?.message || 'no response from the server';
+  // A 404 is an answer ABOUT THE RECORD, not an outage: GET replies `Tenant not found` for
+  // an id that no longer resolves (app/api/superadmin/tenant-settings/route.ts:52). Telling
+  // that operator to retry, or naming "no response from the server", would be false — so it
+  // gets its own branch, ahead of the outage one.
+  const notFound = failed && error?.status === 404;
 
   // Seed the editable settings snapshot whenever fresh data arrives. `?? {}` is not
   // decoration: JSON.parse(JSON.stringify(undefined)) throws, so a payload shaped
@@ -158,6 +163,16 @@ export default function TenantSettingsAuditPage() {
   // past this line, so none of their derived counts can render for a read that never
   // answered, and no half a record can be offered for saving.
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+  if (notFound) return (
+    <div className="space-y-3">
+      <InlineErrorState
+        message={`No tenant with this id: the settings read answered that this organization does not exist, so there is no configuration here to audit or edit. Retrying will not change the answer.`}
+      />
+      <Link href="/superadmin/tenants" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> back to tenants
+      </Link>
+    </div>
+  );
   if (failed || !data) return (
     <div className="space-y-3">
       <InlineErrorState

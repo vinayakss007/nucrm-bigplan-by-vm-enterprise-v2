@@ -54,22 +54,34 @@
  * no overrides. `stale = Boolean(error) && Boolean(data)` keeps the configuration with the
  * caveat ABOVE it and re-runs this read. One read, so the spinner waits on that read alone.
  *
+ * The third state is neither of those two. `failed` swallows a 404, because the GET answers
+ * `Tenant not found` for an id that no longer resolves
+ * (app/api/superadmin/tenant-settings/route.ts:52) and a 404 is an ANSWER — so the outage
+ * sentence called a record the server named absent "unanswered", and put a Try again button
+ * under an answer that will not move. `notFound = failed && error?.status === 404` returns
+ * before the outage, says the organization does not exist, and offers no retry; the status
+ * is read off `ApiQueryError` (`lib/query/client.tsx:27-41`), so a transport failure that
+ * carries none still falls through to the outage arm.
+ *
  * RED AT BASE — measured on `ffef1659` (this branch's base) with
  * `app/superadmin/tenants/[id]/settings/page.tsx` rewound to what main carries and this
- * file as committed: **17 failed | 4 passed (21)**. Nine of the seventeen put the read in a
+ * file as committed: **20 failed | 4 passed (24)**. Twelve of the twenty put the read in a
  * state the class is about: the null quota base printed as a zero, the refused refresh that
  * kept the configuration silently, what that refusal costs, the save fired off the kept
  * snapshot, the outage that at base still printed its reason-less sentence with the
  * fabricated tenant's header and Edit control reachable, the Edit control across all three
- * states, both messageless refusals (which printed `undefined`), and the good → refused →
- * good walk. The other eight are the source ratchets — the three-state split, the fabricated
- * tenant's retirement, the dash keyed off a null counter rather than a zero, the
- * banner-before-content ordering, the two house templates, the retry that names this read,
- * and the guard's blindness to the class before and after the split is rewound. The
- * seventeenth is not this slice's: `stays inside the line ceiling the page is allowed` spawns
- * `scripts/check-file-size.mjs`, and #2986 left three grandfathered components past their
- * baseline on main, so that pin is red at base, red at head and red in the 67 other suites
- * that run the guard — #3009 returns it to green (measured: 21 passed on top of it). The 4
+ * states, both messageless refusals (which printed `undefined`), the good → refused →
+ * good walk, and — for the gone record — the 404 that base called unanswered with a retry
+ * button on it, plus the 503 with no status that must still reach the outage arm. The other
+ * eight are the source ratchets — the three-state split, the gone branch keyed off the
+ * status and ordered ahead of the outage, the fabricated tenant's retirement, the dash keyed
+ * off a null counter rather than a zero, the banner-before-content ordering, the three
+ * banners, the retry that names this read, and the guard's blindness to the class before and
+ * after the split is rewound. The twentieth is not this slice's:
+ * `stays inside the line ceiling the page is allowed` spawns `scripts/check-file-size.mjs`,
+ * and #2986 left three grandfathered components past their baseline on main, so that pin is
+ * red at base, red here and red in the 67 other suites that run the guard — **#3016**
+ * returns it to green (measured: 24 passed on top of it, 23 of them this file's own). The 4
  * that pass at base are the behaviour this slice must not regress: the healthy read that says
  * nothing about freshness, the first-load spinner, #2829's guard + baseline, and the
  * overlap-hygiene pin that leaves this page to exactly one suite.
@@ -157,6 +169,17 @@ const staleRead = (data: unknown, message = 'Request failed (504)'): QueryResult
 });
 /** First load of the one read — nothing has been answered yet. */
 const pending = (): QueryResult => ({ data: undefined, error: null, isLoading: true, refetch: vi.fn() });
+/**
+ * The read ANSWERED, with `Tenant not found` — a statement about the record, not a refusal.
+ * `apiFetcher` throws `ApiQueryError` carrying the HTTP status (`lib/query/client.tsx:27-41`),
+ * so this is the shape that status arrives in.
+ */
+const gone = (): QueryResult => ({
+  data: undefined,
+  error: Object.assign(new Error('Request failed (404)'), { status: 404 }),
+  isLoading: false,
+  refetch: vi.fn(),
+});
 
 const alerts = () =>
   screen.queryAllByRole('alert').map((el) => el.textContent ?? '').join(' | ');
@@ -301,6 +324,33 @@ describe('tenant settings audit: one read, two opposite failures (#2872)', () =>
     expect(registry.byUrl[SETTINGS].refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('a 404 says the record is gone — not that the server was silent — and offers no retry', () => {
+    // The GET answers `Tenant not found` for an id that no longer resolves
+    // (app/api/superadmin/tenant-settings/route.ts:52). Calling that an outage tells the
+    // operator to retry an answer that will not move, and calling the tenant "unanswered"
+    // when the server named it absent is its own small fabrication.
+    registry.byUrl = { [SETTINGS]: gone() };
+    wrapped(<TenantSettingsAuditPage />);
+    expect(alerts()).toContain('does not exist');
+    expect(alerts()).not.toContain('unanswered');
+    expect(alerts()).not.toContain('no response from the server');
+    expect(alerts()).not.toMatch(/\(\d{3}\)/);
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+    expect(registry.byUrl[SETTINGS].refetch).not.toHaveBeenCalled();
+    // Gone is still not present: the region the fabricated tenant filled stays closed.
+    expect(screen.queryByText('Members')).toBeNull();
+    expect(screen.queryByRole('button', { name: /edit settings/i })).toBeNull();
+  });
+
+  it('a 404 refuses to be dressed as an outage when the status is missing', () => {
+    // The sibling case: a transport failure carries no status, so the outage arm must still
+    // be the one that answers — `notFound` is keyed off the status, not off the flag.
+    registry.byUrl = { [SETTINGS]: failed('Request failed (503)') };
+    wrapped(<TenantSettingsAuditPage />);
+    expect(alerts()).toContain('Failed to load this tenant\'s settings');
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
+  });
+
   it('the Edit control tracks the three states: offered, kept, gone', () => {
     registry.byUrl = { [SETTINGS]: ok(answered) };
     wrapped(<TenantSettingsAuditPage />);
@@ -375,6 +425,23 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(s, 'the spinner now waits on more than this read').not.toMatch(/isLoading\s*\|\|/);
   });
 
+  it('reads the gone-record case off the status the route answers with, ahead of the outage', () => {
+    const s = src();
+    expect(s, 'the 404 is not derived from `failed`, so a kept read cannot be called gone')
+      .toMatch(/const notFound = failed && error\?\.status === 404;/);
+    const nf = s.indexOf('if (notFound) return (');
+    const outage = s.indexOf('if (failed || !data) return (');
+    expect(nf, 'the gone branch is not an early return of its own').toBeGreaterThan(-1);
+    expect(nf, 'the outage answers before the record can be named absent').toBeLessThan(outage);
+    expect(outage).toBeGreaterThan(-1);
+    // Nothing in that branch may promise a second try: it is an answer, not a refusal.
+    const region = s.slice(nf, outage);
+    expect(region, 'the gone branch offers to retry an answer that will not move').not.toMatch(/onRetry|refetch/);
+    expect(region, 'the gone branch calls the record unanswered').not.toMatch(/unanswered|no response/);
+    // …and it owns the same region the fabricated tenant sat in.
+    expect(s.indexOf('<h1'), 'the header sits above the gone branch').toBeGreaterThan(nf);
+  });
+
   it('retires the fabricated tenant entirely', () => {
     const s = src();
     // Anchored to line starts / assignment shapes, so the WHY comment describing the base
@@ -409,18 +476,25 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(banner, 'the stale banner renders after the settings it calls the last read').toBeLessThan(header);
   });
 
-  it('speaks in exactly the two house templates, both quoting the reason, neither naming the server', () => {
+  it('speaks in exactly three banners — two quoting the refusal, one quoting no reason at all', () => {
     const templates = src().match(/message=\{`[^`]*`\}/g) ?? [];
-    expect(templates, 'this page has a different number of banners than the slice made').toHaveLength(2);
+    // stale caveat, outage, gone-record. A fourth would mean a new state got a banner without
+    // a case here; a third reason-quoting one would mean the outage split in prose.
+    expect(templates, 'this page has a different number of banners than the slice made').toHaveLength(3);
     for (const t of templates) {
-      expect(t).toContain('${reason}');
       expect(t, `a banner quotes a status code it typed itself: ${t}`).not.toMatch(/\(\d{3}\)/);
       expect(t, `a banner names server internals: ${t}`).not.toMatch(/\b(endpoint|route|status code)\b/i);
       expect(t, `a banner quotes a source path: ${t}`).not.toMatch(/[\w-]+\/[\w.-]+\.tsx?\b/);
       expect(t, `a banner is vague about what moved: ${t}`).not.toMatch(/may be out of date|may not be reflected|some data/);
     }
-    expect(templates.some((t) => /Failed to load/.test(t)), 'no outage template').toBe(true);
-    expect(templates.some((t) => /Could not refresh/.test(t)), 'no stale template').toBe(true);
+    const reasoned = templates.filter((t) => t.includes('${reason}'));
+    expect(reasoned, 'a banner that failed the read without saying why').toHaveLength(2);
+    expect(reasoned.some((t) => /Failed to load/.test(t)), 'no outage template').toBe(true);
+    expect(reasoned.some((t) => /Could not refresh/.test(t)), 'no stale template').toBe(true);
+    // The third is the gone-record branch: it must not invent a reason it does not have.
+    const speechless = templates.filter((t) => !t.includes('${reason}'));
+    expect(speechless).toHaveLength(1);
+    expect(speechless[0], 'a banner quoted a reason for a read that answered').not.toMatch(/no response|refused|refresh/i);
   });
 
   it('retries by re-running this read, never by reloading the page or re-cutting the cache', () => {
