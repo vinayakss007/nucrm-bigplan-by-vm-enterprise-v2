@@ -12,7 +12,6 @@
   "app/tenant/calendar/page.tsx": 537,
   "app/tenant/services/page.tsx": 599,
   "app/tenant/settings/backup/page.tsx": 573,
-  "app/tenant/settings/billing/subscription/page.tsx": 592,
   "app/tenant/settings/custom-fields/page.tsx": 657,
   "app/tenant/settings/preferences/page.tsx": 504,
   "app/tenant/settings/security/page.tsx": 706,
