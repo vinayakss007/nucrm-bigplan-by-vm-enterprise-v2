@@ -2122,7 +2122,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   calls `.insert(`** — the 23503 class — by area: **Settings/platform 47 · CRM objects 38 · Comms+integrations 19 ·
   Billing 14 · AI 2**. The other **50** are update/delete-only: `tenant_id = sentinel` matches no row, so they
   answer 404 or a silent no-op and never reach the FK. 116 of the 120 are `/api/tenant/**`, 4 are `/api/v1/**`.
-  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:367` (re-pinned from the `:342` this line carried on 2026-10-17 — **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still lands on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
+  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
   `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:186` (re-pinned 2026-10-22 from `:181`: `d78d7698` (#2973) put the money-math comment block above it), `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
@@ -2152,7 +2152,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
-  `tests/unit/auth-middleware-require-auth.test.ts:550-559`.
+  `tests/unit/auth-middleware-require-auth.test.ts:549-558` (re-pinned 2026-10-22 from `:550-559`: `3bf7f648c` (#3073) deleted this file's top-of-file `eslint-disable @typescript-eslint/no-explicit-any` header, which moved every line beneath it up by one).
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
   is already computed (`lib/auth/middleware.ts:382`) but it cannot reject there — sentinel **reads** are what power

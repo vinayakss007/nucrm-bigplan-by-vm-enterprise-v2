@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockFindFirst, mockSelectChain, mockUpdate, mockUpdateSet, mockUpdateWhere } = vi.hoisted(() => ({
@@ -12,30 +11,30 @@ const { mockFindFirst, mockSelectChain, mockUpdate, mockUpdateSet, mockUpdateWhe
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
-      tenants: { findFirst: (...args: any[]) => mockFindFirst('tenants', ...args) },
-      tenantModules: { findFirst: (...args: any[]) => mockFindFirst('tenantModules', ...args) },
-      modules: { findFirst: (...args: any[]) => mockFindFirst('modules', ...args) },
+      tenants: { findFirst: (...args: unknown[]) => mockFindFirst('tenants', ...args) },
+      tenantModules: { findFirst: (...args: unknown[]) => mockFindFirst('tenantModules', ...args) },
+      modules: { findFirst: (...args: unknown[]) => mockFindFirst('modules', ...args) },
     },
     select: mockSelectChain,
-    insert: (..._args: any[]) => ({
-      values: (..._valArgs: any[]) => ({
+    insert: (..._args: unknown[]) => ({
+      values: (..._valArgs: unknown[]) => ({
         onConflictDoNothing: vi.fn(() => ({ then: vi.fn() })),
         onConflictDoUpdate: vi.fn(() => ({ then: vi.fn() })),
       }),
     }),
-    update: (...args: any[]) => {
+    update: (...args: unknown[]) => {
       mockUpdate(...args);
       return {
-        set: (...setArgs: any[]) => {
+        set: (...setArgs: unknown[]) => {
           mockUpdateSet(...setArgs);
           return {
-            where: (...whereArgs: any[]) => mockUpdateWhere(...whereArgs),
+            where: (...whereArgs: unknown[]) => mockUpdateWhere(...whereArgs),
           };
         },
       };
     },
-    transaction: vi.fn((cb: (tx: any) => Promise<any>) => {
-      const tx: any = {
+    transaction: vi.fn((cb: (tx: Record<string, unknown>) => unknown) => {
+      const tx: Record<string, unknown> = {
         insert: () => ({
           values: () => ({
             onConflictDoNothing: vi.fn(),
@@ -85,8 +84,8 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((_col: any, _val: any) => `eq(${String(_val)})`),
-  and: vi.fn((..._args: any[]) => 'and()'),
+  eq: vi.fn((_col: unknown, _val: unknown) => `eq(${String(_val)})`),
+  and: vi.fn((..._args: unknown[]) => 'and()'),
 }));
 
 import { ModuleRegistry, BUILTIN_MODULES } from '@/lib/modules/registry';
@@ -104,7 +103,7 @@ describe('module-registry', () => {
     it('free plan modules include core-crm and automation-basic', () => {
       const all = ModuleRegistry.getAll();
       const freeModules = all.filter(
-        (m) => m.pricing?.free && (m.pricing.free as any).enabled
+        (m) => m.pricing?.free && (m.pricing.free as { enabled?: boolean }).enabled
       );
       const freeIds = freeModules.map((m) => m.id);
       expect(freeIds).toContain('core-crm');
@@ -115,10 +114,10 @@ describe('module-registry', () => {
     it('pro plan has more modules than free plan', () => {
       const all = ModuleRegistry.getAll();
       const freeModules = all.filter(
-        (m) => m.pricing?.free && (m.pricing.free as any).enabled
+        (m) => m.pricing?.free && (m.pricing.free as { enabled?: boolean }).enabled
       );
       const proModules = all.filter(
-        (m) => m.pricing?.pro && (m.pricing.pro as any).enabled
+        (m) => m.pricing?.pro && (m.pricing.pro as { enabled?: boolean }).enabled
       );
       expect(proModules.length).toBeGreaterThan(freeModules.length);
     });
@@ -126,7 +125,7 @@ describe('module-registry', () => {
     it('enterprise plan includes all modules', () => {
       const all = ModuleRegistry.getAll();
       const enterpriseModules = all.filter(
-        (m) => m.pricing?.enterprise && (m.pricing.enterprise as any).enabled
+        (m) => m.pricing?.enterprise && (m.pricing.enterprise as { enabled?: boolean }).enabled
       );
       expect(enterpriseModules.length).toBe(all.length);
     });
@@ -134,10 +133,10 @@ describe('module-registry', () => {
     it('ai-assistant is only available on pro and enterprise', () => {
       const aiModule = ModuleRegistry.get('ai-assistant');
       expect(aiModule).not.toBeNull();
-      expect((aiModule!.pricing?.free as any)?.enabled).toBe(false);
-      expect((aiModule!.pricing?.starter as any)?.enabled).toBe(false);
-      expect((aiModule!.pricing?.pro as any)?.enabled).toBe(true);
-      expect((aiModule!.pricing?.enterprise as any)?.enabled).toBe(true);
+      expect((aiModule!.pricing?.free as { enabled?: boolean })?.enabled).toBe(false);
+      expect((aiModule!.pricing?.starter as { enabled?: boolean })?.enabled).toBe(false);
+      expect((aiModule!.pricing?.pro as { enabled?: boolean })?.enabled).toBe(true);
+      expect((aiModule!.pricing?.enterprise as { enabled?: boolean })?.enabled).toBe(true);
     });
   });
 

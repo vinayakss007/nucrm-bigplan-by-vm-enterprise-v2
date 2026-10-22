@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Coverage for the API key *lifecycle* half of lib/auth/api-key.ts.
  *
@@ -15,15 +14,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 
 /** Queue of results handed out to successive `db.select()` calls. */
-let selectResults: any[][] = [];
+let selectResults: unknown[][] = [];
 /** Queue of `UPDATE … RETURNING` row sets, one per `db.update()` call. */
-let updateResults: any[][] = [];
+let updateResults: unknown[][] = [];
 /** Every mutation recorded in call order so tests can assert on payloads. */
 let calls: { op: string; table?: unknown; payload?: unknown }[] = [];
 
-const mockDb: any = vi.hoisted(() => {
+const mockDb: Record<string, ReturnType<typeof vi.fn>> = vi.hoisted(() => {
   // Declared inside the hoisted factory so the module mock can close over it.
-  return {} as any;
+  return {} as Record<string, ReturnType<typeof vi.fn>>;
 });
 
 vi.mock('@/drizzle/db', () => {
@@ -33,9 +32,9 @@ vi.mock('@/drizzle/db', () => {
    * `.limit()`), so rather than guess which one is terminal we make every node
    * thenable and let `await` land wherever the source code puts it.
    */
-  function node(result: any) {
-    const self: any = {
-      then: (res: (v: any) => unknown, rej?: (e: unknown) => unknown) =>
+  function node(result: unknown) {
+    const self: Record<string, unknown> = {
+      then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
         Promise.resolve(result).then(res, rej),
     };
     for (const m of [
@@ -52,7 +51,7 @@ vi.mock('@/drizzle/db', () => {
     return self;
   }
 
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: vi.fn(() => node(selectResults.shift() ?? [])),
     update: vi.fn((table: unknown) => {
       calls.push({ op: 'update', table });
@@ -69,7 +68,7 @@ vi.mock('@/drizzle/db', () => {
       calls.push({ op: 'delete', table });
       return node([]);
     }),
-    transaction: vi.fn(async (cb: (tx: any) => Promise<unknown>) => {
+    transaction: vi.fn(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
       calls.push({ op: 'transaction' });
       return cb(db);
     }),
@@ -100,7 +99,7 @@ describe('generateApiKey', () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
     const { key } = await generateApiKey('t1', 'u1', 'CI key', ['contacts:read']);
 
-    const values = calls.find(c => c.op === 'values')!.payload as any;
+    const values = calls.find(c => c.op === 'values')!.payload as Record<string, unknown>;
     expect(values.keyHash).toBe(createHash('sha256').update(key).digest('hex'));
     // The whole point of hashing: the plaintext must not be in the row.
     expect(JSON.stringify(values)).not.toContain(key);
@@ -110,7 +109,7 @@ describe('generateApiKey', () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
     await generateApiKey('tenant-9', 'user-9', 'Zapier', ['deals:read', 'deals:write']);
 
-    const values = calls.find(c => c.op === 'values')!.payload as any;
+    const values = calls.find(c => c.op === 'values')!.payload as Record<string, unknown>;
     expect(values.tenantId).toBe('tenant-9');
     expect(values.userId).toBe('user-9');
     expect(values.name).toBe('Zapier');
@@ -121,7 +120,7 @@ describe('generateApiKey', () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
     await generateApiKey('t1', 'u1', 'k', [], '2030-01-01T00:00:00.000Z');
 
-    const values = calls.find(c => c.op === 'values')!.payload as any;
+    const values = calls.find(c => c.op === 'values')!.payload as Record<string, unknown>;
     expect(values.expiresAt).toBeInstanceOf(Date);
     expect((values.expiresAt as Date).toISOString()).toBe('2030-01-01T00:00:00.000Z');
   });
@@ -129,7 +128,7 @@ describe('generateApiKey', () => {
   it('stores null when no expiry is supplied', async () => {
     const { generateApiKey } = await import('@/lib/auth/api-key');
     await generateApiKey('t1', 'u1', 'k', []);
-    expect((calls.find(c => c.op === 'values')!.payload as any).expiresAt).toBeNull();
+    expect((calls.find(c => c.op === 'values')!.payload as Record<string, unknown>).expiresAt).toBeNull();
   });
 
   it('never issues the same key twice', async () => {
@@ -198,7 +197,7 @@ describe('rotateApiKey', () => {
     const { rotateApiKey } = await import('@/lib/auth/api-key');
     const result = await rotateApiKey('old-key', 't1', 'u1', 'rotated', ['contacts:read']);
 
-    const values = calls.find(c => c.op === 'values')!.payload as any;
+    const values = calls.find(c => c.op === 'values')!.payload as Record<string, unknown>;
     expect(values.keyHash).toBe(createHash('sha256').update(result!.key).digest('hex'));
     expect(result!.prefix).toBe(`ak_live_${result!.key.slice('ak_live_'.length, 'ak_live_'.length + 6)}`);
   });
@@ -207,7 +206,7 @@ describe('rotateApiKey', () => {
     const { rotateApiKey } = await import('@/lib/auth/api-key');
     await rotateApiKey('old', 't2', 'u2', 'new-name', ['tasks:all']);
 
-    const values = calls.find(c => c.op === 'values')!.payload as any;
+    const values = calls.find(c => c.op === 'values')!.payload as Record<string, unknown>;
     expect(values.name).toBe('new-name');
     expect(values.scopes).toEqual(['tasks:all']);
     expect(values.tenantId).toBe('t2');
@@ -218,9 +217,9 @@ describe('rotateApiKey', () => {
 describe('getApiKeyUsage', () => {
   /** The three selects, in the order the implementation issues them. */
   function queueUsage(
-    total: any[] = [{ count: 0 }],
-    byEndpoint: any[] = [],
-    byStatus: any[] = [],
+    total: unknown[] = [{ count: 0 }],
+    byEndpoint: unknown[] = [],
+    byStatus: unknown[] = [],
   ) {
     selectResults = [total, byEndpoint, byStatus];
   }

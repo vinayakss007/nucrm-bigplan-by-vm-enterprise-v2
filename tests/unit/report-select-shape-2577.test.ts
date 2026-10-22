@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -34,13 +33,13 @@ import type { AnyPgTable } from 'drizzle-orm/pg-core';
 const h = vi.hoisted(() => ({ selections: [] as unknown[], tables: [] as unknown[] }));
 
 vi.mock('@/drizzle/db', () => {
-  const chain: any = {
+  const chain: Record<string, unknown> = {
     from: (table: unknown) => { h.tables.push(table); return chain; },
     where: () => chain,
     groupBy: () => chain,
     orderBy: () => chain,
     limit: () => chain,
-    then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+    then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
   };
   return { db: { select: (fields: unknown) => { h.selections.push(fields); return chain; } } };
 });
@@ -68,7 +67,11 @@ const TABLES: Record<string, AnyPgTable> = {
 const renderer = drizzle({} as never, { schema: { contacts, companies, deals, tasks, leads } });
 
 function render(fields: unknown, table: AnyPgTable): string {
-  return (renderer as any).select(fields as never).from(table).orderBy(desc((table as any).createdAt)).limit(100).toSQL().sql;
+  const r = renderer as unknown as {
+    select: (f: never) => { from: (t: unknown) => { orderBy: (o: unknown) => { limit: (n: number) => { toSQL: () => { sql: string } } } } };
+  };
+  const createdAt = (table as unknown as { createdAt?: unknown }).createdAt;
+  return r.select(fields as never).from(table).orderBy(desc(createdAt as never)).limit(100).toSQL().sql;
 }
 
 function isRenderable(value: unknown): boolean {

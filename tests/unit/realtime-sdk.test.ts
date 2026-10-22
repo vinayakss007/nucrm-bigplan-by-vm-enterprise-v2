@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock EventSource before importing RealtimeSDK
@@ -33,23 +32,31 @@ class MockEventSource {
   }
 }
 
+/** The EventSource double as the SDK sees it: constructible, with an optional
+ *  instance ledger (never populated by this mock — the guards below rely on it
+ *  being absent). */
+type MockEventSourceConstructor = {
+  new (url: string): MockEventSource;
+  instances?: MockEventSource[];
+};
+
 describe('RealtimeSDK', () => {
-  let MockEventSourceCtor: any;
+  let MockEventSourceCtor: MockEventSourceConstructor;
   let origFetch: typeof globalThis.fetch;
 
   beforeEach(() => {
     origFetch = globalThis.fetch;
-    MockEventSourceCtor = MockEventSource as any;
-    (globalThis as any).EventSource = MockEventSourceCtor;
+    MockEventSourceCtor = MockEventSource;
+    (globalThis as { EventSource?: unknown }).EventSource = MockEventSourceCtor;
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({ ticket: 'test-ticket-123' }),
-    })) as any;
+    })) as unknown as typeof fetch;
   });
 
   afterEach(() => {
     globalThis.fetch = origFetch;
-    delete (globalThis as any).EventSource;
+    delete (globalThis as { EventSource?: unknown }).EventSource;
   });
 
   async function createSDK() {
@@ -72,7 +79,7 @@ describe('RealtimeSDK', () => {
   });
 
   it('connect falls back to API key on ticket fetch failure', async () => {
-    (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
     const sdk = await createSDK();
     await sdk.connect();
     // Should still succeed by using apiKey as fallback
@@ -80,7 +87,7 @@ describe('RealtimeSDK', () => {
   });
 
   it('connect falls back when ticket endpoint returns non-OK', async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, json: async () => ({}) });
     const sdk = await createSDK();
     await sdk.connect();
     expect(sdk).toBeDefined();
@@ -90,7 +97,7 @@ describe('RealtimeSDK', () => {
     const sdk = await createSDK();
     await sdk.connect();
     sdk.disconnect();
-    const instances = (MockEventSourceCtor as any).instances || [];
+    const instances = MockEventSourceCtor.instances || [];
     const lastInstance = instances[instances.length - 1];
     if (lastInstance) {
       expect(lastInstance.readyState).toBe(MockEventSource.CLOSED);
@@ -108,7 +115,7 @@ describe('RealtimeSDK', () => {
     sdk.on('contact.created', handler);
     sdk.off('contact.created', handler);
     await sdk.connect();
-    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    const lastCall = MockEventSourceCtor.instances?.slice(-1)[0];
     if (lastCall) {
       lastCall.simulateMessage(JSON.stringify({
         type: 'contact.created', channel: 'contacts',
@@ -126,7 +133,7 @@ describe('RealtimeSDK', () => {
     sdk.on('deal.updated', h2);
     sdk.off('deal.updated');
     await sdk.connect();
-    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    const lastCall = MockEventSourceCtor.instances?.slice(-1)[0];
     if (lastCall) {
       lastCall.simulateMessage(JSON.stringify({
         type: 'deal.updated', channel: 'deals',
@@ -158,7 +165,7 @@ describe('RealtimeSDK', () => {
     sdk.subscribe('contacts');
     sdk.unsubscribe('contacts');
     await sdk.connect();
-    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    const lastCall = MockEventSourceCtor.instances?.slice(-1)[0];
     if (lastCall) {
       lastCall.simulateMessage(JSON.stringify({
         type: 'contacts.update', channel: 'contacts',
@@ -176,7 +183,7 @@ describe('RealtimeSDK', () => {
     await sdk.connect();
 
     // Get the mock EventSource instance and simulate a message
-    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    const lastCall = MockEventSourceCtor.instances?.slice(-1)[0];
     if (lastCall) {
       lastCall.simulateMessage(JSON.stringify({
         type: 'contact.created',
@@ -195,7 +202,7 @@ describe('RealtimeSDK', () => {
 
     await sdk.connect();
 
-    const lastCall = (MockEventSourceCtor as any).instances?.slice(-1)[0];
+    const lastCall = MockEventSourceCtor.instances?.slice(-1)[0];
     if (lastCall) {
       lastCall.simulateMessage('not json');
       expect(handler).not.toHaveBeenCalled();
