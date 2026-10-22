@@ -1,23 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockSelectChain, mockInsertChain, mockUpdateChain, mockEqFn, mockAndFn } = vi.hoisted(() => ({
   mockSelectChain: vi.fn(),
   mockInsertChain: vi.fn(),
   mockUpdateChain: vi.fn(),
-  mockEqFn: vi.fn((_col: any, _val: any) => `eq(${String(_val)})`),
-  mockAndFn: vi.fn((..._args: any[]) => 'and()'),
+  mockEqFn: vi.fn((_col: unknown, _val: unknown) => `eq(${String(_val)})`),
+  mockAndFn: vi.fn((..._args: unknown[]) => 'and()'),
 }));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: mockSelectChain,
-    insert: (...args: any[]) => mockInsertChain(...args),
-    update: (...args: any[]) => mockUpdateChain(...args),
-    transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb({
+    insert: (...args: unknown[]) => mockInsertChain(...args),
+    update: (...args: unknown[]) => mockUpdateChain(...args),
+    transaction: vi.fn((cb: (tx: Record<string, unknown>) => Promise<unknown>) => cb({
       select: mockSelectChain,
-      insert: (...args: any[]) => mockInsertChain(...args),
-      update: (...args: any[]) => mockUpdateChain(...args),
+      insert: (...args: unknown[]) => mockInsertChain(...args),
+      update: (...args: unknown[]) => mockUpdateChain(...args),
     })),
   },
 }));
@@ -47,10 +46,10 @@ import {
   setFieldPermission,
 } from '@/lib/rbac/field-permissions';
 
-function mockWhereChain(rows: any[]) {
+function mockWhereChain(rows: unknown[]) {
   const query = {
     limit: vi.fn().mockResolvedValue(rows),
-    then: vi.fn((resolve: (v: any) => any) => resolve(rows)),
+    then: vi.fn((resolve: (v: unknown) => unknown) => resolve(rows)),
   };
   return { from: vi.fn(() => ({ where: vi.fn(() => query) })) };
 }
