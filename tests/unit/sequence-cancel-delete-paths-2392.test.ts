@@ -33,8 +33,8 @@ import path from 'path';
 import { randomUUID } from 'node:crypto';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const CONTACT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -43,7 +43,7 @@ const SEQ = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 const dialect = new PgDialect();
 function render(node: unknown) {
-  const q = dialect.sqlToQuery(node as Any) as { sql: string; params: unknown[] };
+  const q = dialect.sqlToQuery(node as Loose) as { sql: string; params: unknown[] };
   return { sql: q.sql, params: q.params ?? [] };
 }
 
@@ -61,16 +61,16 @@ function txMock() {
       h.executes.push(render(node));
       return Promise.resolve({ rows: [] });
     },
-    update: (table: Any) => {
+    update: (table: Loose) => {
       const name = String(table?.[Symbol.for('drizzle:Name')] ?? table);
       const rec = { table: name, payload: {} as Record<string, unknown>, where: undefined as unknown };
       h.updates.push(rec);
-      const chain: Any = {
+      const chain: Loose = {
         set: (p: Record<string, unknown>) => { Object.assign(rec.payload, p); return chain; },
         where: (w: unknown) => { rec.where = w; return chain; },
         returning: async () => h.returningSets.shift() ?? [],
-        then: (res: Any, rej?: Any) => Promise.resolve(rec).then(res, rej),
-        catch: (rej: Any) => Promise.resolve().catch(rej),
+        then: (res: Loose, rej?: Loose) => Promise.resolve(rec).then(res, rej),
+        catch: (rej: Loose) => Promise.resolve().catch(rej),
       };
       return chain;
     },
@@ -80,7 +80,7 @@ function txMock() {
 vi.mock('@/drizzle/db', () => ({
   db: {
     ...txMock(),
-    transaction: async (cb: (tx: Any) => Promise<unknown>) => cb(txMock()),
+    transaction: async (cb: (tx: Loose) => Promise<unknown>) => cb(txMock()),
   },
 }));
 
@@ -96,7 +96,7 @@ beforeEach(() => {
 describe('cancelOpenEnrollments — the write every delete path shares', () => {
   it('cancels a whole list of contacts in one statement', async () => {
     const { cancelOpenEnrollments } = await import('@/lib/cron/sequence-steps');
-    const count = await cancelOpenEnrollments(txMock() as Any, TENANT, { contactIds: [CONTACT_A, CONTACT_B] });
+    const count = await cancelOpenEnrollments(txMock() as Loose, TENANT, { contactIds: [CONTACT_A, CONTACT_B] });
 
     expect(count).toBe(2);
     const u = enrollmentUpdate();
@@ -124,7 +124,7 @@ describe('cancelOpenEnrollments — the write every delete path shares', () => {
     // A GDPR erasure with no matching contacts must not reach Postgres:
     // `inArray` renders `contact_id in ()` — a syntax error, not zero rows.
     const { cancelOpenEnrollments } = await import('@/lib/cron/sequence-steps');
-    const count = await cancelOpenEnrollments(txMock() as Any, TENANT, { contactIds: [] });
+    const count = await cancelOpenEnrollments(txMock() as Loose, TENANT, { contactIds: [] });
 
     expect(count).toBe(0);
     expect(h.updates).toHaveLength(0);
@@ -133,7 +133,7 @@ describe('cancelOpenEnrollments — the write every delete path shares', () => {
 
   it('refuses a filter that would cancel the whole tenant', async () => {
     const { cancelOpenEnrollments } = await import('@/lib/cron/sequence-steps');
-    await expect(cancelOpenEnrollments(txMock() as Any, TENANT, {})).rejects.toThrow(/contactId|sequenceId/);
+    await expect(cancelOpenEnrollments(txMock() as Loose, TENANT, {})).rejects.toThrow(/contactId|sequenceId/);
     expect(h.updates).toHaveLength(0);
   });
 
@@ -143,7 +143,7 @@ describe('cancelOpenEnrollments — the write every delete path shares', () => {
   ] as const)('still scopes a single %s', async (_label, filter, predicate) => {
     // The two shapes PR #2409 shipped must not regress as the filter grows.
     const { cancelOpenEnrollments } = await import('@/lib/cron/sequence-steps');
-    await cancelOpenEnrollments(txMock() as Any, TENANT, filter);
+    await cancelOpenEnrollments(txMock() as Loose, TENANT, filter);
 
     const q = render(enrollmentUpdate()!.where);
     expect(q.sql).toMatch(predicate);

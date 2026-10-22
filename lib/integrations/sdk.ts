@@ -178,8 +178,12 @@ class NuCRMClient {
  
     list: () => this.req<{ data: Entity[] }>('/api/tenant/forms'),
     submit: (formId: string, data: Record<string, unknown>) =>
+      // #3046: this hand-rolled fetch bypassed req()'s 15s deadline — a dead
+      // form endpoint could pin a server handler forever. Match the
+      // client-wide timeout; response semantics are unchanged.
       fetch(`${this.cfg.baseUrl}/api/forms/submit`, {
         method:'POST', headers:{'Content-Type':'application/json'},
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ form_id: formId, data }),
       }).then(r => r.json()),
   };

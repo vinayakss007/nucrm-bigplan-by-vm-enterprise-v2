@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #2388 / #2389 — app/api/tenant/leaderboards must speak the schema's actual
  * language, and must not swallow the difference.
@@ -33,7 +32,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/drizzle/db', () => {
-  const db: any = {
+  const db: Record<string, unknown> = {
     execute: (node: unknown) => {
       h.executes.push(node);
       if (h.failWith) return Promise.reject(h.failWith);
@@ -42,10 +41,10 @@ vi.mock('@/drizzle/db', () => {
       return Promise.resolve(h.rowsFor.shift() ?? []);
     },
     select: () => {
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         from: () => chain,
         where: () => chain,
-        then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
       };
       for (const m of ['orderBy', 'limit', 'groupBy']) chain[m] = () => chain;
       return chain;
@@ -123,7 +122,7 @@ function checkColumnsResolve(text: string, label: string) {
   expect(Object.keys(aliases).length, `${label}: no table aliases found — parser broken`).toBeGreaterThan(0);
   const bad: string[] = [];
   for (const [alias, table] of Object.entries(aliases)) {
-    const legal = new Set(Object.values(table as any).map((c: any) => c.name as string));
+    const legal = new Set(Object.values(table as Record<string, { name?: string }>).map((c) => c.name as string));
     for (const m of text.matchAll(new RegExp(`\\b${alias}\\.([a-z_][a-z0-9_]*)\\b`, 'gi'))) {
       if (!legal.has(m[1]!.toLowerCase())) bad.push(`${alias}.${m[1]}`);
     }
@@ -237,7 +236,7 @@ describe('leaderboards must not swallow a database error (#2388)', () => {
 
     const { logError } = await import('@/lib/errors-server');
     expect(logError).toHaveBeenCalledTimes(1);
-    const arg = (logError as any).mock.calls[0][0];
+    const arg = (logError as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(arg.context).toMatch(/leaderboards/);
     expect(String(arg.error)).toMatch(/owner_id/);
   });

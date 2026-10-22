@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from 'vitest';
 
 // ── Helper: create a mock request function ──────────────
@@ -62,7 +61,7 @@ describe('ContactsResource', () => {
     const { ContactsResource } = await import('@/lib/sdk/resources/contacts');
     const req = createMockRequest({ id: 'c2', firstName: 'Jane' });
     const resource = new ContactsResource(req);
-    const result = await resource.create({ firstName: 'Jane' } as any);
+    const result = await resource.create({ firstName: 'Jane' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/contacts', { firstName: 'Jane' });
     expect(result.id).toBe('c2');
   });
@@ -71,7 +70,7 @@ describe('ContactsResource', () => {
     const { ContactsResource } = await import('@/lib/sdk/resources/contacts');
     const req = createMockRequest({ id: 'c1', firstName: 'Updated' });
     const resource = new ContactsResource(req);
-    const result = await resource.update('c1', { firstName: 'Updated' } as any);
+    const result = await resource.update('c1', { firstName: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/contacts/c1', { firstName: 'Updated' });
     expect(result.firstName).toBe('Updated');
   });
@@ -88,7 +87,7 @@ describe('ContactsResource', () => {
     const { ContactsResource } = await import('@/lib/sdk/resources/contacts');
     const req = createMockRequest({ updated: 3 });
     const resource = new ContactsResource(req);
-    const result = await resource.bulkUpdate(['c1', 'c2', 'c3'], { firstName: 'Bulk' } as any);
+    const result = await resource.bulkUpdate(['c1', 'c2', 'c3'], { firstName: 'Bulk' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/contacts/bulk', { ids: ['c1', 'c2', 'c3'], firstName: 'Bulk' });
     expect(result.updated).toBe(3);
   });
@@ -123,10 +122,10 @@ describe('DealsResource', () => {
     await resource.get('d1');
     expect(req).toHaveBeenCalledWith('GET', '/deals/d1');
 
-    await resource.create({ title: 'Deal' } as any);
+    await resource.create({ title: 'Deal' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/deals', { title: 'Deal' });
 
-    await resource.update('d1', { title: 'Updated' } as any);
+    await resource.update('d1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/deals/d1', { title: 'Updated' });
 
     await resource.delete('d1');
@@ -150,10 +149,10 @@ describe('LeadsResource', () => {
     await resource.get('l1');
     expect(req).toHaveBeenCalledWith('GET', '/leads/l1');
 
-    await resource.create({ firstName: 'Lead' } as any);
+    await resource.create({ firstName: 'Lead' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/leads', { firstName: 'Lead' });
 
-    await resource.update('l1', { firstName: 'Updated' } as any);
+    await resource.update('l1', { firstName: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/leads/l1', { firstName: 'Updated' });
 
     await resource.delete('l1');
@@ -175,9 +174,9 @@ describe('CompaniesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/companies', undefined, {});
     await resource.get('co1');
     expect(req).toHaveBeenCalledWith('GET', '/companies/co1');
-    await resource.create({ name: 'Acme' } as any);
+    await resource.create({ name: 'Acme' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/companies', { name: 'Acme' });
-    await resource.update('co1', { name: 'Updated' } as any);
+    await resource.update('co1', { name: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/companies/co1', { name: 'Updated' });
     await resource.delete('co1');
     expect(req).toHaveBeenCalledWith('DELETE', '/companies/co1');
@@ -195,9 +194,9 @@ describe('TasksResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/tasks', undefined, {});
     await resource.get('t1');
     expect(req).toHaveBeenCalledWith('GET', '/tasks/t1');
-    await resource.create({ title: 'Task' } as any);
+    await resource.create({ title: 'Task' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/tasks', { title: 'Task' });
-    await resource.update('t1', { title: 'Done' } as any);
+    await resource.update('t1', { title: 'Done' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/tasks/t1', { title: 'Done' });
     await resource.delete('t1');
     expect(req).toHaveBeenCalledWith('DELETE', '/tasks/t1');
@@ -215,9 +214,9 @@ describe('TicketsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/tickets', undefined, {});
     await resource.get('tk1');
     expect(req).toHaveBeenCalledWith('GET', '/tickets/tk1');
-    await resource.create({ subject: 'Help' } as any);
+    await resource.create({ subject: 'Help' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/tickets', { subject: 'Help' });
-    await resource.update('tk1', { status: 'closed' } as any);
+    await resource.update('tk1', { status: 'closed' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/tickets/tk1', { status: 'closed' });
     await resource.delete('tk1');
     expect(req).toHaveBeenCalledWith('DELETE', '/tickets/tk1');
@@ -235,9 +234,9 @@ describe('InvoicesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/invoices', undefined, {});
     await resource.get('inv1');
     expect(req).toHaveBeenCalledWith('GET', '/invoices/inv1');
-    await resource.create({ amount: 100 } as any);
+    await resource.create({ amount: 100 } as never);
     expect(req).toHaveBeenCalledWith('POST', '/invoices', { amount: 100 });
-    await resource.update('inv1', { amount: 200 } as any);
+    await resource.update('inv1', { amount: 200 } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/invoices/inv1', { amount: 200 });
     await resource.delete('inv1');
     expect(req).toHaveBeenCalledWith('DELETE', '/invoices/inv1');
@@ -255,9 +254,9 @@ describe('DocumentsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/documents', undefined, {});
     await resource.get('doc1');
     expect(req).toHaveBeenCalledWith('GET', '/documents/doc1');
-    await resource.create({ title: 'Doc' } as any);
+    await resource.create({ title: 'Doc' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/documents', { title: 'Doc' });
-    await resource.update('doc1', { title: 'Updated' } as any);
+    await resource.update('doc1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/documents/doc1', { title: 'Updated' });
     await resource.delete('doc1');
     expect(req).toHaveBeenCalledWith('DELETE', '/documents/doc1');
@@ -275,9 +274,9 @@ describe('QuotesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/quotes', undefined, {});
     await resource.get('q1');
     expect(req).toHaveBeenCalledWith('GET', '/quotes/q1');
-    await resource.create({ title: 'Quote' } as any);
+    await resource.create({ title: 'Quote' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/quotes', { title: 'Quote' });
-    await resource.update('q1', { title: 'Updated' } as any);
+    await resource.update('q1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/quotes/q1', { title: 'Updated' });
     await resource.delete('q1');
     expect(req).toHaveBeenCalledWith('DELETE', '/quotes/q1');
@@ -295,9 +294,9 @@ describe('OrdersResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/orders', undefined, {});
     await resource.get('o1');
     expect(req).toHaveBeenCalledWith('GET', '/orders/o1');
-    await resource.create({ title: 'Order' } as any);
+    await resource.create({ title: 'Order' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/orders', { title: 'Order' });
-    await resource.update('o1', { title: 'Updated' } as any);
+    await resource.update('o1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/orders/o1', { title: 'Updated' });
     await resource.delete('o1');
     expect(req).toHaveBeenCalledWith('DELETE', '/orders/o1');
@@ -315,9 +314,9 @@ describe('ContractsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/contracts', undefined, {});
     await resource.get('ct1');
     expect(req).toHaveBeenCalledWith('GET', '/contracts/ct1');
-    await resource.create({ title: 'Contract' } as any);
+    await resource.create({ title: 'Contract' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/contracts', { title: 'Contract' });
-    await resource.update('ct1', { title: 'Updated' } as any);
+    await resource.update('ct1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/contracts/ct1', { title: 'Updated' });
     await resource.delete('ct1');
     expect(req).toHaveBeenCalledWith('DELETE', '/contracts/ct1');
@@ -335,9 +334,9 @@ describe('SubscriptionsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/subscriptions', undefined, {});
     await resource.get('sub1');
     expect(req).toHaveBeenCalledWith('GET', '/subscriptions/sub1');
-    await resource.create({ plan: 'pro' } as any);
+    await resource.create({ plan: 'pro' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/subscriptions', { plan: 'pro' });
-    await resource.update('sub1', { plan: 'enterprise' } as any);
+    await resource.update('sub1', { plan: 'enterprise' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/subscriptions/sub1', { plan: 'enterprise' });
     await resource.cancel('sub1');
     expect(req).toHaveBeenCalledWith('POST', '/subscriptions/sub1/cancel');
@@ -359,9 +358,9 @@ describe('ServicesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/services', undefined, {});
     await resource.get('svc1');
     expect(req).toHaveBeenCalledWith('GET', '/services/svc1');
-    await resource.create({ name: 'Service' } as any);
+    await resource.create({ name: 'Service' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/services', { name: 'Service' });
-    await resource.update('svc1', { name: 'Updated' } as any);
+    await resource.update('svc1', { name: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/services/svc1', { name: 'Updated' });
     await resource.delete('svc1');
     expect(req).toHaveBeenCalledWith('DELETE', '/services/svc1');
@@ -379,9 +378,9 @@ describe('MeetingsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/meetings', undefined, {});
     await resource.get('m1');
     expect(req).toHaveBeenCalledWith('GET', '/meetings/m1');
-    await resource.create({ title: 'Meeting' } as any);
+    await resource.create({ title: 'Meeting' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/meetings', { title: 'Meeting' });
-    await resource.update('m1', { title: 'Updated' } as any);
+    await resource.update('m1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/meetings/m1', { title: 'Updated' });
     await resource.delete('m1');
     expect(req).toHaveBeenCalledWith('DELETE', '/meetings/m1');
@@ -401,7 +400,7 @@ describe('ActivitiesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/activities', undefined, {});
     await resource.get('a1');
     expect(req).toHaveBeenCalledWith('GET', '/activities/a1');
-    await resource.create({ type: 'note' } as any);
+    await resource.create({ type: 'note' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/activities', { type: 'note' });
   });
 });
@@ -417,9 +416,9 @@ describe('FormsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/forms', undefined, {});
     await resource.get('f1');
     expect(req).toHaveBeenCalledWith('GET', '/forms/f1');
-    await resource.create({ title: 'Form' } as any);
+    await resource.create({ title: 'Form' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/forms', { title: 'Form' });
-    await resource.update('f1', { title: 'Updated' } as any);
+    await resource.update('f1', { title: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/forms/f1', { title: 'Updated' });
     await resource.delete('f1');
     expect(req).toHaveBeenCalledWith('DELETE', '/forms/f1');
@@ -437,9 +436,9 @@ describe('SequencesResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/sequences', undefined, {});
     await resource.get('seq1');
     expect(req).toHaveBeenCalledWith('GET', '/sequences/seq1');
-    await resource.create({ name: 'Sequence' } as any);
+    await resource.create({ name: 'Sequence' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/sequences', { name: 'Sequence' });
-    await resource.update('seq1', { name: 'Updated' } as any);
+    await resource.update('seq1', { name: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/sequences/seq1', { name: 'Updated' });
     await resource.delete('seq1');
     expect(req).toHaveBeenCalledWith('DELETE', '/sequences/seq1');
@@ -457,9 +456,9 @@ describe('AutomationsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/automations', undefined, {});
     await resource.get('auto1');
     expect(req).toHaveBeenCalledWith('GET', '/automations/auto1');
-    await resource.create({ name: 'Automation' } as any);
+    await resource.create({ name: 'Automation' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/automations', { name: 'Automation' });
-    await resource.update('auto1', { name: 'Updated' } as any);
+    await resource.update('auto1', { name: 'Updated' } as never);
     expect(req).toHaveBeenCalledWith('PATCH', '/automations/auto1', { name: 'Updated' });
     await resource.delete('auto1');
     expect(req).toHaveBeenCalledWith('DELETE', '/automations/auto1');
@@ -477,7 +476,7 @@ describe('ReportsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/reports', undefined, {});
     await resource.get('r1');
     expect(req).toHaveBeenCalledWith('GET', '/reports/r1');
-    await resource.create({ title: 'Report' } as any);
+    await resource.create({ title: 'Report' } as never);
     expect(req).toHaveBeenCalledWith('POST', '/reports', { title: 'Report' });
     await resource.delete('r1');
     expect(req).toHaveBeenCalledWith('DELETE', '/reports/r1');
