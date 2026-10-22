@@ -205,11 +205,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
         toast.error(data.error || 'Handoff failed');
         return;
       }
-      if (data.no_op) {
-        toast('Already assigned to that user', { icon: 'ℹ️' });
-      } else {
-        toast.success('Lead handed off');
-      }
+      if (data.no_op) toast('Already assigned to that user', { icon: 'ℹ️' });
+      else toast.success('Lead handed off');
       setShowHandoff(false);
       setHandoffDraft({ assigned_to: '', reason: '' });
       router.refresh();

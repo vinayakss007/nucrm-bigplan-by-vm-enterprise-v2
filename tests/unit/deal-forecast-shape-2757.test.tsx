@@ -29,7 +29,7 @@
  * (route.ts:112-117). The close date and amount survive only because the client
  * omits `undefined` fields.
  *
- * `deal-detail-client.tsx:647` mounts this on every deal page.
+ * `deal-detail-client.tsx:645` mounts this on every deal page.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

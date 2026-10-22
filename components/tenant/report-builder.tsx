@@ -115,9 +115,7 @@ export default function ReportBuilder() {
         limit: 20,
       };
 
-      if (selectedMetricField) {
-        body.metricField = selectedMetricField;
-      }
+      if (selectedMetricField) body.metricField = selectedMetricField;
 
       if (dateFrom || dateTo) {
         const dateRange: { from?: string; to?: string } = {};

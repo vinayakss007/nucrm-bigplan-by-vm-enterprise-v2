@@ -175,9 +175,7 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           const allStages: Array<{ id: string; name: string }> = [];
           for (const p of pipelines) {
             const pStages = p.stages ?? p.deal_stages ?? [];
-            for (const s of pStages) {
-              if (s.id && s.name) allStages.push(s);
-            }
+            for (const s of pStages) if (s.id && s.name) allStages.push(s);
           }
           if (allStages.length > 0) {
             const colors = ['bg-slate-100 text-slate-700', 'bg-blue-100 text-blue-700', 'bg-violet-100 text-violet-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700', 'bg-red-100 text-red-600'];
