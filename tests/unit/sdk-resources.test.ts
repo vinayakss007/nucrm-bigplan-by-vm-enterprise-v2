@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { ActivitiesResource } from '@/lib/sdk/resources/activities';
@@ -24,9 +23,24 @@ import { TasksResource } from '@/lib/sdk/resources/tasks';
 // Shared test factory for SDK resource classes
 // ---------------------------------------------------------------------------
 
+/**
+ * The union of methods the table-driven factory may call. Each resource
+ * implements a subset, so every method is optional and takes loose args —
+ * exactly the surface these tests probe via the hasUpdate/hasSearch flags.
+ */
+interface ResourceInstance {
+  list?(...args: unknown[]): Promise<unknown>;
+  get?(...args: unknown[]): Promise<unknown>;
+  create?(...args: unknown[]): Promise<unknown>;
+  update?(...args: unknown[]): Promise<unknown>;
+  delete?(...args: unknown[]): Promise<unknown>;
+  search?(...args: unknown[]): Promise<unknown>;
+  bulkUpdate?(...args: unknown[]): Promise<unknown>;
+}
+
 interface ResourceSpec {
   name: string;
-  ResourceClass: new (request: any) => any;
+  ResourceClass: new (request: never) => ResourceInstance;
   basePath: string;
   /** Whether this resource exposes an update method */
   hasUpdate: boolean;
@@ -72,7 +86,7 @@ describe('SDK Resources - shared CRUD factory', () => {
   describe.each(resourceSpecs)(
     '$name Resource',
     ({ ResourceClass, basePath, hasUpdate, hasDelete, hasSearch, hasBulkUpdate }) => {
-      let resource: any;
+      let resource: ResourceInstance;
 
       beforeEach(() => {
         mockRequest = vi.fn().mockResolvedValue({ id: 'test-1' });
@@ -223,13 +237,13 @@ describe('SDK Resources - shared CRUD factory', () => {
     it('create() propagates request errors', async () => {
       mockRequest.mockRejectedValue(new Error('Validation failed'));
       const resource = new LeadsResource(mockRequest);
-      await expect(resource.create({ firstName: 'X' } as any)).rejects.toThrow('Validation failed');
+      await expect(resource.create({ firstName: 'X' } as never)).rejects.toThrow('Validation failed');
     });
 
     it('update() propagates request errors', async () => {
       mockRequest.mockRejectedValue(new Error('Forbidden'));
       const resource = new TasksResource(mockRequest);
-      await expect(resource.update('t1', { title: 'X' } as any)).rejects.toThrow('Forbidden');
+      await expect(resource.update('t1', { title: 'X' } as never)).rejects.toThrow('Forbidden');
     });
 
     it('delete() propagates request errors', async () => {
@@ -247,7 +261,7 @@ describe('SDK Resources - shared CRUD factory', () => {
     it('bulkUpdate() propagates request errors', async () => {
       mockRequest.mockRejectedValue(new Error('Bulk limit exceeded'));
       const resource = new ContactsResource(mockRequest);
-      await expect(resource.bulkUpdate(['id1'], { firstName: 'X' } as any)).rejects.toThrow('Bulk limit exceeded');
+      await expect(resource.bulkUpdate(['id1'], { firstName: 'X' } as never)).rejects.toThrow('Bulk limit exceeded');
     });
   });
 });

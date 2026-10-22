@@ -23,8 +23,8 @@ vi.mock('@/lib/security/ssrf', async (importOriginal) => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test doubles stand in for Drizzle's builder chain types
-type Any = any;
+// Loosely-typed alias for the Drizzle builder-chain doubles below.
+type Loose = unknown;
 
 const mockTxSet = vi.hoisted(() => vi.fn(() => ({ where: vi.fn() })));
 const mockTxUpdate = vi.hoisted(() => vi.fn(() => ({ set: mockTxSet })));
@@ -44,7 +44,7 @@ vi.mock('@/drizzle/db', () => ({
     })),
     insert: vi.fn(() => ({ values: mockInsertValues })),
     update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
-    transaction: vi.fn((cb: (tx: Any) => Promise<Any>) =>
+    transaction: vi.fn((cb: (tx: Loose) => Promise<Loose>) =>
       cb({
         update: mockTxUpdate,
         insert: vi.fn(() => ({ values: mockInsertValues })),
@@ -112,7 +112,7 @@ import { logger } from '@/lib/logger';
 function stubHooks(hooks: unknown[]) {
   vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({ where: vi.fn().mockResolvedValue(hooks) })),
-  } as Any);
+  } as Loose);
 }
 
 function hook(overrides: Record<string, unknown> = {}) {
@@ -249,7 +249,7 @@ describe('webhook delivery fix', () => {
         returning: vi.fn(() => {
           throw new Error('insert exploded');
         }),
-      } as Any);
+      } as Loose);
 
       const { fireWebhooks } = await import('@/lib/webhooks');
       await fireWebhooks('tenant-1', 'contact.created', {});
@@ -272,7 +272,7 @@ describe('webhook delivery fix', () => {
       expect(mockTxSet).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'delivered', responseStatus: 201 }),
       );
-      const statuses = mockTxSet.mock.calls.map((c) => (c[0] as Any)?.status);
+      const statuses = mockTxSet.mock.calls.map((c) => (c[0] as Loose)?.status);
       expect(statuses).not.toContain('success');
     });
 
@@ -367,11 +367,11 @@ describe('webhook delivery fix', () => {
             })),
           })),
         })),
-      } as Any);
+      } as Loose);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 
       const setFn = vi.fn(() => ({ where: vi.fn() }));
-      vi.mocked(db.update).mockReturnValue({ set: setFn } as Any);
+      vi.mocked(db.update).mockReturnValue({ set: setFn } as Loose);
 
       const { retryFailedWebhooks } = await import('@/lib/webhooks');
       const retried = await retryFailedWebhooks();

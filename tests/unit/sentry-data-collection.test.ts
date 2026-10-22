@@ -28,8 +28,8 @@ const resolverPath = join(
 
 type Resolve = (options: { dataCollection?: unknown }) => Record<string, unknown>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const resolveDataCollection = ((require_(resolverPath) as any).resolveDataCollectionOptions) as Resolve;
+const resolveDataCollection = ((require_(resolverPath) as { resolveDataCollectionOptions: unknown })
+  .resolveDataCollectionOptions) as Resolve;
 
 /** Every path in a resolved options object that would cause data to be sent. */
 function collectingPaths(value: unknown, prefix = ''): string[] {

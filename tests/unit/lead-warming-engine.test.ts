@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/drizzle/db', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function makeChain(handleTransaction?: boolean): any {
+  function makeChain(handleTransaction?: boolean): Record<string, unknown> {
     const fn = function () { return proxy; };
     const proxy = new Proxy(fn, {
       get(_t, prop) {

@@ -27,6 +27,7 @@ deterministic-first AI. There are ~215 database tables.
 | Keep the app healthy (deps, migrations, monitoring, tech debt) | [`MAINTENANCE_PLAN.md`](./MAINTENANCE_PLAN.md)                                          |
 | Add a new feature or module end-to-end                         | [`FEATURE_ADDITION_PLAN.md`](./FEATURE_ADDITION_PLAN.md)                                |
 | Know the mandatory rules (PR policy, branch names, deploy)     | [`../../AGENTS.md`](../../AGENTS.md)                                                    |
+| Stop re-breaking fixes (pre-push gates, dedupe, doctrines)     | [`AGENT_GUARDRAILS.md`](./AGENT_GUARDRAILS.md)                                          |
 | Know the engineering standards (isolation, perf, AI policy)    | [`../../.kiro/steering/global-standards.md`](../../.kiro/steering/global-standards.md)  |
 | Understand the architecture in depth                           | [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)                                        |
 | Run/fix a production incident                                  | [`../runbooks/`](../runbooks/) and [`../DISASTER-RECOVERY.md`](../DISASTER-RECOVERY.md) |

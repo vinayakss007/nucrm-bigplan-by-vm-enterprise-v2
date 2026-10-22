@@ -3,7 +3,10 @@
 > **New here? Start with the agent onboarding hub:**
 > [`docs/agent-plans/README.md`](./docs/agent-plans/README.md) — it links the
 > **Project Map**, **Maintenance Plan**, and **Feature Addition Plan** so any
-> agent gets the full picture before touching code. This file (`AGENTS.md`)
+> agent gets the full picture before touching code. Before your first push,
+> also read [`docs/agent-plans/AGENT_GUARDRAILS.md`](./docs/agent-plans/AGENT_GUARDRAILS.md)
+> — the pre-push gate, dedupe protocol, and the recurring fix/break failure
+> modes it exists to stop. This file (`AGENTS.md`)
 > remains the source of truth for the **mandatory PR policy and live deploy
 > facts** below.
 

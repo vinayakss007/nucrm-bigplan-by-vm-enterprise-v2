@@ -13,9 +13,12 @@ export async function loginAction(formData: FormData) {
 
   try {
     const baseUrl = process.env['APP_URL'] || process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+    // #3046: this self-call had no deadline — a hung DB pinned the server
+    // action forever and every user retry stacked another hung handler.
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(25_000),
       body: JSON.stringify({ email, password })
     });
 
@@ -33,7 +36,12 @@ export async function loginAction(formData: FormData) {
     } else {
       return { error: data.error || 'Login failed' };
     }
-  } catch {
+  } catch (err) {
+    // #3046: AbortSignal.timeout aborts with a TimeoutError DOMException —
+    // tell the user to retry instead of the generic connection-failure text.
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return { error: 'Login is taking too long — please try again' };
+    }
     return { error: 'Unable to connect to authentication service' };
   }
 }
