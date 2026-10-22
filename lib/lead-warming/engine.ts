@@ -696,21 +696,12 @@ export async function seedSystemEvents(): Promise<number> {
   return inserted;
 }
 
-// ── Monthly Reset ─────────────────────────────────────────────────────────
-
 /**
- * #3048: idempotent, catch-up-capable monthly reset.
- *
- * The old design was a one-shot reset that ran ONLY on a host-local
- * `getDate() === 1` cron run: a single failed day-1 run (lock refused,
- * deploy mid-run, DB blip) left the counters stale for the whole month, and
- * the UTC month boundary drifted with server timezone.
- *
- * Now the staleness predicate lives in SQL — a row resets when its counter
- * is non-zero and its last send predates the current UTC month. The cron
- * calls this before processing on EVERY run, so any successful run on or
- * after the 1st performs the reset, and a row already current this month is
- * untouched. Returns the number of rows reset (0 on a normal mid-month run).
+ * #3048: idempotent, catch-up-capable monthly reset. The old one-shot ran only
+ * on a host-local getDate()===1 cron day, so one failed day-1 run stalled
+ * throttling a month. The staleness predicate lives in SQL (non-zero counter,
+ * last send predates the current UTC month), so the cron calls this on EVERY
+ * run before processing — any run on/after the 1st performs the reset.
  */
 export async function resetMonthlyCounters(): Promise<number> {
   const reset = await db.update(leadWarmingSchedule)
