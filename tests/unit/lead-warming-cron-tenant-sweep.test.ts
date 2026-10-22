@@ -39,7 +39,7 @@ const mockProcessLeadWarming = vi.fn(async () => ({
   errors: [`tenant-err-${Math.random().toString(36).slice(2, 7)}`],
   skippedContacts: 4,
 }));
-const mockResetMonthlyCounters = vi.fn(async () => undefined);
+const mockResetMonthlyCounters = vi.fn(async () => 0);
 const mockAnalyzeUnprocessedReplies = vi.fn(async (_limit: number) => ({ processed: 5, errors: 1 }));
 
 vi.mock('@/lib/cron/tenant-scope', () => ({
@@ -94,7 +94,7 @@ describe('lead-warming cron — per-tenant sweep', () => {
       skippedContacts: 4,
     });
     mockAnalyzeUnprocessedReplies.mockResolvedValue({ processed: 5, errors: 1 });
-    mockResetMonthlyCounters.mockResolvedValue(undefined);
+    mockResetMonthlyCounters.mockResolvedValue(0);
     // Mid-month by default: the monthly reset must not fire.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 4, 15, 9, 0, 0));
@@ -139,11 +139,21 @@ describe('lead-warming cron — per-tenant sweep', () => {
       skippedContacts: 8,
     });
     expect(body.replies).toEqual({ processed: 10, errors: 2 });
-    expect(body.monthlyReset).toBeUndefined();
+    // #3048: the idempotent reset now runs inside every tenant sweep on every
+    // day, BEFORE the sends — mid-month it simply resets 0 rows.
+    expect(mockResetMonthlyCounters).toHaveBeenCalledTimes(2);
+    expect(
+      mockResetMonthlyCounters.mock.invocationCallOrder[0]!
+      < mockProcessLeadWarming.mock.invocationCallOrder[0]!,
+    ).toBe(true);
+    expect(body.monthlyReset).toBe(false);
+    expect(body.monthlyResetRows).toBe(0);
   });
 
-  it('resets monthly counters per tenant only on the 1st, keeping the flag in the response', async () => {
-    vi.setSystemTime(new Date(2026, 0, 1, 9, 0, 0));
+  it('catches up the monthly reset on any run after the 1st, not just the 1st (#3048)', async () => {
+    // Mid-month date on purpose: a failed day-1 run must be repaired by the
+    // next successful run instead of stalling throttling for a month.
+    mockResetMonthlyCounters.mockResolvedValue(3);
 
     const { POST } = await import('@/app/api/cron/lead-warming/route');
     const body = await (await POST(makeRequest())).json();
@@ -152,6 +162,7 @@ describe('lead-warming cron — per-tenant sweep', () => {
     // each tenant scope to touch that tenant's rows.
     expect(mockResetMonthlyCounters).toHaveBeenCalledTimes(2);
     expect(body.monthlyReset).toBe(true);
+    expect(body.monthlyResetRows).toBe(6);
   });
 
   it('keeps the completion log line', async () => {

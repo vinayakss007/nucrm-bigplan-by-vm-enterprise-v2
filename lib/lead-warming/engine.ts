@@ -696,15 +696,19 @@ export async function seedSystemEvents(): Promise<number> {
   return inserted;
 }
 
-// ── Monthly Reset ─────────────────────────────────────────────────────────
-
 /**
- * Reset monthly counters for all schedule entries.
- * Called on the 1st of each month by cron.
+ * #3048: idempotent, catch-up-capable monthly reset. The old one-shot ran only
+ * on a host-local getDate()===1 cron day, so one failed day-1 run stalled
+ * throttling a month. The staleness predicate lives in SQL (non-zero counter,
+ * last send predates the current UTC month), so the cron calls this on EVERY
+ * run before processing — any run on/after the 1st performs the reset.
  */
-export async function resetMonthlyCounters(): Promise<void> {
-  await db.update(leadWarmingSchedule)
+export async function resetMonthlyCounters(): Promise<number> {
+  const reset = await db.update(leadWarmingSchedule)
     .set({ messagesThisMonth: 0, updatedAt: new Date() })
-    .where(sql`1=1`);
-  console.log('[lead-warming] Monthly counters reset');
+    .where(sql`${leadWarmingSchedule.messagesThisMonth} > 0 AND (${leadWarmingSchedule.lastMessageAt} IS NULL OR ${leadWarmingSchedule.lastMessageAt} < (date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'))`)
+    .returning({ id: leadWarmingSchedule.id });
+  const count = Array.isArray(reset) ? reset.length : 0;
+  if (count > 0) console.log(`[lead-warming] Monthly counters reset for ${count} schedule rows`);
+  return count;
 }
