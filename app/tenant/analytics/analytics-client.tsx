@@ -15,11 +15,38 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { isWonStageName, isLostStageName } from '@/lib/deals/won-stage';
 import { cn } from '@/lib/utils';
 
+// #3121: keys are lower-cased because they are looked up by the normalised stage
+// name, never by the display label the tenant wrote. This is a preference map, not
+// a list of stages the page is willing to draw — see the byStage memo.
 const STAGE_COLORS: Record<string,string> = {
-  'Lead': '#94a3b8', 'Qualified': '#3b82f6', 'Proposal': '#8b5cf6',
-  'Negotiation': '#f59e0b', 'Won': '#10b981', 'Lost': '#ef4444',
+  lead: '#94a3b8', qualified: '#3b82f6', proposal: '#8b5cf6',
+  negotiation: '#f59e0b', won: '#10b981', lost: '#ef4444',
 };
+// Positional colours for stages the map has no preference for. Green and red stay
+// out of it — on this chart they mean won and lost, and an open stage must not
+// borrow either.
+const STAGE_PALETTE = ['#7c3aed','#0ea5e9','#3b82f6','#f59e0b','#8b5cf6','#94a3b8','#4f46e5'];
+const FALLBACK_STAGE_COLOR = '#7c3aed';
 const SOURCE_COLORS = ['#7c3aed','#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+
+// The category axis is width={90}; stage names are tenant-authored and unbounded.
+const STAGE_LABEL_MAX = 14;
+function truncateStageLabel(value: unknown): string {
+  const label = String(value ?? '');
+  return label.length > STAGE_LABEL_MAX ? `${label.slice(0, STAGE_LABEL_MAX - 1)}…` : label;
+}
+
+function stageColor(normalized: string, index: number): string {
+  const preferred = STAGE_COLORS[normalized];
+  if (preferred) return preferred;
+  // The map only spells the seeded defaults, and #658's whole point is that tenants
+  // rename these stages. "Closed Won" is still the won stage, so it still gets the
+  // won colour — the same vocabulary the KPI row above already classifies with —
+  // rather than a positional colour that could read as any other stage's meaning.
+  if (isWonStageName(normalized)) return STAGE_COLORS['won'] ?? FALLBACK_STAGE_COLOR;
+  if (isLostStageName(normalized)) return STAGE_COLORS['lost'] ?? FALLBACK_STAGE_COLOR;
+  return STAGE_PALETTE[index % STAGE_PALETTE.length] ?? FALLBACK_STAGE_COLOR;
+}
 
 const CHART_STYLE = { background:'transparent' };
 const TICK_STYLE  = { fontSize:10, fill:'hsl(var(--muted-foreground))' };
@@ -82,24 +109,28 @@ export default function TenantAnalyticsPage() {
   const avgDealSize = useMemo(() => (wonCount > 0 ? wonRevenue / wonCount : 0), [wonCount, wonRevenue]);
 
   const byStage = useMemo(() => {
-    const groups: Record<string, { count: number; value: number }> = {};
+    const groups = new Map<string, { stage: string; count: number; value: number }>();
     dealsByStage.forEach(d => {
-      const stageName = d.stageName || 'Other';
-      if (!groups[stageName]) groups[stageName] = { count: 0, value: 0 };
-      const group = groups[stageName];
+      // Two tenant stages whose names differ only by case are the same bar, so
+      // group on the normalised name and keep the first label seen for display.
+      const label = (d.stageName ?? '').trim() || 'Other';
+      const key = label.toLowerCase();
+      const group = groups.get(key);
       if (group) {
         group.count += Number(d.count || 0);
         group.value += Number(d.revenue || 0);
+      } else {
+        groups.set(key, { stage: label, count: Number(d.count || 0), value: Number(d.revenue || 0) });
       }
     });
-    return Object.entries(STAGE_COLORS)
-      .map(([stageName, color]) => ({
-        stage: stageName,
-        count: groups[stageName]?.count || 0,
-        value: groups[stageName]?.value || 0,
-        color,
-      }))
-      .filter(s => s.count > 0);
+    // #3121: this used to be `Object.entries(STAGE_COLORS).map(...)`, which made the
+    // colour map the list of stages the chart was willing to draw. Every stage named
+    // something other than the six seeded defaults looked up to undefined and was
+    // dropped — so a renamed pipeline drew an empty plot while the KPI cards above it
+    // reported the same deals correctly. The rows are the source now; the map only
+    // answers a colour lookup. The payload carries no stage order (the server groups
+    // without an ORDER BY), so the bars keep the order the rows arrive in.
+    return [...groups.entries()].map(([key, group], i) => ({ ...group, color: stageColor(key, i) }));
   }, [dealsByStage]);
 
   const sourceData = useMemo(() => {
@@ -225,17 +256,19 @@ export default function TenantAnalyticsPage() {
 
         <div className="admin-card p-5">
           <p className="text-sm font-semibold mb-4">Deals by Stage</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={byStage} layout="vertical" style={CHART_STYLE}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false}/>
-              <XAxis type="number" tick={TICK_STYLE} tickLine={false} axisLine={false}/>
-              <YAxis type="category" dataKey="stage" tick={TICK_STYLE} tickLine={false} axisLine={false} width={90}/>
-              <Tooltip contentStyle={TIP_STYLE} formatter={(v: unknown, n: number | string | undefined)=>[n==='value'?formatCurrency(v as number):String(v),n==='value'?'Value':'Count']}/>
-              <Bar dataKey="count" name="Count" radius={[0,3,3,0]}>
-                {byStage.map((s,i) => <Cell key={i} fill={STAGE_COLORS[s.stage.toLowerCase()]||'#7c3aed'}/>)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {byStage.length ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={byStage} layout="vertical" style={CHART_STYLE}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false}/>
+                <XAxis type="number" tick={TICK_STYLE} tickLine={false} axisLine={false}/>
+                <YAxis type="category" dataKey="stage" tick={TICK_STYLE} tickLine={false} axisLine={false} width={90} tickFormatter={truncateStageLabel}/>
+                <Tooltip contentStyle={TIP_STYLE} formatter={(v: unknown, n: number | string | undefined)=>[n==='value'?formatCurrency(v as number):String(v),n==='value'?'Value':'Count']}/>
+                <Bar dataKey="count" name="Count" radius={[0,3,3,0]}>
+                  {byStage.map((s,i) => <Cell key={i} fill={s.color}/>)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">No deals to chart yet</div>}
         </div>
       </div>
 
