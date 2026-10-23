@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createOrderSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
+import { sumLineItems, lineTotal } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
@@ -82,10 +83,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
     }
 
-    let subtotal = 0;
-    for (const item of items) {
-      subtotal += (parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0);
-    }
+    // #3109 — this loop accumulated IEEE-754 error across lines (rounded once at
+    // the header, while every stored line total is rounded at write), and
+    // `parseFloat(...) || 1` billed a schema-legal `quantity: 0` as ONE unit.
+    // lib/money exists for exactly this and invoices/quotes already use it.
+    const subtotal = sumLineItems(items);
     const totalAmount = subtotal;
 
     // Atomic per-tenant order-number generation (#2342): the previous COUNT(*)+1
@@ -145,9 +147,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               serviceId: null,
               description: item.description,
               itemType: 'product',
-              quantity: String(item.quantity || 1),
-              unitPrice: String(item.unit_price || 0),
-              total: String(((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)),
+              // #3109 — `|| 1` here too: quantity 0 is legal (free/memo line)
+              // and must price at 0, matching sumLineItems on the header.
+              quantity: String(item.quantity ?? 1),
+              unitPrice: String(item.unit_price ?? 0),
+              total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
               sortOrder: idx,
             }));
 
