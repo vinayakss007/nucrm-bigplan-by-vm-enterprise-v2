@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes, oauthTokens } from '@/drizzle/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
@@ -117,11 +117,22 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const [token] = await db.transaction(async (tx) => {
-        await tx
+      // #3075: the SELECT above is only a fast path — two concurrent redemptions
+      // can both pass it. The claim is this conditional UPDATE: under READ
+      // COMMITTED the second writer blocks on the row lock, then re-evaluates
+      // `used_at IS NULL` against the committed row and claims zero rows.
+      const redemption = await db.transaction(async (tx) => {
+        const [claimed] = await tx
           .update(oauthCodes)
           .set({ usedAt: new Date() })
-          .where(eq(oauthCodes.id, authCode.id));
+          .where(and(
+            eq(oauthCodes.id, authCode.id),
+            isNull(oauthCodes.usedAt),
+            gt(oauthCodes.expiresAt, new Date()),
+          ))
+          .returning({ id: oauthCodes.id });
+
+        if (!claimed) return null;
 
         return tx
           .insert(oauthTokens)
@@ -142,6 +153,14 @@ export async function POST(request: NextRequest) {
           });
       });
 
+      if (redemption === null) {
+        return NextResponse.json(
+          { error: 'invalid_grant', error_description: 'Invalid or expired code' },
+          { status: 400 }
+        );
+      }
+
+      const token = redemption[0];
       if (!token) {
         return NextResponse.json(
           { error: 'server_error', error_description: 'Failed to create token' },
@@ -150,8 +169,8 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({
-        access_token: token!.accessToken,
-        refresh_token: token!.refreshToken,
+        access_token: token.accessToken,
+        refresh_token: token.refreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
         scope: authCode.scope,
@@ -166,56 +185,60 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const [existingToken] = await db
-        .select({
-          // 4 of `oauth_tokens`' 9 columns (measured via getTableColumns): id deletes
-          // the old row, expiresAt gates the grant, userId + scope are carried onto
-          // the replacement. The refresh token itself and clientId are WHERE
-          // predicates and never re-enter scope after the lookup.
-          id: oauthTokens.id,
-          userId: oauthTokens.userId,
-          scope: oauthTokens.scope,
-          expiresAt: oauthTokens.expiresAt,
-        })
-        .from(oauthTokens)
-        // Rotation stays inside the client that minted the token: a refresh token
-        // leaked to a second client must not keep working under that client's own
-        // secret.
-        .where(and(
-          eq(oauthTokens.refreshToken, refreshToken),
-          eq(oauthTokens.clientId, client.id),
-        ))
-        .limit(1);
+      // #3075: claim and rotate in one transaction — the conditional DELETE is
+      // the lock. The old SELECT-then-DELETE let two concurrent refreshes with
+      // the same token both pass the lookup and each mint a replacement,
+      // doubling the live refresh-token set. Under READ COMMITTED the second
+      // DELETE blocks on the row lock, then re-evaluates its predicates
+      // against the committed row and claims zero rows.
+      const rotated = await db.transaction(async (tx) => {
+        const [consumed] = await tx
+          .delete(oauthTokens)
+          .where(and(
+            eq(oauthTokens.refreshToken, refreshToken),
+            // Rotation stays inside the client that minted the token: a refresh
+            // token leaked to a second client must not keep working under that
+            // client's own secret.
+            eq(oauthTokens.clientId, client.id),
+            gt(oauthTokens.expiresAt, new Date()),
+          ))
+          // userId + scope are the only columns carried onto the replacement;
+          // refreshToken and clientId are WHERE predicates only.
+          .returning({
+            userId: oauthTokens.userId,
+            scope: oauthTokens.scope,
+          });
 
-      if (!existingToken || existingToken.expiresAt < new Date()) {
+        if (!consumed) return null;
+
+        return tx
+          .insert(oauthTokens)
+          .values({
+            clientId: client.id,
+            userId: consumed.userId,
+            accessToken: uuidv4(),
+            refreshToken: uuidv4(),
+            scope: consumed.scope,
+            expiresAt: new Date(Date.now() + 3600 * 1000),
+          })
+          // The response is built from these fields alone — this is the OAuth
+          // token endpoint, so RETURNING * would hand the caller columns it
+          // never asked for.
+          .returning({
+            accessToken: oauthTokens.accessToken,
+            refreshToken: oauthTokens.refreshToken,
+            scope: oauthTokens.scope,
+          });
+      });
+
+      if (rotated === null) {
         return NextResponse.json(
           { error: 'invalid_grant', error_description: 'Invalid or expired refresh token' },
           { status: 400 }
         );
       }
 
-      const [newToken] = await db.transaction(async (tx) => {
-        await tx.delete(oauthTokens).where(eq(oauthTokens.id, existingToken.id));
-
-        return tx
-          .insert(oauthTokens)
-          .values({
-            clientId: client.id,
-            userId: existingToken.userId,
-            accessToken: uuidv4(),
-            refreshToken: uuidv4(),
-            scope: existingToken.scope,
-            expiresAt: new Date(Date.now() + 3600 * 1000),
-          })
-          // The response is built from these two fields alone — this is the
-          // OAuth token endpoint, so RETURNING * would hand the caller columns
-          // it never asked for.
-          .returning({
-            accessToken: oauthTokens.accessToken,
-            refreshToken: oauthTokens.refreshToken,
-          });
-      });
-
+      const newToken = rotated[0];
       if (!newToken) {
         return NextResponse.json(
           { error: 'server_error', error_description: 'Failed to create token' },
@@ -228,7 +251,7 @@ export async function POST(request: NextRequest) {
         refresh_token: newToken.refreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
-        scope: existingToken.scope,
+        scope: newToken.scope,
       });
     }
 

@@ -90,13 +90,25 @@ export async function requestPasswordReset(
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-    await withAuthLookupContext(async (tx) =>
+    // #3075: at most one live token per user. The old shape inserted
+    // alongside any still-live tokens from earlier requests, so several
+    // reset links were redeemable at once — and until the expiry window each
+    // old URL was a standing credential. Retire the previous tokens in the
+    // same platform-security context that owns this table (PP-026).
+    await withSecurityContext(async (tx) => {
+      await tx
+        .update(passwordResets)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(passwordResets.userId, user.id),
+          isNull(passwordResets.deletedAt)
+        ));
       await tx.insert(passwordResets).values({
         userId: user.id,
         token: tokenHash,
         expiresAt,
-      })
-    );
+      });
+    });
 
     // Build reset URL
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
@@ -232,17 +244,8 @@ export async function resetPassword(
   newPassword: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    // Validate token
-    const tokenCheck = await verifyResetToken(token);
-    const resetUserId = tokenCheck.userId;
-    if (!tokenCheck.valid || !resetUserId) {
-      return {
-        success: false,
-        message: 'Invalid or expired reset token. Please request a new one.'
-      };
-    }
-
-    // Validate password strength
+    // Password strength is validated BEFORE the token is claimed so a weak
+    // password never burns a live token.
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
       return {
@@ -251,29 +254,67 @@ export async function resetPassword(
       };
     }
 
-    // Hash new password
+    if (!token || token.length !== RESET_TOKEN_LENGTH * 2) {
+      return {
+        success: false,
+        message: 'Invalid or expired reset token. Please request a new one.'
+      };
+    }
+
     const passwordHash = await hashPassword(newPassword);
+    const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    // Update user password
-    await withSecurityContext(async (tx) =>
+    // #3075: single atomic claim, mirroring app/api/auth/reset-password
+    // (#1215). The old shape verified via SELECT, changed the password, then
+    // cleared the token through a helper whose failure was swallowed — two
+    // concurrent requests with the same link both succeeded, and any token
+    // left live until expiry. The conditional UPDATE ... RETURNING lets
+    // exactly one redemption win; on the win it also consumes every other
+    // still-live token for that user, and session invalidation moves inside
+    // the same transaction (its failure now rolls the whole reset back
+    // instead of being console.error'd away).
+    const resetUserId = await withSecurityContext(async (tx) => {
+      const [claimed] = await tx
+        .update(passwordResets)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(passwordResets.token, tokenHash),
+          isNull(passwordResets.deletedAt),
+          gt(passwordResets.expiresAt, new Date())
+        ))
+        .returning({ userId: passwordResets.userId });
+
+      if (!claimed) return null;
+
       await tx
-      .update(users)
-      .set({
-        passwordHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, resetUserId))
-    );
+        .update(users)
+        .set({
+          passwordHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, claimed.userId));
 
-    // Invalidate all existing sessions for this user
-    await withSecurityContext(async (tx) =>
       await tx
-      .delete(sessions)
-      .where(eq(sessions.userId, resetUserId))
-    ).catch((e) => { console.error('[password-reset] Failed to invalidate sessions', e); });
+        .delete(sessions)
+        .where(eq(sessions.userId, claimed.userId));
 
-    // Consume the reset token to prevent reuse within the expiry window
-    await clearResetToken(resetUserId);
+      await tx
+        .update(passwordResets)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(passwordResets.userId, claimed.userId),
+          isNull(passwordResets.deletedAt)
+        ));
+
+      return claimed.userId;
+    });
+
+    if (!resetUserId) {
+      return {
+        success: false,
+        message: 'Invalid or expired reset token. Please request a new one.'
+      };
+    }
 
     logger.info('Password reset successful', { userId: resetUserId });
 
