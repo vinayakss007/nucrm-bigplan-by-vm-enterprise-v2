@@ -85,17 +85,20 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
 
         if (!meetsConditions(automation.conditions as AutomationCondition[], enrichedData)) continue;
 
+        // #3131: an action can fail without throwing — the run row has to know.
+        const actionFailures: string[] = [];
         await db.transaction(async (tx) => {
           for (const action of (automation.actions as AutomationAction[] ?? [])) {
-            await executeAction(tx, action, payload, enrichedData);
+            await executeAction(tx, action, payload, enrichedData, actionFailures);
           }
 
           await tx.insert(automationRuns).values({
             tenantId: payload.tenantId,
             automationId: automation.id,
             triggerEvent: payload.event,
-            status: 'success',
+            status: actionFailures.length > 0 ? 'failed' : 'success',
             triggeredBy: payload.userId || null,
+            errorMessage: actionFailures.length > 0 ? actionFailures.join('; ') : null,
             metadata: enrichedData,
           });
         });
@@ -158,18 +161,27 @@ function str(data: Record<string, unknown>, key: string): string | undefined {
   return v == null ? undefined : String(v);
 }
 
-async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: AutomationAction, payload: TriggerPayload, enrichedData: Record<string, unknown>): Promise<void> {
+/**
+ * Run one configured action. `actionFailures` receives a reason for any action
+ * that failed WITHOUT throwing (#3131) — a refused mail must not abort the
+ * caller's transaction and roll back the sibling actions the tenant also asked
+ * for, so it is reported to the run row instead of re-written as a rollback.
+ */
+async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: AutomationAction, payload: TriggerPayload, enrichedData: Record<string, unknown>, actionFailures: string[]): Promise<void> {
   const { type, config = {} } = action;
 
   switch (type) {
     case 'send_email': {
       const to = config.to || str(enrichedData, 'email');
       if (!to) return;
-      await sendEmail({
+      // #2422/#3045: sendEmail never throws on a provider 4xx/5xx, it returns
+      // `{ success: false, error }` — this awaited it and dropped the result.
+      const sent = await sendEmail({
         to,
         subject: config.subject || 'Automated message from NuCRM',
         html: interpolateHtml(config.body || '', enrichedData),
       });
+      if (!sent.success) actionFailures.push(`send_email: ${sent.error ?? 'email provider rejected the automated send'}`);
       break;
     }
 

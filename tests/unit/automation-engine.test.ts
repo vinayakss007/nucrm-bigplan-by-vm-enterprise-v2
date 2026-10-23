@@ -27,7 +27,8 @@ vi.mock('@/drizzle/db', () => ({
 }));
 
 vi.mock('@/lib/email/service', () => ({
-  sendEmail: vi.fn().mockResolvedValue(undefined),
+  // A SendResult, not undefined — sendEmail never resolves undefined (#2422/#3045).
+  sendEmail: vi.fn().mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-1' }),
 }));
 
 vi.mock('@/lib/notifications', () => ({
