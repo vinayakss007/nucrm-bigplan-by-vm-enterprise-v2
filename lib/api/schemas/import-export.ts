@@ -15,6 +15,17 @@ export const importSchema = z.object({
   skip_duplicates: z.boolean().optional().default(true),
 });
 
+// #3106 — the shape the CSV import modals actually post (`components/tenant/
+// import-modal.tsx:93`: `{ csv, ...opts }`). The three csv routes used to gate
+// against `importSchema` above, which describes a different contract entirely
+// ({entity_type, data[]}), so every real import was answered 400 before a row
+// was parsed. Routes must validate against THIS one and use the parsed value.
+export const csvImportSchema = z.object({
+  csv: z.string().min(1, 'csv field required'),
+  skipDuplicates: z.boolean().optional().default(true),
+  updateExisting: z.boolean().optional().default(false),
+});
+
 export const importContactsSchema = z.object({
   file_url: z.string().url('Invalid file URL'),
   mapping: z.record(z.string(), z.string()).optional().default({}),
@@ -68,6 +79,7 @@ export const exportSchema = z.object({
 
 // ── Type exports ──
 export type ImportInput = z.infer<typeof importSchema>;
+export type CsvImportInput = z.infer<typeof csvImportSchema>;
 export type ImportContactsInput = z.infer<typeof importContactsSchema>;
 export type MergeContactInput = z.infer<typeof mergeContactSchema>;
 export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;

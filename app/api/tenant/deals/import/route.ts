@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { importSchema } from '@/lib/api/schemas';
+import { csvImportSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, contacts, companies, pipelines, dealStages, activities, tenants, plans } from '@/drizzle/schema';
@@ -65,10 +65,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (deny) return deny;
 
     const rawBody = await readJsonBody(request);
-    const validated = validateBody(importSchema, rawBody);
+    // #3106 — the gate used to be `importSchema`, which describes a payload no
+    // caller sends; every real import died at its 400. Validate the csv shape
+    // and use the parsed value.
+    const validated = validateBody(csvImportSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const { csv } = rawBody;
-    if (!csv) return NextResponse.json({ error: 'csv field required' }, { status: 400 });
+    const { csv } = validated.data;
 
     const rows = parseCSV(csv);
     if (!rows.length) return NextResponse.json({ error: 'No data rows found in CSV' }, { status: 400 });

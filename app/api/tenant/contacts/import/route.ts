@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { importSchema } from '@/lib/api/schemas';
+import { csvImportSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
@@ -46,11 +46,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (deny) return deny;
 
     const rawBody = await readJsonBody(request);
-    const validated = validateBody(importSchema, rawBody);
+    // #3106 — this validated `importSchema` ({entity_type, data[]}), a contract no
+    // caller sends, then read the csv off the raw body it had just rejected. The
+    // gate is `csvImportSchema` — the shape import-modal.tsx:93 posts — and the
+    // parsed value is what the route uses.
+    const validated = validateBody(csvImportSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const _v = validated.data;
-    const { csv, skipDuplicates = true, updateExisting = false } = { ...rawBody, csv: rawBody.csv };
-    if (!csv) return NextResponse.json({ error:'csv field required' }, { status:400 });
+    const { csv, skipDuplicates, updateExisting } = validated.data;
 
     const rows = parseContactsCsv(csv);
     if (!rows.length) return NextResponse.json({ error:'No data rows found in CSV' }, { status:400 });
