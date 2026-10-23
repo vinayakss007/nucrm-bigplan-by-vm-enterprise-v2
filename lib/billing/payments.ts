@@ -65,7 +65,7 @@ export async function recalculateInvoicePayments(
   tenantId: string
 ): Promise<InvoiceTotals> {
   const [invoice] = await tx
-    .select({ totalAmount: invoices.totalAmount, status: invoices.status })
+    .select({ totalAmount: invoices.totalAmount, status: invoices.status, paidAt: invoices.paidAt })
     .from(invoices)
     .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, tenantId)))
     .limit(1);
@@ -101,9 +101,13 @@ export async function recalculateInvoicePayments(
     }
   }
 
-  // paid_at marks when the invoice was settled, so it is set only on full
-  // settlement and cleared if the balance reopens.
-  const paidAt = status === 'paid' ? new Date() : null;
+  // #3142: paidAt marks WHEN the invoice settled. It used to be re-stamped to
+  // now() on every recalc that left the invoice fully paid (a PATCH on a paid
+  // invoice, a PayU webhook replay), silently moving the settlement date the
+  // public invoice portal serves. Preserve it across the paid state and stamp
+  // only the unpaid→paid transition; clearing it when the balance reopens is
+  // the correct behaviour that stays.
+  const paidAt = status === 'paid' ? (invoice.paidAt ?? new Date()) : null;
 
   await tx
     .update(invoices)
