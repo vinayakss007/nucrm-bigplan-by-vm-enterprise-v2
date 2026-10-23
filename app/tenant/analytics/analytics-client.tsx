@@ -12,6 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
+import { isWonStageName, isLostStageName } from '@/lib/deals/won-stage';
 import { cn } from '@/lib/utils';
 
 const STAGE_COLORS: Record<string,string> = {
@@ -52,10 +53,18 @@ export default function TenantAnalyticsPage() {
 
   const loading = !overviewRes && !overviewErr;
 
-  // Classify stages by NAME (case-insensitive) exactly as before.
-  const wonStages = useMemo(() => dealsByStage.filter(s => s.stageName?.toLowerCase() === 'won'), [dealsByStage]);
-  const lostStages = useMemo(() => dealsByStage.filter(s => s.stageName?.toLowerCase() === 'lost'), [dealsByStage]);
-  const openStages = useMemo(() => dealsByStage.filter(s => !['won', 'lost'].includes(s.stageName?.toLowerCase() || '')), [dealsByStage]);
+  // #3118: these three filters must partition one set, and they compared the
+  // stage name EXACTLY to 'won'/'lost'. A tenant that renamed its winning stage to
+  // "Closed Won" — the rename #658 was filed about, and the shape the server's own
+  // `isWonStageName` accepts — matched none of the three, so its banked revenue
+  // landed in `openStages` and showed up as live pipeline while Win Rate answered
+  // 0%. Same rule as the server now uses, and `openStages` is its complement.
+  const wonStages = useMemo(() => dealsByStage.filter(s => isWonStageName(s.stageName)), [dealsByStage]);
+  const lostStages = useMemo(() => dealsByStage.filter(s => isLostStageName(s.stageName)), [dealsByStage]);
+  const openStages = useMemo(
+    () => dealsByStage.filter(s => !isWonStageName(s.stageName) && !isLostStageName(s.stageName)),
+    [dealsByStage],
+  );
 
   const wonCount = useMemo(() => wonStages.reduce((s, d) => s + Number(d.count || 0), 0), [wonStages]);
   const lostCount = useMemo(() => lostStages.reduce((s, d) => s + Number(d.count || 0), 0), [lostStages]);

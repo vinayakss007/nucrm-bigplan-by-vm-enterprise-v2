@@ -14,6 +14,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { lineTotal, sumLineItems } from '@/lib/money';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -82,10 +83,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
     }
 
-    let subtotal = 0;
-    for (const item of items) {
-      subtotal += (parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0);
-    }
+    // #3109: cost the order the way quotes and invoices do. A raw float
+    // accumulation rounded once at the end could not be reconciled with the
+    // per-line totals written below, and `|| 1` silently billed a schema-legal
+    // quantity of 0 as one unit.
+    const subtotal = sumLineItems(items);
     const totalAmount = subtotal;
 
     // Atomic per-tenant order-number generation (#2342): the previous COUNT(*)+1
@@ -145,9 +147,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               serviceId: null,
               description: item.description,
               itemType: 'product',
-              quantity: String(item.quantity || 1),
-              unitPrice: String(item.unit_price || 0),
-              total: String(((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)),
+              quantity: String(item.quantity ?? 1),
+              unitPrice: String(item.unit_price ?? 0),
+              total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
               sortOrder: idx,
             }));
 

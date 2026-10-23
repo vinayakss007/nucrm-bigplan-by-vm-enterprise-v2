@@ -227,7 +227,9 @@ export async function applyTaxToLineItems(
   const itemsWithTax: LineItemWithTax[] = [];
 
   for (const item of items) {
-    const lineAmount = item.amount * (item.quantity || 1);
+    // `quantity?: number`, so this default means "absent", not "zero": an
+    // explicit 0 line (free item) must cost 0, not one unit (#3128).
+    const lineAmount = item.amount * (item.quantity ?? 1);
     totalSubtotal += lineAmount;
 
     if (item.taxExempt) {

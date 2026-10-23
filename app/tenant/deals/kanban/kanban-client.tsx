@@ -18,6 +18,7 @@ import {
   User, Clock, TrendingUp
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { isWonStageName } from '@/lib/deals/won-stage';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -286,7 +287,21 @@ export default function DealsKanbanPage() {
     return map;
   }, [deals, stages]);
   const totalValue = useMemo(() => deals.reduce((sum, d) => sum + (parseFloat(d.amount || '0') || 0), 0), [deals]);
-  const wonDeals = useMemo(() => deals.filter(d => d.stageId === 'won'), [deals]);
+  // #3118: `stageId` is deals.stage_id, a uuid, so `d.stageId === 'won'` compared a
+  // column against the id of this component's own DEFAULT_STAGES placeholder and
+  // answered 0 on every real board — the sibling of the id-vs-name comparison
+  // #1457 already fixed in this file's drag handler. The server's rule (#658) is
+  // the stage NAME; the deals API joins it, so use it, and fall back to the loaded
+  // stages' ids for rows that carry none
+  // (a brand-new deal, or the placeholder board a workspace with no pipeline gets).
+  const wonStageIds = useMemo(
+    () => new Set(stages.filter(s => isWonStageName(s.name)).map(s => s.id)),
+    [stages]
+  );
+  const wonDeals = useMemo(
+    () => deals.filter(d => (d.stageName ? isWonStageName(d.stageName) : wonStageIds.has(d.stageId ?? ''))),
+    [deals, wonStageIds]
+  );
   const wonValue = useMemo(() => wonDeals.reduce((sum, d) => sum + (parseFloat(d.amount || '0') || 0), 0), [wonDeals]);
 
   const activeDeal = activeId ? deals.find(d => d.id === activeId) : null;

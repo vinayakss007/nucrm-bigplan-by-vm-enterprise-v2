@@ -140,12 +140,30 @@ export async function processWarmUp(): Promise<WarmUpResult> {
 
           try {
             // Send the warm-up email
-            await sendEmail({
+            const sent = await sendEmail({
               to: participant.participantEmail,
               subject,
               html: body.replace(/\n/g, '<br>'),
               text: body,
             });
+
+            // #3110: sendEmail reports a provider rejection as { success: false }
+            // and does NOT throw (#2422/#3045), so the catch below never saw it and a
+            // 429/bounce/invalid-address send was written as 'sent'. That is
+            // load-bearing three times over: `sentToday` counts 'sent' rows (the
+            // rejection burned the day's budget on mail that never left),
+            // `bouncesLast7Days` counts 'failed' rows (the 5% pause could never trip
+            // on a provider that is rejecting sends), and `lastSentAt` gates pool
+            // eligibility (the participant lost the rest of the day). Book none of it.
+            if (!sent.success) {
+              const reason = sent.error ?? 'email provider rejected the warm-up send';
+              await db.update(emailWarmupLogs)
+                .set({ status: 'failed', errorMessage: reason })
+                .where(eq(emailWarmupLogs.id, log.id))
+                .catch(() => { /* best-effort, same as the handler below */ });
+              result.errors.push(`Failed to send to ${participant.participantEmail}: ${reason}`);
+              continue;
+            }
 
             // Update log, pool, config atomically
             await db.transaction(async (tx) => {
