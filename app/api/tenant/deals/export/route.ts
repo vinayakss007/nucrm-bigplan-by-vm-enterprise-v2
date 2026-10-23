@@ -8,7 +8,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/schema';
 import { eq, asc, and, isNull } from 'drizzle-orm';
-import { escapeCSV } from '@/lib/export';
+import { escapeCSV, MAX_EXPORT_ROWS, ExportLimitError } from '@/lib/export';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -52,7 +52,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         notArchived(),
         ownerScope(ctx, 'deals.view_all', deals),
       ))
-      .orderBy(asc(deals.createdAt));
+      .orderBy(asc(deals.createdAt))
+      // #3153: the contacts/leads exports and the generic engine cap reads at
+      // MAX_EXPORT_ROWS + 1 and answer 413 (#H2); this raw twin had no limit at
+      // all, so a wide filter materialised the whole tenant through four joins
+      // into memory. The +1 is the probe row that detects the overflow.
+      .limit(MAX_EXPORT_ROWS + 1);
+
+    if (rows.length > MAX_EXPORT_ROWS) throw new ExportLimitError(MAX_EXPORT_ROWS);
 
     // #2614 — field_permissions were being bypassed on the CSV export path:
     // the export handler selected `amount` (and every other restricted column)
@@ -90,6 +97,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       },
     });
   } catch (err: unknown) {
+    // #3153: over-limit is client-actionable — 413, same as the contacts
+    // export's ExportLimitError branch, and don't page on-call for it.
+    if (err instanceof ExportLimitError) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
     await logError({ error: err, context: 'tenant/deals export GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
