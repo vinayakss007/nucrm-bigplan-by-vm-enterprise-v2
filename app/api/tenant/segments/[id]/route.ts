@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -22,6 +22,13 @@ export const DELETE = withApiRoute(
 
       const ctx = await requireAuth(req);
       if (ctx instanceof NextResponse) return ctx;
+      // #3151 — this is the only hard delete in the family: no tombstone, and
+      // `segment_members` leaves with it by the `onDelete: 'cascade'` FK
+      // (`drizzle/schema/segments.ts:39`), so the bulk `restore` action cannot
+      // bring either back. Removing the audience another team's automations
+      // enrol from is authoring, and authoring takes `segments.manage`.
+      const deny = requirePerm(ctx, 'segments.manage');
+      if (deny) return deny;
 
       const { id } = await params;
       // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
