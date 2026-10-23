@@ -28,3 +28,26 @@ export function isWonStageName(name: string | null | undefined): boolean {
   if (/\bnot\b/.test(n)) return false;
   return /\b(closed|deal|mark|marked|sale|sales)\b/.test(n);
 }
+
+/**
+ * Whether a deal-stage name represents a "lost" (closed-lost) stage — the mirror
+ * of `isWonStageName` above, with the same vocabulary and the same refusal of
+ * negations.
+ *
+ * Analytics needs both sides: the win rate and the open-pipeline figure classify
+ * every stage of a tenant's pipeline as won, lost, or neither. A page that only
+ * knows the exact names 'Won'/'Lost' silently files a renamed winning stage under
+ * "open", which inflates live pipeline by the money already banked. (#3118)
+ *
+ * Kept conservative on purpose: a label the matcher does not understand is left
+ * in the open bucket rather than counted as a loss, so a stage like
+ * "Not Won" or "Churn Risk" never deflates the win rate.
+ */
+export function isLostStageName(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const n = name.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  if (n === 'lost') return true;
+  if (!/\blost\b/.test(n)) return false;
+  if (/\bnot\b|\bnever\b/.test(n)) return false;
+  return /\b(closed|deal|mark|marked|sale|sales)\b/.test(n);
+}
