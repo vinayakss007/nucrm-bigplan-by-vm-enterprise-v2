@@ -137,6 +137,10 @@ describe('Email Warmup Engine', () => {
           where: vi.fn(() => Promise.resolve()),
         })),
       });
+      // The engine reads the provider result before booking the send (#3110), so
+      // this mock has to resolve a SendResult the way lib/email/service.ts does.
+      const { sendEmail } = await import('@/lib/email/service');
+      (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-1' });
 
       const { processWarmUp } = await import('@/lib/email/warmup');
       const result = await processWarmUp();

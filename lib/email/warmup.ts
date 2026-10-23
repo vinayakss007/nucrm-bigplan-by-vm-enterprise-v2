@@ -139,13 +139,30 @@ export async function processWarmUp(): Promise<WarmUpResult> {
           if (!log) continue;
 
           try {
-            // Send the warm-up email
-            await sendEmail({
+            // Send the warm-up email. `sendEmail` resolves { success:false }
+            // rather than throwing on a provider 4xx/5xx (#2422/#3045), so the
+            // catch below cannot see a rejected send — the result has to be
+            // checked here or every bounce is recorded as delivered.
+            const sent = await sendEmail({
               to: participant.participantEmail,
               subject,
               html: body.replace(/\n/g, '<br>'),
               text: body,
             });
+
+            if (!sent.success) {
+              const reason = sent.error ?? 'provider rejected the send';
+              // Only the log moves: the participant keeps lastSentAt NULL/at its
+              // previous value so the next tick picks it up again, and burning a
+              // slot here is what made a rejected send unretryable.
+              await db.transaction(async (tx) => {
+                await tx.update(emailWarmupLogs)
+                  .set({ status: 'failed', errorMessage: reason })
+                  .where(eq(emailWarmupLogs.id, log.id));
+              }).catch((_e) => { /* best-effort */ });
+              result.errors.push(`Failed to send to ${participant.participantEmail}: ${reason}`);
+              continue;
+            }
 
             // Update log, pool, config atomically
             await db.transaction(async (tx) => {
