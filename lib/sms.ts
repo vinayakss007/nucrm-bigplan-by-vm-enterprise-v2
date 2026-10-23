@@ -272,13 +272,22 @@ export async function updateDeliveryStatus(payload: DeliveryStatusPayload) {
 
   const status = statusMap[payload.MessageStatus] || payload.MessageStatus;
 
-  await db.update(smsMessages)
+  // #3127: this UPDATE's result was thrown away and `updated: true` was returned
+  // unconditionally, so a callback for a MessageSid no row owns — replayed, past
+  // the retention window, or forged-but-signature-valid — wrote nothing while the
+  // webhook told Twilio the delivery status had been recorded. RETURNING makes
+  // the answer describe the write.
+  const rows = await db.update(smsMessages)
     .set({
       status,
       errorCode: payload.ErrorCode || null,
     })
-    .where(eq(smsMessages.twilioSid, payload.MessageSid));
+    .where(eq(smsMessages.twilioSid, payload.MessageSid))
+    .returning({ id: smsMessages.id });
 
+  if (!rows.length) {
+    return { updated: false, status, unmatchedMessageSid: payload.MessageSid };
+  }
   return { updated: true, status };
 }
 
