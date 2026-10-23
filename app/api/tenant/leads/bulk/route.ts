@@ -352,6 +352,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         break;
       }
       case 'add_to_segment': {
+        const deny = requirePerm(ctx, 'leads.edit');
+        if (deny) return deny;
         const segId = payload['segment_id'] as string | undefined;
         if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
         const [seg] = await db.select({ id: segments.id }).from(segments)
