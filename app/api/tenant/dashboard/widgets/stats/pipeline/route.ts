@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, dealStages } from '@/drizzle/schema';
+import { deals } from '@/drizzle/schema';
 import { eq, and, isNull, sql, notInArray } from 'drizzle-orm';
+import { resolveDealStageIds } from '@/lib/deals/won-stage-ids';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
@@ -26,14 +27,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const auth = ctx;
 
     return withCache(tid, 'stats-pipeline', 300, async () => {
-      // Subquery to get terminal stage IDs (won/lost) scoped to this tenant
-      const terminalStageIds = db
-        .select({ id: dealStages.id })
-        .from(dealStages)
-        .where(and(
-          eq(dealStages.tenantId, tid),
-          sql`(LOWER(${dealStages.name}) LIKE '%won%' OR LOWER(${dealStages.name}) LIKE '%lost%')`
-        ));
+      // #3156 — this tile decided which deals are closed with
+      // `LOWER(name) LIKE '%won%' OR LOWER(name) LIKE '%lost%'`, a substring rule
+      // that sweeps the negations #658 explicitly refuses: a stage called `Not
+      // Won`, `Unwon` or `Wonderful Prospect` made its deals terminal, so they
+      // left open pipeline and the tile answered low on BOTH numbers. The ids now
+      // come from the matcher every other read uses. An empty set is a real
+      // answer here — drizzle renders `notInArray(col, [])` as the literal `true`,
+      // so a tenant with no terminal stage excludes nothing, as it should.
+      const { terminal: terminalStageIds } = await resolveDealStageIds(db, tid);
 
       const [result] = await db
         .select({
