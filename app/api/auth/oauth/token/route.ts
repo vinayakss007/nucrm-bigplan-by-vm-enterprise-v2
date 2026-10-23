@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes, oauthTokens } from '@/drizzle/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
@@ -117,20 +117,30 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const [token] = await db.transaction(async (tx) => {
-        await tx
+      // RFC 6749 §4.1.2 — the code is single-use, and the SELECT above is only
+      // what decides the error text. The claim below is the authoritative gate:
+      // two concurrent exchanges both read `used_at IS NULL`, and against the
+      // unconditional UPDATE this route used previously both minted a token pair
+      // for one code. `WHERE used_at IS NULL ... RETURNING` lets exactly one
+      // request win, and the token insert rides in the same transaction as the
+      // claim — the shape #1215/#1216 established for reset tokens.
+      const redeemed = await db.transaction(async (tx) => {
+        const [claimed] = await tx
           .update(oauthCodes)
           .set({ usedAt: new Date() })
-          .where(eq(oauthCodes.id, authCode.id));
+          .where(and(eq(oauthCodes.id, authCode.id), isNull(oauthCodes.usedAt)))
+          .returning({ userId: oauthCodes.userId, scope: oauthCodes.scope });
 
-        return tx
+        if (!claimed) return { claimed: false as const };
+
+        const tokens = await tx
           .insert(oauthTokens)
           .values({
             clientId: client.id,
-            userId: authCode.userId,
+            userId: claimed.userId,
             accessToken: uuidv4(),
             refreshToken: uuidv4(),
-            scope: authCode.scope,
+            scope: claimed.scope,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           })
           // The response is built from these two fields alone — this is the
@@ -140,7 +150,18 @@ export async function POST(request: NextRequest) {
             accessToken: oauthTokens.accessToken,
             refreshToken: oauthTokens.refreshToken,
           });
+
+        return { claimed: true as const, code: claimed, tokens };
       });
+
+      if (!redeemed.claimed) {
+        return NextResponse.json(
+          { error: 'invalid_grant', error_description: 'Invalid or expired code' },
+          { status: 400 }
+        );
+      }
+
+      const [token] = redeemed.tokens;
 
       if (!token) {
         return NextResponse.json(
@@ -154,7 +175,7 @@ export async function POST(request: NextRequest) {
         refresh_token: token!.refreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
-        scope: authCode.scope,
+        scope: redeemed.code.scope,
       });
     }
 

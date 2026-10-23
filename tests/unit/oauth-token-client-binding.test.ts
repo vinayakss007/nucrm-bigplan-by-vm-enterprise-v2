@@ -43,7 +43,17 @@ const harness = vi.hoisted(() => {
     select: () => makeSelectChain(),
     transaction: async (cb: (tx: Record<string, unknown>) => Promise<unknown>) =>
       cb({
-        update: () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) }),
+        // #3075 turned this write into a conditional claim, so the real chain is
+        // update().set().where().returning() — the mock has to carry the
+        // RETURNING leg or the route under test would call a method that does
+        // not exist on the object drizzle hands back.
+        update: () => ({
+          set: () => ({
+            where: () => ({
+              returning: () => Promise.resolve([{ userId: 'user-1', scope: 'crm:read' }]),
+            }),
+          }),
+        }),
         delete: () => ({ where: () => Promise.resolve({ rowCount: 1 }) }),
         insert: () => ({
           values: () => ({
