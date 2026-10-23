@@ -30,13 +30,21 @@ const mockTxExecute = vi.fn(async (statement: unknown) => {
 // `tx.select().from(documents).where(…).limit(1)` and
 // `tx.select().from(signing_events).where(…).orderBy(…)`.
 function makeTxSelectChain() {
+  const settle = () => Promise.resolve(mockLiveDocuments.current);
   const chain: Record<string, unknown> = {
     from: () => chain,
     where: () => chain,
     orderBy: () => Promise.resolve([]),
   };
-  chain.limit = () => Promise.resolve(mockLiveDocuments.current);
-  chain.then = (res: (v: unknown) => unknown) => Promise.resolve(mockLiveDocuments.current).then(res);
+  // #3134: handleSigningWebhook reads its row as `…limit(1).for('update')`, so
+  // limit() must hand back an awaitable that also carries .for(), like a real
+  // drizzle PgSelect does.
+  chain.limit = () => {
+    const p = settle() as Promise<unknown[]> & { for: () => Promise<unknown[]> };
+    p.for = settle;
+    return p;
+  };
+  chain.then = (res: (v: unknown) => unknown) => settle().then(res);
   return chain;
 }
 
