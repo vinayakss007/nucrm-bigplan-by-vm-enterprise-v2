@@ -20,7 +20,7 @@ each step names the file(s) that must exist and the invariant that proves it. Re
 
 1. Next.js app-router project (pages under `app/`, API under
    `app/api/**/route.ts`). Node **≥ 22** (`package.json` engines; the vendored
-   `node-v22.14.0` is on PATH here — 07 § Node).
+   `node-v22.23.4` is on PATH here — 07 § Node).
 2. Drizzle ORM + `pg` Pool. Postgres reachable; env in `.env.local`
    (`DATABASE_URL`, session secret, `TRUST_PROXY`, `CSRF_ENFORCE_CENTRAL`,
    `PGBOUNCER_ENABLED`). Never commit secrets.

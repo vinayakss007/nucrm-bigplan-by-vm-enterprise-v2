@@ -30,7 +30,7 @@
  *                        IP buckets are separate (A blocked, B unaffected)
  *
  * Usage:
- *   export PATH=/home/opc/node-v22.14.0-linux-x64/bin:$PATH
+ *   export PATH=/home/opc/node-v22.23.4-linux-x64/bin:$PATH
  *   set -a; . ./.env.local; set +a
  *   TRUST_PROXY=true npx next dev -p 3100            # server, same tree
  *   npx tsx scripts/simulate-basecrm-acceptance.ts   # this harness

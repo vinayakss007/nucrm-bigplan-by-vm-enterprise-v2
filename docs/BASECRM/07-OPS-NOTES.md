@@ -10,12 +10,21 @@ is my acceptance run flaky".
 - **engines require Node ≥ 22.** The system node on this host is **v16.20.2**
   (`/usr/bin/node`) and a login shell defaulted to it, which broke repo-wide lint
   (eslint crashed on the Node 16 stack) — issue **#2622**. Fixed by prepending the
-  vendored runtime in `~/.bashrc`:
+  vendored runtime in `~/.bashrc` (line 54 as of this writing):
   ```sh
-  export PATH="/home/opc/node-v22.14.0-linux-x64/bin:$PATH"
+  export PATH="/home/opc/node-v22.23.4-linux-x64/bin:$PATH"
   ```
-  Verify: `bash -lc 'node -v; which node'` → `v22.14.0`. Rebuild note: any fresh
+  Verify: `bash -lc 'node -v; which node'` → `v22.23.4` /
+  `/home/opc/node-v22.23.4-linux-x64/bin/node`. Rebuild note: any fresh
   checkout on this box needs this before `npm test`/`eslint` will run.
+  The runtime is **vendored, not installed** — a directory under `/home/opc`, no
+  version manager behind it — so the pin is a path, and it moves when the directory
+  is replaced. `node-v22.14.0-linux-x64` is still on disk and still runs; it is the
+  retired one (its line is commented out in `~/.bashrc`), and prepending it is the
+  one mistake this section can cause, because it succeeds silently: `node -v` is
+  ≥ 22 either way and nothing tells you that you are now two minors behind the
+  runtime every suite on this box was verified with. Re-measure before editing this
+  bullet — `env -i HOME=$HOME bash -lc 'node -v; which -a node'`.
 - Package manager: npm; install uses `--legacy-peer-deps` (see Docker issue #656
   in AGENTS.md backlog — the compose build carries the flag).
 
