@@ -189,8 +189,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
                 serviceId: null,
                 description: item.description,
                 itemType: 'custom',
-                quantity: String(item.quantity || 1),
-                unitPrice: String(item.unit_price || 0),
+                // #3128: `|| 1` persisted a schema-legal quantity 0 as one unit
+                // next to `total: "0.00"`, so the row could not be recomputed from
+                // its own columns — which is what the L-1 reconciliation below needs.
+                quantity: String(item.quantity ?? 1),
+                unitPrice: String(item.unit_price ?? 0),
                 discountType: 'percentage',
                 discountValue: '0',
                 discountAmount: '0',
