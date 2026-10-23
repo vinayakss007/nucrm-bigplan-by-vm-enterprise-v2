@@ -65,7 +65,15 @@ export const GET = withApiRoute(async (request: NextRequest,
     })
     .from(activities)
     .leftJoin(users, eq(users.id, activities.userId))
-    .where(and(eq(activities.contactId, id), eq(activities.tenantId, ctx.tenantId)))
+    // #3116 — this file's own DELETE handler tombstones the note and guards on
+    // `isNull(deletedAt)` while doing it; the read above did not know, so the
+    // note the user just deleted returned on the next render. Same predicate the
+    // dashboard activity widget already applies.
+    .where(and(
+      eq(activities.contactId, id),
+      eq(activities.tenantId, ctx.tenantId),
+      isNull(activities.deletedAt)
+    ))
     .orderBy(desc(activities.createdAt))
     .limit(50);
 

@@ -11,7 +11,7 @@ import { db } from '@/drizzle/db';
 import { activities } from '@/drizzle/schema';
 import { users } from '@/drizzle/schema';
 import { companies, contacts, deals, supportTickets, tasks } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
 import { isEntityId } from '@/lib/id';
@@ -101,7 +101,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const eventType = searchParams.get('event_type');
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
-    const conditions = [eq(activities.tenantId, ctx.tenantId)];
+    // #3116 — the tombstone belongs in the shared array, not in either query:
+    // the count below and the page below it read from this one list, and a
+    // deleted row dropped from one and not the other shifts `total` and
+    // `hasMore` while the list itself still looks right. Written by
+    // DELETE /api/tenant/contacts/[id]/notes; already read this way by
+    // dashboard/stats, widgets/activity and lib/activity/timeline.
+    const conditions = [eq(activities.tenantId, ctx.tenantId), isNull(activities.deletedAt)];
 
     // Naming a record is answered with that record's own rule, and a name that
     // does not resolve is a 404 rather than an empty 200 — the empty 200 tells
