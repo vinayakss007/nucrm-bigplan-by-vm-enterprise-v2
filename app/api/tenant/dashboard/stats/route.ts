@@ -62,8 +62,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           ) AS new_contacts_this_month,
           -- Folded here (was a trailing 8th query): won-stage ids resolved
           -- inline so this stays a single round-trip.
+          -- #3112 — the month key is the WIN date, not the creation date. A deal
+          -- created in September and closed in October belongs to October's
+          -- revenue; on created_at it silently left this tile (and
+          -- widgets/stats/revenue). COALESCE falls back to created_at only where
+          -- won_at was never recorded (v1 PUT, inbound webhook, automations —
+          -- #3112), and created_at is a lower bound on the win, so the fallback
+          -- can only keep an old count, never lose one.
           (SELECT COALESCE(SUM(${deals.amount}), 0)::float FROM ${deals}
-           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal}${mineDeal} AND created_at >= date_trunc('month', now())
+           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal}${mineDeal} AND COALESCE(won_at, created_at) >= date_trunc('month', now())
            AND stage_id IN (
              SELECT ds.id FROM ${dealStages} ds
              INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
