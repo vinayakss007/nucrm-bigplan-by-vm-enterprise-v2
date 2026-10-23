@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { cookieSecureForRequest, requestIsHttps } from '@/lib/auth/cookie-security';
@@ -165,15 +165,23 @@ export async function POST_login(request: NextRequest) {
         const hash = createHash('sha256').update(String(totpToken).toUpperCase()).digest('hex');
         const codes: string[] = typeof user.totpBackupCodes === 'string' ? JSON.parse(user.totpBackupCodes) : (user.totpBackupCodes as string[]);
         if (codes.includes(hash)) {
-          valid = true;
-          // `users_update_own` is keyed on app.current_user, which a pre-auth
-          // connection does not have — so consuming a backup code silently
-          // failed and the code stayed reusable.
-          await withUserContext(user.id, async (tx) =>
-            await tx.update(users)
-              .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
-              .where(eq(users.id, user.id))
-          ).catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
+          // #3075: fail closed — the code counts as used only once the conditional
+          // consume write wins; a lost claim or failed write denies, never reuses.
+          try {
+            const consumed = await withUserContext(user.id, async (tx) =>
+              await tx.update(users)
+                .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
+                .where(and(
+                  eq(users.id, user.id),
+                  sql`${users.totpBackupCodes} @> jsonb_build_array(${hash})`,
+                ))
+                .returning({ id: users.id })
+            );
+            if (consumed.length > 0) valid = true;
+            else devLogger.warn('[Auth] Backup code already consumed by a concurrent login — denying');
+          } catch (e) {
+            devLogger.error(e as Error, '[Auth] Failed to consume backup code — denying login');
+          }
         }
       }
       if (!valid) return loginRespond(request, isForm, { error:'Invalid 2FA code', requires_2fa:true }, 401);
