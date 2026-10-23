@@ -130,7 +130,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           if (!q) throw new Error('Failed to create quote');
 
           if (items?.length) {
-            const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; service_id?: string | null; item_type?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
+            const lineItems = items.map((item: { description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; service_id?: string | null; item_type?: string | null; tax_rate?: number }, idx: number) => ({
               tenantId,
               quoteId: q.id,
               productId: item.product_id ?? null,
@@ -140,7 +140,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               quantity: String(item.quantity ?? 1),
               unitPrice: String(item.unit_price ?? 0),
               discountPercent: '0',
-              taxPercent: String(item.tax_amount ?? 0),
+              // #3108: this read `item.tax_amount` — a key createQuoteSchema does
+              // not declare (its line field is `tax_rate`) and schema.parse strips,
+              // so every quote line persisted 0% tax for every client.
+              taxPercent: String(item.tax_rate ?? 0),
               total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
               sortOrder: idx,
             } as typeof quoteLineItems.$inferInsert));
