@@ -20,6 +20,10 @@ const harness = vi.hoisted(() => {
   const state = {
     rows: {} as Record<string, Record<string, unknown>[]>,
     whereQueries: [] as { sql: string; params: unknown[] }[],
+    // #3075: the code-consumption UPDATE and the refresh-token DELETE are now
+    // conditional claims with RETURNING; tests set this to [] to simulate a
+    // concurrent redemption that won the claim first.
+    claimRows: [{ id: 'code-1', userId: 'user-1', scope: 'crm:read' }] as Record<string, unknown>[],
   };
   const inject = { render: null as null | ((f: SQL) => { sql: string; params: unknown[] }) };
 
@@ -39,15 +43,29 @@ const harness = vi.hoisted(() => {
     return chain;
   };
 
+  // UPDATE/DELETE builder: records the WHERE predicate (so the client binding
+  // and claim conditions stay pinned) and resolves `.returning()` from
+  // state.claimRows.
+  const makeWriteChain = () => {
+    const chain: Record<string, unknown> = {};
+    chain.set = () => chain;
+    chain.where = (f: SQL) => {
+      if (inject.render) state.whereQueries.push(inject.render(f));
+      return chain;
+    };
+    chain.returning = () => Promise.resolve(state.claimRows);
+    return chain;
+  };
+
   const db = {
     select: () => makeSelectChain(),
     transaction: async (cb: (tx: Record<string, unknown>) => Promise<unknown>) =>
       cb({
-        update: () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) }),
-        delete: () => ({ where: () => Promise.resolve({ rowCount: 1 }) }),
+        update: () => makeWriteChain(),
+        delete: () => makeWriteChain(),
         insert: () => ({
           values: () => ({
-            returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new' }]),
+            returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }]),
           }),
         }),
       }),
@@ -91,6 +109,7 @@ function whereFor(table: string) {
 describe('POST /api/auth/oauth/token — client binding (RFC 6749 §4.1.3)', () => {
   beforeEach(() => {
     harness.state.whereQueries = [];
+    harness.state.claimRows = [{ id: 'code-1', userId: 'user-1', scope: 'crm:read' }];
     harness.state.rows = {
       oauth_clients: [{ id: CLIENT_A_INTERNAL, clientSecret: CLIENT_SECRET }],
       oauth_codes: [],

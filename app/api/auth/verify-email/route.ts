@@ -51,15 +51,32 @@ export async function POST(request: NextRequest) {
     
     // The write is authorised by the token itself, so it runs in the platform
   // security context rather than pretending to be a tenant request.
-  await withSecurityContext(async (tx) => {
+  // #3075: the lookup above is only a fast path — the claim is this
+  // conditional UPDATE inside the same transaction that flips email_verified.
+  // Two concurrent clicks on an unclaimed token used to both redeem it; under
+  // READ COMMITTED the second UPDATE blocks on the row lock, re-checks
+  // `used_at IS NULL`, and claims nothing.
+  const claimed = await withSecurityContext(async (tx) => {
+      const [win] = await tx
+        .update(emailVerifications)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(emailVerifications.id, row.id),
+          isNull(emailVerifications.usedAt),
+          gt(emailVerifications.expiresAt, new Date()),
+        ))
+        .returning({ id: emailVerifications.id });
+
+      if (!win) return false;
+
       await tx.update(users)
         .set({ emailVerified: true })
         .where(eq(users.id, row.userId));
-      
-      await tx.update(emailVerifications)
-        .set({ usedAt: new Date() })
-        .where(eq(emailVerifications.id, row.id));
+
+      return true;
     });
+
+    if (!claimed) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
 
     return NextResponse.json({ ok: true, email: row.email });
  

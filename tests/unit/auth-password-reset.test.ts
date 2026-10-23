@@ -2,18 +2,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let mockResolve: ReturnType<typeof vi.fn>;
 
-const makeChain = () => ({
-  from: vi.fn(() => chain),
-  innerJoin: vi.fn(() => chain),
-  where: vi.fn(() => chain),
-  limit: vi.fn(() => mockResolve()),
-  values: vi.fn(() => Promise.resolve()),
-  set: vi.fn(() => ({ where: mockResolve })),
-  // resetPassword() revokes every existing session with
-  // db.delete(sessions).where(...).catch(...), so the chain has to be
-  // catch-able as well as awaitable.
-  catch: vi.fn(() => Promise.resolve()),
-});
+const makeChain = () => {
+  // #3075: resetPassword now claims the token with
+  // UPDATE ... WHERE ... RETURNING, so the `where()` of an UPDATE builder must
+  // be awaitable AND carry a `returning()` resolving to the claimed rows.
+  // SELECT keeps its old plain-where so its limit() stays the only consumer of
+  // the Once queue.
+  const thenableWhere = vi.fn((...args: unknown[]) => {
+    const p = Promise.resolve().then(() => mockResolve(...args));
+    return Object.assign(p, { returning: () => p });
+  });
+  return {
+    from: vi.fn(() => chain),
+    innerJoin: vi.fn(() => chain),
+    where: vi.fn(() => chain),
+    limit: vi.fn(() => mockResolve()),
+    values: vi.fn(() => Promise.resolve()),
+    set: vi.fn(() => ({ where: thenableWhere })),
+    // resetPassword() revokes every existing session with
+    // db.delete(sessions).where(...).catch(...), so the chain has to be
+    // catch-able as well as awaitable.
+    catch: vi.fn(() => Promise.resolve()),
+  };
+};
 const chain = makeChain();
 
 let mockSelect: ReturnType<typeof vi.fn>;
