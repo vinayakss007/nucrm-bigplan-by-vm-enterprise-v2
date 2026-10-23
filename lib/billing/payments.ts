@@ -65,7 +65,7 @@ export async function recalculateInvoicePayments(
   tenantId: string
 ): Promise<InvoiceTotals> {
   const [invoice] = await tx
-    .select({ totalAmount: invoices.totalAmount, status: invoices.status })
+    .select({ totalAmount: invoices.totalAmount, status: invoices.status, paidAt: invoices.paidAt })
     .from(invoices)
     .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, tenantId)))
     .limit(1);
@@ -101,9 +101,15 @@ export async function recalculateInvoicePayments(
     }
   }
 
-  // paid_at marks when the invoice was settled, so it is set only on full
-  // settlement and cleared if the balance reopens.
-  const paidAt = status === 'paid' ? new Date() : null;
+  // paid_at marks WHEN the invoice was settled, so it is stamped on the unpaid→paid
+  // transition and cleared if the balance reopens. It must not be re-stamped while
+  // the invoice merely stays paid: #2226 made this recalculation the owner of the
+  // column, and a bare `new Date()` here therefore moved the settlement date on
+  // every later line edit, every webhook replay and every unrelated payment edit —
+  // the date served to customers via /public/invoices and used for aging drifted
+  // forward arbitrarily many times, under their feet.
+  const staysPaid = status === 'paid' && currentStatus === 'paid' && invoice.paidAt != null;
+  const paidAt = status === 'paid' ? (staysPaid ? invoice.paidAt : new Date()) : null;
 
   await tx
     .update(invoices)
