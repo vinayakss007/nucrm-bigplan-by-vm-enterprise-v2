@@ -87,7 +87,12 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
 
     const validIds = valid.map(r => r.id);
-    if (!validIds.length)
+    // #3154 — `restore` is the one action whose rows CANNOT be in this set: it is
+    // filtered `deletedAt IS NULL`, so every trashed id the caller named has
+    // already been dropped and the only honest call of the verb was answered 404
+    // before the switch was even entered. Same exemption as deals/leads (#2692) —
+    // the case resolves its own set below.
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid tasks found' }, { status: 404 });
 
     let affected = 0;
@@ -320,6 +325,29 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       case 'restore': {
         const deny = requirePerm(ctx, 'tasks.edit');
         if (deny) return deny;
+
+        // #3154 — the trashed rows are by construction NOT in `validIds` (that set
+        // is filtered `deletedAt IS NULL`), so writing to it restored nothing while
+        // still answering `{"affected":N}` for whichever live ids the caller also
+        // named. Re-resolve the set against the trash, and carry `mine` into it:
+        // trash is not a permission boundary, and without the narrowing a rep could
+        // name another rep's trashed task ids and un-delete them (#2692).
+        const restorable = await db
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            and(
+              inArray(tasks.id, task_ids),
+              eq(tasks.tenantId, ctx.tenantId),
+              sql`${tasks.deletedAt} IS NOT NULL`,
+              mine
+            )
+          );
+        const restorableIds = restorable.map(r => r.id);
+        if (!restorableIds.length) {
+          return NextResponse.json({ error: 'No deleted tasks found to restore' }, { status: 404 });
+        }
+
         const res = await db
           .update(tasks)
           .set({
@@ -329,8 +357,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           })
           .where(
             and(
-              inArray(tasks.id, validIds),
-              eq(tasks.tenantId, ctx.tenantId)
+              inArray(tasks.id, restorableIds),
+              eq(tasks.tenantId, ctx.tenantId),
+              sql`${tasks.deletedAt} IS NOT NULL`
             )
           );
         affected = res.rowCount ?? 0;
