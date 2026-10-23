@@ -47,14 +47,23 @@ SENTRY_TRACES_SAMPLE_RATE=0.2                        # 20% of requests traced
 
 ## 2. Dependency Update Strategy
 
+> **Operational detail lives in
+> [`docs/runbooks/dependency-upgrades.md`](../runbooks/dependency-upgrades.md)**
+> — the step-by-step procedure, the `overrides` rules, and the Node-runtime
+> upgrade path. Read that before running any command in this section. Two things
+> below were actively wrong and are corrected there: `npm audit fix --force` as a
+> "critical CVE" response (it silently jumps `tailwindcss` 3 → 4), and treating
+> `npm audit` as if it covered the Node runtime (it does not).
+
 ### Schedule
 
-| Frequency   | What             | How                                       |
-| :---------- | :--------------- | :---------------------------------------- |
-| Weekly      | Security patches | `npm audit fix`                           |
-| Monthly     | Minor versions   | `npx npm-check-updates -u --target minor` |
-| Quarterly   | Major versions   | Manual review + test                      |
-| Immediately | Critical CVEs    | `npm audit fix --force` + verify          |
+| Frequency   | What             | How                                                                                             |
+| :---------- | :--------------- | :---------------------------------------------------------------------------------------------- |
+| Weekly      | Security patches | `npm audit --omit=dev`, then `npm audit fix` (never `--force`)                                   |
+| Monthly     | Minor versions   | `npx npm-check-updates -u --target minor`                                                        |
+| Quarterly   | Major versions   | Manual review + test, one major per PR                                                            |
+| Immediately | Critical CVEs    | Triage the graph first → targeted version bump or scoped override; `--force` only after reading what it will move |
+| Per release | Node runtime     | Check <https://nodejs.org/en/blog/vulnerability> — invisible to `npm audit`                      |
 
 ### Step-by-Step: Monthly Update Process
 
@@ -87,7 +96,7 @@ git push -u origin chore/deps-update-$(date +%Y%m)
 | :---------------------------- | :--------------- | :-------------------------------------------- |
 | `next`                        | App framework    | Test in staging first, check migration guide  |
 | `react` / `react-dom`         | UI runtime       | Only update together, check breaking changes  |
-| `drizzle-orm` / `drizzle-kit` | Database         | Run `db:push` after update, verify schema     |
+| `drizzle-orm` / `drizzle-kit` | Database         | `npm run db:migrate` after update, verify schema — never `drizzle-kit push` (AGENTS.md) |
 | `@sentry/nextjs`              | Error tracking   | Check SDK changelog for breaking changes      |
 | `ioredis`                     | Cache/queues     | Test Redis connection after update            |
 | `pg`                          | Database driver  | Test connection pool after update             |
@@ -100,7 +109,7 @@ git push -u origin chore/deps-update-$(date +%Y%m)
 
 ## 3. Next.js Version Upgrades
 
-### Current: Next.js 16.2.1
+### Current: Next.js 16.4.2 (re-measured 2026-10-23; this is the registry `latest`)
 
 ### Upgrade Checklist
 
@@ -138,7 +147,22 @@ npm run test
 
 ## 4. Node.js Version Upgrades
 
-### Current: Node.js 22.22.2
+### Current: three different runtimes, so "current" is not one number
+
+Measured 2026-10-23. The previous line here said "Node.js 22.22.2", which
+described none of them.
+
+| Surface | Version | Patched floor after the 2026-10-21 security release |
+| :------ | :------ | :-------------------------------------------------- |
+| CI (`.github/workflows/ci.yml`) | `"22"` (floating) | 22.23.4 |
+| dev box (`node -v`) | **24.21.0 — unpatched** | 24.22.1 |
+| `Dockerfile` (`node:26-alpine`) | resolves at build time | 26.12.1 |
+| `engines.node` | `>=22.0.0` | permits every unpatched 22.x |
+
+That release fixed 10 CVEs including a Brotli decoder out-of-bounds write
+(CVE-2026-111497) with RCE potential, TLS certificate hostname bypasses, and an
+`ca-cert` update for a compromised eMudhra intermediate CA. `npm audit` reports
+none of it — see the runbook, section 5.
 
 ### When to Upgrade
 
@@ -214,18 +238,29 @@ DATABASE_URL=production_url npm run db:migrate
 ### When npm audit reports a vulnerability:
 
 ```bash
-# Check severity
-npm audit
+# 1. Which graph is it in? Only the shipped one is an emergency.
+npm audit --omit=dev
 
-# Auto-fix (low/moderate)
+# 2. Read the advisory's actual version RANGE before choosing a fix.
+#    A caret override can admit the vulnerable versions it was meant to avoid.
+
+# 3. Non-breaking auto-fix
 npm audit fix
 
-# If fix requires major version bump
-npm audit fix --force  # Then run tests!
+# 4. If no fix available — check whether it affects you.
+#    Many are dev-only, build-time, or in a code path never reached.
 
-# If no fix available — check if it affects you
-# Many vulnerabilities are in dev-only deps or unused code paths
+# 5. `npm audit fix --force` only with a human reading what it moved.
+#    In this repo it resolves to tailwindcss@4 (a full styling restructure) and
+#    rewrites the tree inside what looked like a security patch. Prefer an
+#    explicit version bump or a version-scoped override instead — see
+#    docs/runbooks/dependency-upgrades.md section 4.
 ```
+
+Remember that `npm audit` is blind to the Node runtime itself. When a Node
+security release lands, `node -v`, `Dockerfile`, `engines` and CI `node-version`
+are the artifacts to check, and the CI box will tell you nothing about the
+containers.
 
 ### Critical Security Checklist
 
