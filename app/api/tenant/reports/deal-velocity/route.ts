@@ -8,7 +8,8 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages } from '@/drizzle/schema';
-import { eq, and, sql, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { resolveDealStageIds } from '@/lib/deals/won-stage-ids';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -29,6 +30,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const tid = ctx.tenantId;
 
+    // #3156 — three queries below each carried their own copy of "which stage is
+    // a win": `LOWER(name) IN ('won','closed won')` twice and a fourth-name list
+    // for the terminal set. Two hand-maintained vocabularies in one file is how
+    // they drift, and both under-count the tenants #658 was filed about (`Deal
+    // Won`, `Marked Won`, `Closed - Won`). The subqueries had no tenant predicate
+    // either, so the won set was the union of EVERY tenant's `won` stages. One
+    // classification of this tenant's stages now feeds all three, so the won set
+    // and the terminal set cannot disagree.
+    const { won: wonStageIds, terminal: terminalStageIds } = await resolveDealStageIds(db, tid);
+
     // Avg days to close (won deals only)
     const avgClose = await db.execute(sql`
       SELECT 
@@ -36,13 +47,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       FROM deals
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
-        AND stage_id IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won'))
+        AND ${inArray(deals.stageId, wonStageIds)}
     `);
 
     // Conversion rate (won / total created)
     const counts = await db.execute(sql`
       SELECT 
-        COUNT(*) FILTER (WHERE stage_id IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won'))) as won,
+        COUNT(*) FILTER (WHERE ${inArray(deals.stageId, wonStageIds)}) as won,
         COUNT(*) as total
       FROM deals
       WHERE tenant_id = ${tid} AND deleted_at IS NULL
@@ -67,7 +78,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       FROM deals
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
-        AND stage_id NOT IN (SELECT id FROM deal_stages WHERE LOWER(name) IN ('won', 'closed won', 'lost', 'closed lost'))
+        AND ${notInArray(deals.stageId, terminalStageIds)}
     `);
 
     // Deals created this month

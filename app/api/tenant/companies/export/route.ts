@@ -8,7 +8,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { companies } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
-import { escapeCSV } from '@/lib/export';
+import { escapeCSV, MAX_EXPORT_ROWS, ExportLimitError } from '@/lib/export';
 import { enforceFieldRead } from '@/lib/rbac/enforce';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -47,7 +47,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       // generic engine (`lib/export/index.ts:190`) and this route's own list
       // (`companies/route.ts:40-43`) already filtered `deletedAt`.
       .where(and(eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
-      .orderBy(asc(companies.createdAt));
+      .orderBy(asc(companies.createdAt))
+      // #3153: cap the read like the contacts/leads exports and the generic
+      // engine do; the +1 probe row detects an over-limit filter, which is
+      // answered 413 below instead of materialising the whole tenant.
+      .limit(MAX_EXPORT_ROWS + 1);
+
+    if (rows.length > MAX_EXPORT_ROWS) throw new ExportLimitError(MAX_EXPORT_ROWS);
 
     // [CSV header, row key] in the order the file is written.
     const COLUMNS: ReadonlyArray<readonly [string, string]> = [
@@ -76,6 +82,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       },
     });
   } catch (err: unknown) {
+    // #3153: over-limit is client-actionable — 413, not a server fault.
+    if (err instanceof ExportLimitError) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
     await logError({ error: err, context: 'tenant/companies export GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }

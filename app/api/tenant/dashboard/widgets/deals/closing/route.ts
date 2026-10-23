@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+import { deals, dealStages } from '@/drizzle/schema';
+import { eq, and, isNull, asc, notInArray } from 'drizzle-orm';
+import { resolveDealStageIds } from '@/lib/deals/won-stage-ids';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
@@ -26,9 +27,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const auth = ctx;
 
     return withCache(tid, 'deals-closing', 300, async () => {
-      // Single round-trip: terminal-stage filter inlined as a subselect
-      // (previously a stages query followed by the items query). NOT IN over
-      // an empty set matches everything, preserving the old fallback.
+      // #3156 — the exclusion was `lower(ds.name) IN ('won', 'lost')`, an exact
+      // match on two labels, so a tenant whose winning stage is `Closed Won` (the
+      // vocabulary #658 settled) never had its won deals excluded and this widget
+      // kept listing deals that closed months ago. One resolved set now, and the
+      // empty case keeps the behaviour that subselect had for the wrong reason:
+      // `notInArray(col, [])` renders the literal `true`, so a tenant with no
+      // terminal stage excludes nothing.
+      const { terminal: terminalStageIds } = await resolveDealStageIds(db, tid);
+
       const items = await db
         .select({
           id: deals.id,
@@ -44,11 +51,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           isNull(deals.deletedAt),
           notArchived(),  // #2684
           ownerScope(auth, 'deals.view_all', deals),  // #2688
-          sql`${deals.stageId} NOT IN (
-            SELECT ds.id FROM ${dealStages} ds
-            INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
-            WHERE p.tenant_id = ${tid} AND lower(ds.name) IN ('won', 'lost')
-          )`,
+          notInArray(deals.stageId, terminalStageIds),
         ))
         .orderBy(asc(deals.closeDate))
         .limit(5);

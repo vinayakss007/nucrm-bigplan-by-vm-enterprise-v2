@@ -78,7 +78,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     
     const validIds = valid.map(r => r.id);
-    if (!validIds.length)
+    // #3154 — see the same note in tasks/bulk: this set is filtered
+    // `deletedAt IS NULL`, so the trashed ids a `restore` names can never survive
+    // it, and the honest call of that verb was answered 404 before the switch.
+    // The case below resolves its own set, deals/leads-style (#2692).
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid companies found' }, { status: 404 });
 
     let affected = 0;
@@ -261,6 +265,32 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       case 'restore': {
         const deny = requirePerm(ctx, 'companies.edit');
         if (deny) return deny;
+
+        // #3154 — `validIds` is built under `deletedAt IS NULL`, so it holds no
+        // trashed company by construction: this wrote `deletedAt = null` over a set
+        // of rows that were never deleted and reported the count as a restore.
+        // Re-resolve against the trash, off the caller's id set, the way
+        // deals/bulk:409 and leads/bulk:306 do (#2692). Scope is deliberately the
+        // same tenant + tombstone pair the route's own validation uses: this route
+        // carries no owner narrowing anywhere, and neither does any other read or
+        // write of `companies` — `companies.view_all` is defined and enforced
+        // nowhere, which #2597 tracks and seven call sites comment around. Settling
+        // it for one action here would make the inconsistency worse, not better.
+        const restorable = await db
+          .select({ id: companies.id })
+          .from(companies)
+          .where(
+            and(
+              inArray(companies.id, company_ids),
+              eq(companies.tenantId, ctx.tenantId),
+              sql`${companies.deletedAt} IS NOT NULL`
+            )
+          );
+        const restorableIds = restorable.map(r => r.id);
+        if (!restorableIds.length) {
+          return NextResponse.json({ error: 'No deleted companies found to restore' }, { status: 404 });
+        }
+
         const res = await db
           .update(companies)
           .set({
@@ -270,8 +300,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           })
           .where(
             and(
-              inArray(companies.id, validIds),
-              eq(companies.tenantId, ctx.tenantId)
+              inArray(companies.id, restorableIds),
+              eq(companies.tenantId, ctx.tenantId),
+              sql`${companies.deletedAt} IS NOT NULL`
             )
           );
         affected = res.rowCount ?? 0;
