@@ -25,6 +25,7 @@ import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
+import { restoreBulkContacts } from '@/lib/contacts/bulk-restore';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
@@ -127,11 +128,18 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     
     const validIds = valid.map(r => r.id);
-    if (!validIds.length)
+    // `restore` is the one action whose target set is NOT `validIds` — trashed and
+    // archived rows are excluded from it by construction. Both siblings exempt it
+    // here and re-resolve their own set (`leads/bulk:70`, `deals/bulk:92`); without
+    // the exemption a restore 404s before the switch ever runs.
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid contacts found' }, { status: 404 });
 
     const payload = rawBody.payload ?? {};
     let affected = 0;
+    // The audit trail logs the ids the action actually touched, which for `restore`
+    // is the re-resolved set rather than this live one.
+    let auditIds: string[] = validIds;
     // Optional extra fields merged into the response (e.g. compliance skip counts).
     let extraResult: Record<string, unknown> = {};
 
@@ -369,21 +377,25 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       case 'restore': {
         const deny = requirePerm(ctx, 'contacts.edit');
         if (deny) return deny;
-        const res = await db
-          .update(contacts)
-          .set({
-            isArchived: false,
-            deletedAt: null,
-            deletedBy: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(contacts.id, validIds),
-              eq(contacts.tenantId, ctx.tenantId)
-            )
-          );
-        affected = res.rowCount ?? 0;
+        // #3111 — the delete case above decrements tenants.currentContacts by the
+        // rows it tombstoned; this had to be the inverse and was a bare UPDATE:
+        // no re-increment, no plan check, no transaction. See lib/contacts/bulk-restore.
+        const outcome = await restoreBulkContacts(db, {
+          tenantId: ctx.tenantId,
+          ids: contact_ids,
+          scope: ownedScope,
+        });
+        if (!outcome.ok) {
+          if (outcome.reason === 'over-plan-limit') {
+            return NextResponse.json(
+              { error: `Restore would exceed plan limit of ${outcome.maxContacts} contacts.` },
+              { status: 403 },
+            );
+          }
+          return NextResponse.json({ error: 'No deleted or archived contacts found to restore' }, { status: 404 });
+        }
+        affected = outcome.restored;
+        auditIds = outcome.ids;
         break;
       }
       case 'add_to_sequence': {
@@ -466,7 +478,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'contact',
-      newData: { count: affected, contact_ids: validIds.slice(0, 20), payload },
+      newData: { count: affected, contact_ids: auditIds.slice(0, 20), payload },
     });
 
     return NextResponse.json({ ok: true, affected, action, ...extraResult });
