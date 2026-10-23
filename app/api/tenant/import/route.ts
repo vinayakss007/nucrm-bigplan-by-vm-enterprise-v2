@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, companies, leads } from '@/drizzle/schema';
+import { contacts, companies, leads, tenants, plans } from '@/drizzle/schema';
+import { eq, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -55,93 +56,137 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const errors: Array<{ row: number; error: string }> = [];
     let imported = 0;
 
+    // #3147: contacts and leads share the plan-counted pool
+    // (tenants.currentContacts vs plans.maxContacts). The typed CSV importer
+    // enforces that gate under a row lock and bumps the counter SQL-side in
+    // the same transaction (#3080); this generic twin enforced nothing — quota
+    // bypass on every import, and counter drift for every later quota check.
+    // Companies carry no counter and stay out of the gate.
+    class PlanQuotaError extends Error {}
+
+    type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
     // Process in batches of 50
     const BATCH_SIZE = 50;
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE);
 
-      try {
-        switch (entity) {
-          case 'contacts': {
-            const values = batch.map((r, idx) => {
-              if (!r.first_name && !r.firstName) {
-                errors.push({ row: i + idx + 1, error: 'first_name is required' });
-                return null;
-              }
-              return {
-                tenantId: ctx.tenantId,
-                firstName: r.first_name || r.firstName || '',
-                lastName: r.last_name || r.lastName || null,
-                email: r.email || null,
-                phone: r.phone || null,
-                jobTitle: r.job_title || r.jobTitle || null,
-                leadStatus: 'new' as const,
-                createdBy: ctx.userId,
-              };
-            }).filter((v): v is NonNullable<typeof v> => v !== null);
+    const admitWithPlanGate = async (incoming: number, insertRows: (tx: DbTransaction) => Promise<void>) => {
+      await db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({
+            currentContacts: tenants.currentContacts,
+            maxContacts: plans.maxContacts,
+          })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId))
+          .for('update');
 
-            if (values.length > 0) {
-              await db.insert(contacts).values(values);
-              imported += values.length;
-            }
-            break;
-          }
-
-          case 'companies': {
-            const values = batch.map((r, idx) => {
-              if (!r.name) {
-                errors.push({ row: i + idx + 1, error: 'name is required' });
-                return null;
-              }
-              return {
-                tenantId: ctx.tenantId,
-                name: r.name,
-                website: r.website || null,
-                industry: r.industry || null,
-                phone: r.phone || null,
-                createdBy: ctx.userId,
-              };
-            }).filter((v): v is NonNullable<typeof v> => v !== null);
-
-            if (values.length > 0) {
-              await db.insert(companies).values(values);
-              imported += values.length;
-            }
-            break;
-          }
-
-          case 'leads': {
-            const values = batch.map((r, idx) => {
-              if (!r.first_name && !r.firstName) {
-                errors.push({ row: i + idx + 1, error: 'first_name is required' });
-                return null;
-              }
-              return {
-                tenantId: ctx.tenantId,
-                firstName: r.first_name || r.firstName || '',
-                // leads.lastName is NOT NULL (default ''), unlike contacts.lastName
-                // which is nullable — so this branch cannot pass null.
-                lastName: r.last_name || r.lastName || '',
-                email: r.email || null,
-                phone: r.phone || null,
-                companyName: r.company || r.company_name || null,
-                leadStatus: 'new' as const,
-                source: r.source || r.lead_source || null,
-                createdBy: ctx.userId,
-              };
-            }).filter((v): v is NonNullable<typeof v> => v !== null);
-
-            if (values.length > 0) {
-              await db.insert(leads).values(values);
-              imported += values.length;
-            }
-            break;
-          }
+        if (locked && locked.maxContacts != null && (locked.currentContacts ?? 0) + incoming > locked.maxContacts) {
+          throw new PlanQuotaError(
+            `Import would exceed plan limit of ${locked.maxContacts} contacts (leads share the contacts pool).`,
+          );
         }
-      } catch (batchErr) {
-        const msg = batchErr instanceof Error ? batchErr.message : 'Unknown error';
-        errors.push({ row: i + 1, error: `Batch failed: ${msg}` });
+
+        await tx
+          .update(tenants)
+          .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + ${incoming}` })
+          .where(eq(tenants.id, ctx.tenantId));
+
+        await insertRows(tx);
+      });
+    };
+
+    try {
+      switch (entity) {
+        case 'contacts': {
+          const values = records.map((r, idx) => {
+            if (!r.first_name && !r.firstName) {
+              errors.push({ row: idx + 1, error: 'first_name is required' });
+              return null;
+            }
+            return {
+              tenantId: ctx.tenantId,
+              firstName: r.first_name || r.firstName || '',
+              lastName: r.last_name || r.lastName || null,
+              email: r.email || null,
+              phone: r.phone || null,
+              jobTitle: r.job_title || r.jobTitle || null,
+              leadStatus: 'new' as const,
+              createdBy: ctx.userId,
+            };
+          }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+          if (values.length > 0) {
+            await admitWithPlanGate(values.length, async (tx) => {
+              for (let i = 0; i < values.length; i += BATCH_SIZE) {
+                await tx.insert(contacts).values(values.slice(i, i + BATCH_SIZE));
+              }
+            });
+            imported += values.length;
+          }
+          break;
+        }
+
+        case 'companies': {
+          const values = records.map((r, idx) => {
+            if (!r.name) {
+              errors.push({ row: idx + 1, error: 'name is required' });
+              return null;
+            }
+            return {
+              tenantId: ctx.tenantId,
+              name: r.name,
+              website: r.website || null,
+              industry: r.industry || null,
+              phone: r.phone || null,
+              createdBy: ctx.userId,
+            };
+          }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+          for (let i = 0; i < values.length; i += BATCH_SIZE) {
+            await db.insert(companies).values(values.slice(i, i + BATCH_SIZE));
+          }
+          imported += values.length;
+          break;
+        }
+
+        case 'leads': {
+          const values = records.map((r, idx) => {
+            if (!r.first_name && !r.firstName) {
+              errors.push({ row: idx + 1, error: 'first_name is required' });
+              return null;
+            }
+            return {
+              tenantId: ctx.tenantId,
+              firstName: r.first_name || r.firstName || '',
+              // leads.lastName is NOT NULL (default ''), unlike contacts.lastName
+              // which is nullable — so this branch cannot pass null.
+              lastName: r.last_name || r.lastName || '',
+              email: r.email || null,
+              phone: r.phone || null,
+              companyName: r.company || r.company_name || null,
+              leadStatus: 'new' as const,
+              source: r.source || r.lead_source || null,
+              createdBy: ctx.userId,
+            };
+          }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+          if (values.length > 0) {
+            await admitWithPlanGate(values.length, async (tx) => {
+              for (let i = 0; i < values.length; i += BATCH_SIZE) {
+                await tx.insert(leads).values(values.slice(i, i + BATCH_SIZE));
+              }
+            });
+            imported += values.length;
+          }
+          break;
+        }
       }
+    } catch (err) {
+      if (err instanceof PlanQuotaError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     return NextResponse.json({
