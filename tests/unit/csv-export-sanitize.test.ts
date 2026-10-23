@@ -204,7 +204,7 @@ describe('Automation Engine - Unknown Operator Default Behavior', () => {
     }));
 
     vi.doMock('@/lib/email/service', () => ({
-      sendEmail: vi.fn().mockResolvedValue(undefined),
+      sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'msg-1' }),
     }));
 
     vi.doMock('@/lib/notifications', () => ({

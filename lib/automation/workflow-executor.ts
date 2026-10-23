@@ -316,11 +316,16 @@ async function executeActionNode(
       case 'send_email': {
         const to = (data.to as string) || (ctx.email as string);
         if (!to) throw new Error('No email recipient');
-        await sendEmail({
+        // #3131: a provider 4xx/5xx resolves `{ success: false, error }` instead
+        // of throwing (#2422/#3045), so this has to be read or the action log
+        // claims a delivery that never happened. This catch is below: the action
+        // fails and the walk continues, like the no-recipient case above.
+        const sent = await sendEmail({
           to,
           subject: interpolate((data.subject as string) || 'Message from NuCRM', ctx),
           html: interpolateHtml((data.body as string) || '', ctx),
         });
+        if (!sent.success) throw new Error(sent.error ?? 'email provider rejected the automated send');
         break;
       }
 
