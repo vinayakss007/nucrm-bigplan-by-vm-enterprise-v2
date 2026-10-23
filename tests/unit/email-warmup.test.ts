@@ -138,6 +138,11 @@ describe('Email Warmup Engine', () => {
         })),
       });
 
+      const { sendEmail } = await import('@/lib/email/service');
+      // sendEmail resolves a SendResult and never reports success as undefined
+      // (#2422/#3045); #3110 now reads that result, so this mock has to return it.
+      (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, messageId: 'msg-1' });
+
       const { processWarmUp } = await import('@/lib/email/warmup');
       const result = await processWarmUp();
       expect(result.emailsSent).toBe(1);
