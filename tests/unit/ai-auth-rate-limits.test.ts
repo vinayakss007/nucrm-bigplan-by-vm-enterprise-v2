@@ -41,6 +41,14 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn(),
 }));
 
+// #3077 made this stubbing load-bearing: without it getClientIp() returns the
+// constant 'unknown' (lib/client-ip.ts:15) and the x-forwarded-for values below
+// are never read, so every case here shared one `v1_rate:<action>:unknown`
+// bucket. Only the auth-scoped actions were affected, and only once #3077
+// listed 'accept-invite' — that case then failed closed with a 503 and the
+// suite went red on a correct production change.
+vi.stubEnv('TRUST_PROXY', 'true');
+
 function makeRequest(ip: string): Request {
   return new Request('http://localhost/api/test', {
     method: 'POST',

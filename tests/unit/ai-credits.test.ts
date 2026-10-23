@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockFindFirst = vi.fn();
 const mockReturning = vi.fn();
-const mockValues = vi.fn(() => ({ returning: mockReturning, onConflictDoUpdate: vi.fn() }));
+// #3081: getCreditBalance's auto-create now goes through onConflictDoNothing
+// (the bare insert raced the tenant_id_billing_period_key unique index) —
+// the mock chain must mirror the real one.
+const mockValues = vi.fn(() => ({
+  returning: mockReturning,
+  onConflictDoUpdate: vi.fn(),
+  onConflictDoNothing: () => ({ returning: mockReturning }),
+}));
 const mockInsert = vi.fn(() => ({ values: mockValues }));
 
 const mockLimit = vi.fn(() => Promise.resolve([]));

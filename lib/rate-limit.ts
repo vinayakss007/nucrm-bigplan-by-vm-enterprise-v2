@@ -407,10 +407,24 @@ export default rateLimiter;
 // request rather than silently bucket every user together. Live symptom:
 // Redis key `nucrm:rate:v1_rate:login:unknown` — one strike against that
 // bucket locks out every login attempt globally.
+// #3077: canonical form is DASHED and membership is tested on the
+// normalized action, because callers drifted between `2fa_verify` and
+// `2fa-verify` spellings — a misspelled entry silently opted an auth
+// endpoint out of the fail-closed guarantee. Every literal `action:` used
+// under app/api/auth/** is listed here; the coverage test fails the suite
+// when a new auth action appears without a decision here.
 const AUTH_RATE_ACTIONS = new Set([
-  'login', 'signup', 'register', 'password_reset', 'forgot_password',
-  'magic_link', 'otp', '2fa', '2fa_verify', 'totp',
+  'login', 'signup', 'register', 'password-reset', 'password-reset-confirm',
+  'forgot-password', 'reset-password', 'magic-link',
+  'otp', 'totp', '2fa', '2fa-verify', '2fa-setup', '2fa-disable',
+  'verify-email', 'resend-verification', 'accept-invite', 'invite-details', 'sso-start',
+  'csrf-token', 'oauth-token', 'oauth-revoke', 'oauth-authorize',
 ]);
+
+/** Visible for the #3077 coverage test. */
+export function isAuthScopedAction(action: string): boolean {
+  return AUTH_RATE_ACTIONS.has(action.replace(/_/g, '-'));
+}
 
 export async function checkRateLimit(
   request: Request,
@@ -425,7 +439,7 @@ export async function checkRateLimit(
   // would share one global bucket across every caller — either fix the proxy
   // config (set TRUST_PROXY=true and have nginx emit X-Forwarded-For /
   // X-Real-IP) or the limiter has nothing to isolate abuse against.
-  if (ip === 'unknown' && AUTH_RATE_ACTIONS.has(action)) {
+  if (ip === 'unknown' && isAuthScopedAction(action)) {
     return NextResponse.json(
       { error: 'Rate limiter misconfigured: client IP unavailable for an auth endpoint.' },
       { status: 503 },

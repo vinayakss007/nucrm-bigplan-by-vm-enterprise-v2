@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- react/socket mocks are intentionally loose */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-let mockSetState: any;
+let mockSetState: ReturnType<typeof vi.fn> | null;
 let cleanupRegistry: (() => void)[] = [];
 
 vi.mock('react', () => ({
-  useState: (initial: any) => {
+  useState: (initial: unknown) => {
     mockSetState = vi.fn();
     return [initial, mockSetState];
   },
@@ -13,32 +12,32 @@ vi.mock('react', () => ({
     const cleanup = fn();
     if (cleanup) cleanupRegistry.push(cleanup);
   },
-  useCallback: (fn: any) => fn,
+  useCallback: (fn: unknown) => fn,
   useRef: (initial: unknown) => ({ current: initial }),
 }));
 
 // ── socket.io-client mock ────────────────────────────────────────────────────
 // The hook dynamically imports this, so the mock must be hoisted by vi.mock.
-let socketHandlers: Map<string, ((payload?: any) => void)[]>;
-let mockSocket: any;
-let socketFactoryOpts: any;
+let socketHandlers: Map<string, ((payload?: unknown) => void)[]>;
+let mockSocket: { on: (event: string, handler: (payload?: unknown) => void) => void; close: ReturnType<typeof vi.fn> };
+let socketFactoryOpts: Record<string, unknown> | null;
 let socketCreated = false;
 
 vi.mock('socket.io-client', () => ({
-  io: (opts: any) => {
+  io: (opts: Record<string, unknown>) => {
     socketCreated = true;
     socketFactoryOpts = opts;
     return mockSocket;
   },
 }));
 
-function emitSocket(event: string, payload?: any) {
+function emitSocket(event: string, payload?: unknown) {
   (socketHandlers.get(event) ?? []).forEach((h) => h(payload));
 }
 
 // ── EventSource (SSE fallback) mock ──────────────────────────────────────────
-let mockEventSourceInstance: any;
-let messageHandlers: Map<string, ((event: any) => void)[]>;
+let mockEventSourceInstance: MockEventSource | null;
+let messageHandlers: Map<string, ((event: { data: string }) => void)[]>;
 
 class MockEventSource {
   onopen: (() => void) | null = null;
@@ -48,13 +47,13 @@ class MockEventSource {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     mockEventSourceInstance = this;
   }
-  addEventListener(type: string, handler: (event: any) => void) {
+  addEventListener(type: string, handler: (event: { data: string }) => void) {
     if (!messageHandlers.has(type)) messageHandlers.set(type, []);
     messageHandlers.get(type)!.push(handler);
   }
 }
 
-function triggerSSEMessage(data: any) {
+function triggerSSEMessage(data: unknown) {
   (messageHandlers.get('message') ?? []).forEach((h) => h({ data: JSON.stringify(data) }));
 }
 
@@ -83,7 +82,7 @@ beforeEach(() => {
   socketFactoryOpts = null;
   socketCreated = false;
   mockSocket = {
-    on: (event: string, handler: (payload?: any) => void) => {
+    on: (event: string, handler: (payload?: unknown) => void) => {
       if (!socketHandlers.has(event)) socketHandlers.set(event, []);
       socketHandlers.get(event)!.push(handler);
     },
@@ -137,12 +136,12 @@ describe('useNotifications — socket transport (preferred)', () => {
     useNotifications(true);
     await flush();
 
-    const fetchCallsBefore = (fetch as any).mock.calls.length;
+    const fetchCallsBefore = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
     emitSocket('notification:new', { title: 'hi' });
 
     expect(mockSetState).toHaveBeenCalled();
     // No extra network round-trip — that is the efficiency win.
-    expect((fetch as any).mock.calls.length).toBe(fetchCallsBefore);
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCallsBefore);
   });
 
   it('accepts an authoritative count push (e.g. after mark-all-read)', async () => {

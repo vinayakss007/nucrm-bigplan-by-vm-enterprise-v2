@@ -269,6 +269,23 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         // unique idx_leads_tenant_oid can re-run allocation instead of
         // surfacing as a failed row.
         const createLeadRowTx = () => db.transaction(async (tx) => {
+          // #3080: the plan gate has to hold ACROSS the writes. The upfront
+          // FOR UPDATE check commits before any row exists, so two concurrent
+          // imports both passed it and neither maintained the counter. Lock
+          // the tenant row here, per row, then enforce and bump
+          // currentContacts inside this same transaction — a quota failure
+          // rolls back the contact/lead it would have created.
+          const [lockedTenant] = await tx
+            .select({
+              currentContacts: tenants.currentContacts,
+              maxContacts: plans.maxContacts,
+            })
+            .from(tenants)
+            .innerJoin(plans, eq(plans.id, tenants.planId))
+            .where(eq(tenants.id, ctx.tenantId))
+            .limit(1)
+            .for('update');
+
           const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
             firstName,
             lastName: mapped.lastName || '',
@@ -287,6 +304,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             internalNotes: mapped.internalNotes?.slice(0, 5000) || null,
             assignedTo: mapped.assignedTo || null,
           });
+
+          if (resolve.isNewContact) {
+            if (lockedTenant && lockedTenant.maxContacts != null
+              && (lockedTenant.currentContacts ?? 0) + 1 > lockedTenant.maxContacts) {
+              throw new Error(`Plan contact limit reached (${lockedTenant.maxContacts} contacts) — row skipped`);
+            }
+            await tx.update(tenants)
+              .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+              .where(eq(tenants.id, ctx.tenantId));
+          }
 
           const leadOid = await generateLeadOid(tx, ctx.tenantId);
 

@@ -151,10 +151,23 @@ const gets = (url: string) => net.calls.filter(u => u === url).length;
 // Matched on the element, not the page text: `nucrm-app` and `Application` both contain "app".
 const checkCards = () => ['database', 'app', 'email'].filter(s => screen.queryAllByText(s).length > 0);
 
+/**
+ * "Settled" cannot mean one microtask. After the stub resolves, apiFetcher still awaits the
+ * body, React Query publishes the result, and React re-renders — several ticks later. A fixed
+ * `await Promise.resolve()` therefore read the DOM while the board was still on
+ * "Running checks…", which is how `a 403 is the server saying no` passed locally and failed on
+ * a loaded CI runner (twice: on #3070 and #3073, from unrelated branches). The cache's own
+ * fetching count is the settle signal; waiting on it is timing-independent.
+ */
+async function settle() {
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  await act(async () => { await Promise.resolve(); });
+}
+
 async function mountRosterSettled() {
   const view = mountPage();
   await waitFor(() => expect(gets(ROSTER_URL)).toBeGreaterThan(0));
-  await act(async () => { await Promise.resolve(); });
+  await settle();
   return view;
 }
 
@@ -162,7 +175,7 @@ async function mountBothSettled() {
   const view = mountPage();
   await waitFor(() => expect(gets(ROSTER_URL)).toBe(1));
   await waitFor(() => expect(gets(APP_URL)).toBe(1));
-  await act(async () => { await Promise.resolve(); });
+  await settle();
   return view;
 }
 
@@ -172,7 +185,7 @@ async function refusedRosterRefresh(status = 500, body: Record<string, unknown> 
   const view = await mountBothSettled();
   await act(async () => { await client.refetchQueries({ queryKey: ROSTER_KEY }); });
   await waitFor(() => expect(gets(ROSTER_URL)).toBe(2));
-  await act(async () => { await Promise.resolve(); });
+  await settle();
   return view;
 }
 
@@ -182,7 +195,7 @@ async function refusedAppRefresh() {
   const view = await mountBothSettled();
   await act(async () => { await client.refetchQueries({ queryKey: APP_KEY }); });
   await waitFor(() => expect(gets(APP_URL)).toBe(2));
-  await act(async () => { await Promise.resolve(); });
+  await settle();
   return view;
 }
 
@@ -483,7 +496,11 @@ describe('the superadmin health board — the source stays in this shape', () =>
   });
 
   it('no other suite mounted this page before this one', () => {
-    const hits = spawnSync('grep', ['-rlF', 'app/superadmin/health/page', 'tests'], {
+    // This guard is about a suite that imports and renders the board. It grepped the bare path,
+    // which also matches prose: #3095 cites `app/superadmin/health/page.tsx:70` to document the
+    // cache-key collision it found, while mounting the *monitoring* page. The import specifier is
+    // what a second mount would have to spell, so that is what now has to be unique.
+    const hits = spawnSync('grep', ['-rlE', "from '@/app/superadmin/health/page'", 'tests'], {
       cwd: process.cwd(), encoding: 'utf8',
     });
     expect((hits.stdout ?? '').trim().split('\n').sort()).toEqual([

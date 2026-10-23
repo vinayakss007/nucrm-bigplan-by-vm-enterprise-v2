@@ -10,12 +10,31 @@ is my acceptance run flaky".
 - **engines require Node ≥ 22.** The system node on this host is **v16.20.2**
   (`/usr/bin/node`) and a login shell defaulted to it, which broke repo-wide lint
   (eslint crashed on the Node 16 stack) — issue **#2622**. Fixed by prepending the
-  vendored runtime in `~/.bashrc`:
+  vendored runtime, and that prepend lives in `~/.bashrc` (currently `:60`) — it is
+  a profile fact, not a per-shell command you must retype:
   ```sh
-  export PATH="/home/opc/node-v22.14.0-linux-x64/bin:$PATH"
+  export PATH="/home/opc/node-v26.12.1-linux-x64/bin:$PATH"
   ```
-  Verify: `bash -lc 'node -v; which node'` → `v22.14.0`. Rebuild note: any fresh
-  checkout on this box needs this before `npm test`/`eslint` will run.
+  Verify: `bash -lc 'node -v; which node'` → `v26.12.1` +
+  `/home/opc/node-v26.12.1-linux-x64/bin/node`. Rebuild note: any fresh checkout on
+  this box needs this before `npm test`/`eslint` will run.
+- **The profile pins one runtime; three are on disk.** `node-v22.23.4-linux-x64` and
+  `node-v22.14.0-linux-x64` are still installed but **retired** — their `export` lines
+  sit commented directly under the active one (`~/.bashrc:61-62`) and are the rollback.
+  Prepending a retired tree still *works*, which is why it is a trap: it silently
+  shadows the runtime the suites were verified with, and `node -v` in that same shell
+  then disagrees with the login shell. 22.14.0 specifically is dead for this repo —
+  jsdom 30.1.3 pulls undici 8.12.2, whose decompress interceptor calls
+  `zlib.createZstdDecompress` at module load (added in 22.15.0), so every
+  `@vitest-environment jsdom` suite dies at collection on it.
+- **Host and shipped image are on 26; CI is on 22.** `Dockerfile:4,10,63` builds and
+  runs `node:26-alpine`, and since 2026-10-23 the host profile matches it (26.12.1,
+  glibc x64). Every `actions/setup-node` step in `.github/workflows/*.yml` still pins
+  `node-version: "22"`. `engines.node` (`>=22.0.0`) accepts both and the repo's native
+  deps are per-platform N-API prebuilds that load on either, so the merge gate cannot
+  see a 26-only regression — nor a musl-vs-glibc one, since CI and this host are both
+  glibc. Verified on 26.12.1 before the switch: `tsc --noEmit` clean, `eslint .
+  --max-warnings 46` clean, `npm run test:unit` 9378 passing, `next build` exit 0.
 - Package manager: npm; install uses `--legacy-peer-deps` (see Docker issue #656
   in AGENTS.md backlog — the compose build carries the flag).
 

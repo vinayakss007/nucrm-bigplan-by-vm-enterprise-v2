@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -26,13 +25,13 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 const h = vi.hoisted(() => ({ wheres: [] as unknown[] }));
 
 vi.mock('@/drizzle/db', () => {
-  const chain: any = {
+  const chain: Record<string, unknown> = {
     from: () => chain,
     where: (w: unknown) => { h.wheres.push(w); return chain; },
     groupBy: () => chain,
     orderBy: () => chain,
     limit: () => chain,
-    then: (res: any, rej?: any) => Promise.resolve([]).then(res, rej),
+    then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve([]).then(res, rej),
   };
   return { db: { select: () => chain } };
 });
@@ -53,8 +52,9 @@ async function run(reportType: string, filters: unknown) {
   return { out, mod };
 }
 
-function render(mod: any, tableKey: string, field: string, raw: unknown) {
-  return dialect.sqlToQuery(mod.filterCondition(tableKey, field, raw) as never);
+function render(mod: Record<string, unknown>, tableKey: string, field: string, raw: unknown) {
+  const filterCondition = mod.filterCondition as (t: string, f: string, r: unknown) => unknown;
+  return dialect.sqlToQuery(filterCondition(tableKey, field, raw) as never);
 }
 
 beforeEach(() => { vi.clearAllMocks(); h.wheres = []; });

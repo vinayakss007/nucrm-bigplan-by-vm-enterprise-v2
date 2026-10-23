@@ -292,8 +292,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }
 
     const entityResult = await db.execute(
-      sql`SELECT metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
-    );    const entity = entityResult.rows[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
+      sql`SELECT id FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
+    );    const entity = entityResult.rows[0] as { id: string } | undefined;
     if (!entity) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
     }
@@ -305,13 +305,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       if (safeKey) sanitizedFields[safeKey] = val;
     }
 
-    const mergedMetadata = {
-      ...(entity.metadata || {}),
-      ...sanitizedFields,
-    };
-
+    // #3078: merge only the new keys in SQL. The old shape read `metadata`,
+    // spread it in JS and wrote the whole column back — any concurrent
+    // set-value/set-bulk between read and write was silently lost.
     await db.execute(
-      sql`UPDATE ${table} SET metadata = ${mergedMetadata} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
+      sql`UPDATE ${table} SET metadata = COALESCE(metadata, '{}'::jsonb) || ${sanitizedFields}::jsonb WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
     );
 
     return NextResponse.json({

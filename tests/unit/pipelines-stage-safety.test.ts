@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Regression tests for PATCH/DELETE /api/tenant/pipelines/[id] (#757 item 4).
  *
@@ -37,8 +36,8 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/drizzle/db', () => {
   function reader() {
-    const self: any = {
-      then: (res: any, rej?: any) =>
+    const self: Record<string, unknown> = {
+      then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) =>
         Promise.resolve(h.selectQueue.shift() ?? []).then(res, rej),
     };
     for (const m of ['from', 'where', 'innerJoin', 'leftJoin', 'groupBy', 'orderBy', 'limit', 'offset']) {
@@ -47,46 +46,46 @@ vi.mock('@/drizzle/db', () => {
     return self;
   }
 
-  const db: any = {
+  const db: Record<string, unknown> = {
     select: () => reader(),
     update: (table: unknown) => {
-      const rec: any = { op: 'update', table };
+      const rec: { op: string; table?: unknown; payload?: unknown } = { op: 'update', table };
       h.ops.push(rec);
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         set: (p: unknown) => {
           rec.payload = p;
           return chain;
         },
         where: () => chain,
         returning: async () => h.returningQueue.shift() ?? [],
-        then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
       };
       return chain;
     },
     insert: (table: unknown) => {
-      const rec: any = { op: 'insert', table };
+      const rec: { op: string; table?: unknown; payload?: unknown } = { op: 'insert', table };
       h.ops.push(rec);
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         values: (p: unknown) => {
           rec.payload = p;
           return chain;
         },
         returning: async () => h.returningQueue.shift() ?? [],
-        then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
       };
       return chain;
     },
     delete: (table: unknown) => {
-      const rec: any = { op: 'delete', table };
+      const rec: { op: string; table?: unknown; payload?: unknown } = { op: 'delete', table };
       h.ops.push(rec);
-      const chain: any = {
+      const chain: Record<string, unknown> = {
         where: () => chain,
-        then: (res: any, rej?: any) => Promise.resolve(undefined).then(res, rej),
+        then: (res?: (v: unknown) => unknown, rej?: (reason: unknown) => unknown) => Promise.resolve(undefined).then(res, rej),
       };
       return chain;
     },
     query: { pipelines: { findFirst: async () => h.findFirstPipeline } },
-    transaction: async (cb: any) => cb(db),
+    transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };
 });

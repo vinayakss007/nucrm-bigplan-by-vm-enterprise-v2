@@ -513,7 +513,10 @@ describe('the ratchet (#2872)', () => {
     expect(monitoring).toMatch(/const monitoringFailed = Boolean\(monitoringQuery\.error\) && !data;/);
     expect(monitoring).toMatch(/const monitoringStale = Boolean\(monitoringQuery\.error\) && Boolean\(data\);/);
     expect(monitoring).toMatch(/const healthFailed = Boolean\(healthQuery\.error\) && !health;/);
-    expect(monitoring).toMatch(/const healthStale = Boolean\(healthQuery\.error\) && Boolean\(health\);/);
+    // #3095: `Boolean(health)` became `Boolean(healthQuery.data) && !health503`. The caveat is about
+    // the payload a previous tick produced, so it has to name `data`, and a tick that answered 503
+    // produced a reading just now rather than a copy of an old one. `failed` keeps its #2872 shape.
+    expect(monitoring).toMatch(/const healthStale = Boolean\(healthQuery\.error\) && Boolean\(healthQuery\.data\) && !health503;/);
     expect(monitoring).toMatch(/const monitoringReason = monitoringQuery\.error\?\.message \|\| 'no response from the server';/);
     expect(monitoring).toMatch(/const healthReason = healthQuery\.error\?\.message \|\| 'no response from the server';/);
     for (const gate of [/\{monitoringFailed && \(/, /\{monitoringStale && \(/, /\{healthFailed && \(/, /\{healthStale && \(/]) {
@@ -533,7 +536,9 @@ describe('the ratchet (#2872)', () => {
       /monitoringFailed \? '—' : data\?\.backupStatus\?\.failed \?\? 0/,
       /monitoringFailed \? '—' : data\?\.restoreStatus\?\.failed \?\? 0/,
       /healthFailed \? '—' : hs\.version \?\? 'not reported'/,
-      /healthFailed\?'Status not read':allUp/,
+      // #3095: the verdict is keyed on whether a reading exists, not on whether the read failed —
+      // a payload with no `status` is neither, and used to print "Status not read" in outage red.
+      /probeKnown\?'Status not read':allUp/,
       /monitoringFailed \? \(\s*<p className="text-white\/30 text-sm text-center py-8">—<\/p>/,
     ]) {
       expect(monitoring, `a derived figure stopped keying off failed (${figure.source})`).toMatch(figure);
@@ -645,6 +650,7 @@ describe('the ratchet (#2872)', () => {
         return /@\/app\/superadmin\/(settings|monitoring)\/page/.test(s);
       });
     expect(importers.sort()).toEqual([
+      'panel-page-error-not-empty-superadmin-monitoring-probe-3095.test.tsx',
       'panel-page-error-not-empty-superadmin-settings-monitoring-stale-2872.test.tsx',
     ]);
   });

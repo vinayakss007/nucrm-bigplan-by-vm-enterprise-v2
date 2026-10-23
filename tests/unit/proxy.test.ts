@@ -190,6 +190,20 @@ describe('proxy middleware', () => {
     });
   });
 
+  // #3076: /api/auth/password-reset/{request,confirm} are unauthenticated flows
+  // by definition, but no PUBLIC_PATHS entry matched them — the logged-out
+  // caller got the edge's 401 before the handler ran (#2415's failure mode,
+  // the one the #2415 sweep missed).
+  describe('password reset flow is reachable logged out (#3076)', () => {
+    for (const pathname of ['/api/auth/password-reset/request', '/api/auth/password-reset/confirm']) {
+      it(`POST ${pathname} passes the edge with no session`, async () => {
+        const { proxy } = await import('@/proxy');
+        const res = await proxy(makeReq(pathname, { method: 'POST' }));
+        expect(res._isNext, `${pathname} was intercepted: ${JSON.stringify(res.body ?? res.status)}`).toBe(true);
+      });
+    }
+  });
+
   // #1992: CSP/nonce work belongs on HTML document responses only — RSC
   // flight-payload prefetches must skip it, and the nonce must be edge-safe
   // (WebCrypto base64, still matching Next's nonce regex).
