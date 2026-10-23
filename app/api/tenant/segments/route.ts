@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -54,6 +54,23 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       .orderBy(segments.name);
 
     // Shape for the UI: expose entity_type/filters/filter_count/created_at.
+    //
+    // #3151 — every authenticated session read the full filter definition of
+    // every segment in the workspace, and nothing in the app consumes it: the
+    // admin page renders only `filter_count` (`app/tenant/segments/page.tsx:159`),
+    // and the five `<entity>-data-table` pickers project `{id, name}`
+    // (`tasks-data-table.tsx:294`, `leads-client.tsx:152`). So the gate is on
+    // that one field, held to `segments.view` — whose own catalogue entry is
+    // "View Segments" (`lib/permissions/definitions.ts:119`).
+    //
+    // It is deliberately not a 403 on the route. Those same pickers feed the
+    // bulk `add_to_segment` action, which #3148 granted to `<entity>.edit`
+    // holders rather than to any segments permission (`contacts/bulk:458`,
+    // `tasks/bulk:339`, …), and a refusal is swallowed by their
+    // `r.ok ? r.json() : { data: [] }` — every rep allowed to add a row to a
+    // segment would silently lose the dropdown they pick it from. The id/name
+    // list and the true count stay readable; only the definition is withheld.
+    const mayReadConfig = can(ctx, 'segments.view');
     const data = rows.map((r) => {
       const filters = (r.config as Record<string, unknown>) ?? {};
       return {
@@ -61,7 +78,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         name: r.name,
         entity_type: r.entityType,
         description: r.description,
-        filters,
+        filters: mayReadConfig ? filters : {},
         filter_count: Object.keys(filters).length,
         created_at: r.createdAt,
       };
@@ -81,6 +98,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3151 — a segment is authored, not chosen: this inserts the row whose
+    // `config` the list above only now stops handing out, so creating one takes
+    // `segments.manage` ("Create/edit segments", `definitions.ts:120`).
+    const deny = requirePerm(ctx, 'segments.manage');
+    if (deny) return deny;
 
     const body = await readJsonBody(req);
     const name = typeof body.name === 'string' ? body.name.trim() : '';
