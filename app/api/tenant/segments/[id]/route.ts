@@ -25,8 +25,8 @@ export const DELETE = withApiRoute(
       // #3151 — this is the only hard delete in the family: no tombstone, and
       // `segment_members` leaves with it by the `onDelete: 'cascade'` FK
       // (`drizzle/schema/segments.ts:39`), so the bulk `restore` action cannot
-      // bring either back. Deleting a segment another team's automations read
-      // off is authoring, and authoring takes `segments.manage`.
+      // bring either back. Removing the audience another team's automations
+      // enrol from is authoring, and authoring takes `segments.manage`.
       const deny = requirePerm(ctx, 'segments.manage');
       if (deny) return deny;
 

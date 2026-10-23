@@ -69,7 +69,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     // `tasks/bulk:339`, …), and a refusal is swallowed by their
     // `r.ok ? r.json() : { data: [] }` — every rep allowed to add a row to a
     // segment would silently lose the dropdown they pick it from. The id/name
-    // list and the true count stay readable; only the definition is withheld.
+    // list and the true count stay readable; only the definition is withheld,
+    // and it is withheld from the sessions that have no use for it.
     const mayReadConfig = can(ctx, 'segments.view');
     const data = rows.map((r) => {
       const filters = (r.config as Record<string, unknown>) ?? {};
@@ -98,8 +99,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    // #3151 — a segment is authored, not chosen: this inserts the row whose
-    // `config` the list above only now stops handing out, so creating one takes
+    // #3151 — a segment is authored, not chosen. This inserts the row whose
+    // `config` the list above now withholds, so creating one takes
     // `segments.manage` ("Create/edit segments", `definitions.ts:120`).
     const deny = requirePerm(ctx, 'segments.manage');
     if (deny) return deny;
