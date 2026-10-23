@@ -18,6 +18,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
+import { money, round2 } from '@/lib/money';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -144,7 +145,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
                 discountValue: item.discountPercent ?? '0',
                 discountAmount: '0',
                 taxRate: item.taxPercent ?? '0',
-                taxAmount: '0',
+                // #3108: was hard-coded '0'. Quote lines now persist real
+                // per-line tax (the quote route used to read a stripped
+                // `tax_amount` key); derive the line tax amount the same way
+                // invoices/route.ts L-1 does, so line sums reconcile with the
+                // header after conversion.
+                taxAmount: round2(money(item.total ?? '0') * money(item.taxPercent ?? '0') / 100).toFixed(2),
                 total: item.total ?? '0',
                 sortOrder: idx,
               }))
