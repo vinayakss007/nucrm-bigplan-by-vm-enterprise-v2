@@ -11,7 +11,7 @@ import { createNoteSchema } from '@/lib/api/schemas';
 import { requireAuth, can, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, isNull } from 'drizzle-orm';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { ownerScope } from '@/lib/api/owner-scope';
@@ -68,7 +68,12 @@ export const GET = withApiRoute(async (request: NextRequest,
     // Build filters
     const filters = [
       eq(activities.contactId, id),
-      eq(activities.tenantId, ctx.tenantId)
+      eq(activities.tenantId, ctx.tenantId),
+      // #3116 — one array feeds both the page and its `count`, so the tombstone
+      // goes here and the two cannot drift. It is written by the notes DELETE in
+      // this same folder; a deleted note used to stay on this timeline and keep
+      // `total` counting it.
+      isNull(activities.deletedAt)
     ];
     
     if (eventType) {

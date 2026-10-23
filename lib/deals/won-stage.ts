@@ -51,3 +51,21 @@ export function isLostStageName(name: string | null | undefined): boolean {
   if (/\bnot\b|\bnever\b/.test(n)) return false;
   return /\b(closed|deal|mark|marked|sale|sales)\b/.test(n);
 }
+
+/**
+ * The `deals` patch that records a win, for a stage name a write is about to
+ * move deals into — empty unless the stage is a won stage.
+ *
+ * `deals.won_at` (0084) is the win date the MTD revenue tiles and the
+ * leaderboards read, and until #3112 only the single-deal PATCH set it, so a
+ * bulk "move to Won" — the common way a team closes a quarter of deals at once
+ * — was invisible to revenue and excluded outright by leaderboards'
+ * `won_at IS NOT NULL`. It returns a spreadable object so an ordinary move
+ * spreads to nothing and the UPDATE does not mention the column at all.
+ *
+ * The legacy `metadata.won_at` copy `deals/[id]` still mirrors is deliberately
+ * not written here — 0084 backfilled it and no reader remains.
+ */
+export function wonAtPatch(name: string | null | undefined): { wonAt?: Date } {
+  return isWonStageName(name) ? { wonAt: new Date() } : {};
+}

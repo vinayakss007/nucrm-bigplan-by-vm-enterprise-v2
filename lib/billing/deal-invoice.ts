@@ -186,24 +186,6 @@ export async function createInvoiceFromWonDeal(
             );
           }
 
-          // Log an activity on the deal timeline.
-          try {
-            await tx.insert(activities).values({
-              tenantId: ctx.tenantId,
-              userId: ctx.userId,
-              entityType: 'deal',
-              entityId: dealId,
-              contactId: row.contactId ?? null,
-              dealId,
-              eventType: 'invoice_created',
-              description: `Draft invoice ${invoiceNumber} created for won deal "${row.title ?? ''}"`,
-              metadata: { deal_id: dealId, invoice_id: inv.id, invoice_number: invoiceNumber },
-            });
-          } catch (err) {
-            // Activity is non-critical.
-            await logError({ error: err, context: 'deal-invoice: activity insert' });
-          }
-
           return { id: inv.id, invoiceNumber };
         });
 
@@ -221,6 +203,26 @@ export async function createInvoiceFromWonDeal(
     }
 
     if (createdInvoiceId) {
+      // #3107: this activity row was inserted inside the transaction above in a
+      // try/catch — a trap (#2222): a failed insert aborts the Postgres tx, the
+      // COMMIT becomes a ROLLBACK, and the invoice vanishes while this function
+      // still reports success. It is genuinely non-critical only AFTER commit.
+      try {
+        await db.insert(activities).values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'deal',
+          entityId: dealId,
+          contactId: row.contactId ?? null,
+          dealId,
+          eventType: 'invoice_created',
+          description: `Draft invoice ${createdInvoiceNumber} created for won deal "${row.title ?? ''}"`,
+          metadata: { deal_id: dealId, invoice_id: createdInvoiceId, invoice_number: createdInvoiceNumber },
+        });
+      } catch (err) {
+        await logError({ error: err, context: 'deal-invoice: activity insert' });
+      }
+
       await logAudit({
         tenantId: ctx.tenantId,
         userId: ctx.userId,

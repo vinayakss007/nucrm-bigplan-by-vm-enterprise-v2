@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, gte, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { notArchived } from '@/lib/api/deals-archive-filter';
@@ -51,7 +51,18 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             notArchived(),
             ownerScope(auth, 'deals.view_all', deals),
             eq(deals.stageId, wonStage.id),
-            gte(deals.createdAt, sql`date_trunc('month', now())`),
+            // #3112 — the tile promises revenue *won* this month. `created_at`
+            // answered "created this month and won by now", which drops every
+            // deal booked last month and closed this month — the majority of a
+            // mature pipeline. `won_at` (0084, backfilled from
+            // metadata.won_at) is the win date, and is written by
+            // `deals/[id]` PATCH and, since this fix, by the bulk stage/close
+            // actions. It is still NULL for wins recorded by the v1 `PUT`, the
+            // inbound webhook and the automations (#3112 lists them), so the
+            // fallback keeps those in the month they were created: a provable
+            // lower bound on the win date, so this can only ever recover rows
+            // the old predicate missed, never lose one it counted.
+            sql`COALESCE(${deals.wonAt}, ${deals.createdAt}) >= date_trunc('month', now())`,
           ));
         wonThisMonth = Number(revenue?.total ?? 0);
       }
