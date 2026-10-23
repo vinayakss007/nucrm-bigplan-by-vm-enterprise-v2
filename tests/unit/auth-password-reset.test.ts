@@ -8,10 +8,18 @@ const makeChain = () => ({
   where: vi.fn(() => chain),
   limit: vi.fn(() => mockResolve()),
   values: vi.fn(() => Promise.resolve()),
-  set: vi.fn(() => ({ where: mockResolve })),
+  // #3075: resetPassword now CLAIMS the token with a conditional
+  // UPDATE ... WHERE deleted_at IS NULL ... RETURNING, so the mocked
+  // update chain has to expose .returning() on the awaitable where result.
+  set: vi.fn(() => ({
+    where: vi.fn(() => {
+      const p = mockResolve();
+      return Object.assign(p, { returning: () => p });
+    }),
+  })),
   // resetPassword() revokes every existing session with
-  // db.delete(sessions).where(...).catch(...), so the chain has to be
-  // catch-able as well as awaitable.
+  // db.delete(sessions).where(...), so the chain has to be catch-able as
+  // well as awaitable.
   catch: vi.fn(() => Promise.resolve()),
 });
 const chain = makeChain();

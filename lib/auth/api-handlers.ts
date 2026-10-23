@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { cookieSecureForRequest, requestIsHttps } from '@/lib/auth/cookie-security';
@@ -165,15 +165,19 @@ export async function POST_login(request: NextRequest) {
         const hash = createHash('sha256').update(String(totpToken).toUpperCase()).digest('hex');
         const codes: string[] = typeof user.totpBackupCodes === 'string' ? JSON.parse(user.totpBackupCodes) : (user.totpBackupCodes as string[]);
         if (codes.includes(hash)) {
-          valid = true;
-          // `users_update_own` is keyed on app.current_user, which a pre-auth
-          // connection does not have — so consuming a backup code silently
-          // failed and the code stayed reusable.
-          await withUserContext(user.id, async (tx) =>
-            await tx.update(users)
-              .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
-              .where(eq(users.id, user.id))
-          ).catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
+          // #3075: was fire-and-warn — valid=true before the UPDATE, write
+          // failure swallowed, so a backup code stayed replayable forever
+          // (they do not expire). Claim atomically instead: @> only matches
+          // while the hash is still in the array, and a zero-row claim —
+          // lost race or write failure — denies sign-in.
+          const claimed = await withUserContext(user.id, (tx) =>
+            tx.update(users)
+              .set({ totpBackupCodes: codes.filter((x: string) => x !== hash) })
+              .where(and(eq(users.id, user.id),
+                sql`${users.totpBackupCodes} @> ${JSON.stringify([hash])}::jsonb`))
+              .returning({ id: users.id })).catch(() => [] as { id: string }[]);
+          valid = claimed.length > 0;
+          if (!valid) logger.warn('2FA backup code claim failed — denying sign-in', { email, ip });
         }
       }
       if (!valid) return loginRespond(request, isForm, { error:'Invalid 2FA code', requires_2fa:true }, 401);

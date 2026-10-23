@@ -20,6 +20,10 @@ const harness = vi.hoisted(() => {
   const state = {
     rows: {} as Record<string, Record<string, unknown>[]>,
     whereQueries: [] as { sql: string; params: unknown[] }[],
+    // #3075: the exchange now CLAIMS the code with a conditional
+    // UPDATE ... WHERE used_at IS NULL RETURNING. undefined = claim wins
+    // (one row); set to [] to simulate losing the race.
+    claimRows: undefined as undefined | Record<string, unknown>[],
   };
   const inject = { render: null as null | ((f: SQL) => { sql: string; params: unknown[] }) };
 
@@ -43,7 +47,16 @@ const harness = vi.hoisted(() => {
     select: () => makeSelectChain(),
     transaction: async (cb: (tx: Record<string, unknown>) => Promise<unknown>) =>
       cb({
-        update: () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) }),
+        update: () => ({
+          set: () => ({
+            where: () => {
+              const rows = state.claimRows ?? [{ id: 'code-1' }];
+              return Object.assign(Promise.resolve(rows), {
+                returning: () => Promise.resolve(rows),
+              });
+            },
+          }),
+        }),
         delete: () => ({ where: () => Promise.resolve({ rowCount: 1 }) }),
         insert: () => ({
           values: () => ({
@@ -91,6 +104,7 @@ function whereFor(table: string) {
 describe('POST /api/auth/oauth/token — client binding (RFC 6749 §4.1.3)', () => {
   beforeEach(() => {
     harness.state.whereQueries = [];
+    harness.state.claimRows = undefined;
     harness.state.rows = {
       oauth_clients: [{ id: CLIENT_A_INTERNAL, clientSecret: CLIENT_SECRET }],
       oauth_codes: [],

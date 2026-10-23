@@ -49,17 +49,33 @@ export async function POST(request: NextRequest) {
     const row = result[0];
     if (!row) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
     
-    // The write is authorised by the token itself, so it runs in the platform
-  // security context rather than pretending to be a tenant request.
-  await withSecurityContext(async (tx) => {
+    // #3075: the write is authorised by the token itself, so it runs in the
+    // platform security context rather than pretending to be a tenant request.
+    // The token is CLAIMED there — conditional UPDATE ... WHERE used_at IS
+    // NULL RETURNING in the same transaction as the verification write. The
+    // lookup above is a race window: two concurrent redeems of the same link
+    // both found the row unused and each marked the email verified (the old
+    // unconditional set wrote usedAt after the fact, so nothing decided the
+    // winner). Zero rows here means somebody else consumed it first.
+    const claimed = await withSecurityContext(async (tx) => {
+      const [won] = await tx.update(emailVerifications)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(emailVerifications.id, row.id),
+          isNull(emailVerifications.usedAt),
+        ))
+        .returning({ id: emailVerifications.id });
+
+      if (!won) return false;
+
       await tx.update(users)
         .set({ emailVerified: true })
         .where(eq(users.id, row.userId));
-      
-      await tx.update(emailVerifications)
-        .set({ usedAt: new Date() })
-        .where(eq(emailVerifications.id, row.id));
+
+      return true;
     });
+
+    if (!claimed) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
 
     return NextResponse.json({ ok: true, email: row.email });
  

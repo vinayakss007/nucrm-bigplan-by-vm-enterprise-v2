@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { oauthClients, oauthCodes, oauthTokens } from '@/drizzle/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
@@ -117,13 +117,25 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const [token] = await db.transaction(async (tx) => {
-        await tx
+      const exchanged = await db.transaction(async (tx) => {
+        // #3075: atomically CLAIM the code before minting anything. The SELECT
+        // above is a race in the window it lives in: two concurrent exchanges
+        // both saw usedAt = null, and the old unconditional UPDATE marked it
+        // used twice while minting two token pairs. The conditional
+        // UPDATE ... WHERE used_at IS NULL RETURNING lets exactly one win
+        // (RFC 6749 §4.1.2 single-use); the loser gets zero rows.
+        const [claimed] = await tx
           .update(oauthCodes)
           .set({ usedAt: new Date() })
-          .where(eq(oauthCodes.id, authCode.id));
+          .where(and(
+            eq(oauthCodes.id, authCode.id),
+            isNull(oauthCodes.usedAt),
+          ))
+          .returning({ id: oauthCodes.id });
 
-        return tx
+        if (!claimed) return null;
+
+        const [tok] = await tx
           .insert(oauthTokens)
           .values({
             clientId: client.id,
@@ -140,9 +152,17 @@ export async function POST(request: NextRequest) {
             accessToken: oauthTokens.accessToken,
             refreshToken: oauthTokens.refreshToken,
           });
+        return tok ?? false;
       });
 
-      if (!token) {
+      if (exchanged === null) {
+        return NextResponse.json(
+          { error: 'invalid_grant', error_description: 'Invalid or expired code' },
+          { status: 400 }
+        );
+      }
+
+      if (!exchanged) {
         return NextResponse.json(
           { error: 'server_error', error_description: 'Failed to create token' },
           { status: 500 }
@@ -150,8 +170,8 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({
-        access_token: token!.accessToken,
-        refresh_token: token!.refreshToken,
+        access_token: exchanged.accessToken,
+        refresh_token: exchanged.refreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
         scope: authCode.scope,

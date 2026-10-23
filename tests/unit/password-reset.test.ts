@@ -25,7 +25,13 @@ vi.mock('@/drizzle/db', () => ({
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
-        where: vi.fn(() => mockUpdate()),
+        // #3075: resetPassword claims the token with a conditional
+        // UPDATE ... RETURNING, so the mocked where() must also expose
+        // .returning() on the awaitable result.
+        where: vi.fn(() => {
+          const p = mockUpdate();
+          return Object.assign(p, { returning: () => p });
+        }),
       })),
     })),
     delete: vi.fn(() => ({
@@ -56,7 +62,8 @@ describe('Password Reset Module', () => {
     vi.clearAllMocks();
     mockSelect.mockResolvedValue([]);
     mockInsert.mockResolvedValue([{}]);
-    mockUpdate.mockResolvedValue([{}]);
+    // The claim UPDATE ... RETURNING must hand back a row for a successful reset.
+    mockUpdate.mockResolvedValue([{ userId: 'user-1' }]);
     mockDelete.mockResolvedValue({ catch: vi.fn() });
   });
 
