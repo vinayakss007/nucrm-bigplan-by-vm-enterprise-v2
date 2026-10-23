@@ -18,7 +18,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Captured side effects ────────────────────────────────────────────────────
-const sendEmail = vi.fn().mockResolvedValue(undefined);
+const sendEmail = vi.fn().mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-1' });
 const createNotification = vi.fn().mockResolvedValue(undefined);
 const safeFetch = vi.fn().mockResolvedValue({ ok: true });
 const captureError = vi.fn();

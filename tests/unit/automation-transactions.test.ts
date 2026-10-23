@@ -12,7 +12,7 @@ const mockDb = vi.hoisted(() => ({
 }));
 
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
-vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn() }));
+vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'msg-1' }) }));
 vi.mock('@/lib/notifications', () => ({ createNotification: vi.fn() }));
 vi.mock('@/lib/capture-error', () => ({ captureError: vi.fn() }));
 
