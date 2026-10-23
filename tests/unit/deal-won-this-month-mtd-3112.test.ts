@@ -157,8 +157,11 @@ beforeEach(() => {
 
 describe('site 1 — GET /api/tenant/dashboard/widgets/stats/revenue keys the month on the win', () => {
   async function runRevenue() {
+    // #3120: the tile's stage read now projects {id, name} and classifies the
+    // name with isWonStageName, so the stub row carries the name the real query
+    // would have returned.
     (db.select as ReturnType<typeof vi.fn>)
-      .mockImplementationOnce(() => selectChain([{ id: STAGE }]))
+      .mockImplementationOnce(() => selectChain([{ id: STAGE, name: 'Won' }]))
       .mockImplementation(() => selectChain([{ total: 42000 }]));
     return (revenue.GET as (req: NextRequest) => Promise<Response>)(
       get('/api/tenant/dashboard/widgets/stats/revenue'),

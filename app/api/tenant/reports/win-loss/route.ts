@@ -7,7 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { inArray, sql } from 'drizzle-orm';
+import { dealStages } from '@/drizzle/schema';
+import { resolveDealStageIds } from '@/lib/deals/won-stage-ids';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -29,34 +32,55 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const tid = ctx.tenantId;
 
+    // #3120 — every comparison below used to be a substring match, `ds.name
+    // ILIKE '%won%'` / `'%lost%'`, which counts exactly the labels #658's
+    // `isWonStageName` exists to refuse: `Not Won`, `Unwon`, `Wonderful
+    // Prospect`, `Not Lost`. They inflated the won and lost counts, the monthly
+    // trend, and the closed denominator the win rate is divided by — and said
+    // nothing at all about a renamed `Deal Won`/`Marked Won` stage. The stage
+    // rows are now classified by the shared matcher and both queries aggregate
+    // over those ids.
+    //
+    // `ds` is the alias the raw SQL below already used, and drizzle's `alias()`
+    // renders its columns exactly the same way, so the predicate stays
+    // parameterised instead of an interpolated id list. `inArray` renders the
+    // literal `false` for an empty id list, so a tenant whose pipeline has no
+    // won/lost stage answers "0 closed" here rather than "every deal is closed"
+    // (which is what dropping the WHERE term would have done).
+    const ds = alias(dealStages, 'ds');
+    const stageIds = await resolveDealStageIds(db, tid);
+    const wonIds = inArray(ds.id, stageIds.won);
+    const lostIds = inArray(ds.id, stageIds.lost);
+    const closedIds = inArray(ds.id, stageIds.terminal);
+
     // Overall win/loss stats
     const stats = await db.execute(sql`
       SELECT
-        COUNT(*) FILTER (WHERE ds.name ILIKE '%won%') as won,
-        COUNT(*) FILTER (WHERE ds.name ILIKE '%lost%') as lost,
+        COUNT(*) FILTER (WHERE ${wonIds}) as won,
+        COUNT(*) FILTER (WHERE ${lostIds}) as lost,
         COUNT(*) as total_closed,
-        COALESCE(AVG(d.amount::numeric) FILTER (WHERE ds.name ILIKE '%won%'), 0)::numeric(12,2) as avg_won_value,
-        COALESCE(AVG(d.amount::numeric) FILTER (WHERE ds.name ILIKE '%lost%'), 0)::numeric(12,2) as avg_lost_value,
-        COALESCE(AVG(EXTRACT(EPOCH FROM (d.updated_at - d.created_at))/86400) FILTER (WHERE ds.name ILIKE '%won%'), 0)::numeric(10,1) as avg_days_to_win,
-        COALESCE(AVG(EXTRACT(EPOCH FROM (d.updated_at - d.created_at))/86400) FILTER (WHERE ds.name ILIKE '%lost%'), 0)::numeric(10,1) as avg_days_to_lose
+        COALESCE(AVG(d.amount::numeric) FILTER (WHERE ${wonIds}), 0)::numeric(12,2) as avg_won_value,
+        COALESCE(AVG(d.amount::numeric) FILTER (WHERE ${lostIds}), 0)::numeric(12,2) as avg_lost_value,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (d.updated_at - d.created_at))/86400) FILTER (WHERE ${wonIds}), 0)::numeric(10,1) as avg_days_to_win,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (d.updated_at - d.created_at))/86400) FILTER (WHERE ${lostIds}), 0)::numeric(10,1) as avg_days_to_lose
       FROM deals d
       LEFT JOIN deal_stages ds ON ds.id = d.stage_id
       WHERE d.tenant_id = ${tid}
         AND d.deleted_at IS NULL
-        AND ds.name ILIKE ANY(ARRAY['%won%', '%lost%'])
+        AND ${closedIds}
     `);
 
     // Monthly trend (last 6 months)
     const monthlyTrend = await db.execute(sql`
       SELECT
         TO_CHAR(d.updated_at, 'YYYY-MM') as month,
-        COUNT(*) FILTER (WHERE ds.name ILIKE '%won%') as won,
-        COUNT(*) FILTER (WHERE ds.name ILIKE '%lost%') as lost
+        COUNT(*) FILTER (WHERE ${wonIds}) as won,
+        COUNT(*) FILTER (WHERE ${lostIds}) as lost
       FROM deals d
       LEFT JOIN deal_stages ds ON ds.id = d.stage_id
       WHERE d.tenant_id = ${tid}
         AND d.deleted_at IS NULL
-        AND ds.name ILIKE ANY(ARRAY['%won%', '%lost%'])
+        AND ${closedIds}
         AND d.updated_at >= NOW() - INTERVAL '6 months'
       GROUP BY TO_CHAR(d.updated_at, 'YYYY-MM')
       ORDER BY month DESC

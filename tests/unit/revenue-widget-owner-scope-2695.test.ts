@@ -9,7 +9,7 @@
  *
  * Seven widgets got `ownerScope` + a per-caller cache key in #2688. This one,
  * live at `components/tenant/dashboard/widget-registry.ts:23-24`, is a `SUM`
- * over `deals` (`widgets/stats/revenue/route.ts:35-42`) filtered on tenant,
+ * over `deals` (`widgets/stats/revenue/route.ts:41-69`) filtered on tenant,
  * tombstone, the tenant's "won" stage and `date_trunc('month', now())` — and
  * it called `withCache(tid, 'stats-revenue', 300, …)` with the default
  * `scopeKey` of `'tenant'` (`lib/dashboard/widget-cache.ts:27`).
@@ -21,7 +21,8 @@
  * defects are the same pair #2688 refused to split, and both are asserted here:
  * on the SQL drizzle renders, and on the cache key the route hands `withCache`.
  *
- * The stage lookup (`:28-33`) reads `deal_stages`/`pipelines` — tenant
+ * The stage lookup (`:39`, since #3120 through
+ * `lib/deals/won-stage-ids.ts:56-64`) reads `deal_stages`/`pipelines` — tenant
  * configuration, not owned records — so it stays tenant-wide, as it does in
  * every other widget. That is pinned so the next reader does not scope it too.
  */
@@ -48,7 +49,9 @@ function makeBuilder() {
     wheres.push({ sql: rendered.sql, params: rendered.params });
     return builder;
   };
-  builder['then'] = (resolve: (v: unknown) => unknown) => resolve([{ id: STAGE, total: 42000 }]);
+  // #3120: the stage read now projects the NAME, because deciding which of
+  // this tenant's stages is the win is `isWonStageName`'s job, not SQL's.
+  builder['then'] = (resolve: (v: unknown) => unknown) => resolve([{ id: STAGE, name: 'Won', total: 42000 }]);
   return builder;
 }
 
