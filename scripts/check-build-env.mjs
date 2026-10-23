@@ -4,6 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 
+import { lstatSync } from 'node:fs';
+
 /**
  * Build-time guard: refuse to run `next build` with NODE_ENV=development.
  *
@@ -38,6 +40,41 @@ if (nodeEnv === 'development') {
   process.exit(1);
 }
 
+/**
+ * Second refusal: a symlinked `node_modules`.
+ *
+ * Why: Turbopack cannot resolve one and panics with
+ *   "Symlink node_modules could not be resolved: the symlink target leaves the
+ *    filesystem root or its parent directory could not be resolved"
+ * — after compiling, so the run is lost. It is not a repo bug: it is what a
+ * worktree prepared with `ln -s …/node_modules` looks like to the bundler
+ * (07 § Local worktrees). The cheap fix is a hardlink copy, which shares inodes.
+ */
+let nodeModulesIsSymlink = false;
+try {
+  nodeModulesIsSymlink = lstatSync('node_modules').isSymbolicLink();
+} catch (err) {
+  // No node_modules at all is `npm install`'s problem, not this guard's.
+  if (err.code !== 'ENOENT') throw err;
+}
+
+if (nodeModulesIsSymlink) {
+  console.error(
+    '\n\u001b[31m✖ Refusing to build: node_modules is a symlink.\u001b[0m\n' +
+      '\n' +
+      '  Turbopack cannot resolve a symlinked node_modules; it panics partway\n' +
+      '  through the compile with "Symlink node_modules could not be resolved",\n' +
+      '  after the build work is already spent.\n' +
+      '\n' +
+      '  Fix: give this tree a real node_modules. A hardlink copy shares inodes\n' +
+      '  and costs near-zero disk:\n' +
+      '      cp -al <source-checkout>/node_modules ./node_modules\n' +
+      '  (docs/BASECRM/07-OPS-NOTES.md § Local worktrees)\n',
+  );
+  process.exit(1);
+}
+
 console.log(
   `[check-build-env] OK — building with NODE_ENV=${nodeEnv ?? '(unset → production)'}`,
 );
+
