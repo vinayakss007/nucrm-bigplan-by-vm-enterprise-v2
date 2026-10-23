@@ -543,9 +543,11 @@ d('public bearer-token routes establish a tenant context from the credential (#2
     expect(body.offer.id).toBe(quoteA.id);
     expect(body.offer.title).toBe(`Offer A ${RUN}`);
     expect(body.offer.buyer_name).toBe('Buyer A');
-    // The first view answers with the status the row held on entry (#2468 kept the
-    // pre-write semantics); the write itself is asserted below.
-    expect(body.offer.status).toBe('sent');
+    // #3159 changed what the page reports: the row held `sent` when the handler
+    // read it, and the answer now names the status the guarded write committed —
+    // `viewed`. Reporting the pre-write snapshot would be reporting a status the
+    // handler has just proved the row no longer holds.
+    expect(body.offer.status).toBe('viewed');
     expect(body.seller.name).toBe(`2468 Workspace A ${RUN}`);
 
     expect(body.line_items.map((l) => l.id), 'the planted cross-tenant line must not be visible')

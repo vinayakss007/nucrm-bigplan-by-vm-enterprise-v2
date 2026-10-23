@@ -23,7 +23,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, contacts, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
@@ -34,6 +34,7 @@ import {
   patchOfferMetadata,
   readOfferMetadata,
   canTransition,
+  allowedFromStatus,
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -102,8 +103,21 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // 'sent' without its public_token metadata (H7). patchOfferMetadata now takes
     // the tx; the activity write participates so a failed timeline row rolls the
     // send back rather than leaving a half-sent offer.
-    await db.transaction(async (tx) => {
-      await tx
+    //
+    // #3159 — the write is guarded by the transition it is claiming, because the
+    // `canTransition` check above is against a row that can change before this
+    // UPDATE does. A cancel landing in between used to be overwritten: the send
+    // came back 200 with a link to a cancelled offer.
+    //
+    // The token is decided AFTER the row is locked, for the same reason. Two
+    // concurrent sends of a fresh draft each minted their own `public_token`, and
+    // the jsonb merge made the second clobber the first — the link in the email
+    // the buyer received first then 404s. Holding the row means the other send has
+    // either committed its token or is waiting for us, so re-reading the committed
+    // metadata keeps one URL per offer.
+    let committedToken = publicToken;
+    const sent = await db.transaction(async (tx) => {
+      const [won] = await tx
         .update(quotes)
         .set({
           status: 'sent',
@@ -111,10 +125,22 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           ...(expiresAt ? { expiresAt } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(quotes.id, quoteId));
+        .where(and(
+          eq(quotes.id, quoteId),
+          eq(quotes.tenantId, ctx.tenantId),
+          inArray(quotes.status, allowedFromStatus('sent')),
+        ))
+        .returning({ id: quotes.id });
+      if (!won) return false;
+
+      const fresh = await tx.query.quotes.findFirst({
+        where: and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId)),
+        columns: { metadata: true },
+      });
+      committedToken = readOfferMetadata(fresh ?? quote).public_token || publicToken;
 
       await patchOfferMetadata(quoteId, ctx.tenantId, {
-        public_token: publicToken,
+        public_token: committedToken,
         sent_to_email: toEmail,
       }, tx);
 
@@ -137,10 +163,18 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           },
         });
       }
+      return true;
     });
 
+    // The guard lost: nothing was written, no email went out, no audit row.
+    if (!sent) {
+      return NextResponse.json({
+        error: "Cannot send offer in its current state",
+      }, { status: 409 });
+    }
+
     // Outbound email — non-fatal if it fails
-    const link = publicOfferUrl(publicToken);
+    const link = publicOfferUrl(committedToken);
     const safeContactName = sanitizeHTMLServer(contactName || '');
     const safeQuoteTitle = sanitizeHTMLServer(quote.title || '');
     let emailResult: { success: boolean; provider?: string; error?: string } | null = null;
@@ -168,13 +202,13 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       action: 'offer_sent',
       entityType: 'quote',
       entityId: quoteId,
-      newData: { to_email: toEmail, public_token: publicToken, email_result: emailResult },
+      newData: { to_email: toEmail, public_token: committedToken, email_result: emailResult },
     });
 
     return NextResponse.json({
       ok: true,
       status: 'sent',
-      public_token: publicToken,
+      public_token: committedToken,
       public_url: link,
       to_email: toEmail,
       email: emailResult,

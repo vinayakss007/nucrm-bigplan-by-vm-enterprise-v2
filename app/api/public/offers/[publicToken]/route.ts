@@ -18,11 +18,21 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
-import { eq, and, asc, isNull } from 'drizzle-orm';
+import { eq, and, asc, isNull, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata } from '@/lib/offers';
+import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata, allowedFromStatus } from '@/lib/offers';
+
+/**
+ * Statuses this page renders. The buyer's own link stays readable after they
+ * decided on it, which is why `accepted`/`declined` are here; `draft`,
+ * `cancelled` and `expired` are 404 by design, so a probe cannot tell a
+ * cancelled offer from a token that never existed. Also the answer after a
+ * guarded write loses the race (#3159) — the row moved somewhere the public has
+ * no business seeing, and 404 is the same clean refusal the pre-read uses.
+ */
+const PUBLICLY_VISIBLE: readonly string[] = ['sent', 'viewed', 'accepted', 'declined'];
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the RLS
@@ -32,6 +42,7 @@ import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferM
  */
 type OfferViewOutcome =
   | { kind: 'expired' }
+  | { kind: 'gone' }
   | {
       kind: 'found';
       offer: Record<string, unknown>;
@@ -52,11 +63,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
 
     // Reject terminal-state and cancelled offers (treat as not found to the public)
-    if (!['sent', 'viewed'].includes(offer.status ?? '')) {
-      // For accepted / declined, we DO want the buyer to see the final state
-      if (!['accepted', 'declined'].includes(offer.status ?? '')) {
-        return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
-      }
+    if (!PUBLICLY_VISIBLE.includes(offer.status ?? '')) {
+      return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     }
 
     // From the auto-expire write through the branding read, every statement here
@@ -67,30 +75,77 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
     // resolved, which also keeps H7 (status + viewed metadata commit together)
     // inside the context that makes those writes reachable at all.
     const outcome = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx): Promise<OfferViewOutcome> => {
+      // #3159 — `offer` is a snapshot taken before this transaction opened, and
+      // both writes below used to trust it: `UPDATE … WHERE id = ...` with no
+      // status in the clause. A GET that landed just after the buyer accepted
+      // therefore rewrote `accepted` back to `viewed` — re-opening an offer the
+      // seller had closed and letting it be accepted a second time — and the
+      // auto-expire arm did the same to a `cancelled`. Each write now claims the
+      // from-set its own transition admits, and a zero-row result means the row
+      // moved: the committed status is re-read, and that is what the page shows
+      // rather than a status this handler knows is gone.
+      const committedStatus = async (): Promise<string> => {
+        const fresh = await tx.query.quotes.findFirst({
+          where: and(eq(quotes.id, offer.id), eq(quotes.tenantId, offer.tenantId)),
+          columns: { status: true },
+        });
+        return fresh?.status ?? '';
+      };
+      let status = offer.status ?? '';
+      let viewCounted = false;
+
       // Auto-expire if past expiry
       if (
         offer.expiresAt
         && new Date(offer.expiresAt).getTime() < Date.now()
-        && (offer.status === 'sent' || offer.status === 'viewed')
+        && canTransition(status, 'expired')
       ) {
-        await tx.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-        return { kind: 'expired' };
+        const [expired] = await tx
+          .update(quotes)
+          .set({ status: 'expired', updatedAt: new Date() })
+          .where(and(
+            eq(quotes.id, offer.id),
+            eq(quotes.tenantId, offer.tenantId),
+            inArray(quotes.status, allowedFromStatus('expired')),
+          ))
+          .returning({ id: quotes.id });
+        if (expired) return { kind: 'expired' };
+        status = await committedStatus();
+        if (!PUBLICLY_VISIBLE.includes(status)) return { kind: 'gone' };
       }
 
       // Mark as viewed if first open — status + viewed metadata written atomically
       // in one tx so the offer is never marked 'viewed' without its viewed_at/
       // viewed_count metadata (H7). patchOfferMetadata takes the tx.
-      if (offer.status === 'sent') {
-        if (canTransition(offer.status, 'viewed')) {
+      if (status === 'sent') {
+        const [viewed] = await tx
+          .update(quotes)
+          .set({ status: 'viewed', updatedAt: new Date() })
+          .where(and(
+            eq(quotes.id, offer.id),
+            eq(quotes.tenantId, offer.tenantId),
+            inArray(quotes.status, allowedFromStatus('viewed')),
+          ))
+          .returning({ id: quotes.id });
+        if (viewed) {
+          // This handler just wrote it, so the page reports what it wrote.
+          status = 'viewed';
           // #2344: viewed_count is incremented by Postgres inside jsonb_set, not
           // computed from the pre-read `offer` row.
-          await tx.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
           await patchOfferMetadata(offer.id, offer.tenantId, {
             viewed_at: new Date().toISOString(),
           }, tx);
           await incrementOfferViewedCount(offer.id, offer.tenantId, tx);
+          // One view counted per open. Without this the branch below, which now
+          // sees the `viewed` status this write just committed, would count it
+          // twice.
+          viewCounted = true;
+        } else {
+          status = await committedStatus();
+          if (!PUBLICLY_VISIBLE.includes(status)) return { kind: 'gone' };
         }
-      } else if (offer.status === 'viewed') {
+      }
+      if (status === 'viewed' && !viewCounted) {
         // #2344: no sibling status write here — a single-statement atomic
         // increment needs no surrounding transaction.
         await incrementOfferViewedCount(offer.id, offer.tenantId, tx);
@@ -133,7 +188,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
           id: offer.id,
           quote_number: offer.quoteNumber,
           title: offer.title,
-          status: offer.status,
+          // The status this transaction settled on, not the one the pre-read saw
+          // (#3159) — if a guarded write lost, `status` is the committed value.
+          status,
           subtotal: offer.subtotal,
           discount: offer.discount,
           tax: offer.tax,
@@ -156,6 +213,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
     });
 
     if (outcome.kind === 'expired') return NextResponse.json({ error: 'This offer has expired' }, { status: 410 });
+    // The row moved somewhere the public does not get to see while this page was
+    // deciding — the same clean 404 an already-cancelled token gets.
+    if (outcome.kind === 'gone') return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
 
     return NextResponse.json({
       offer: outcome.offer,
