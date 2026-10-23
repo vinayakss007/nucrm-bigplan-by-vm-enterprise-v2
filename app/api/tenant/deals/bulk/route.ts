@@ -24,14 +24,13 @@ import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
+import { wonAtPatch } from '@/lib/deals/won-stage';
 
 const MAX_BULK = 500;
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'bulk', 'post');
   if (limited) return limited;
-  
-  
   let ctx!: AuthContext;
   try {
     const auth = await requireAuth(req);
@@ -166,7 +165,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
         // Verify stage belongs to a pipeline owned by this tenant
         const [stage] = await db
-          .select({ id: dealStages.id })
+          .select({ id: dealStages.id, name: dealStages.name })
           .from(dealStages)
           .innerJoin(pipelines, eq(dealStages.pipelineId, pipelines.id))
           .where(
@@ -182,6 +181,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .update(deals)
           .set({
             stageId: stageId,
+            ...wonAtPatch(stage.name),
             updatedAt: new Date(),
             updatedBy: ctx.userId,
           })
@@ -205,7 +205,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         if (!stageId) return NextResponse.json({ error: 'stage_id required' }, { status: 400 });
 
         const [stage] = await db
-          .select({ id: dealStages.id })
+          .select({ id: dealStages.id, name: dealStages.name })
           .from(dealStages)
           .innerJoin(pipelines, eq(dealStages.pipelineId, pipelines.id))
           .where(
@@ -217,8 +217,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!stage) return NextResponse.json({ error: 'Stage not found in this workspace' }, { status: 404 });
 
- 
- 
+        // #3112 — the stage decides the win, not `payload.outcome`, which is the
+        // caller's label; both now go through wonAtPatch, as PATCH does.
         const closePatch: Record<string, unknown> = {
           closed_at: new Date().toISOString(),
           close_reason: reason,
@@ -230,6 +230,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .set({
             stageId: stageId,
             closeDate: new Date(),
+            ...wonAtPatch(stage.name),
             metadata: sql`COALESCE(${deals.metadata}, '{}'::jsonb) || ${JSON.stringify(closePatch)}::jsonb`,
             updatedAt: new Date(),
             updatedBy: ctx.userId,
@@ -355,7 +356,6 @@ export const POST = withApiRoute(async (req: NextRequest) => {
               eq(deals.tenantId, ctx.tenantId)
             )
           );
-        
         affected = res.rowCount ?? 0;
         break;
       }
@@ -490,8 +490,6 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     });
 
     return NextResponse.json({ ok: true, affected, action });
- 
- 
   } catch (err) {
     await logError({ error: err, context: 'tenant/deals bulk POST', requestMethod: 'POST' });
     await logError({ error: err, context: 'deals/bulk', tenantId: ctx?.tenantId });
