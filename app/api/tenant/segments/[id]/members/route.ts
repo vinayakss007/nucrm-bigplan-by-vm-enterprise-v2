@@ -11,7 +11,7 @@
  *        `segments.last_refreshed_at`.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -37,6 +37,9 @@ export const GET = withApiRoute(
     try {
       const ctx = await requireAuth(req);
       if (ctx instanceof NextResponse) return ctx;
+      // The member cache is what `enroll` feeds into `sequence_enrollments` (#3148).
+      const deny = requirePerm(ctx, 'segments.view');
+      if (deny) return deny;
       const { id } = await params;
       // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
       if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
@@ -72,6 +75,8 @@ export const POST = withApiRoute(
 
       const ctx = await requireAuth(req);
       if (ctx instanceof NextResponse) return ctx;
+      const deny = requirePerm(ctx, 'segments.manage');
+      if (deny) return deny;
       const { id } = await params;
       // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
       if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
