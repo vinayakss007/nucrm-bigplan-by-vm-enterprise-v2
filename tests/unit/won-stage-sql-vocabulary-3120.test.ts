@@ -149,7 +149,7 @@ const stageRead = () => whereFor('id,name');
 const combinedStats = () => executed.find((e) => /AS won_this_month/.test(e.sql));
 
 /** The stage read may not re-decide the vocabulary: it selects, it does not judge. */
-function expectNoStageNameComparison( sqlText: string | undefined, label: string) {
+function expectNoStageNameComparison(sqlText: string | undefined, label: string) {
   expect(sqlText, `${label}: ${wheres.map((w) => w.sql).join('\n')}`).toBeTruthy();
   expect(sqlText!, label).not.toMatch(/name/i);
   expect(sqlText!, label).not.toMatch(/ILIKE/i);
