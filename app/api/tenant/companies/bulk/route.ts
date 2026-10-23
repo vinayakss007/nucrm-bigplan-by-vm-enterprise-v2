@@ -78,7 +78,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     
     const validIds = valid.map(r => r.id);
-    if (!validIds.length)
+    // `restore` is the one action whose target set is NOT `validIds`: trashed rows
+    // never survive the live-only validation above. Re-resolve it in the case
+    // instead of bailing here (#3154; leads/bulk:70, deals/bulk:91).
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid companies found' }, { status: 404 });
 
     let affected = 0;
@@ -261,6 +264,26 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       case 'restore': {
         const deny = requirePerm(ctx, 'companies.edit');
         if (deny) return deny;
+
+        // #3154 — over `validIds` this wrote `deletedAt: null` onto rows that already
+        // had it and reported them as restored. Re-resolve the caller's ids against the
+        // trashed set, on this route's own scope — tenant + tombstone, because
+        // `companies.view_all` is defined and enforced nowhere, deliberately (#2597;
+        // trash/route.ts:122, notes/bulk/route.ts:33 say the same for their entity).
+        const restorable = await db
+          .select({ id: companies.id })
+          .from(companies)
+          .where(
+            and(
+              inArray(companies.id, company_ids),
+              eq(companies.tenantId, ctx.tenantId),
+              sql`${companies.deletedAt} IS NOT NULL`
+            )
+          );
+        const restorableIds = restorable.map(r => r.id);
+        if (!restorableIds.length)
+          return NextResponse.json({ error: 'No deleted companies found to restore' }, { status: 404 });
+
         const res = await db
           .update(companies)
           .set({
@@ -270,8 +293,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           })
           .where(
             and(
-              inArray(companies.id, validIds),
-              eq(companies.tenantId, ctx.tenantId)
+              inArray(companies.id, restorableIds),
+              eq(companies.tenantId, ctx.tenantId),
+              sql`${companies.deletedAt} IS NOT NULL`
             )
           );
         affected = res.rowCount ?? 0;
