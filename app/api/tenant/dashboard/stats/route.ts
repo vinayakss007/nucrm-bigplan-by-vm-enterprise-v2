@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, activities, tasks, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, notInArray, sql, desc, asc } from 'drizzle-orm';
+import { eq, and, isNull, inArray, notInArray, sql, desc, asc } from 'drizzle-orm';
+import { resolveDealStageIds } from '@/lib/deals/won-stage-ids';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { ownerScope, ownerScopeSql } from '@/lib/api/owner-scope';
 import { logError, tenantMeta } from '@/lib/errors-server';
@@ -36,16 +37,26 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const mineDeal = ownerScopeSql(ownerScope(ctx, 'deals.view_all', deals));
     const mineTask = ownerScopeSql(ownerScope(ctx, 'tasks.view_all', tasks));
 
-    // Single optimized query: all stats in 2 round-trips
-    // Query 1: Terminal stages + all counts + deals by stage (combined)
-    const [terminalStages, combinedStats, dealsByStage] = await Promise.all([
-      // Get terminal stage IDs for filtering
-      db.select({ id: dealStages.id, name: dealStages.name })
-        .from(dealStages)
-        .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(eq(pipelines.tenantId, tid), sql`lower(${dealStages.name}) IN ('won', 'lost')`))
-        .limit(20),
+    // #3120 — "which stage ends a deal", and "which of those endings is a win",
+    // is #658's rule (`isWonStageName`/`isLostStageName`), not a SQL string
+    // comparison, so the tenant's stage rows are classified here and everything
+    // below compares ids. This site used to resolve terminal stages with
+    // `lower(name) IN ('won','lost')` capped at 20 rows while `won_this_month`
+    // carried its own `lower(ds.name) = 'won'` subquery, so a tenant whose
+    // pipeline says `Closed Won`/`Closed Lost` matched neither: the tile reported
+    // 0 won revenue while the deals list, the leaderboards and the analytics page
+    // all said otherwise, and the Upcoming Deals widget listed deals that closed
+    // months ago because the empty terminal set made the route drop the exclusion
+    // entirely. It costs one cheap read of the tenant's own stage
+    // configuration — a handful of rows — to make every dashboard number answer
+    // the same question the rest of the app answers.
+    const stageIds = await resolveDealStageIds(db, tid);
+    const terminalStageIds = stageIds.terminal;
 
+    // Single optimized query: all stats in 2 round-trips (#3120 adds the
+    // stage-vocabulary read ahead of them, so 3 in total)
+    // Query 1: all counts + deals by stage (combined)
+    const [combinedStats, dealsByStage] = await Promise.all([
       // Combined counts in a single query with subqueries
       db.execute(sql`
         SELECT
@@ -60,8 +71,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           (SELECT COUNT(*)::int FROM ${contacts}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveContact}${mineContact} AND created_at >= date_trunc('month', now())
           ) AS new_contacts_this_month,
-          -- Folded here (was a trailing 8th query): won-stage ids resolved
-          -- inline so this stays a single round-trip.
+          -- Folded here (was a trailing 8th query): the won-stage ids come from
+          -- the #658 matcher resolved above (#3120), so this stays one
+          -- round-trip and a renamed winning stage still counts. inArray renders
+          -- the literal false for an empty list, which is the right answer for a
+          -- tenant with no winning stage — 0, not "every deal".
           -- #3112 — the month key is the WIN date, not the creation date. A deal
           -- created in September and closed in October belongs to October's
           -- revenue; on created_at it silently left this tile (and
@@ -71,11 +85,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           -- can only keep an old count, never lose one.
           (SELECT COALESCE(SUM(${deals.amount}), 0)::float FROM ${deals}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal}${mineDeal} AND COALESCE(won_at, created_at) >= date_trunc('month', now())
-           AND stage_id IN (
-             SELECT ds.id FROM ${dealStages} ds
-             INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
-             WHERE p.tenant_id = ${tid} AND lower(ds.name) = 'won'
-           )
+           AND ${inArray(deals.stageId, stageIds.won)}
           ) AS won_this_month
       `),
 
@@ -100,7 +110,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(asc(dealStages.order)),
     ]);
 
-    const terminalStageIds = terminalStages.map(s => s.id);
     const counts = combinedStats.rows?.[0] || {};
 
     // Query 2: Recent data (parallel — 4 lightweight queries)
@@ -137,7 +146,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(and(
         eq(deals.tenantId, tid), isNull(deals.deletedAt), notArchived(),
         ownerScope(ctx, 'deals.view_all', deals),
-        ...(terminalStageIds.length > 0 ? [notInArray(deals.stageId, terminalStageIds)] : []),
+        // #3120 — the old `terminalStageIds.length > 0 ? [...] : []` splice read
+        // like a safe fallback and was the opposite: it treated "this tenant has
+        // no stage called exactly 'Won'/'Lost'" as "nothing is ever closed", so
+        // the widget listed deals that closed months ago. The predicate is now
+        // always applied and the empty case is answered by drizzle, which
+        // renders `notInArray(col, [])` as the literal `true` — correct here,
+        // because a tenant whose matcher finds no terminal stage genuinely has
+        // no closed deals to exclude. (The inclusion sites above need the other
+        // half: `inArray(col, [])` renders `false`.)
+        notInArray(deals.stageId, terminalStageIds),
       ))
       .orderBy(asc(deals.closeDate))
         .limit(5),
