@@ -1493,7 +1493,7 @@ inferred.
     existing rule touched. Ten more auth routes copy `request.url` the same way.
   - `lib/email/service.ts:316-320` → `metadata: { subject, recipients }`, i.e. the outbound subject
     (customer free text) and a partially-masked recipient list (`j***@domain`, which `EMAIL_RE` does
-    not match). Plus `lib/automation/engine.ts:106` (re-pinned 2026-10-17 from `:100` for **#2761**, again 2026-10-18 from `:102` for **#2813**'s import, again 2026-10-23 from `:103` for **#3131**'s three lines in `evaluateAutomations`) / `workflow-executor.ts:159` → `tags.context` =
+    not match). Plus `lib/automation/engine.ts:106` (re-pinned 2026-10-17 from `:100` for **#2761**, again 2026-10-18 from `:102` for **#2813**'s import, again 2026-10-23 from `:103` for **#3131**'s three lines in `evaluateAutomations`) / `workflow-executor.ts:183` (re-pinned 2026-10-23 from `:159` for **#3139**'s outcome collector ahead of the walk) → `tags.context` =
     `` `automation:${name}` `` where `name` is typed by the customer.
     `scrubPii` now walks all three bags (depth-capped at 3 against a caller-supplied cycle), replaces
     values under identity keys (`email`, `ip`, `subject`, `recipients`, `to`, `from`, plus the existing

@@ -307,6 +307,9 @@ describe('executeWorkflow — the action log tells the truth about the send (#31
 
     expect(id).toBeTruthy();
     expect(h.inserts.some((i) => i.values.title === 'Follow up')).toBe(true);
-    expect(h.updates.some((u) => u.set.status === 'completed')).toBe(true);
+    // #3139 fixed the other half of this. Not aborting was already right; the
+    // 'completed' this asserted next to an action log saying the send failed
+    // was the false claim the issue was filed about.
+    expect(h.updates.some((u) => u.set.status === 'failed')).toBe(true);
   });
 });
