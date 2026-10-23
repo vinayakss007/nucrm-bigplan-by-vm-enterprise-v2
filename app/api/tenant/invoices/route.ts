@@ -189,8 +189,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
                 serviceId: null,
                 description: item.description,
                 itemType: 'custom',
-                quantity: String(item.quantity || 1),
-                unitPrice: String(item.unit_price || 0),
+                // #3128: `?? 1`, not `|| 1` — the money above already treated a
+                // legal quantity of 0 as zero, so storing "1" here left the row
+                // claiming one unit for a total of 0.00.
+                quantity: String(item.quantity ?? 1),
+                unitPrice: String(item.unit_price ?? 0),
                 discountType: 'percentage',
                 discountValue: '0',
                 discountAmount: '0',
