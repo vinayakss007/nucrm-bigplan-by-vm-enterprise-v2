@@ -33,7 +33,7 @@ export const signingEvents = pgTable('signing_events', {
   requestId: uuid('request_id').notNull().references(() => signingRequests.id, { onDelete: 'cascade' }),
   tenantId: utils.tenantId(),
   signerEmail: text('signer_email').notNull(),
-  event: text('event').notNull(), // 'sent' | 'viewed' | 'signed' | 'declined'
+  event: text('event').notNull(), // 'sent' | 'viewed' | 'signed' | 'declined' | 'expired' (#3134)
   eventAt: timestamp('event_at', { withTimezone: true }).defaultNow().notNull(),
   metadata: jsonb('metadata').default({}),
 }, (table) => {
