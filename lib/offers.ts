@@ -20,7 +20,8 @@ import { getAppUrl } from './app-url';
 import { randomBytes } from 'crypto';
 import { db, type DbClient } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
-import { eq, and, sql, isNull } from 'drizzle-orm';
+import { eq, and, sql, isNull, inArray } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 export type OfferStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'cancelled';
@@ -170,4 +171,47 @@ export function canTransition(from: string, to: OfferStatus): boolean {
     case 'cancelled': return from === 'draft' || from === 'sent' || from === 'viewed';
     default:          return false;
   }
+}
+
+/**
+ * Raised when a guarded transition finds the row has moved on since the
+ * caller's unlocked read — the loser of a concurrent offer-lifecycle race.
+ * Callers must answer 409 (not 500) and roll the rest of the transaction back.
+ */
+export class OfferTransitionLost extends Error {
+  constructor(to: OfferStatus) {
+    super(`Offer can no longer transition to '${to}' — its state changed concurrently`);
+    this.name = 'OfferTransitionLost';
+  }
+}
+
+/**
+ * #3159: the conditional half of every offer lifecycle transition.
+ *
+ * canTransition() has already vetted the in-memory row, but that read is
+ * unlocked — a concurrent accept/cancel/GET could have written the status in
+ * between, and an unconditional `UPDATE ... WHERE id = ...` let the later
+ * commit silently overwrite a terminal state (a buyer's acceptance vanishing
+ * into 'cancelled', a GET regressing 'accepted' to 'viewed'). Folding the
+ * allowed source states into the WHERE and reading the write back with
+ * .returning() means Postgres re-checks the status against the locked row
+ * version: the loser of the race updates zero rows and finds out.
+ *
+ * `quotes.status` is NOT NULL DEFAULT 'draft' (drizzle/schema/crm.ts), so a
+ * plain in-array needs no null arm. Returns whether the write landed; the
+ * caller threads the same tx into its sibling writes so a loss throws them
+ * all away.
+ */
+export async function transitionOfferStatus(
+  client: DbClient,
+  quoteId: string,
+  allowedFrom: readonly OfferStatus[],
+  set: PgUpdateSetSource<typeof quotes>,
+): Promise<boolean> {
+  const rows = await client
+    .update(quotes)
+    .set(set)
+    .where(and(eq(quotes.id, quoteId), inArray(quotes.status, [...allowedFrom])))
+    .returning({ id: quotes.id });
+  return rows.length > 0;
 }

@@ -308,9 +308,13 @@ describe('the walk is the portal surface, and it fails closed', () => {
 describe('the bearer-token surface #2446 deferred is bound, with no baseline (#2468)', () => {
   const fixed: Array<{ file: string; tables: string[] }> = [
     { file: 'app/api/public/csat/[token]/route.ts', tables: ['csatSurveys'] },
-    { file: 'app/api/public/offers/[publicToken]/route.ts', tables: ['quotes', 'quoteLineItems', 'contacts'] },
-    { file: 'app/api/public/offers/[publicToken]/accept/route.ts', tables: ['quotes', 'activities'] },
-    { file: 'app/api/public/offers/[publicToken]/decline/route.ts', tables: ['quotes', 'activities'] },
+    // #3159 moved each route's `quotes` status write into the guarded
+    // transitionOfferStatus() in lib/offers.ts, so the route files no longer
+    // name the table at all — the proof the writes still bind to the caller's
+    // tx is the dedicated test below, not a per-file table list here.
+    { file: 'app/api/public/offers/[publicToken]/route.ts', tables: ['quoteLineItems', 'contacts'] },
+    { file: 'app/api/public/offers/[publicToken]/accept/route.ts', tables: ['activities'] },
+    { file: 'app/api/public/offers/[publicToken]/decline/route.ts', tables: ['activities'] },
   ];
 
   let repoTables: Map<string, TenantTable>;
@@ -330,6 +334,22 @@ describe('the bearer-token surface #2446 deferred is bound, with no baseline (#2
       expect(read.filter((r) => r.handle === 'db').map((r) => `${r.js}@${r.line}`)).toEqual([]);
     }, 30_000);
   }
+
+  it('#3159: the quotes status writes moved to transitionOfferStatus, on the caller tx', () => {
+    // The three offers routes above no longer name `quotes` — that is only an
+    // honest reduction, not a regression, if the guarded write lives in
+    // lib/offers.ts on the handle the route passed in. Pin that shape: the
+    // update runs on the `client` parameter (never on `db`), folds the allowed
+    // source statuses into the WHERE, and reads the write back with
+    // .returning() so the loser of the race sees zero rows.
+    const src = readFileSync(join(ROOT, 'lib/offers.ts'), 'utf8');
+    const helper = src.slice(src.indexOf('export async function transitionOfferStatus'));
+    expect(helper).toMatch(/client\s*\n?\s*\.update\(quotes\)/);
+    expect(helper).toMatch(/inArray\(quotes\.status/);
+    expect(helper).toMatch(/\.returning\(\{ id: quotes\.id \}\)/);
+    // The helper takes no db import of its own — every caller threads its tx.
+    expect(helper).not.toMatch(/\bdb\.update\(/);
+  });
 
   it('the signing route reaches the database only through lib/esignature-internal.ts', async () => {
     // Its documents read is gone (#2468 folded the name into the gate that

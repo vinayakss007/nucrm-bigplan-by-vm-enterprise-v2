@@ -12,8 +12,7 @@
  * No auth — the token IS the credential. Rate-limited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { quotes, activities } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { activities } from '@/drizzle/schema';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -22,6 +21,7 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
+  transitionOfferStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -62,11 +62,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     // no tenant carrier, so the bare `db.transaction()` set no GUCs at all — the
     // writes were as unreachable as the credential read in lib/offers.ts. The
     // context comes from the resolved offer row, never from the request.
-    await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx) => {
-      await tx
-        .update(quotes)
-        .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(eq(quotes.id, offer.id));
+    // #3159: the status write is conditional on sent/viewed — a concurrent
+    // accept that committed after our unlocked read wins, this matches zero
+    // rows, and the buyer's acceptance survives instead of being silently
+    // overwritten by 'declined'.
+    const won = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx) => {
+      const moved = await transitionOfferStatus(tx, offer.id, ['sent', 'viewed'], {
+        status: 'declined',
+        declinedAt: now,
+        updatedAt: now,
+      });
+      if (!moved) return false;
 
       await patchOfferMetadata(offer.id, offer.tenantId, {
         decline_reason: reason || undefined,
@@ -86,7 +92,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
           metadata: { offer_id: offer.id, decline_reason: reason, email },
         });
       }
+      return true;
     });
+
+    if (!won) {
+      return NextResponse.json({ error: 'Offer cannot be declined in its current state' }, { status: 409 });
+    }
 
     await logAudit({
       tenantId: offer.tenantId,

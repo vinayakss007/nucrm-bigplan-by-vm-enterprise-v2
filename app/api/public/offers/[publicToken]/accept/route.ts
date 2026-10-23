@@ -19,8 +19,7 @@
  *   - audit log entry
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { quotes, activities } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { activities } from '@/drizzle/schema';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -29,6 +28,7 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
+  transitionOfferStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -46,6 +46,7 @@ const offerAcceptSchema = z.object({
  */
 type AcceptOutcome =
   | { kind: 'expired' }
+  | { kind: 'lost' }
   | { kind: 'accepted'; acceptedAt: Date };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
@@ -74,16 +75,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     // write is now one transaction scoped to the tenant the credential resolved.
     // #2446's sibling (`app/api/public/quotes/[id]/accept`) is the shape copied.
     const outcome = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx): Promise<AcceptOutcome> => {
+      // #3159: both writes are conditional on the offer still being in a
+      // source state this transition (or the auto-expire) is allowed to
+      // leave. The status read above is unlocked, so a concurrent cancel/
+      // expire can have committed first — matching zero rows then reports
+      // 'lost' instead of overwriting a terminal state, and the metadata +
+      // activity writes below never run.
       if (offer.expiresAt && new Date(offer.expiresAt).getTime() < Date.now()) {
-        await tx.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-        return { kind: 'expired' };
+        const won = await transitionOfferStatus(tx, offer.id, ['sent', 'viewed'], { status: 'expired', updatedAt: new Date() });
+        return won ? { kind: 'expired' } : { kind: 'lost' };
       }
 
       const now = new Date();
-      await tx
-        .update(quotes)
-        .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(eq(quotes.id, offer.id));
+      const won = await transitionOfferStatus(tx, offer.id, ['sent', 'viewed'], {
+        status: 'accepted',
+        acceptedAt: now,
+        updatedAt: now,
+      });
+      if (!won) return { kind: 'lost' };
 
       // One jsonb merge through patchOfferMetadata instead of the second inline
       // jsonb_set this route used to run: same merge semantics as decline, and it
@@ -111,6 +120,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     });
 
     if (outcome.kind === 'expired') return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
+    // #3159: someone else wrote a terminal status between our read and the
+    // guarded update — the accept did not happen, and must not look like it did.
+    if (outcome.kind === 'lost') {
+      return NextResponse.json({ error: 'Offer cannot be accepted in its current state' }, { status: 409 });
+    }
 
     await logAudit({
       tenantId: offer.tenantId,

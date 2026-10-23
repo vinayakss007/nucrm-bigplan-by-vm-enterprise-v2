@@ -18,7 +18,7 @@ import { quotes, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { canTransition } from '@/lib/offers';
+import { canTransition, transitionOfferStatus, OfferTransitionLost } from '@/lib/offers';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
@@ -41,25 +41,29 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // Clear the public token so the buyer link is dead, set status, and write
     // the timeline activity — all in one db.transaction so the offer is never
     // marked 'cancelled' without its matching timeline row, and vice-versa (H7).
+    //
+    // #3159: the status write is conditional on the pre-tx read's allowed
+    // sources (draft/sent/viewed). A buyer who accepted between that read and
+    // this statement locks the row first, the guard matches zero rows, the
+    // throw rolls the transaction back, and the accepted offer survives
+    // instead of being silently cancelled.
     await db.transaction(async (tx) => {
-      await tx
-        .update(quotes)
-        .set({
-          status: 'cancelled',
-          updatedAt: new Date(),
-          // Strip the public_token so /p/offers/<token> 404s cleanly going forward
-          metadata: sql`
-            CASE
-              WHEN ${quotes.metadata}->'offer' IS NULL THEN ${quotes.metadata}
-              ELSE jsonb_set(
-                COALESCE(${quotes.metadata}, '{}'::jsonb),
-                '{offer}',
-                (${quotes.metadata}->'offer') - 'public_token'
-              )
-            END
-          `,
-        })
-        .where(eq(quotes.id, quoteId));
+      const won = await transitionOfferStatus(tx, quoteId, ['draft', 'sent', 'viewed'], {
+        status: 'cancelled',
+        updatedAt: new Date(),
+        // Strip the public_token so /p/offers/<token> 404s cleanly going forward
+        metadata: sql`
+          CASE
+            WHEN ${quotes.metadata}->'offer' IS NULL THEN ${quotes.metadata}
+            ELSE jsonb_set(
+              COALESCE(${quotes.metadata}, '{}'::jsonb),
+              '{offer}',
+              (${quotes.metadata}->'offer') - 'public_token'
+            )
+          END
+        `,
+      });
+      if (!won) throw new OfferTransitionLost('cancelled');
 
       if (quote.contactId) {
         await tx.insert(activities).values({
@@ -86,6 +90,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     return NextResponse.json({ ok: true, status: 'cancelled' });
   } catch (err) {
+    // #3159: lost the race — the offer went terminal under us. 409, unchanged
+    // row, no activity written.
+    if (err instanceof OfferTransitionLost) {
+      return NextResponse.json({ error: 'Cannot cancel offer in its current state' }, { status: 409 });
+    }
     return apiError(err);
   }
 });

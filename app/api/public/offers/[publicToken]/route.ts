@@ -17,12 +17,12 @@
  * opened the offer" without a separate tracking pixel.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
+import { quoteLineItems, contacts, tenants } from '@/drizzle/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata } from '@/lib/offers';
+import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata, transitionOfferStatus } from '@/lib/offers';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the RLS
@@ -67,13 +67,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
     // resolved, which also keeps H7 (status + viewed metadata commit together)
     // inside the context that makes those writes reachable at all.
     const outcome = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx): Promise<OfferViewOutcome> => {
-      // Auto-expire if past expiry
+      // Auto-expire if past expiry — #3159: conditional, so this can never
+      // overwrite a status that committed after the unlocked token read below
+      // (an accepted offer must stay accepted, not silently become 'expired').
       if (
         offer.expiresAt
         && new Date(offer.expiresAt).getTime() < Date.now()
         && (offer.status === 'sent' || offer.status === 'viewed')
       ) {
-        await tx.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
+        await transitionOfferStatus(tx, offer.id, ['sent', 'viewed'], { status: 'expired', updatedAt: new Date() });
         return { kind: 'expired' };
       }
 
@@ -84,11 +86,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
         if (canTransition(offer.status, 'viewed')) {
           // #2344: viewed_count is incremented by Postgres inside jsonb_set, not
           // computed from the pre-read `offer` row.
-          await tx.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-          await patchOfferMetadata(offer.id, offer.tenantId, {
-            viewed_at: new Date().toISOString(),
-          }, tx);
-          await incrementOfferViewedCount(offer.id, offer.tenantId, tx);
+          // #3159: the sent→viewed write is conditional too — a GET that lands
+          // after a concurrent accept used to regress 'accepted' back to
+          // 'viewed', re-opening a closed offer. Zero rows here means someone
+          // else moved the status, so we skip the metadata writes and just
+          // serve what the reads found.
+          const won = await transitionOfferStatus(tx, offer.id, ['sent'], { status: 'viewed', updatedAt: new Date() });
+          if (won) {
+            await patchOfferMetadata(offer.id, offer.tenantId, {
+              viewed_at: new Date().toISOString(),
+            }, tx);
+            await incrementOfferViewedCount(offer.id, offer.tenantId, tx);
+          }
         }
       } else if (offer.status === 'viewed') {
         // #2344: no sibling status write here — a single-statement atomic

@@ -134,7 +134,13 @@ vi.mock('@/drizzle/db', async () => {
         return {
           where: (w: unknown) => {
             entry.where = w;
-            return Promise.resolve();
+            // #3159: the guarded offer transitions read the write back via
+            // .returning() — the mocked chain must carry it like the real
+            // drizzle chain does. One row back means the transition "won",
+            // which is the pre-#3159 behavior these tests already pin.
+            const p = Promise.resolve([]) as Promise<unknown[]> & { returning: () => Promise<unknown[]> };
+            p.returning = () => Promise.resolve([{ id: 'quote-1' }]);
+            return p;
           },
         };
       },

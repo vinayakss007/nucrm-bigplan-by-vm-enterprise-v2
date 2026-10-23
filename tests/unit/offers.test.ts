@@ -28,6 +28,8 @@ vi.mock('drizzle-orm', () => ({
   and: (...args: unknown[]) => ({ op: 'and', args }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values }),
   isNull: (a: unknown) => ({ op: 'isNull', a }),
+  // #3159: lib/offers.ts imports inArray for the guarded transition.
+  inArray: (a: unknown, b: unknown) => ({ op: 'inArray', a, b }),
 }));
 
 beforeEach(() => {

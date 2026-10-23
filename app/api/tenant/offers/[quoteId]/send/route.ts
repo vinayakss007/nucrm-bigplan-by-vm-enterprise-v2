@@ -34,6 +34,8 @@ import {
   patchOfferMetadata,
   readOfferMetadata,
   canTransition,
+  transitionOfferStatus,
+  OfferTransitionLost,
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -66,8 +68,10 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     let body: SendBody;
     try { body = await readJsonBody(req) as SendBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-    const meta = readOfferMetadata(quote);
-    const publicToken = meta.public_token || generatePublicToken();
+    // #3159: the public_token is chosen after the guarded status update wins
+    // (below) — minting it from this unlocked read let two concurrent sends
+    // generate two tokens and have the later jsonb merge kill the first link.
+    let publicToken = '';
 
     // Resolve buyer email — explicit body wins, then contact lookup
     let toEmail = body.to_email?.trim() || null;
@@ -102,16 +106,29 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // 'sent' without its public_token metadata (H7). patchOfferMetadata now takes
     // the tx; the activity write participates so a failed timeline row rolls the
     // send back rather than leaving a half-sent offer.
+    //
+    // #3159: the status write is conditional — it only lands from draft/sent,
+    // the set canTransition() vetted against the pre-tx read. If a concurrent
+    // cancel/accept committed in between, zero rows come back, this throws, and
+    // the metadata + activity writes roll back instead of overwriting the
+    // terminal state (and no email goes out below).
     await db.transaction(async (tx) => {
-      await tx
-        .update(quotes)
-        .set({
-          status: 'sent',
-          sentAt: new Date(),
-          ...(expiresAt ? { expiresAt } : {}),
-          updatedAt: new Date(),
-        })
+      const won = await transitionOfferStatus(tx, quoteId, ['draft', 'sent'], {
+        status: 'sent',
+        sentAt: new Date(),
+        ...(expiresAt ? { expiresAt } : {}),
+        updatedAt: new Date(),
+      });
+      if (!won) throw new OfferTransitionLost('sent');
+
+      // Re-read the metadata under the lock the guarded update just took: a
+      // concurrent send that committed contributes its token here instead of
+      // being clobbered by a freshly minted one.
+      const [fresh] = await tx
+        .select({ metadata: quotes.metadata })
+        .from(quotes)
         .where(eq(quotes.id, quoteId));
+      publicToken = readOfferMetadata({ metadata: fresh?.metadata ?? null }).public_token || generatePublicToken();
 
       await patchOfferMetadata(quoteId, ctx.tenantId, {
         public_token: publicToken,
@@ -180,6 +197,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       email: emailResult,
     });
   } catch (err) {
+    // #3159: lost the race — the offer moved to a state that cannot be sent
+    // (buyer accepted, another cancel won). Client-actionable conflict, not a
+    // server fault: answer 409 without paging logError or emailing anyone.
+    if (err instanceof OfferTransitionLost) {
+      return NextResponse.json({ error: 'Cannot send offer in its current state' }, { status: 409 });
+    }
     await logError({ error: err, context: 'offers/send POST', requestMethod: 'POST' });
     return apiError(err);
   }
