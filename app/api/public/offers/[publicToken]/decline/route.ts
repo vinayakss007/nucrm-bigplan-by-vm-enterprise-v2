@@ -13,7 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -22,6 +22,7 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
+  allowedFromStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -62,11 +63,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     // no tenant carrier, so the bare `db.transaction()` set no GUCs at all — the
     // writes were as unreachable as the credential read in lib/offers.ts. The
     // context comes from the resolved offer row, never from the request.
-    await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx) => {
-      await tx
+    const declined = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx) => {
+      // #3159 — same guarded claim as the accept sibling: `WHERE id` alone let a
+      // decline overwrite an accept that committed in the gap after the read
+      // above, and the buyer's own confirmation was the thing that vanished.
+      const [won] = await tx
         .update(quotes)
         .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(eq(quotes.id, offer.id));
+        .where(and(
+          eq(quotes.id, offer.id),
+          eq(quotes.tenantId, offer.tenantId),
+          inArray(quotes.status, allowedFromStatus('declined')),
+        ))
+        .returning({ id: quotes.id });
+      if (!won) return false;
 
       await patchOfferMetadata(offer.id, offer.tenantId, {
         decline_reason: reason || undefined,
@@ -86,7 +96,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
           metadata: { offer_id: offer.id, decline_reason: reason, email },
         });
       }
+      return true;
     });
+
+    if (!declined) {
+      return NextResponse.json({ error: 'Offer cannot be declined in its current state' }, { status: 409 });
+    }
 
     await logAudit({
       tenantId: offer.tenantId,

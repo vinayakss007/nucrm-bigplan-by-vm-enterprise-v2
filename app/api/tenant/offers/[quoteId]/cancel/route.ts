@@ -15,10 +15,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { canTransition } from '@/lib/offers';
+import { canTransition, allowedFromStatus } from '@/lib/offers';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
@@ -41,8 +41,16 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // Clear the public token so the buyer link is dead, set status, and write
     // the timeline activity — all in one db.transaction so the offer is never
     // marked 'cancelled' without its matching timeline row, and vice-versa (H7).
-    await db.transaction(async (tx) => {
-      await tx
+    //
+    // #3159 — the `canTransition` check above reads a row that can change before
+    // this UPDATE does, and an id-only write then overwrote whatever it became:
+    // buyer accepts, seller's cancel (which had already passed the check on a
+    // `sent` read) lands second and the accepted offer is simply gone. Postgres
+    // re-evaluates the WHERE against the locked row version, so carrying the
+    // transition's from-set into the write makes the loser fail here instead of
+    // silently winning, and `returning()` is how the handler finds that out.
+    const cancelled = await db.transaction(async (tx) => {
+      const [won] = await tx
         .update(quotes)
         .set({
           status: 'cancelled',
@@ -59,7 +67,13 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             END
           `,
         })
-        .where(eq(quotes.id, quoteId));
+        .where(and(
+          eq(quotes.id, quoteId),
+          eq(quotes.tenantId, ctx.tenantId),
+          inArray(quotes.status, allowedFromStatus('cancelled')),
+        ))
+        .returning({ id: quotes.id });
+      if (!won) return false;
 
       if (quote.contactId) {
         await tx.insert(activities).values({
@@ -74,7 +88,14 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           metadata: { offer_id: quoteId },
         });
       }
+      return true;
     });
+
+    // Nothing was written and no audit row was filed: the offer moved on while
+    // this request was deciding. Same 409 the stale check answers, same body.
+    if (!cancelled) {
+      return NextResponse.json({ error: "Cannot cancel an offer in its current state" }, { status: 409 });
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
