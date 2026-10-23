@@ -21,7 +21,7 @@ export type SigningProvider = 'docusign' | 'hellosign' | 'internal';
 
 export type SigningStatus = 'pending' | 'sent' | 'viewed' | 'signed' | 'declined' | 'expired';
 
-export type SigningEventType = 'sent' | 'viewed' | 'signed' | 'declined';
+export type SigningEventType = 'sent' | 'viewed' | 'signed' | 'declined' | 'expired';
 
 export interface Signer {
   email: string;
@@ -397,11 +397,28 @@ export async function handleSigningWebhook(payload: WebhookPayload): Promise<{ u
   // Map event to status
   const newStatus = mapEventToStatus(payload.event);
 
-  // Update request status + record event in a single transaction
+  // #3134: providers deliver webhooks out of order and retry duplicates, so a
+  // late 'viewed' must not un-sign an already-signed request. Re-read the row
+  // FOR UPDATE inside the transaction (the pre-read above is racy) and apply
+  // the status only when it advances the state machine. Equal rank is a
+  // no-op, which also absorbs duplicate deliveries.
+  let applied = false;
   await db.transaction(async (tx) => {
-    await tx.update(signingRequests)
-      .set({ status: newStatus })
-      .where(eq(signingRequests.id, row.id));
+    const [locked] = await tx
+      .select({ status: signingRequests.status })
+      .from(signingRequests)
+      .where(eq(signingRequests.id, row.id))
+      .limit(1)
+      .for('update');
+
+    const current = (locked?.status ?? row.status) as SigningStatus;
+    applied = STATUS_ORDER[newStatus] > STATUS_ORDER[current];
+
+    if (applied) {
+      await tx.update(signingRequests)
+        .set({ status: newStatus })
+        .where(eq(signingRequests.id, row.id));
+    }
 
     await tx.insert(signingEvents).values({
       requestId: row.id,
@@ -412,7 +429,7 @@ export async function handleSigningWebhook(payload: WebhookPayload): Promise<{ u
     });
   });
 
-  return { updated: true };
+  return { updated: applied };
 }
 
 // ── Status Mapping Helpers ────────────────────────────
@@ -438,12 +455,24 @@ function mapHelloSignStatus(statusCode: string): SigningStatus {
   return map[statusCode] || 'pending';
 }
 
+// #3134: signing state machine. signed/declined/expired are terminal and share
+// a rank so no post-terminal webhook can rewrite them.
+const STATUS_ORDER: Record<SigningStatus, number> = {
+  pending: 0,
+  sent: 1,
+  viewed: 2,
+  signed: 3,
+  declined: 3,
+  expired: 3,
+};
+
 function mapEventToStatus(event: SigningEventType): SigningStatus {
   const map: Record<SigningEventType, SigningStatus> = {
     'sent': 'sent',
     'viewed': 'viewed',
     'signed': 'signed',
     'declined': 'declined',
+    'expired': 'expired',
   };
   return map[event] || 'pending';
 }

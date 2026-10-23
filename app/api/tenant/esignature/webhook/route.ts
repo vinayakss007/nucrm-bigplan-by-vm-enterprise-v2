@@ -103,6 +103,10 @@ function mapDocuSignEvent(event: string): SigningEventType {
     'recipient-delivered': 'viewed',
     'recipient-completed': 'signed',
     'recipient-declined': 'declined',
+    // #3134: these used to hit the `|| 'viewed'` fallback, storing an expired
+    // envelope as merely viewed — permanently actionable in the UI.
+    'envelope-expired': 'expired',
+    'envelope-voided': 'expired',
   };
   return map[event] || 'viewed';
 }
@@ -113,6 +117,8 @@ function mapHelloSignEvent(eventType: string): SigningEventType {
     'signature_request_viewed': 'viewed',
     'signature_request_signed': 'signed',
     'signature_request_declined': 'declined',
+    'signature_request_expired': 'expired',
+    'signature_request_removed': 'expired',
   };
   return map[eventType] || 'viewed';
 }
