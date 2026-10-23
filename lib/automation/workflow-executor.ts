@@ -25,7 +25,12 @@ import {
 } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
-import { escapeHtml } from '@/lib/email/escape-html';
+import {
+  evaluateCondition,
+  getNestedValue,
+  interpolate,
+  interpolateHtml,
+} from './workflow-values';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
 import { safeFetch } from '@/lib/security/ssrf';
@@ -140,6 +145,11 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   if (!execution) throw new Error('Failed to create execution record');
 
   try {
+    // Actions that fail are caught inside executeActionNode so one bad node
+    // cannot roll back the nodes behind it. The outcomes still have to reach
+    // the status below, so the walk collects them (#3139).
+    const actionFailures: string[] = [];
+
     // Wrap node execution + status update in a transaction for atomicity
     await db.transaction(async (tx) => {
       // Find trigger node (entry point)
@@ -150,9 +160,23 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
       }
 
       // Execute starting from trigger
-      await executeNode(tx, triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx, new Set());
+      await executeNode(tx, triggerNode.id, nodes, children, execution.id, tenantId, userId, ctx, new Set(), actionFailures);
 
-      await updateExecution(tx, execution.id, 'completed', ctx);
+      // A run whose actions were all rejected by the provider, or that threw on
+      // every node, used to be written as 'completed' — indistinguishable from a
+      // run that did everything. 'failed' is already allowed by
+      // chk_workflow_executions_status, so no migration is needed to report it.
+      if (actionFailures.length > 0) {
+        await updateExecution(
+          tx,
+          execution.id,
+          'failed',
+          ctx,
+          `${actionFailures.length} action(s) failed: ${actionFailures.join('; ')}`.slice(0, 500),
+        );
+      } else {
+        await updateExecution(tx, execution.id, 'completed', ctx);
+      }
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -176,7 +200,8 @@ async function executeNode(
   tenantId: string,
   userId: string | undefined,
   ctx: Record<string, unknown>,
-  visited: Set<string>
+  visited: Set<string>,
+  actionFailures: string[]
 ): Promise<void> {
   // Cycle detection: skip nodes already visited in this execution path.
   // NOTE: The visited Set serves as both cycle prevention AND deduplication.
@@ -255,7 +280,7 @@ async function executeNode(
       // Action nodes: action_send_email, action_create_task, etc.
       if (node.type.startsWith('action_')) {
         const actionType = node.type.replace('action_', '');
-        await executeActionNode(dbOrTx, actionType, node.data, executionId, tenantId, userId, ctx);
+        await executeActionNode(dbOrTx, actionType, node.data, executionId, tenantId, userId, ctx, actionFailures);
       }
       break;
     }
@@ -264,7 +289,7 @@ async function executeNode(
   // Proceed to children
   const childEdges = children.get(nodeId) || [];
   for (const edge of childEdges) {
-    await executeNode(dbOrTx, edge.target, nodes, children, executionId, tenantId, userId, ctx, visited);
+    await executeNode(dbOrTx, edge.target, nodes, children, executionId, tenantId, userId, ctx, visited, actionFailures);
   }
 }
 
@@ -275,7 +300,8 @@ async function executeActionNode(
   executionId: string,
   tenantId: string,
   userId: string | undefined,
-  ctx: Record<string, unknown>
+  ctx: Record<string, unknown>,
+  actionFailures: string[]
 ): Promise<void> {
   const actionLog = {
     executionId,
@@ -421,6 +447,9 @@ async function executeActionNode(
   } catch (err: unknown) {
     actionLog.status = 'failed';
     const message = err instanceof Error ? err.message : String(err);
+    // Recorded before the log write so a failing insert cannot erase the fact
+    // that this action did not happen.
+    actionFailures.push(`${actionType}: ${message}`);
     await dbOrTx.insert(workflowExecutionLogs).values({
       workflowExecutionId: executionId,
       tenantId,
@@ -453,41 +482,4 @@ async function updateExecution(
       completedAt: new Date(),
     })
     .where(eq(workflowExecutions.id, executionId));
-}
-
-function evaluateCondition(fieldValue: unknown, operator: string, value: unknown): boolean {
-  switch (operator) {
-    case 'equals': return String(fieldValue) === String(value);
-    case 'not_equals': return String(fieldValue) !== String(value);
-    case 'contains': return String(fieldValue ?? '').includes(String(value));
-    case 'not_contains': return !String(fieldValue ?? '').includes(String(value));
-    case 'greater_than': return Number(fieldValue) > Number(value);
-    case 'less_than': return Number(fieldValue) < Number(value);
-    case 'is_empty': return fieldValue == null || fieldValue === '';
-    case 'is_not_empty': return fieldValue != null && fieldValue !== '';
-    default: return false;
-  }
-}
-
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce((acc: unknown, key: string) => {
-    if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
-    return undefined;
-  }, obj);
-}
-
-function interpolate(template: string, data: Record<string, unknown>, opts?: { escapeValues?: boolean }): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const value = String(data[key] ?? '');
-    return opts?.escapeValues ? escapeHtml(value) : value;
-  });
-}
-
-/**
- * Like interpolate(), but HTML-escapes each substituted value.
- * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
- * to prevent XSS via user-controlled template variables.
- */
-function interpolateHtml(template: string, data: Record<string, unknown>): string {
-  return interpolate(template, data, { escapeValues: true });
 }
