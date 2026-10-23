@@ -271,9 +271,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         // of rows that were never deleted and reported the count as a restore.
         // Re-resolve against the trash, off the caller's id set, the way
         // deals/bulk:409 and leads/bulk:306 do (#2692). Scope is deliberately the
-        // same tenant + tombstone pair the route's own validation uses — this route
-        // carries no owner narrowing anywhere (#2674 family), and adding one here
-        // would be a different claim on a different surface.
+        // same tenant + tombstone pair the route's own validation uses: this route
+        // carries no owner narrowing anywhere, and neither does any other read or
+        // write of `companies` — `companies.view_all` is defined and enforced
+        // nowhere, which #2597 tracks and seven call sites comment around. Settling
+        // it for one action here would make the inconsistency worse, not better.
         const restorable = await db
           .select({ id: companies.id })
           .from(companies)

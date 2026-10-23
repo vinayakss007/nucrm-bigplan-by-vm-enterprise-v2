@@ -218,7 +218,9 @@ describe.each([
     expect(res.status).toBe(404);
     const trash = restorable()!;
     // tasks narrows through ownerScope; companies/bulk carries no owner scope on
-    // any of its sets (#2674 family), so only the tenant + tombstone pair applies.
+    // any of its sets, as no `companies` read does — `companies.view_all` is
+    // defined and enforced nowhere, which #2597 tracks. Only the tenant +
+    // tombstone pair applies there.
     if (route === 'tasks') {
       expect(ownsBoth(col)(trash), `no ownership predicate: ${trash.sql}`).toBe(true);
     } else {
