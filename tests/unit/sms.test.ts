@@ -237,7 +237,9 @@ describe('SMS - sendSMS', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await sendSMS({
@@ -263,7 +265,9 @@ describe('SMS - sendSMS', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network failure')));
 
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await sendSMS({
@@ -486,7 +490,9 @@ describe('SMS - updateDeliveryStatus', () => {
   });
 
   it('updates status to delivered', async () => {
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await updateDeliveryStatus({
@@ -499,7 +505,9 @@ describe('SMS - updateDeliveryStatus', () => {
   });
 
   it('maps undelivered to failed', async () => {
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await updateDeliveryStatus({
@@ -515,7 +523,9 @@ describe('SMS - updateDeliveryStatus', () => {
   });
 
   it('maps queued and sent statuses', async () => {
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await updateDeliveryStatus({
@@ -532,7 +542,9 @@ describe('SMS - updateDeliveryStatus', () => {
   });
 
   it('passes through unknown statuses', async () => {
-    const setFn = vi.fn(() => ({ where: vi.fn() }));
+    // #3127: updateDeliveryStatus now reads the write back via .returning(),
+    // so the mocked chain must carry it like the real drizzle chain does.
+    const setFn = vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'msg-1' }]) })) }));
     vi.mocked(db.update).mockReturnValue({ set: setFn });
 
     const result = await updateDeliveryStatus({

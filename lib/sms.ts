@@ -272,14 +272,18 @@ export async function updateDeliveryStatus(payload: DeliveryStatusPayload) {
 
   const status = statusMap[payload.MessageStatus] || payload.MessageStatus;
 
-  await db.update(smsMessages)
+  // #3127: the UPDATE result was discarded and `updated: true` returned
+  // unconditionally, so a callback for an unknown MessageSid (replayed,
+  // mismatched, past retention) wrote nothing yet was reported as applied.
+  const rows = await db.update(smsMessages)
     .set({
       status,
       errorCode: payload.ErrorCode || null,
     })
-    .where(eq(smsMessages.twilioSid, payload.MessageSid));
+    .where(eq(smsMessages.twilioSid, payload.MessageSid))
+    .returning({ id: smsMessages.id });
 
-  return { updated: true, status };
+  return { updated: rows.length > 0, status };
 }
 
 /**
