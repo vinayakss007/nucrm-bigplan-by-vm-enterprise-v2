@@ -17,7 +17,8 @@
  *
  * PATCH lets the user mark a suggestion as accepted/rejected so we can
  * compute acceptance-rate later. Users can only PATCH their own rows;
- * admins can patch any row in the tenant.
+ * admins can patch any row in the tenant. `expectedUpdatedAt` is rejected
+ * with 400 — this table has no `updated_at`, so there is nothing to compare.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -27,7 +28,6 @@ import { users } from '@/drizzle/schema/core';
 import { eq, and, desc, sql, gte, count } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
-import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -161,13 +161,21 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     const filters = [eq(aiActivity.id, id), eq(aiActivity.tenantId, ctx.tenantId)];
     if (!ctx.isAdmin) filters.push(eq(aiActivity.userId, ctx.userId));
 
-    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
-    const guard = await concurrencyGuard(db, aiActivity, id, ctx.tenantId, expectedUpdatedAt);
-    if (guard) return guard;
+    // ai_activity has no updated_at column, so optimistic concurrency is not
+    // available here. Reject the field instead of silently ignoring it: a client
+    // that believes it sent a precondition must not learn later that the write
+    // happened regardless. See migration 0002 (table as created) vs the dead
+    // 0016 re-creation that does declare updated_at.
+    if (body.expectedUpdatedAt) {
+      return NextResponse.json(
+        { error: 'ai_activity has no updated_at - optimistic concurrency is not available for this record' },
+        { status: 400 }
+      );
+    }
 
     const result = await db
       .update(aiActivity)
-      .set({ accepted, updatedAt: new Date() } as Record<string, unknown>)
+      .set({ accepted })
       .where(and(...filters))
       .returning({ id: aiActivity.id });
 

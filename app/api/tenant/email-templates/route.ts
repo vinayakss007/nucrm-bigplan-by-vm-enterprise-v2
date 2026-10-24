@@ -68,14 +68,20 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    // `email_templates` spreads utils.lifecycle(), not utils.audit(): it has no
+    // created_by column, so the `createdBy` key that used to sit here was dropped
+    // silently by Drizzle's column mapper, and the `as typeof ….$inferInsert` cast
+    // that tsc needed was what kept that invisible. Both are gone, so the column
+    // list is compiler-enforced. If "who created this template" is ever required,
+    // it belongs in an audit call (this handler has none); adding a column would
+    // be DDL and is out of scope here.
     const [row] = await db.insert(emailTemplates).values({
       tenantId: ctx.tenantId,
       name: v.name,
       subject: v.subject,
       bodyHtml: v.body,
       category: v.category || 'general',
-      createdBy: ctx.userId,
-    } as typeof emailTemplates.$inferInsert).returning({
+    }).returning({
       id: emailTemplates.id,
       name: emailTemplates.name,
       subject: emailTemplates.subject,
