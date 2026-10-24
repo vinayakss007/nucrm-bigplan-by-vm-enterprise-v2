@@ -11,8 +11,8 @@ import { createSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
-import { sequences, sequenceSteps } from '@/drizzle/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
+import { eq, and, desc, isNull, getTableColumns, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -42,7 +42,25 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       filters.push(eq(sequences.status, 'draft'));
     }
 
-    const data = await db.select()
+    // #3193: `enroll_count` is derived from `sequence_enrollments` here instead of
+    // being read off the counter column. The column is a tally of accepted enrollment
+    // *calls*: five writers add to it, no path subtracts (`cancelOpenEnrollments` only
+    // moves `status`), and a re-enroll of an already-active contact used to add another
+    // one on the ON CONFLICT branch. The row count is what the tally was always meant
+    // to hold, and it is the shape the other sequences UI already derives for its own
+    // "enrolled" figure (`app/tenant/sequences/page.tsx` — that one counts every row of
+    // the sequence's `sequence_enrollments`; this pins the tenant and skips tombstones,
+    // the same predicate #2740's conflict target uses), so the two surfaces cannot
+    // disagree.
+    const data = await db.select({
+      ...getTableColumns(sequences),
+      enrollCount: sql<number>`(
+        select count(*)::int from ${sequenceEnrollments}
+        where ${sequenceEnrollments.sequenceId} = ${sequences.id}
+          and ${sequenceEnrollments.tenantId} = ${ctx.tenantId}
+          and ${sequenceEnrollments.deletedAt} is null
+      )`,
+    })
       .from(sequences)
       .where(and(...filters))
       .orderBy(desc(sequences.createdAt));
