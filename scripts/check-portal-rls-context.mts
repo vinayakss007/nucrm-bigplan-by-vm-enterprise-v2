@@ -62,11 +62,12 @@ export type TenantTable = { js: string; sql: string };
 export const MIN_TENANT_KEYED_TABLES = 100;
 /**
  * `find app/api/public -name route.ts` = 14, plus the three portal-auth files,
- * plus the three capture files #3163 added to `DEFAULT_TARGETS`. Pinned at the
- * current surface on purpose: a floor left at 17 would say OK the day a capture
- * directory stops existing, which is how #2446's sweep missed this path at all.
+ * plus the three capture files #3163 added to `DEFAULT_TARGETS`, plus the two
+ * team-invitation routes #3182 added. Pinned at the current surface on purpose: a
+ * floor left at 17 would say OK the day a capture directory stops existing, which
+ * is how #2446's sweep missed this path at all.
  */
-export const MIN_SCANNED_FILES = 20;
+export const MIN_SCANNED_FILES = 22;
 /** If the walk finds no tenant-keyed read at all, the patterns stopped working. */
 export const MIN_TABLE_READS = 20;
 
@@ -586,11 +587,20 @@ function tsFiles(path: string): string[] {
 
 /**
  * The anonymous request surface: everything that answers a caller with no
- * session. `app/api/public/**` + the portal-auth files are #2446's; the last
+ * session. `app/api/public/**` + the portal-auth files are #2446's; the next
  * three are #3163's, and they were the gap — the capture path (`/api/forms/submit`,
  * `/api/leads/public`) and the public form renderer (`/api/tenant/forms/public`)
  * read and wrote tenant-policyed tables on the pool, which is the same silent
  * zero-row failure this guard was written for, on routes this guard never walked.
+ *
+ * The last two are #3182's team-invitation routes. `app/api/auth/*` as a whole is
+ * deliberately NOT here: measured with the same walk, the other 13 dirs under it
+ * carry 100+ tenant-keyed reads that have never been examined — most of them
+ * legitimately different (login resolves a credential through `app.auth_lookup`,
+ * `sso` and `oauth` hand off to identity providers). Naming the whole tree would
+ * have buried #3182's own two files under a baseline nobody could argue with, so
+ * the fix names the routes it actually made work and leaves the rest as the
+ * follow-up it describes.
  */
 export const DEFAULT_TARGETS = [
   'app/api/public',
@@ -600,6 +610,8 @@ export const DEFAULT_TARGETS = [
   'app/api/forms/submit',
   'app/api/tenant/forms/public',
   'app/api/leads/public',
+  'app/api/auth/accept-invite',
+  'app/api/auth/invite-details',
 ];
 
 export async function run(
