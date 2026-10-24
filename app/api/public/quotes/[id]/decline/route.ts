@@ -5,13 +5,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { allowedFromStatus } from '@/lib/offers';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the RLS
@@ -78,11 +79,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const validStatuses = ['sent', 'viewed'];
       if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
 
+      // #3175: the JS check above vets a row read without a lock. Between that
+      // read and this write a concurrent accept (or the tenant-side edit) can
+      // land, and the old unconditional `WHERE id = ...` would stomp 'declined'
+      // over the terminal state. The guard claims the same from-set the check
+      // vetted — from ONE table (`allowedFromStatus`), so the two halves can
+      // never drift — and the read-back tells us if we lost the race. Zero rows
+      // means the activity insert and the 200 answer must not happen.
       const now = new Date();
-      await tx
+      const [declined] = await tx
         .update(quotes)
         .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(eq(quotes.id, quote.id));
+        .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId), inArray(quotes.status, allowedFromStatus('declined'))))
+        .returning({ id: quotes.id });
+      if (!declined) return { kind: 'bad_state' };
 
       await tx.insert(activities).values({
         tenantId: quote.tenantId,

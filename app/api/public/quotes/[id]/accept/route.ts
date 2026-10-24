@@ -5,12 +5,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { allowedFromStatus } from '@/lib/offers';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the
@@ -78,18 +79,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
 
       const now = new Date();
+      // #3175 (#3159's doctrine, portal siblings): the status vet above reads a
+      // row that can move while this POST is in flight, and these writes used
+      // to carry `WHERE id = ...` alone — so an accept racing a decline
+      // overwrote the loser and BOTH activity rows committed, and an
+      // auto-expire could flatten a concurrently accepted quote. Claiming the
+      // transition's from-set in the WHERE and reading the write back means
+      // Postgres re-checks against the locked row version: zero rows = lost
+      // the race, answer the existing 409, and write nothing else.
       if (quote.expiresAt && new Date(quote.expiresAt).getTime() < now.getTime()) {
-        await tx
+        const [expired] = await tx
           .update(quotes)
           .set({ status: 'expired', updatedAt: now })
-          .where(eq(quotes.id, quote.id));
+          .where(and(
+            eq(quotes.id, quote.id),
+            eq(quotes.tenantId, quote.tenantId),
+            inArray(quotes.status, allowedFromStatus('expired')),
+          ))
+          .returning({ id: quotes.id });
+        if (!expired) return { kind: 'bad_state' };
         return { kind: 'expired' };
       }
 
-      await tx
+      const [accepted] = await tx
         .update(quotes)
         .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(eq(quotes.id, quote.id));
+        .where(and(
+          eq(quotes.id, quote.id),
+          eq(quotes.tenantId, quote.tenantId),
+          inArray(quotes.status, allowedFromStatus('accepted')),
+        ))
+        .returning({ id: quotes.id });
+      if (!accepted) return { kind: 'bad_state' };
 
       await tx.insert(activities).values({
         tenantId: quote.tenantId,
