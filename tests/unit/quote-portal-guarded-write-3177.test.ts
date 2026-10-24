@@ -257,6 +257,20 @@ describe('POST /api/public/quotes/[id]/accept — the claim is in the WHERE (#31
     expect((await res.json()).status).toBe('accepted');
     expect(state.inserted).toHaveLength(0);
   });
+
+  it('a claim that lost to a soft delete answers 404, not a status nobody can see', async () => {
+    // #2382 applies to the re-read as much as to the pre-read: the row the buyer
+    // thought they were accepting is gone, and `status: ''` would tell the page a
+    // state that no quote has.
+    state.quote = quoteRow();
+    state.updateReturns = [[]];
+    state.fresh = [];
+
+    const res = await call('accept');
+    expect(res.status).toBe(404);
+    expect(state.inserted).toHaveLength(0);
+    expect(state.audits).toHaveLength(0);
+  });
 });
 
 describe('POST /api/public/quotes/[id]/decline — the claim is in the WHERE (#3177)', () => {
@@ -296,6 +310,17 @@ describe('POST /api/public/quotes/[id]/decline — the claim is in the WHERE (#3
     expect(res.status).toBe(409);
     expect(state.updates).toHaveLength(1);
     expect(state.inserted).toHaveLength(0);
+  });
+
+  it('a decline that lost to a soft delete answers 404 with nothing written', async () => {
+    state.quote = quoteRow();
+    state.updateReturns = [[]];
+    state.fresh = [];
+
+    const res = await call('decline', { reason: 'over budget' });
+    expect(res.status).toBe(404);
+    expect(state.inserted).toHaveLength(0);
+    expect(state.audits).toHaveLength(0);
   });
 });
 

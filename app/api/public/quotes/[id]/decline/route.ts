@@ -100,12 +100,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ))
         .returning({ id: quotes.id });
       if (!declined) {
+        // What the winning commit actually left behind. The re-read keeps the
+        // tombstone filter (#2382), so a delete that landed while this claim was
+        // losing answers as the same 404 the pre-read would have given rather
+        // than reporting a status no customer can see.
         const [fresh] = await tx
           .select({ status: quotes.status })
           .from(quotes)
-          .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId)))
+          .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId), isNull(quotes.deletedAt)))
           .limit(1);
-        return { kind: 'conflict', committedStatus: fresh?.status ?? '' };
+        if (!fresh) return { kind: 'no_quote' };
+        return { kind: 'conflict', committedStatus: fresh.status ?? '' };
       }
 
       await tx.insert(activities).values({
