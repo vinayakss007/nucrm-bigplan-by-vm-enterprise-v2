@@ -64,9 +64,9 @@ export const GET = withApiRoute(async (request: NextRequest,
 
     // #3193: the relational read above hands back `sequences.enroll_count`, a tally of
     // accepted enrollment calls that nothing ever decrements. The list route derives
-    // the figure from the table (`sequences/route.ts`, same #3193), so both readings of
-    // the number equal the enrollment rows for this sequence and neither trusts the
-    // counter. Same predicate as #2740's conflict target: live rows of this tenant.
+    // the figure from the table (`sequences/route.ts`, same #3193) with the same predicate
+    // — this tenant's rows, `deleted_at IS NULL`, any `status` — so the two API readings
+    // agree and neither trusts the counter. Not #2740's active-only conflict target.
     const [enrolled] = await db.select({ count: sql<number>`count(*)::int` })
       .from(sequenceEnrollments)
       .where(and(

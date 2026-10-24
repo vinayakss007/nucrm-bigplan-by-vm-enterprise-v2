@@ -46,12 +46,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // being read off the counter column. The column is a tally of accepted enrollment
     // *calls*: five writers add to it, no path subtracts (`cancelOpenEnrollments` only
     // moves `status`), and a re-enroll of an already-active contact used to add another
-    // one on the ON CONFLICT branch. The row count is what the tally was always meant
-    // to hold, and it is the shape the other sequences UI already derives for its own
-    // "enrolled" figure (`app/tenant/sequences/page.tsx` — that one counts every row of
-    // the sequence's `sequence_enrollments`; this pins the tenant and skips tombstones,
-    // the same predicate #2740's conflict target uses), so the two surfaces cannot
-    // disagree.
+    // one on the ON CONFLICT branch. The definition these two reads share is every
+    // non-tombstoned enrollment row of this sequence for this tenant, whatever its
+    // `status` — deliberately not #2740's conflict target either, which also requires
+    // `status = 'active'` (`0130_sequence_enrollments_active_unique.sql:94-96`), and not
+    // `app/tenant/sequences/page.tsx:31-32`, whose `enrollment_count` keeps tombstones
+    // and whose `active_count` drops cancelled rows. Three questions, three answers.
     const data = await db.select({
       ...getTableColumns(sequences),
       enrollCount: sql<number>`(
