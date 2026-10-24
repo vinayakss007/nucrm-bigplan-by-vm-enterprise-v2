@@ -4,10 +4,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // the DB gauges in particular have to keep moving (or explicitly report the
 // section is down) so Prometheus never shows a frozen "calm" picture during
 // an incident.
-// #2146: the CRM counts section is now ONE aggregate statement instead of a
+// #2146: the counts section is now ONE aggregate statement instead of a
 // 15-query fan-out (Sentry N+1 x1636 + pool checkouts feeding #2145). The
 // route issues exactly 3 DB round-trips per scrape: latency ping, pool
-// stats, counts.
+// stats, tenant counts.
+// #3195 took the CRM half of that third statement OUT — contacts / leads /
+// deals / companies / tasks / activities / users are all guarded by
+// tenant_isolation, which 0039 made fail CLOSED, so a bare-pool count of them
+// is a permanent zero rather than a measurement. The section keeps the one
+// number the shipped policies do answer on the pool (`tenants`, whose only
+// SELECT policy is `tenants_read_all USING (true)`) and the rest is pinned in
+// tests/unit/metrics-tenant-count-3195.test.ts.
 
 const mockExecute = vi.fn();
 
@@ -15,24 +22,8 @@ const poolRows = (active: string) => ({
   rows: [{ active, active_queries: '10', waiting: '3', max_conn: '100' }],
 });
 
-const countsRow = {
-  rows: [{
-    contacts_total: 7,
-    leads_total: 11,
-    deals_total: 5,
-    companies_total: 3,
-    tasks_pending: 2,
-    tasks_completed: 9,
-    activities_total: 40,
-    tenants_active: 6,
-    users_total: 12,
-    contacts_created_24h: 1,
-    leads_created_24h: 2,
-    deals_created_24h: 3,
-    deals_won: 4,
-    deals_lost: 1,
-    pipeline_value: '1500.25',
-  }],
+const fleetRow = {
+  rows: [{ tenants_active: 6, tenants_total: 34 }],
 };
 
 function healthyDb(active = '42') {
@@ -41,7 +32,7 @@ function healthyDb(active = '42') {
     n += 1;
     if (n === 1) return { rows: [{ '?column?': 1 }] }; // SELECT 1 latency ping
     if (n === 2) return poolRows(active); // pool stats
-    return countsRow; // single CRM counts statement
+    return fleetRow; // single tenant-count statement
   });
 }
 
@@ -101,15 +92,28 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     expect(body).toContain('nucrm_db_active_connections 42');
     expect(body).toContain('nucrm_db_pool_up 1');
     expect(body).toContain('nucrm_metrics_counts_up 1');
-    expect(body).toContain('nucrm_contacts_total 7');
-    expect(body).toContain('nucrm_leads_total 11');
-    expect(body).toContain('nucrm_deals_value_total 1500.25');
+    // #3195: the count this section is allowed to claim. `tenants` carries no
+    // tenant_id and its only SELECT policy is `tenants_read_all USING (true)`,
+    // so the pool answers it; the CRM counts did not have that excuse.
+    expect(body).toContain('nucrm_tenants_total 6');
+    expect(body).toContain('nucrm_tenants_overall_total 34');
     expect(body).toContain('nucrm_cache_up 1');
     expect(body).toContain('nucrm_cache_size 42');
     expect(body).toContain('nucrm_cache_hit_rate 83');
     // tenant-cleanup is one of the four queues worker.ts declares but the
     // old knownQueues list omitted — their pileups were invisible.
     expect(body).toContain('nucrm_queue_jobs_total{queue="tenant-cleanup",status="waiting"} 5');
+  });
+
+  it('does not emit the tenant-keyed CRM gauges #3195 withdrew', async () => {
+    healthyDb('42');
+    const body = await (await GET(metricsReq())).text();
+    for (const series of ['nucrm_contacts_total', 'nucrm_leads_total', 'nucrm_deals_total',
+      'nucrm_companies_total', 'nucrm_tasks_pending_total', 'nucrm_users_total',
+      'nucrm_deals_value_total', 'nucrm_activities_total']) {
+      expect(body.split('\n').filter((l) => l.startsWith(`${series} `)), series).toEqual([]);
+    }
+    expect(body).toContain('nucrm_crm_counts_exported 0');
   });
 
   it('makes exactly three DB statements per scrape — no 15-query fan-out (#2146)', async () => {
