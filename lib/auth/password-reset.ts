@@ -37,14 +37,23 @@ export async function clearResetToken(userId: string): Promise<void> {
     // a session, so no user context exists here. Runs with the token_issue
     // privilege that admits UPDATE on password_resets without an authenticated
     // user (0134).
-    await withTokenIssueContext(async (tx) =>
-      await tx
-      .update(passwordResets)
-      .set({ deletedAt: new Date() })
-      .where(and(
-        eq(passwordResets.userId, userId),
-        isNull(passwordResets.deletedAt)
-      ))
+    //
+    // #3218: it is a *by-user* write, so it names the user rather than a
+    // credential. 0134's UPDATE arm could not express that anyway (its USING is
+    // "any live row"), and measured against it this statement matched 0 rows in
+    // a token_issue-only context because the rows were not visible through any
+    // SELECT policy. 0135's password_resets_token_retire pair is the narrow
+    // grant: rows of app.token_retire_user and nothing else.
+    await withTokenIssueContext(
+      async (tx) =>
+        await tx
+          .update(passwordResets)
+          .set({ deletedAt: new Date() })
+          .where(and(
+            eq(passwordResets.userId, userId),
+            isNull(passwordResets.deletedAt)
+          )),
+      { retireUser: userId },
     );
   } catch (err) {
     devLogger.error(err as Error, '[password-reset] clearResetToken failed');
@@ -110,7 +119,7 @@ export async function requestPasswordReset(
         token: tokenHash,
         expiresAt,
       });
-    });
+    }, { retireUser: user.id });
 
     // Build reset URL
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
@@ -196,21 +205,26 @@ export async function verifyResetToken(token: string): Promise<{
     const now = new Date();
 
     // Find valid reset token in password_resets table
-    const [resetRecord] = await withAuthLookupContext(async (tx) =>
-      await tx
-      .select({
-        id: passwordResets.id,
-        userId: passwordResets.userId,
-        expiresAt: passwordResets.expiresAt,
-      })
-      .from(passwordResets)
-      .innerJoin(users, eq(users.id, passwordResets.userId))
-      .where(and(
-        eq(passwordResets.token, tokenHash),
-        isNull(passwordResets.deletedAt),
-        gt(passwordResets.expiresAt, now)
-      ))
-      .limit(1)
+    // #3218: the token hash names the one row this read is authorised for; the
+    // auth_lookup arm's `token = app.token_credential` replaces 0134's
+    // "every live row of a secret-bearing table".
+    const [resetRecord] = await withAuthLookupContext(
+      async (tx) =>
+        await tx
+          .select({
+            id: passwordResets.id,
+            userId: passwordResets.userId,
+            expiresAt: passwordResets.expiresAt,
+          })
+          .from(passwordResets)
+          .innerJoin(users, eq(users.id, passwordResets.userId))
+          .where(and(
+            eq(passwordResets.token, tokenHash),
+            isNull(passwordResets.deletedAt),
+            gt(passwordResets.expiresAt, now)
+          ))
+          .limit(1),
+      tokenHash,
     );
 
     if (!resetRecord) {
@@ -218,6 +232,8 @@ export async function verifyResetToken(token: string): Promise<{
     }
 
     // Get user email
+    // A users-by-id read: no credential to name, and passing none is what clears
+    // app.token_credential for this statement.
     const [user] = await withAuthLookupContext(async (tx) =>
       await tx
       .select({ email: users.email })
@@ -281,7 +297,7 @@ export async function resetPassword(
     // authenticated user). Once the row is claimed we know userId and switch
     // to app.current_user for the users/sessions writes.
     const resetUserId = await db.transaction(async (tx) => {
-      await setTokenIssueContext(tx);
+      await setTokenIssueContext(tx, { credential: tokenHash });
       const [claimed] = await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })
@@ -294,6 +310,12 @@ export async function resetPassword(
 
       if (!claimed) return null;
 
+      // The credential has been spent; from here the writes are "this user's
+      // password, this user's sessions, this user's *other* tokens". Re-asserting
+      // the issue context with retireUser is what authorises the last of those —
+      // #3218's claim arm is keyed on the credential, which by now is the row we
+      // just tombstoned, so it cannot cover the by-user sweep.
+      await setTokenIssueContext(tx, { retireUser: claimed.userId });
       await setUserContext(claimed.userId, tx);
 
       await tx

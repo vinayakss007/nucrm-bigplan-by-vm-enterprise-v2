@@ -77,30 +77,36 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const [authCode] = await withAuthLookupContext(async (tx) =>
-        await tx
-          .select({
-            // 5 of `oauth_codes`' 9 columns (measured via getTableColumns): id is the
-            // UPDATE's target and usedAt the replay gate; userId + scope are the only
-            // values that reach the inserted token; redirectUri is only compared. `code`
-            // and clientId stay WHERE predicates.
-            id: oauthCodes.id,
-            userId: oauthCodes.userId,
-            redirectUri: oauthCodes.redirectUri,
-            scope: oauthCodes.scope,
-            usedAt: oauthCodes.usedAt,
-          })
-          .from(oauthCodes)
-          // authorize writes client_id onto the code it mints, so the binding is
-          // already recorded — this just stops another authenticated client from
-          // redeeming it (RFC 6749 §4.1.3). Without it a secret for client B turns a
-          // code issued to client A into a token carrying A's user and scope.
-          .where(and(
-            eq(oauthCodes.code, code),
-            eq(oauthCodes.clientId, client.id),
-            gt(oauthCodes.expiresAt, new Date()),
-          ))
-          .limit(1)
+      // #3218: the code is named in the lookup context, not just in the WHERE.
+      // 0134's oauth_codes SELECT arm was gated on the boolean app.auth_lookup
+      // alone, so this read saw every live code in the table and the WHERE below
+      // was the only thing between that and enumerating other clients' codes.
+      const [authCode] = await withAuthLookupContext(
+        async (tx) =>
+          await tx
+            .select({
+              // 5 of `oauth_codes`' 9 columns (measured via getTableColumns): id is the
+              // UPDATE's target and usedAt the replay gate; userId + scope are the only
+              // values that reach the inserted token; redirectUri is only compared. `code`
+              // and clientId stay WHERE predicates.
+              id: oauthCodes.id,
+              userId: oauthCodes.userId,
+              redirectUri: oauthCodes.redirectUri,
+              scope: oauthCodes.scope,
+              usedAt: oauthCodes.usedAt,
+            })
+            .from(oauthCodes)
+            // authorize writes client_id onto the code it mints, so the binding is
+            // already recorded — this just stops another authenticated client from
+            // redeeming it (RFC 6749 §4.1.3). Without it a secret for client B turns a
+            // code issued to client A into a token carrying A's user and scope.
+            .where(and(
+              eq(oauthCodes.code, code),
+              eq(oauthCodes.clientId, client.id),
+              gt(oauthCodes.expiresAt, new Date()),
+            ))
+            .limit(1),
+        code,
       );
 
       if (!authCode || authCode.usedAt) {
@@ -125,7 +131,7 @@ export async function POST(request: NextRequest) {
       // COMMITTED the second writer blocks on the row lock, then re-evaluates
       // `used_at IS NULL` against the committed row and claims zero rows.
       const redemption = await db.transaction(async (tx) => {
-        await setTokenIssueContext(tx);
+        await setTokenIssueContext(tx, { credential: code });
         const [claimed] = await tx
           .update(oauthCodes)
           .set({ usedAt: new Date() })

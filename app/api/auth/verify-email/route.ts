@@ -31,21 +31,27 @@ export async function POST(request: NextRequest) {
     // PP-026: redeeming a verification link is a pre-auth read — the holder has
   // proven nothing RLS recognises yet, so this needs the narrow auth_lookup
   // privilege (email_verifications_auth_select + users_auth_lookup in 0088).
-  const result = await withAuthLookupContext(async (tx) =>
-      await tx.select({
-      id: emailVerifications.id,
-      userId: emailVerifications.userId,
-      email: users.email,
-    })
-    .from(emailVerifications)
-    .innerJoin(users, eq(users.id, emailVerifications.userId))
-    .where(and(
-      eq(emailVerifications.tokenHash, hash),
-      isNull(emailVerifications.usedAt),
-      gt(emailVerifications.expiresAt, new Date())
-    ))
-    .limit(1)
-    );
+  // The link's hash is passed alongside it: from 0135 the credential-table SELECT
+  // arm admits the row whose token_hash equals app.token_credential and nothing
+  // else, so a lookup that names no credential reads nothing.
+  const result = await withAuthLookupContext(
+    async (tx) =>
+      await tx
+        .select({
+          id: emailVerifications.id,
+          userId: emailVerifications.userId,
+          email: users.email,
+        })
+        .from(emailVerifications)
+        .innerJoin(users, eq(users.id, emailVerifications.userId))
+        .where(and(
+          eq(emailVerifications.tokenHash, hash),
+          isNull(emailVerifications.usedAt),
+          gt(emailVerifications.expiresAt, new Date())
+        ))
+        .limit(1),
+    hash,
+  );
 
     const row = result[0];
     if (!row) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
@@ -53,8 +59,12 @@ export async function POST(request: NextRequest) {
     // The claim is authorised by the token itself, so it runs with the
     // token_issue privilege (UPDATE on email_verifications) plus the user
     // context (UPDATE on users). Both are SET LOCAL inside one transaction.
+    // It names the same hash even though the WHERE is on `id`: the 0135 claim
+    // arms — the UPDATE and the read arm that makes .returning() work at all —
+    // are keyed on the credential, and measured against 0134 an unkeyed claim
+    // matched zero rows.
     const claimed = await db.transaction(async (tx) => {
-      await setTokenIssueContext(tx);
+      await setTokenIssueContext(tx, { credential: hash });
       const [win] = await tx
         .update(emailVerifications)
         .set({ usedAt: new Date() })

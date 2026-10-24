@@ -50,10 +50,11 @@ export async function POST(request: NextRequest) {
     // Pre-auth by construction: the holder of a reset token has proven nothing
     // that RLS recognises, so the claim runs under app.token_issue (the narrow
     // privilege that admits UPDATE/INSERT on password_resets without an
-    // authenticated user). Once the row is claimed we know userId and switch to
-    // app.current_user for the users/sessions writes.
+    // authenticated user) and names the credential it is claiming, which is what
+    // keeps the 0135 arms to exactly this row. Once the row is claimed we know
+    // userId and switch to app.current_user for the users/sessions writes.
     const claimed = await db.transaction(async (tx) => {
-      await setTokenIssueContext(tx);
+      await setTokenIssueContext(tx, { credential: tokenHash });
       const [reset] = await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })
