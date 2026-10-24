@@ -192,6 +192,30 @@ describe('what the guard must NOT report', () => {
     expect(maskComments(src).slice(0, src.indexOf('\n')).trim()).toBe('');
   });
 
+  it('does not let a regex literal’s apostrophe unmask the comments after it (#3163)', () => {
+    // `escapeHtmlEntities` ends in `.replace(/'/g, '&#x27;')`. Read as a string
+    // opener, that quote ran on to the next one in the file — two lines of
+    // prose further down in app/api/leads/public/route.ts — so everything
+    // between them stayed visible, and the sentence "a non-uuid reached
+    // `eq(forms.id, …)`" was reported as a bare-pool read of a policyed table.
+    // A false positive like that is only survivable by adding a baseline entry,
+    // which is how a deferral list grows.
+    const src = [
+      "const esc = (s) => s.replace(/'/g, '&#x27;');",
+      '// Shape: a non-uuid reached eq(invoices.id, ...) and Postgres answered 22P02.',
+      'await withTenantContext(t, u, async (tx) => tx.select({ id: invoices.id }).from(invoices));',
+    ].join('\n');
+    expect(maskComments(src).split('\n')[1]!.trim()).toBe('');
+    expect(analyze('app/api/leads/public/route.ts', src).violations).toEqual([]);
+  });
+
+  it('still reads a regex body as code, not as a comment', () => {
+    // Skipping a literal is not blanking it: `db` in a pattern is an odd thing
+    // to write, but a guard that erases regexes could erase a table name in one.
+    const src = "const re = /from\\(invoices\\)/; await db.select({ id: invoices.id }).from(invoices);";
+    expect(analyze('app/api/public/z/route.ts', src).violations.map((v) => v.table)).toEqual(['invoices']);
+  });
+
   it('ignores a column map that is not a query', () => {
     const src = 'const TICKET_PROJECTION = {\n  id: supportTickets.id,\n  status: supportTickets.status,\n};\n';
     expect(analyze('app/api/public/z/route.ts', src).violations).toEqual([]);
@@ -279,12 +303,33 @@ describe('the walk is the portal surface, and it fails closed', () => {
     expect(res.unused).toEqual([]);
   }, 60_000);
 
-  it('walks 17 files because the surface is 14 public routes plus the three portal-auth files', async () => {
-    const res = await run(['app/api/public', 'lib/portal-auth.ts', 'lib/portal-session.ts', 'app/api/tenant/portal/login'], ROOT, { tables: repoTables });
-    expect(res.files).toBe(17);
-    const again = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
-    expect(again.violations).toEqual([]);
+  it('walks 20 files: 14 public routes, the three portal-auth files, the three capture routes (#3163)', async () => {
+    const res = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
+    expect(res.files).toBe(20);
+    // The floor IS the surface now. Left at 17 it would still say OK the day a
+    // capture directory stops existing — which is how #2446's sweep never looked
+    // at this path in the first place.
+    expect(res.files).toBe(MIN_SCANNED_FILES);
+    expect(res.reads).toBeGreaterThanOrEqual(MIN_TABLE_READS);
+    expect(res.violations).toEqual([]);
+    expect(res.unused).toEqual([]);
   }, 60_000);
+
+  it('sees a `forms` read on every capture route it was widened for', () => {
+    // Widening a target list proves nothing on its own: three files that walk
+    // to zero reads would pass exactly as quietly as they used to. So each
+    // capture route is checked twice — the guard FINDS the policyed read, and
+    // the guard then has no complaint about it.
+    for (const rel of [
+      'app/api/forms/submit/route.ts',
+      'app/api/tenant/forms/public/[id]/route.ts',
+      'app/api/leads/public/route.ts',
+    ]) {
+      const raw = readFileSync(join(ROOT, rel), 'utf8');
+      expect(findReads(maskComments(raw), repoTables).map((r) => r.js), rel).toContain('forms');
+      expect(analyzeSource(rel, raw, repoTables, [], ROOT).violations, rel).toEqual([]);
+    }
+  });
 
   it('throws rather than blessing everything when the schema or the walk goes missing', async () => {
     await expect(run([], ROOT, { tables: new Map(), baseline: [] })).rejects.toThrow(/derived only 0/);

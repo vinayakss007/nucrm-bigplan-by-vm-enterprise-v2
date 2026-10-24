@@ -35,11 +35,32 @@ function makeInsertChain() {
   return () => ({ values });
 }
 
+// #3163: the route now reaches `forms` through a lookup transaction and runs its
+// capture writes inside a tenant-context transaction, so every statement it
+// issues goes through the TRANSACTION (a real drizzle tx exposes select/insert/
+// update/query/execute — the double has to, or it stops being a double of the
+// thing under test). `txCalls` records the operations, so "400s without writing"
+// is still pinned: the lookup select lands as 'lookup', and nothing may be 'insert'.
+function makeSelectChain(label: string) {
+  return () => {
+    txCalls.push(label);
+    const b: Record<string, unknown> = {};
+    for (const m of ['from', 'innerJoin', 'where']) b[m] = () => b;
+    b['limit'] = () => Promise.resolve([{ ...formRow }]);
+    return b;
+  };
+}
+
 const txMock = {
+  execute: async () => { txCalls.push('set_config'); return { rows: [] }; },
+  select: makeSelectChain('lookup'),
   query: {
     contacts: { findFirst: async () => null },
   },
-  insert: makeInsertChain(),
+  insert: () => {
+    txCalls.push('insert');
+    return makeInsertChain()();
+  },
   update: () => ({
     set: () => ({
       where: () => {
@@ -52,12 +73,7 @@ const txMock = {
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-    select: () => {
-      const b: Record<string, unknown> = {};
-      for (const m of ['from', 'innerJoin', 'where']) b[m] = () => b;
-      b['limit'] = () => Promise.resolve([{ ...formRow }]);
-      return b;
-    },
+    select: makeSelectChain('bare-select'),
     transaction: async (fn: (tx: typeof txMock) => Promise<unknown>) => {
       txCalls.push('transaction');
       return fn(txMock);
@@ -106,7 +122,9 @@ describe('POST /api/forms/submit — required enforcement (#2287)', () => {
     const res = await submit({});
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Missing required fields', fields: ['Email'] });
-    expect(txCalls).not.toContain('transaction');
+    // #3163: reading the form is its own transaction now, so "no transaction"
+    // was never the point of this assertion — "nothing written" is.
+    expect(txCalls).not.toContain('insert');
   });
 
   it('(a2) 400s the same id-shaped form when the required value is whitespace', async () => {
@@ -139,6 +157,7 @@ describe('POST /api/forms/submit — required enforcement (#2287)', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ok).toBe(true);
     expect(txCalls).toContain('transaction');
+    expect(txCalls).toContain('insert');
   });
 
   it('(c2) accepts a legacy key-shaped submission the same way', async () => {
