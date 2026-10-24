@@ -1,13 +1,22 @@
 # ── Multi-stage build for speed & size ────────────────────
+#
+# The base is pinned to a full version, not a floating major. `node:26-alpine`
+# tracks whatever upstream published last, so a build is not reproducible and
+# nothing in the repo records which runtime production actually runs. 26.12.1
+# (2026-10-21) is the security release that closes CVE-2026-111497 (Brotli OOB
+# write) and the TLS hostname-check bypasses; `26-alpine` only reached it by
+# drifting. `.github/dependabot.yml` enables the `docker` ecosystem, so the pin
+# is refreshed by a PR rather than by memory — bump it on every Node security
+# release. See docs/runbooks/dependency-upgrades.md.
 
 # Stage 1: Dependencies
-FROM node:26-alpine AS deps
+FROM node:26.12.1-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --no-audit --no-fund
 
 # Stage 2: Builder
-FROM node:26-alpine AS builder
+FROM node:26.12.1-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -60,7 +69,7 @@ RUN --mount=type=secret,id=jwt_secret \
     echo "$RELEASE" > /app/.next/BUILD_ID
 
 # Stage 3: Runner (minimal)
-FROM node:26-alpine AS runner
+FROM node:26.12.1-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
