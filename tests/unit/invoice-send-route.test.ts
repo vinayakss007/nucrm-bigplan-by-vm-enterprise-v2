@@ -22,6 +22,10 @@ const m = vi.hoisted(() => {
     invoice: null as Record<string, unknown> | null,
     contact: null as Record<string, unknown> | null,
     updateSets: [] as Record<string, unknown>[],
+    // #3168: the guarded draft→sent write is read back with .returning();
+    // movedRows decides whether the transition landed (draft in the WHERE).
+    movedRows: [] as Array<{ id: string }>,
+    updateWheres: [] as unknown[],
     insertedActivities: [] as unknown[],
     txCalls: 0,
   };
@@ -30,7 +34,14 @@ const m = vi.hoisted(() => {
     update: vi.fn(() => ({
       set: (payload: Record<string, unknown>) => {
         state.updateSets.push(payload);
-        return { where: vi.fn(async () => undefined) };
+        return {
+          where: vi.fn((w: unknown) => ({
+            returning: vi.fn(async () => {
+              state.updateWheres.push(w);
+              return state.movedRows;
+            }),
+          })),
+        };
       },
     })),
     insert: vi.fn(() => ({
@@ -114,7 +125,7 @@ async function call(body?: Record<string, unknown>) {
   });
 }
 
-const invoiceRow = () => ({
+const invoiceRow = (overrides: Record<string, unknown> = {}) => ({
   id: INVOICE_ID,
   tenantId: TENANT,
   contactId: 'c-1',
@@ -123,6 +134,7 @@ const invoiceRow = () => ({
   totalAmount: '250.00',
   status: 'draft',
   dueDate: null,
+  ...overrides,
 });
 
 beforeEach(() => {
@@ -130,6 +142,8 @@ beforeEach(() => {
   m.state.invoice = invoiceRow();
   m.state.contact = { firstName: 'Buyer', lastName: 'One', email: 'buyer@example.com' };
   m.state.updateSets = [];
+  m.state.movedRows = [{ id: INVOICE_ID }]; // draft→sent lands by default
+  m.state.updateWheres = [];
   m.state.insertedActivities = [];
   m.state.txCalls = 0;
 });
@@ -197,5 +211,62 @@ describe('POST /api/tenant/invoices/[id]/send — honest send status (#2227)', (
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.status).toBe('draft');
+  });
+});
+
+/**
+ * #3168 — `status` is payment-derived (recalculateInvoicePayments owns it, and
+ * lib/billing/payments.ts deliberately never touches cancelled/void). The send
+ * route force-wrote 'sent' from ANY state, so re-emailing a paid invoice
+ * demoted it against its own ledger and a void one reopened. The write is now
+ * a guarded draft→sent transition scoped by tenant, read back via
+ * .returning(); when zero rows come back the invoice keeps its real status.
+ */
+describe('POST /api/tenant/invoices/[id]/send — ledger-owned status is not demoted (#3168)', () => {
+  it('resending a paid invoice answers with its actual status, not sent', async () => {
+    m.state.invoice = invoiceRow({ status: 'paid' });
+    // the draft-guarded WHERE matches zero rows on a paid invoice
+    m.state.movedRows = [];
+    vi.mocked(sendEmail).mockResolvedValue({ success: true, provider: 'smtp' });
+
+    const res = await call();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.status).toBe('paid');
+
+    // the email genuinely went out — the timeline says so, even though the
+    // status write correctly landed on zero rows
+    expect(m.state.insertedActivities).toHaveLength(1);
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'invoice_sent' }));
+  });
+
+  it('a void invoice is never reopened to sent', async () => {
+    m.state.invoice = invoiceRow({ status: 'void' });
+    m.state.movedRows = [];
+    vi.mocked(sendEmail).mockResolvedValue({ success: true, provider: 'smtp' });
+
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect((await res.json()).status).toBe('void');
+  });
+
+  it('the transition write is scoped by tenant AND requires the draft source status', async () => {
+    vi.mocked(sendEmail).mockResolvedValue({ success: true, provider: 'smtp' });
+
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect((await res.json()).status).toBe('sent');
+    expect(m.state.updateWheres).toHaveLength(1);
+    // mocked and()/eq() shapes: { and: [ { eq: [col, val] }, … ] }
+    const predicate = m.state.updateWheres[0] as { and: Array<{ eq: [string, unknown] }> };
+    const pairs = predicate.and.map((e) => e.eq);
+    expect(pairs).toEqual(
+      expect.arrayContaining([
+        ['invoices.id', INVOICE_ID],
+        ['invoices.tenant_id', TENANT],
+        ['invoices.status', 'draft'],
+      ]),
+    );
   });
 });

@@ -118,8 +118,26 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // If this write fails the handler 500s via the outer catch: the customer
     // has the email, and a retry may duplicate it — the honest-failure
     // direction we prefer (#2227).
+    //
+    // #3168: only a DRAFT invoice transitions to 'sent' here. `status` is a
+    // payment-derived field owned by recalculateInvoicePayments
+    // (lib/billing/payments.ts:30 — 'sent' is payment-driven; cancelled/void
+    // are deliberately never touched), so re-emailing a paid/overdue/
+    // partially_paid invoice must not demote it against its own ledger, and
+    // a void/cancelled one must not be reopened. The source status and the
+    // tenant both sit in the WHERE — tenancy is re-checked at write time
+    // instead of resting on the pre-read separated from here by an SMTP
+    // round-trip — and the write is read back so the response reports the
+    // invoice's actual status, not a hard-coded 'sent'. The activity row is
+    // written either way: the email genuinely went out.
+    let statusAfterSend = invoice.status;
     await db.transaction(async (tx) => {
-      await tx.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
+      const [moved] = await tx
+        .update(invoices)
+        .set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(invoices.id, id), eq(invoices.tenantId, ctx.tenantId), eq(invoices.status, 'draft')))
+        .returning({ id: invoices.id });
+      if (moved) statusAfterSend = 'sent';
 
       if (invoice.contactId) {
         await tx.insert(activities).values({
@@ -149,7 +167,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       newData: { to_email: toEmail, email_result: emailResult },
     });
 
-    return NextResponse.json({ ok: true, status: 'sent', to_email: toEmail, email: emailResult });
+    return NextResponse.json({ ok: true, status: statusAfterSend, to_email: toEmail, email: emailResult });
   } catch (err) {
     await logError({ error: err, context: 'tenant/invoices/[id]/send POST', requestMethod: 'POST' });
     return apiError(err);
