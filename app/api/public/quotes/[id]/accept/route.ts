@@ -11,7 +11,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { allowedFromStatus } from '@/lib/offers';
+import { allowedFromStatus, canTransition } from '@/lib/offers';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the
@@ -75,8 +75,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       if (!quote) return { kind: 'no_quote' };
 
-      const validStatuses = ['sent', 'viewed'];
-      if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
+      // #3177: the vet reads the same OFFER_TRANSITIONS table the guarded write
+      // claims below, so the JS 409 and the SQL from-set are one rule, not two.
+      if (!canTransition(quote.status, 'accepted')) return { kind: 'bad_state' };
 
       const now = new Date();
       // #3175 (#3159's doctrine, portal siblings): the status vet above reads a

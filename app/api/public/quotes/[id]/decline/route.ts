@@ -12,7 +12,7 @@ import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { allowedFromStatus } from '@/lib/offers';
+import { allowedFromStatus, canTransition } from '@/lib/offers';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the RLS
@@ -76,8 +76,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       if (!quote) return { kind: 'no_quote' };
 
-      const validStatuses = ['sent', 'viewed'];
-      if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
+      // #3177: the vet reads the same OFFER_TRANSITIONS table the guarded write
+      // claims below, so the JS 409 and the SQL from-set are one rule, not two.
+      if (!canTransition(quote.status, 'declined')) return { kind: 'bad_state' };
 
       // #3175: the JS check above vets a row read without a lock. Between that
       // read and this write a concurrent accept (or the tenant-side edit) can

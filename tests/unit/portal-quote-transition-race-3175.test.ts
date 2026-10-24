@@ -22,7 +22,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { getTableName } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TENANT = '22222222-2222-4222-8222-222222222222';
 const QUOTE = '33333333-3333-4333-8333-333333333333';
 const CONTACT = '44444444-4444-4444-8444-444444444444';
@@ -261,5 +265,32 @@ describe('decline claims its transition in the WHERE (#3175)', () => {
     const res = await call('decline', {});
     expect(res.status, await res.text()).toBe(404);
     expect(state.updates).toEqual([]);
+  });
+});
+
+describe('one rule, not two hand-copies (#3177)', () => {
+  it('neither route carries a local copy of the from-set', () => {
+    for (const route of ['accept', 'decline'] as const) {
+      const src = readFileSync(join(REPO, 'app/api/public/quotes/[id]', route, 'route.ts'), 'utf8');
+      expect(src, `${route} still hand-copies the status set`).not.toMatch(/\[\s*'sent',\s*'viewed'\s*\]/);
+      expect(src, `${route} does not vet through the table`).toContain('canTransition');
+      expect(src, `${route} does not claim through the table`).toContain('allowedFromStatus');
+    }
+  });
+
+  it('the SQL claim is exactly the table from-set, not an accident of the fixture', async () => {
+    const { allowedFromStatus } = await import('@/lib/offers');
+    state.quoteRow = [quoteRow()];
+    state.updateReturns = [[won]];
+    await call('accept');
+    // WHERE params are [id, tenantId, ...from-set] — the same array the JS vet
+    // (`canTransition`) consults, so the two halves cannot drift.
+    expect(state.updates[0].params.slice(2)).toEqual([...allowedFromStatus('accepted')]);
+
+    state.updates = [];
+    state.quoteRow = [quoteRow()];
+    state.updateReturns = [[won]];
+    await call('decline', {});
+    expect(state.updates[0].params.slice(2)).toEqual([...allowedFromStatus('declined')]);
   });
 });
