@@ -15,11 +15,14 @@
  * suite stayed green: the tests mock `db`, and the one place that did not
  * (`contacts`, whose policy raises) had been pinned as an expected failure.
  *
- * Rule: inside the portal's request surface — `app/api/public/**` plus the
- * three portal-auth files — a table that carries a tenant policy may only be
- * reached through a handle that a context-establishing call bound
- * (`withTenantContext`, `withPortalLookupContext`, …). The bare pool `db` is
- * never such a handle, inside a callback or outside it: `lib/db/pool.ts` hands
+ * Rule: inside the portal's request surface, a table that carries a tenant policy
+ * may only be reached through a handle that a context-establishing call bound
+ * (`withTenantContext`, `withPortalLookupContext`, …). The surface is DERIVED from
+ * `proxy.ts`'s own `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (#3186) and unioned with the
+ * routes and library files only a name can reach — it used to be a hand-written
+ * directory list, and #3163's capture path and #3182's invitation routes were both
+ * invisible to it for exactly that reason. The bare pool `db` is never such a
+ * handle, inside a callback or outside it: `lib/db/pool.ts` hands
  * out a different connection per query, so a `SET LOCAL` made three statements
  * ago is not on the connection this SELECT is about to run on.
  *
@@ -50,9 +53,12 @@
  * Usage: npm run guard:portal-rls-context [--json] [file|dir…]
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, join, relative, sep } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { getTableColumns, getTableName } from 'drizzle-orm';
+// The anonymous surface is one fact with one source of truth. #3186: this guard
+// used its own directory list while its sibling had read `proxy.ts` since #2232.
+import { publicApiPaths, resolveScope } from './check-public-row-projection.mts';
 
 // ── the policyed set, derived ────────────────────────────────────────────────
 
@@ -61,15 +67,20 @@ export type TenantTable = { js: string; sql: string };
 /** A derived set this small means the schema stopped loading, not the product. */
 export const MIN_TENANT_KEYED_TABLES = 100;
 /**
- * `find app/api/public -name route.ts` = 14, plus the three portal-auth files,
- * plus the three capture files #3163 added to `DEFAULT_TARGETS`, plus the two
- * team-invitation routes #3182 added. Pinned at the current surface on purpose: a
- * floor left at 17 would say OK the day a capture directory stops existing, which
- * is how #2446's sweep missed this path at all.
+ * The floor is the derived anonymous surface measured on the day #3186 landed:
+ * every `app/<path>` that `proxy.ts` advertises, plus the two portal-auth
+ * libraries and the hand-named routes below. Pinned at the current surface on
+ * purpose: a floor left at 22 would say OK the day the derivation quietly stops
+ * matching `PUBLIC_PATHS` and the walk falls back to the hand list, which is the
+ * exact failure #3186 was filed for. It moves when the surface moves, and only
+ * with the walk that produced the new number.
  */
-export const MIN_SCANNED_FILES = 22;
-/** If the walk finds no tenant-keyed read at all, the patterns stopped working. */
-export const MIN_TABLE_READS = 20;
+export const MIN_SCANNED_FILES = 103;
+/**
+ * Tenant-keyed statements the same walk examines (measured 230). Below this the
+ * read patterns stopped working, or the scope shrank to the hand list.
+ */
+export const MIN_TABLE_READS = 200;
 
 /**
  * Every call that binds a handle with RLS GUCs set: six from `lib/db/rls.ts`,
@@ -586,26 +597,20 @@ function tsFiles(path: string): string[] {
 }
 
 /**
- * The anonymous request surface: everything that answers a caller with no
- * session. `app/api/public/**` + the portal-auth files are #2446's; the next
- * three are #3163's, and they were the gap — the capture path (`/api/forms/submit`,
- * `/api/leads/public`) and the public form renderer (`/api/tenant/forms/public`)
- * read and wrote tenant-policyed tables on the pool, which is the same silent
- * zero-row failure this guard was written for, on routes this guard never walked.
+ * The hand-named half of the surface: two library files and the routes the
+ * widening PRs proved one at a time.
  *
- * The last two are #3182's team-invitation routes. `app/api/auth/*` as a whole is
- * deliberately NOT here: measured with the same walk, the other 13 dirs under it
- * carry 100+ tenant-keyed reads that have never been examined — most of them
- * legitimately different (login resolves a credential through `app.auth_lookup`,
- * `sso` and `oauth` hand off to identity providers). Naming the whole tree would
- * have buried #3182's own two files under a baseline nobody could argue with, so
- * the fix names the routes it actually made work and leaves the rest as the
- * follow-up it describes.
+ * `lib/portal-auth.ts` and `lib/portal-session.ts` are libraries, not routes, and
+ * no `PUBLIC_PATHS` entry names them — so the derived list can only ever be a
+ * UNION with this one (#3186's first constraint). The rest are the capture paths
+ * #3163 found outside the guard and the two team-invitation routes #3182 fixed;
+ * they are also in `proxy.ts`, and saying so twice costs nothing, while dropping
+ * them would silently narrow coverage if an edge entry is ever rephrased.
  */
-export const DEFAULT_TARGETS = [
-  'app/api/public',
+export const PINNED_TARGETS = [
   'lib/portal-auth.ts',
   'lib/portal-session.ts',
+  'app/api/public',
   'app/api/tenant/portal/login',
   'app/api/forms/submit',
   'app/api/tenant/forms/public',
@@ -614,11 +619,215 @@ export const DEFAULT_TARGETS = [
   'app/api/auth/invite-details',
 ];
 
+/**
+ * Everything `proxy.ts` advertises as anonymous, as `app/<path>` directories.
+ *
+ * #3186: the guard used to answer "what is the portal surface?" from a list
+ * someone had to remember to edit, and the history says nobody does — #3163's
+ * capture path and #3182's invitation routes were both invisible to it, and both
+ * were fixed by *adding a line*. Its sibling guard `check-public-row-projection`
+ * has read the edge's own `PUBLIC_PATHS`/`PUBLIC_PREFIXES` since #2232; #3179
+ * just landed the content-derived version of the same fix for `apply-rls-ci`.
+ * Measured with this function at `7ff9dc24f`: 53 public dirs, 11 walked.
+ */
+export function publicScopeDirs(root: string): string[] {
+  const proxyFile = join(root, 'proxy.ts');
+  if (!existsSync(proxyFile)) {
+    throw new Error(`${proxyFile} is missing — the anonymous surface cannot be derived`);
+  }
+  const paths = publicApiPaths(readFileSync(proxyFile, 'utf8'));
+  if (paths.length === 0) {
+    throw new Error(
+      'no /api/ entry was matched in PUBLIC_PATHS / PUBLIC_PREFIXES — the edge lists were not '
+      + 'parsed, so this scope proves nothing',
+    );
+  }
+  const { dirs } = resolveScope(root, paths);
+  if (dirs.length === 0) {
+    throw new Error(`none of the ${paths.length} public /api/ paths resolves to app/<path> — nothing audited`);
+  }
+  return dirs;
+}
+
+/** The scope the guard runs with: the derived surface, plus what only a name can reach. */
+export function buildTargets(root: string): string[] {
+  return [...new Set([...publicScopeDirs(root), ...PINNED_TARGETS])].sort();
+}
+
+/**
+ * Findings the walk reports on a caller this guard cannot judge yet, deferred by
+ * directory and RATCHETTED by count.
+ *
+ * Widening the scope to the whole anonymous surface does not mean every finding
+ * is the #2446 bug — most of the 114 measured here are a different question:
+ * `app/api/cron/*` iterates tenants deliberately (#2539's lock work, #2540's
+ * backup role), `app/api/webhooks/*` authenticates by signing secret and must
+ * resolve a tenant from a provider payload, and `auth/oauth`, `auth/sso` and
+ * `unsubscribe` all redeem a credential before a tenant is known — which is
+ * #3102's open decision about the privilege shape for pre-auth reads, not a
+ * missing `withTenantContext()` call. Claiming them as #2446 breaks would be a
+ * false alarm; pretending the guard cannot see them would re-open the hole
+ * #3186 is about.
+ *
+ * So a deferral is a *counted* exemption: `maxFindings` is the measured size of
+ * the class today, and the guard fails on a deferral that grew (a new unbound
+ * read joined a deferred directory) or one that went to zero (the class was
+ * fixed, and the directory must come back into scope). Per-file `verifyEntry`
+ * stays the only way to excuse a single statement; these excuse no statement in
+ * a route that has since been fixed — the count has to stay honest.
+ *
+ * The third bucket — reads by a caller whose identity the route already verified,
+ * which is the #2446 bug itself — is NOT deferred here. Widening the scope found
+ * two (#3196 `/api/flags`, #3197 `/api/track/event`) and both are fixed at the
+ * call site in this file's own PR, with the guard as the test that keeps them
+ * fixed.
+ */
+export type ScopeDeferral = {
+  dir: string;
+  deferredTo: string;
+  why: string;
+  maxFindings: number;
+};
+
+export const SCOPE_DEFERRALS: ScopeDeferral[] = [
+  {
+    dir: 'app/api/cron',
+    deferredTo: '#2539',
+    why: 'Scheduled jobs authenticate by cron secret and then iterate every tenant deliberately; '
+      + 'the per-tenant context loop is the work #2539 tracks, and these reads are its, not a route '
+      + 'that forgot withTenantContext().',
+    maxFindings: 59,
+  },
+  {
+    dir: 'app/api/webhooks',
+    deferredTo: '#3102',
+    why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
+      + 'which is the pre-auth credential-privilege decision #3102 still holds open; no tenant GUC '
+      + 'exists to set before that resolution happens.',
+    maxFindings: 44,
+  },
+  {
+    dir: 'app/api/auth/oauth',
+    deferredTo: '#3102',
+    why: 'Token issuance and revocation read oauthClients from the pool before any session exists, '
+      + 'keyed on the client credential the caller presented — the same privilege arm #3102 has not '
+      + 'specified yet, so a context helper here would have nothing to pin.',
+    maxFindings: 2,
+  },
+  {
+    dir: 'app/api/auth/sso',
+    deferredTo: '#3102',
+    why: 'The IdP handoff resolves ssoProviders by issuer/state before a tenant or user is known; '
+      + 'that read belongs to #3102\'s credential-lookup decision, not to a missing transaction '
+      + 'context, and inventing a GUC for it is not this guard\'s call.',
+    maxFindings: 2,
+  },
+  {
+    dir: 'app/api/tenant/plugins/webhook',
+    deferredTo: '#3102',
+    why: 'A plugin callback URL that `proxy.ts` keeps anonymous still has to look up which tenant a '
+      + 'plugin installation belongs to; that is #3102\'s pre-auth privilege shape, and the route is '
+      + 'under app/api/tenant only by naming.',
+    maxFindings: 1,
+  },
+  {
+    dir: 'app/api/unsubscribe',
+    deferredTo: '#3102',
+    why: 'RFC 8058 one-click unsubscribe arrives with an HMAC token and no session, and the write that '
+      + 'would honour it is on a FORCE-RLS table with no tenant to set first — #3102 exactly: a '
+      + 'credential that grants a row-level privilege does not exist in the shipped policy set.',
+    maxFindings: 3,
+  },
+  {
+    dir: 'app/api/metrics',
+    deferredTo: '#3195',
+    why: 'The Prometheus scrape has no user and no tenant to pin: its caller is an operator, and the '
+      + 'numbers are deliberately cross-tenant fleet totals, so the privilege it needs is a narrow '
+      + 'read-only aggregate arm — the shape #3195 puts to the same decision #3102 holds open, not a '
+      + 'withTenantContext() the route could legitimately call.',
+    maxFindings: 1,
+  },
+];
+
+/** Why a deferral is not admissible; returns the reason, or null. */
+export function verifyDeferral(entry: ScopeDeferral): string | null {
+  if (!entry.dir || entry.dir.includes('..') || entry.dir.startsWith('/')) {
+    return `dir must be a repository-relative directory, not "${entry.dir}"`;
+  }
+  if (!/^#\d+$/.test(entry.deferredTo ?? '')) {
+    return `${entry.dir}: deferredTo must be the issue the work is tracked in, not "${entry.deferredTo}"`;
+  }
+  if ((entry.why ?? '').trim().length < 40) {
+    return `${entry.dir}: a deferral needs a reason of at least 40 characters — one a reviewer can disagree with`;
+  }
+  if (!Number.isInteger(entry.maxFindings) || entry.maxFindings < 1) {
+    return `${entry.dir}: maxFindings must be a positive count — a deferral pinned at 0 excuses nothing`;
+  }
+  return null;
+}
+
+export type Deferred = { dir: string; deferredTo: string; count: number; maxFindings: number };
+
+/**
+ * Split findings into what the guard reports and what a counted deferral covers,
+ * and fail closed on both ways a deferral can rot.
+ */
+export function applyDeferrals(
+  violations: Violation[],
+  deferrals: ScopeDeferral[] = SCOPE_DEFERRALS,
+): { kept: Violation[]; deferred: Deferred[] } {
+  const kept: Violation[] = [];
+  const deferred: Deferred[] = [];
+  // Only an admissible entry covers a directory: a deferral that cannot be
+  // validated reports itself and leaves everything under it on the record.
+  const covered: string[] = [];
+  for (const entry of deferrals) {
+    const invalid = verifyDeferral(entry);
+    if (invalid) {
+      kept.push({ file: 'scripts/check-portal-rls-context.mts', table: entry.dir, line: 1, problem: `deferral is not admissible — ${invalid}` });
+      continue;
+    }
+    covered.push(entry.dir);
+    const hit = violations.filter((v) => v.file === entry.dir || v.file.startsWith(`${entry.dir}/`));
+    if (hit.length === 0) {
+      kept.push({
+        file: entry.dir, table: '', line: 1,
+        problem: `the deferral for ${entry.dir} (${entry.deferredTo}) excuses nothing — no unbound read `
+          + 'is reported there, so the directory is back in scope and the entry must go',
+      });
+      continue;
+    }
+    if (hit.length > entry.maxFindings) {
+      kept.push({
+        file: entry.dir, table: hit[0]!.table, line: hit[0]!.line,
+        problem: `the deferral for ${entry.dir} is pinned at ${entry.maxFindings} contextless read(s) `
+          + `(${entry.deferredTo}) and ${hit.length} were found — a new unbound read joined a deferred `
+          + 'surface: fix it, or widen the pin deliberately with the count that was measured',
+      });
+      continue;
+    }
+    deferred.push({ dir: entry.dir, deferredTo: entry.deferredTo, count: hit.length, maxFindings: entry.maxFindings });
+  }
+  for (const v of violations) {
+    if (!covered.some((dir) => v.file === dir || v.file.startsWith(`${dir}/`))) kept.push(v);
+  }
+  return { kept, deferred };
+}
+
+export const DEFAULT_TARGETS = buildTargets(join(dirname(fileURLToPath(import.meta.url)), '..'));
+
 export async function run(
   targets: string[],
   root = '.',
-  opts: { tables?: Map<string, TenantTable>; baseline?: BaselineEntry[] } = {},
-): Promise<{ violations: Violation[]; files: number; reads: number; unused: BaselineEntry[]; tableCount: number }> {
+  opts: { tables?: Map<string, TenantTable>; baseline?: BaselineEntry[]; deferrals?: ScopeDeferral[] } = {},
+): Promise<{
+  violations: Violation[];
+  files: number;
+  reads: number;
+  unused: BaselineEntry[];
+  tableCount: number;
+  deferred: Deferred[];
+}> {
   const tables = opts.tables ?? await loadTenantTables(root);
   if (tables.size < MIN_TENANT_KEYED_TABLES) {
     throw new Error(
@@ -650,9 +859,12 @@ export async function run(
       `${MIN_TABLE_READS} — the read patterns stopped matching, so this run proves nothing`,
     );
   }
+  // `unused` is judged against the raw findings: a baseline entry that covers a
+  // read inside a deferred directory is still doing its job there.
   const unused = baseline.filter((e) => !usedEntries.has(e)
     && !violations.some((v) => v.file === e.file && v.table === e.table));
-  return { violations, files: files.length, reads, unused, tableCount: tables.size };
+  const { kept, deferred } = applyDeferrals(violations, opts.deferrals ?? SCOPE_DEFERRALS);
+  return { violations: kept, files: files.length, reads, unused, tableCount: tables.size, deferred };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -661,10 +873,13 @@ async function main() {
   const argv = process.argv.slice(2);
   const json = argv.includes('--json');
   const targets = argv.filter((a) => !a.startsWith('--'));
-  const { violations, files, reads, unused, tableCount } = await run(targets.length > 0 ? targets : DEFAULT_TARGETS);
+  const { violations, files, reads, unused, tableCount, deferred } = await run(targets.length > 0 ? targets : DEFAULT_TARGETS);
 
   if (json) {
-    console.log(JSON.stringify({ scanned: files, tenantTables: tableCount, reads, violations, unused }, null, 2));
+    console.log(JSON.stringify({
+      scanned: files, tenantTables: tableCount, reads, violations, unused,
+      deferredFindings: deferred.reduce((n, d) => n + d.count, 0), deferrals: deferred,
+    }, null, 2));
     if (violations.length > 0) process.exit(1);
     return;
   }
@@ -673,20 +888,26 @@ async function main() {
     console.error(
       `\n\x1b[31m✖ Portal RLS-context guard failed (#2446).\x1b[0m\n` +
       `\n  ${files} file(s) scanned against ${tableCount} tenant-policyed table(s); ` +
-      `${reads} statement(s) examined.\n\n${rows.join('\n')}\n\n` +
+      `${reads} statement(s) examined; ${deferred.length} counted deferral(s) hold ` +
+      `${deferred.reduce((n, d) => n + d.count, 0)} more.\n\n${rows.join('\n')}\n\n` +
       '  Fix: wrap the work in withTenantContext(identity.tenantId, NO_USER_SENTINEL,\n' +
       '  tx => …) and use tx — or withPortalLookupContext() for the credential read\n' +
       '  that runs before a tenant is known. A bare db.* inside the callback loses the\n' +
       '  context: the pool answers on another connection. If the file really is\n' +
       '  deferred, add scripts/portal-rls-context-baseline.json an entry naming the\n' +
       '  issue it is deferred to and the test that pins it — this guard re-verifies\n' +
-      '  exemptions, it does not trust them.\n',
+      '  exemptions, it does not trust them. A whole DIRECTORY is only ever deferred\n' +
+      '  by SCOPE_DEFERRALS, and its pin is a count that is not allowed to grow.\n',
     );
     process.exit(1);
   }
   console.log(
     `[check-portal-rls-context] OK — ${files} file(s), ${tableCount} tenant-policyed tables, ` +
-    `${reads} statement(s): every policyed read is bound to a context-establishing call.`,
+    `${reads} statement(s): every policyed read is bound to a context-establishing call` +
+    (deferred.length > 0
+      ? `, bar ${deferred.reduce((n, d) => n + d.count, 0)} read(s) in ${deferred.length} counted `
+        + `deferral(s): ${deferred.map((d) => `${d.dir} ${d.count}/${d.maxFindings} → ${d.deferredTo}`).join(', ')}.`
+      : '.'),
   );
   if (unused.length > 0) {
     console.warn(

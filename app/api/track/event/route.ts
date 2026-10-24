@@ -27,7 +27,7 @@ import { validateBody } from '@/lib/api/validate';
 import { safeJson } from '@/lib/api/validate';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 import { getSessionToken, getCurrentUserForToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
+import { withUserContext } from '@/lib/db/rls';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { ensureAnonId } from '@/lib/analytics/cookie';
@@ -47,8 +47,10 @@ const eventSchema = z.object({
 
 /**
  * Resolve the caller's tenantId/userId from the session cookie WITHOUT the
- * full requireAuth machinery (no RLS pinning needed for an append-only insert
- * and we must tolerate anonymous callers). Returns nulls when unauthenticated.
+ * full requireAuth machinery (the insert stays append-only and anonymous
+ * callers must keep working), so a null tenant is a legitimate answer here —
+ * but since #3197 it can only mean "no session", because the read that decides
+ * it now runs with the caller's own `app.current_user` set.
  */
 async function resolveIdentity(): Promise<{ userId: string | null; tenantId: string | null }> {
   try {
@@ -62,19 +64,27 @@ async function resolveIdentity(): Promise<{ userId: string | null; tenantId: str
     if (!tokenUser?.id) return { userId: null, tenantId: null };
 
     // Prefer the user's last-active tenant; fall back to any active membership.
-    const [row] = await db
-      .select({
-        userId: users.id,
-        lastTenantId: users.lastTenantId,
-        memberTenantId: tenantMembers.tenantId,
-      })
-      .from(users)
-      .leftJoin(
-        tenantMembers,
-        and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')),
-      )
-      .where(eq(users.id, tokenUser.id))
-      .limit(1);
+    //
+    // #3186: this ran on the bare pool, and both tables it reads are policyed by
+    // the caller's identity — `users_read_self`/`users_tenant_member_read` on
+    // `users` and 0127's `tenant_members_self_read` all key off `app.current_user`
+    // — so with no GUC the LEFT JOIN returned nothing and every event was stamped
+    // with a null tenant, no error anywhere. The id was already verified two lines
+    // above; this just gives the read the context it was written to need.
+    const [row] = await withUserContext(tokenUser.id, (tx) =>
+      tx
+        .select({
+          userId: users.id,
+          lastTenantId: users.lastTenantId,
+          memberTenantId: tenantMembers.tenantId,
+        })
+        .from(users)
+        .leftJoin(
+          tenantMembers,
+          and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')),
+        )
+        .where(eq(users.id, tokenUser.id))
+        .limit(1));
 
     if (!row) return { userId: null, tenantId: null };
     return {
