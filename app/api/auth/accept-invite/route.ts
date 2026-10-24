@@ -11,9 +11,10 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 import { getCurrentUserForToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
 import { invitations, tenants, users, roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
+import { withTenantContext } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 const schema = z.object({ token: z.string().min(1) });
 
@@ -36,36 +37,55 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { token: inviteToken } = validated.data;
 
-    const inv = await db
-      .select({
-        id: invitations.id,
-        tenantId: invitations.tenantId,
-        email: invitations.email,
-        roleSlug: invitations.roleSlug,
-        invitedBy: invitations.invitedBy,
-        tenantName: tenants.name,
-      })
-      .from(invitations)
-      .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
-      .where(and(
-        eq(invitations.token, inviteToken),
-        isNull(invitations.acceptedAt),
-        gt(invitations.expiresAt, new Date())
-      ))
-      .then(res => res[0]);
+    // #3182: `invitations` has one shipped policy, 0037's `tenant_isolation`
+    // FOR ALL, and it compares `tenant_id` to `app.current_tenant` — a value this
+    // request does not have, because finding it IS the query. Read on the
+    // contextless pool it matched nothing and the route answered 404 for a live
+    // invitation: acceptance was unreachable, not merely wrong. So the read runs
+    // under the credential arm 0133 adds for exactly this lookup — SELECT-only,
+    // keyed on the token the caller presented, never on a tenant it names. The
+    // tenant-scoped half below is a separate context, which is what keeps the
+    // narrow read narrow (`lib/db/portal-lookup-context.ts:126`).
+    const inv = await withPortalLookupContext({ accessToken: inviteToken }, (tx) =>
+      tx
+        .select({
+          id: invitations.id,
+          tenantId: invitations.tenantId,
+          email: invitations.email,
+          roleSlug: invitations.roleSlug,
+          invitedBy: invitations.invitedBy,
+          tenantName: tenants.name,
+        })
+        .from(invitations)
+        .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+        .where(and(
+          eq(invitations.token, inviteToken),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.deletedAt),
+          gt(invitations.expiresAt, new Date())
+        ))
+        .then(res => res[0]));
 
     if (!inv) return NextResponse.json({ error: 'Invitation not found or expired' }, { status: 404 });
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { email: true }
-    });
+    // #3182, second half: the writes below were no better off. A transaction
+    // handle carries no GUCs of its own (#2446), so `tx.insert(tenantMembers)`
+    // raised 42501 and `tx.update(invitations).set({ acceptedAt })` matched zero
+    // rows without an error — an accepted invitation that stays live forever. The
+    // `users` read belongs in this context too: `users_read_self` keys on
+    // `app.current_user`, which is the other half of what `withTenantContext`
+    // sets, and that is why the identity is the real session user rather than
+    // `NO_USER_SENTINEL`. The email check returns as data and is answered outside,
+    // the #2446 rule that no branch may reply while the transaction still holds a
+    // half-done join.
+    const outcome = await withTenantContext(inv.tenantId, userId, async (tx): Promise<'email_mismatch' | 'accepted'> => {
+      const user = await tx.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: { email: true }
+      });
 
-    if (!user || user.email.toLowerCase() !== inv.email.toLowerCase()) {
-      return NextResponse.json({ error: 'This invitation is for a different email address' }, { status: 403 });
-    }
+      if (!user || user.email.toLowerCase() !== inv.email.toLowerCase()) return 'email_mismatch';
 
-    await db.transaction(async (tx) => {
       // Find role
       const role = await tx.query.roles.findFirst({
         where: and(
@@ -120,7 +140,13 @@ export async function POST(request: NextRequest) {
       await tx.update(tenants)
         .set({ currentUsers: memberCount })
         .where(eq(tenants.id, inv.tenantId));
+
+      return 'accepted';
     });
+
+    if (outcome === 'email_mismatch') {
+      return NextResponse.json({ error: 'This invitation is for a different email address' }, { status: 403 });
+    }
 
     return NextResponse.json({ ok: true, tenant_name: inv.tenantName });
  

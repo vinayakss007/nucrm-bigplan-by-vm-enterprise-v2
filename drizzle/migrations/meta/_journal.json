@@ -932,6 +932,13 @@
       "when": 1792749194412,
       "tag": "0132_public_form_capture_lookup",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 133,
+      "when": 1792749194413,
+      "tag": "0133_invitations_credential_lookup_rls",
+      "breakpoints": true
     }
   ]
 }
