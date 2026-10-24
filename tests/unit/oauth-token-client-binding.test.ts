@@ -43,10 +43,12 @@ const harness = vi.hoisted(() => {
     return chain;
   };
 
-  // UPDATE/DELETE builder: records the WHERE predicate (so the client binding
-  // and claim conditions stay pinned) and resolves `.returning()` from
-  // state.claimRows.
-  const makeWriteChain = () => {
+  // One builder shared by the bare `db` handle and the transaction handle. #3075
+  // made the redemption a conditional claim, and the pre-auth RLS work (#3102)
+  // wraps the code lookup in `withAuthLookupContext`, which runs the SELECT on
+  // the *transaction* handle rather than on `db`. A tx that could only write made
+  // that lookup throw, so the select builder has to live here too.
+  const writeChain = () => {
     const chain: Record<string, unknown> = {};
     chain.set = () => chain;
     chain.where = (f: SQL) => {
@@ -57,19 +59,20 @@ const harness = vi.hoisted(() => {
     return chain;
   };
 
-  const db = {
+  const insertChain = () => ({
+    values: () => ({
+      returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }]),
+    }),
+  });
+
+  const tx = () => ({
     select: () => makeSelectChain(),
-    transaction: async (cb: (tx: Record<string, unknown>) => Promise<unknown>) =>
-      cb({
-        update: () => makeWriteChain(),
-        delete: () => makeWriteChain(),
-        insert: () => ({
-          values: () => ({
-            returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }]),
-          }),
-        }),
-      }),
-  };
+    update: writeChain,
+    delete: writeChain,
+    insert: insertChain,
+  });
+
+  const db = { ...tx(), transaction: async (cb: (t: Record<string, unknown>) => Promise<unknown>) => cb(tx()) };
 
   return { state, inject, db };
 });

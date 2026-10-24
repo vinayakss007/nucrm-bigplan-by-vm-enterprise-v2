@@ -92,6 +92,15 @@ vi.mock('@/lib/db/rls', () => ({
   withSecurityContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
   withTenantContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
   withUserContext: async (_uid: string, fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
+  // #3102: the pre-auth claim sites switched from the broad security context to
+  // the narrow app.token_issue privilege, then to app.current_user once the
+  // claimed row names the user. Both are GUC SETs — they carry no predicate, so
+  // pinning them would assert nothing this file cares about. The real helpers
+  // no-op against a client with no `execute`, which is exactly what H.tx is, so
+  // the stubs mirror that: run the callback on the same recording handle.
+  withTokenIssueContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
+  setTokenIssueContext: async () => undefined,
+  setUserContext: async () => undefined,
   setTenantContext: vi.fn(),
 }));
 vi.mock('@/lib/rate-limit', () => ({
