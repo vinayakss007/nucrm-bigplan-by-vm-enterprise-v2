@@ -173,12 +173,24 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const { id } = await params;
 
-    await db.update(leadWarmingCampaigns)
-      .set({ status: 'archived', deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
+    // #3212: `lead_warming_campaigns` has no `deleted_by` column (this table
+    // spreads `utils.lifecycle()`, not `utils.audit()`), and Drizzle builds the
+    // SET clause from the table's own column map — a key it does not declare is
+    // rendered as nothing, silently. The `as Record<string, unknown>` that made
+    // that invisible is gone too, so the next phantom key is a tsc error.
+    const [archived] = await db.update(leadWarmingCampaigns)
+      .set({ status: 'archived', deletedAt: new Date(), updatedAt: new Date() })
       .where(and(
         eq(leadWarmingCampaigns.id, id),
         eq(leadWarmingCampaigns.tenantId, ctx.tenantId)
-      ));
+      ))
+      .returning({ id: leadWarmingCampaigns.id });
+
+    // #3212: same read-back the PATCH above this already does — a campaign that
+    // vanished since the auth check is not "archived".
+    if (!archived) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true, message: 'Campaign archived' });
  

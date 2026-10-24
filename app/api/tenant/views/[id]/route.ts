@@ -117,9 +117,29 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: Params) 
       return forbidden('Only the view owner or admin can delete');
     }
 
-    await db.update(savedViews)
-      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
-      .where(eq(savedViews.id, id));
+    // #3212: `saved_views` spreads `utils.lifecycle()`, not `utils.audit()`, so it
+    // has no `deleted_by` column — Drizzle renders a set key the table does not
+    // declare as nothing, so `deletedBy: ctx.userId` was silently dropped and this
+    // tombstone recorded no deleter. The `as Record<string, unknown>` cast is what
+    // hid that from tsc, so it goes too and the compiler now enforces the list.
+    //
+    // The write is also guarded (#3194 doctrine): the read above only proves the
+    // row was right a moment ago, and `.where(eq(id))` alone would let anything
+    // that raced between the two delete a view it does not own — the owner check
+    // is exactly what RLS cannot express, since app.current_tenant says nothing
+    // about which user owns the row. An empty read-back means the row moved, was
+    // already tombstoned, or belongs to someone else: 404, nothing written.
+    const claim = await db.update(savedViews)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(savedViews.id, id),
+        eq(savedViews.tenantId, ctx.tenantId),
+        isNull(savedViews.deletedAt),
+        ...(ctx.isAdmin ? [] : [eq(savedViews.userId, ctx.userId)])
+      ))
+      .returning({ id: savedViews.id });
+
+    if (!claim.length) return notFound('View');
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
