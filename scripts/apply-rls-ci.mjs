@@ -4,8 +4,9 @@
  * CI provisions the schema with `npm run db:sync` (drizzle-kit push),
  * which syncs only the TABLE structure. It does NOT run the hand-written
  * SQL migration files that create RLS objects. This script applies those
- * RLS up-migrations in journal order so integration tests can verify
- * row-level security.
+ * security migrations in journal order so integration tests can verify
+ * row-level security — discovering them by what their SQL does (#3171), with
+ * the old filename test kept as a union fallback.
  *
  * Files that cannot re-run on a pushed schema are reported as skipped,
  * not fatal. It then asserts RLS is ON for the core tenant-scoped
@@ -30,19 +31,150 @@ const migrationsDir = join(__dirname, '..', 'drizzle', 'migrations');
 // regression of an 0088-class bug passed green. Match is deliberately wide:
 // files that cannot re-run on a pushed schema are reported skipped, not fatal,
 // so over-inclusion costs noise while under-inclusion costs safety.
-const RLS_TAG_RE = /rls|isolation|polic|bypass|member_read|tenant_reference|force_/i;
+//
+// #3171: that regex is kept, but only as a FALLBACK. Matching on words like
+// `polic`/`rls` in a *filename* is a proxy for content, and the two diverge —
+// measured at `fdd42eaad`, 11 of the 23 files the name test let through the
+// door carried no name match at all, and re-measured here at `04698d679`, the
+// same class of miss is 15 files wide: `0098` tenant-hierarchy party access,
+// `0099` API-key auth lookup, `0105` the email-tracking-pixel lookup, `0127`
+// `segment_members` self-scope, `0131` super-admin usage read, `0042`'s
+// audit-purge TRIGGER (the reason #3165's suite could not demonstrate itself),
+// and the `GRANT`/`REVOKE` statements in `0000`, `0002` and `0049`. A
+// regression that deletes or narrows any of those objects is invisible to CI —
+// the identical failure mode #2232 was filed for, one migration number later.
+//
+// So discovery asks the file what it does. The name test stays as the fallback
+// the comment above describes: it is a union, never a subtraction, because
+// dropping a file CI used to apply would take coverage away, and the five
+// name-only matches (`0060`, `0066`, `0070`, `0086`, plus `0124` until its
+// `DROP POLICY` became visible to the content test) cost nothing but a `skipped`
+// line if they carry no security SQL.
+export const RLS_TAG_RE = /rls|isolation|polic|bypass|member_read|tenant_reference|force_/i;
+
+/**
+ * The security objects themselves. `ALTER`/`DROP POLICY` and `DROP TRIGGER` are
+ * in here on purpose: a migration that REMOVES a security object has to run in
+ * CI too, or the provisioned database keeps a policy production retired.
+ */
+export const SECURITY_SQL_RE =
+  /CREATE POLICY|ALTER POLICY|DROP POLICY|ENABLE ROW LEVEL SECURITY|DISABLE ROW LEVEL SECURITY|FORCE ROW LEVEL SECURITY|NO FORCE ROW LEVEL SECURITY|GRANT|REVOKE|SECURITY DEFINER|CREATE (OR REPLACE )?TRIGGER|DROP TRIGGER/i;
+
+/**
+ * Measured at `04698d679`: 132 up-migrations, 34 carrying security SQL, 38 in
+ * the union. The floor sits far below the real number and far above a directory
+ * that stopped existing, which is the only way this script can silently
+ * provision a weaker database than it claims to.
+ */
+export const MIN_SECURITY_MIGRATIONS = 30;
+
+/**
+ * Blank `-- …` and `/* … *\/` to spaces, keeping every offset, so a header that
+ * says "this table already has FORCE ROW LEVEL SECURITY" is not mistaken for
+ * security SQL. Quoted literals are stepped over, and `''` inside one is an
+ * escape rather than a close: `0109`, `0125` and `0129` are each included by
+ * raw text and excluded by this, and they are exactly the kind of file whose
+ * comment explains why it is NOT an RLS migration.
+ */
+export function stripSqlComments(sql) {
+  const out = sql.split('');
+  const n = sql.length;
+  const blank = (from, to) => {
+    for (let j = from; j < to && j < n; j++) if (out[j] !== '\n') out[j] = ' ';
+  };
+  let i = 0;
+  while (i < n) {
+    const c = sql[i];
+    const d = sql[i + 1];
+    if (c === '-' && d === '-') {
+      let j = i;
+      while (j < n && sql[j] !== '\n') j++;
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    if (c === '/' && d === '*') {
+      let j = i + 2;
+      while (j < n && !(sql[j] === '*' && sql[j + 1] === '/')) j++;
+      blank(i, Math.min(j + 2, n));
+      i = j + 2;
+      continue;
+    }
+    if (c === "'") {
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") { i += 2; continue; }
+        if (sql[i] === "'") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return out.join('');
+}
+
+/** Does this migration's own SQL create, change or retire a security object? */
+export function hasSecuritySql(sql) {
+  return SECURITY_SQL_RE.test(stripSqlComments(sql));
+}
+
+/**
+ * Classify one migration. Pure and exported so the unit test pins both
+ * directions — the files the name test missed must come IN, and the files whose
+ * only match is prose must stay OUT — against the real corpus, not a fixture.
+ */
+export function classifySecurityMigration(tag, sql) {
+  const byContent = sql !== null && hasSecuritySql(sql);
+  const byName = RLS_TAG_RE.test(tag);
+  return { tag, byContent, byName, included: byContent || byName };
+}
+
+/** Journal order, oldest first — the same order `db:migrate` would use. */
+export function sortByIdx(tags) {
+  return [...tags].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+/**
+ * The tags to apply, from `entries = [{ tag, sql }]` (`sql: null` when the file
+ * cannot be read — the caller reports that as `missing`, not as a non-match).
+ */
+export function discoverSecurityTags(entries) {
+  return sortByIdx(
+    entries.filter((e) => classifySecurityMigration(e.tag, e.sql).included).map((e) => e.tag),
+  );
+}
 
 function discoverRlsTags() {
   return readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
     .map((f) => f.replace(/\.sql$/, ''))
-    .filter((tag) => RLS_TAG_RE.test(tag))
-    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    .map((tag) => {
+      let sql = null;
+      try {
+        sql = readFileSync(join(migrationsDir, `${tag}.sql`), 'utf8');
+      } catch {
+        sql = null; // reported as `missing` when the loop reaches it
+      }
+      return { tag, sql };
+    });
 }
 
-const RLS_MIGRATION_TAGS = discoverRlsTags();
+const MIGRATION_ENTRIES = discoverRlsTags();
+const RLS_MIGRATION_TAGS = discoverSecurityTags(MIGRATION_ENTRIES);
+const CLASSIFIED = new Map(
+  MIGRATION_ENTRIES.map((e) => [e.tag, classifySecurityMigration(e.tag, e.sql)]),
+);
 if (RLS_MIGRATION_TAGS.length === 0) {
-  console.error('[apply-rls-ci] RLS discovery matched zero migrations — pattern or migrations dir broken');
+  console.error('[apply-rls-ci] security-migration discovery matched zero migrations — pattern or migrations dir broken');
+  process.exit(1);
+}
+if (RLS_MIGRATION_TAGS.length < MIN_SECURITY_MIGRATIONS) {
+  console.error(
+    `[apply-rls-ci] discovery matched ${RLS_MIGRATION_TAGS.length} migration(s); expected at least ` +
+    `${MIN_SECURITY_MIGRATIONS} — the migrations dir moved or the content test stopped working, ` +
+    'and a CI database provisioned by nothing looks exactly like one provisioned correctly (#3171)',
+  );
   process.exit(1);
 }
 
@@ -55,8 +187,15 @@ function main() {
 
   const results = [];
 
+  console.log(
+    `[apply-rls-ci] ${RLS_MIGRATION_TAGS.length}/${MIGRATION_ENTRIES.length} up-migrations carry ` +
+    `security objects — ${RLS_MIGRATION_TAGS.filter((t) => CLASSIFIED.get(t)?.byContent).length} by SQL content, ` +
+    `${RLS_MIGRATION_TAGS.filter((t) => !CLASSIFIED.get(t)?.byContent).length} by filename only (#3171)`,
+  );
+
   for (const tag of RLS_MIGRATION_TAGS) {
     const upPath = join(migrationsDir, `${tag}.sql`);
+    const why = CLASSIFIED.get(tag)?.byContent ? 'content' : 'filename';
 
     // Check if the up migration file exists
     try {
@@ -79,10 +218,10 @@ function main() {
         `psql "${databaseUrl}" -v ON_ERROR_STOP=1 -f "${upPath}"`,
         { stdio: 'pipe', timeout: 30000 }
       );
-      results.push({ tag, status: 'applied', detail: 'migration executed' });
+      results.push({ tag, status: 'applied', detail: `migration executed (matched by ${why})` });
     } catch (_e) {
       // Some migrations reference tables/columns that don't exist after db:sync
-      results.push({ tag, status: "skipped", detail: _e.message.slice(0, 80) });
+      results.push({ tag, status: "skipped", detail: `matched by ${why}: ${_e.message.slice(0, 60)}` });
     }
   }
 
@@ -175,4 +314,8 @@ function main() {
   console.log('\n✅ RLS migrations applied and verified');
 }
 
-main();
+// The classifier is exported for `tests/unit/apply-rls-ci-content-discovery-3171.test.ts`,
+// which pins the discovery set against the real migrations directory; running the
+// module must not also provision a database, so `main()` is guarded the way
+// `check-migration-rls-dml.mjs` guards it.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
