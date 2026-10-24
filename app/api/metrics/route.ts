@@ -108,63 +108,6 @@ export async function GET(request: NextRequest) {
       push(metrics, 'nucrm_db_pool_up', 'DB pool stats section emitted fresh values', 'gauge', 0);
     }
 
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // ── CRM Counts ─────────────────────────────────────────────
-    // #2146: ONE aggregate statement instead of 15 queries per scrape. The
-    // Promise.all fan-out (#2118) fixed scrape timeouts but Sentry still
-    // flagged every scrape as N+1 (1636 events) and each subquery took its
-    // own pool checkout, feeding pool pressure (#2145). Same values, same
-    // per-section deadline so a slow count still cannot 500 the scrape.
-    try {
-      const countsRes = await withTimeout(db.execute(sql`
-        SELECT
-          (SELECT count(*)::int FROM contacts  WHERE deleted_at IS NULL)                          AS contacts_total,
-          (SELECT count(*)::int FROM leads     WHERE deleted_at IS NULL)                          AS leads_total,
-          (SELECT count(*)::int FROM deals     WHERE deleted_at IS NULL)                          AS deals_total,
-          (SELECT count(*)::int FROM companies WHERE deleted_at IS NULL)                          AS companies_total,
-          (SELECT count(*)::int FROM tasks     WHERE status = 'pending'   AND deleted_at IS NULL) AS tasks_pending,
-          (SELECT count(*)::int FROM tasks     WHERE status = 'completed' AND deleted_at IS NULL) AS tasks_completed,
-          (SELECT count(*)::int FROM activities)                                                  AS activities_total,
-          (SELECT count(*)::int FROM tenants WHERE status = 'active')                             AS tenants_active,
-          (SELECT count(*)::int FROM users)                                                       AS users_total,
-          (SELECT count(*)::int FROM contacts WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS contacts_created_24h,
-          (SELECT count(*)::int FROM leads    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS leads_created_24h,
-          (SELECT count(*)::int FROM deals    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS deals_created_24h,
-          (SELECT count(*)::int FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-             JOIN pipelines  p ON p.id = d.pipeline_id
-            WHERE d.deleted_at IS NULL AND s.name ILIKE 'won')                                   AS deals_won,
-          (SELECT count(*)::int FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-             JOIN pipelines  p ON p.id = d.pipeline_id
-            WHERE d.deleted_at IS NULL AND s.name ILIKE 'lost')                                  AS deals_lost,
-          (SELECT COALESCE(sum(d.amount::numeric), 0)::text FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-            WHERE d.deleted_at IS NULL AND lower(s.name) != 'lost')                              AS pipeline_value
-      `), 'counts');
-      const c = (countsRes.rows[0] ?? {}) as Record<string, unknown>;
-      const num = (key: string): number => Number(c[key] ?? 0);
-      push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', num('contacts_total'));
-      push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', num('leads_total'));
-      push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', num('deals_total'));
-      push(metrics, 'nucrm_companies_total', 'Total companies in CRM', 'gauge', num('companies_total'));
-      push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', num('tasks_pending'));
-      push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', num('activities_total'));
-      push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', num('tenants_active'));
-      push(metrics, 'nucrm_users_total', 'Total users', 'gauge', num('users_total'));
-      push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', num('tasks_completed'));
-      push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', num('contacts_created_24h'));
-      push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', num('leads_created_24h'));
-      push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', num('deals_created_24h'));
-      push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', num('deals_won'));
-      push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', num('deals_lost'));
-      push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', num('pipeline_value'));
-      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 1);
-    } catch {
-      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 0);
-    }
-
     // ── Redis / Cache Metrics ──────────────────────────────────
     let redisConn: IORedis | null = null;
     try {

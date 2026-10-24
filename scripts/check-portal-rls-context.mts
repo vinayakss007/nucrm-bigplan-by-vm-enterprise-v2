@@ -738,15 +738,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'credential that grants a row-level privilege does not exist in the shipped policy set.',
     maxFindings: 3,
   },
-  {
-    dir: 'app/api/metrics',
-    deferredTo: '#3195',
-    why: 'The Prometheus scrape has no user and no tenant to pin: its caller is an operator, and the '
-      + 'numbers are deliberately cross-tenant fleet totals, so the privilege it needs is a narrow '
-      + 'read-only aggregate arm — the shape #3195 puts to the same decision #3102 holds open, not a '
-      + 'withTenantContext() the route could legitimately call.',
-    maxFindings: 1,
-  },
 ];
 
 /** Why a deferral is not admissible; returns the reason, or null. */
