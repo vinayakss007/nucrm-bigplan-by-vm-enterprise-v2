@@ -2275,7 +2275,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 
 **Found:** 2026-10-04 (UTC), verifying PP-030 against the tree before implementing its fix as a narrow behaviour change.
 **Status:** 🔧 FIXED IN THIS PR (#2539, 2026-10-10 UTC) — one shared refusal site (`lib/cron/cron-lock.ts`), all **22** routes
-converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` — un-moved 2026-10-16, **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards — + `package.json:70` (re-pinned 2026-10-24 from `:69`: **#3178** added the `guard:override-ranges` script line above, which pushed every `guard:*` line below it down one; `:69` was itself re-pinned 2026-10-15 from `:68`: script lines above it grew since #2539)) and 48 refusal tests. The
+converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` — un-moved 2026-10-16, **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards — + `package.json:"guard:cron-lock"` (keyed 2026-10-24 by **#3201** to the alias itself rather than to the line holding it, from `:70`; `:70` was itself re-pinned 2026-10-24 from `:69`: **#3178** added the `guard:override-ranges` script line above, which pushed every `guard:*` line below it down one; `:69` was itself re-pinned 2026-10-15 from `:68`: script lines above it grew since #2539)) and 48 refusal tests. The
 **200 `ok:true` mask is gone from the tree**: a held lock is now `423 { ok:false }`. _Written 2026-10-04 as:_ 🚨 OPEN —
 defect re-confirmed with two corrections; **no code shipped**, because the honest fix spans 23 files, which is a design
 decision (a shared skip site), not an edit.
@@ -3673,7 +3673,7 @@ database`, and exactly two FAILs:
   wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
   the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the
   seventh arrived `ci.yml:81` runs three guards rather than one — and the alias goes at the very end of the `scripts`
-  block, outside the `:47-69` region, so the sixth reads `package.json:158` and the seventh `package.json:159`, next to <!-- both re-pinned 2026-10-24 from `:157`/`:158`: **#3178** added `guard:override-ranges` above the `guard:*` block, which moved every alias line below it down one; `:157`/`:158` were themselves re-pinned 2026-10-22 from `:156`/`:157`: `2de26b93` added `db:bootstrap-test` above the alias block -->
+  block, outside the `:47-69` region, so the sixth reads `package.json:"guard:catch-empty"` and the seventh <!-- both keyed 2026-10-24 by **#3201** to the alias each sentence names, rather than to the line holding it, from `:158`/`:159`; `:158`/`:159` were both re-pinned 2026-10-24 from `:157`/`:158`: **#3178** added `guard:override-ranges` above the `guard:*` block, which moved every alias line below it down one; `:157`/`:158` were themselves re-pinned 2026-10-22 from `:156`/`:157`: `2de26b93` added `db:bootstrap-test` above the alias block --> reads `package.json:"guard:panel-error-state"`, next to
   **#2596**'s `guard:env-coverage`, which `ci.yml` likewise calls as a bare `node` command at `:438`.
   Line-count-neutral wiring keeps those _numbers_ true and cannot keep their _content_. Appending to a shared `run:`
   line rewrites that line; appending to a JSON object leaves the alias before it intact but for the comma the new key
@@ -3681,8 +3681,8 @@ database`, and exactly two FAILs:
   in the revision that wrote the sentence, while `guard:coords`, which only asks whether the line is live, passes both.
   That screen runs on main, nightly, and never in PR CI, because its answer is branch-dependent. Both are re-pinned
   here, inside the sentences that name them, because an entry in `scripts/register-drift-allowlist.json` is for drift
-  that waits on another PR and this PR is the one that finished the move. The trap is permanent by construction:
-  whoever appends the next alias re-pins `package.json:159` <!-- from `:158`, for the same **#3178** `guard:override-ranges` shift; `:158` from `:157` for `2de26b93`'s `db:bootstrap-test` -->, whoever joins that step re-pins `ci.yml:81`, and each
+  that waits on another PR and this PR is the one that finished the move. The trap was permanent by construction, and **#3201** closes only its `package.json` half:
+  whoever appends the next alias used to re-pin `:159` <!-- from `:158`, for the same **#3178** `guard:override-ranges` shift; `:158` from `:157` for `2de26b93`'s `db:bootstrap-test` --> and re-pins nothing now, because that pointer reads `package.json:"guard:panel-error-state"` (keyed 2026-10-24), which a script line appended below it cannot move and only renaming or deleting the alias itself would; whoever joins that step re-pins `ci.yml:81`, and each
   writes the correction into the sentence rather than minting a fresh pointer. The seventh also carries a ratcheting
   allowlist of its own, `scripts/panel-error-state-baseline.json` — data rather than a coordinate, so it is named
   without a line number. The counts above predate the sixth and the seventh: two more `guard:*` scripts exist, and two
@@ -3730,7 +3730,11 @@ database`, and exactly two FAILs:
 CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
   (c) **Make the wiring greppable** — route `ci.yml:221` and `:254` (re-pinned from `:219`/`:252` on 2026-10-11 by **#2566**, originally from `:217`/`:250` by **#2539**) through `npm run guard:audit` /
-  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:63`/`:64 (re-pinned 2026-10-15 from `:62/:63`: one script line inserted above)`) so "which
+  `npm run guard:semgrep` (the same two commands, already aliases — keyed here on 2026-10-24 by **#3201** as
+  `package.json:"guard:audit"` and `package.json:"guard:semgrep"` instead of the `:63`/`:64` pair they
+  replace, a pair that had itself been re-pinned on 2026-10-15 from `:62`/`:63` when one script line was
+  inserted above. The second half had been written as a bare `:64`, which carries no filename, so
+  `guard:coords` never resolved it at all; keying it is what makes it attributable) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
   change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
   `register-drift` themselves. A control that is invisible to the obvious audit command is a
@@ -3783,7 +3787,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:90` (re-pinned 2026-10-24 from `:89`: **#3178** added the `guard:override-ranges` script line above, which pushed every `db:*` line below it down one; `:89` was re-pinned 2026-10-16 from `:88`: **#2655** added a `guard:*` script line at `:70`, which pushed every `db:*` line below it down one; `:88` was itself re-pinned 2026-10-15 from `:87`, and that one 2026-10-09) now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
+  point. `package.json:"db:deploy-migrate"` (keyed 2026-10-24 by **#3201** to the alias itself rather than to the line holding it, from `:90`; `:90` was re-pinned 2026-10-24 from `:89`: **#3178** added the `guard:override-ranges` script line above, which pushed every `db:*` line below it down one; `:89` was re-pinned 2026-10-16 from `:88`: **#2655** added a `guard:*` script line at `:70`, which pushed every `db:*` line below it down one; `:88` was itself re-pinned 2026-10-15 from `:87`, and that one 2026-10-09) now also exists as a hand-run alias (re-pinned 2026-10-09
   from `:84`, which **#2474**'s `guard:catalog-grants` script line pushed down by one, again on
   2026-10-10 to `:86` by **#2539**'s `guard:cron-lock` line, and on 2026-10-11 to `:87` by **#2566**'s
   `guard:raw-sql` line); **no workflow
@@ -4668,7 +4672,7 @@ was which screen in this repo owns column attributes. Answer: none, and the clos
   and `new_data` NULL in all of them and all 141 `metadata` values parsing as JSON objects — so the
   conversion is safe and pending, which is exactly what an allowlist entry is for.
 
-- **AC3 — it runs somewhere, in both shapes.** `package.json:110` (re-pinned 2026-10-24 from `:109`: **#3178** added the `guard:override-ranges` script line above, which pushed every `db:*` line below it down one; `:109` was re-pinned 2026-10-22 from `:108`: `2de26b93` added `db:bootstrap-test` one line above; `:108` was itself re-pinned 2026-10-16 from `:107`: the same **#2655** `guard:*` line at `:70` that moved `db:deploy-migrate` above; `:107` was itself re-pinned 2026-10-15 from `:106`, and `:106` from `:105` on 2026-10-11 by
+- **AC3 — it runs somewhere, in both shapes.** `package.json:"db:drift-check"` (keyed 2026-10-24 by **#3201** to the alias itself rather than to the line holding it, from `:110`; `:110` was re-pinned 2026-10-24 from `:109`: **#3178** added the `guard:override-ranges` script line above, which pushed every `db:*` line below it down one; `:109` was re-pinned 2026-10-22 from `:108`: `2de26b93` added `db:bootstrap-test` one line above; `:108` was itself re-pinned 2026-10-16 from `:107`: the same **#2655** `guard:*` line at `:70` that moved `db:deploy-migrate` above; `:107` was itself re-pinned 2026-10-15 from `:106`, and `:106` from `:105` on 2026-10-11 by
   **#2566**'s `guard:raw-sql` script line, and from `:104` on 2026-10-10 by
   **#2539**'s `guard:cron-lock` script line) is the alias; before this entry
   `grep -rn drift-check .github/workflows` returned **0** hits across all five workflow files while
