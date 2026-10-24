@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { sessions, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withUserContext } from '@/lib/db/rls';
 
 export async function GET(request: NextRequest) {
   // #1154: throttle this unauthenticated endpoint to prevent mass enumeration.
@@ -61,14 +62,22 @@ export async function GET(request: NextRequest) {
   // other tenants' flag overrides / kill-switch state.
   const tenantId = request.headers.get('x-tenant-id') || undefined;
   if (tenantId) {
-    const membership = await db.select({ id: tenantMembers.id })
-      .from(tenantMembers)
-      .where(and(
-        eq(tenantMembers.tenantId, tenantId),
-        eq(tenantMembers.userId, userId),
-        eq(tenantMembers.status, 'active'),
-      ))
-      .limit(1);
+    // #3186: the #2446 shape on a caller this route already verified — the
+    // membership probe read `tenant_members` on the bare pool, where neither
+    // `app.current_tenant` (tenant_isolation) nor `app.current_user`
+    // (0127's `tenant_members_self_read`) is set, so the policy deparse to zero
+    // rows and every X-Tenant-ID request answered 403 "Not a member of this
+    // tenant" no matter what the table says. The GUC this read is scoped by is
+    // the caller's own id, which is exactly what `withUserContext` sets.
+    const membership = await withUserContext(userId, (tx) =>
+      tx.select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, tenantId),
+          eq(tenantMembers.userId, userId),
+          eq(tenantMembers.status, 'active'),
+        ))
+        .limit(1));
     if (!membership[0]) {
       return NextResponse.json({ error: 'Not a member of this tenant' }, { status: 403 });
     }

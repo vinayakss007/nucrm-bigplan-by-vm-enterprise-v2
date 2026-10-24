@@ -303,16 +303,20 @@ describe('the walk is the portal surface, and it fails closed', () => {
     expect(res.unused).toEqual([]);
   }, 60_000);
 
-  it('walks 22 files: 14 public routes, the three portal-auth files, the three capture routes (#3163), the two invitation routes (#3182)', async () => {
+  it('walks the proxy-derived surface — 103 files, not the 22 the hand list reached (#3186)', async () => {
     const res = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
-    expect(res.files).toBe(22);
-    // The floor IS the surface now. Left at 17 it would still say OK the day a
-    // capture directory stops existing — which is how #2446's sweep never looked
-    // at this path in the first place.
+    expect(res.files).toBe(103);
+    // The floor IS the surface now. Left at 22 it would still say OK the day the
+    // derivation stops matching `PUBLIC_PATHS` and the walk quietly falls back to
+    // the hand list — which is how #2446's sweep never looked at the capture path,
+    // and how #3163 and #3182 were both fixed by adding a line.
     expect(res.files).toBe(MIN_SCANNED_FILES);
     expect(res.reads).toBeGreaterThanOrEqual(MIN_TABLE_READS);
+    // Clean means the KEPT findings are clean: the counted deferrals are the
+    // other half of the story, and they are pinned in #3186's own block below.
     expect(res.violations).toEqual([]);
     expect(res.unused).toEqual([]);
+    expect(res.deferred.reduce((n, d) => n + d.count, 0)).toBeGreaterThan(0);
   }, 60_000);
 
   it('sees a `forms` read on every capture route it was widened for', () => {
