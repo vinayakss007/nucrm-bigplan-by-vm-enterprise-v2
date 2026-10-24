@@ -2899,7 +2899,10 @@ tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476
   `sim.nucrm3j.probe` row from `analytics_events` (31 rows now include it; owner's call).
 - **Files:** none changed. Evidence read: `digest.log`/`state.json` under `/root/sentry-watchdog/`,
   `drizzle/migrations/0096_analytics_events_ingest_insert.sql` (+ its `.down.sql`),
-  `app/api/track/event/route.ts:75-133`, `lib/analytics/store.ts`, `pg_policy` for `analytics_events`,
+  `app/api/track/event/route.ts:85-143` (re-pinned 2026-10-24 from `:75-133`: **#3197** wrapped this
+  route's identity read in `withUserContext`, which re-indented it and added 10 lines, so the span's
+  two anchors — the join's closing `)` and the handler's closing `}` — both moved down; it names the
+  same region, not a new one), `lib/analytics/store.ts`, `pg_policy` for `analytics_events`,
   24 h of nginx access logs aggregated to status counts, six 12 h Loki chunks aggregated to counts.
   Related: **#82**, **#44**, **#63**, **PP-044**.
 
@@ -3622,7 +3625,7 @@ database`, and exactly two FAILs:
   shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:100`, writing at `:114`, `:377`, `:386` — re-pinned
   2026-10-17 from 74/88/340/349, which **#2796**'s `stepDelayMs` helper pushed down by 26; those were the 2026-10-09 re-pin of 64/78/330/339, moved by **#2473**'s `SequenceStepRow` block)
   is the only place that literal is issued: the un-enroll route calls it
-  (`app/api/tenant/contacts/[id]/enroll/route.ts:123`, re-pinned 2026-10-17 from `:127`: **#2796** folded that route's two-line first-step delay sum into one `stepDelayMs` call; again 2026-10-18 from `:126`: **#2740** added its partial-index note 6 lines above and **#2813** replaced the 12-line steps pre-read with 3) and no longer contains the value itself. Which is why
+  (`app/api/tenant/contacts/[id]/enroll/route.ts:145`, re-pinned 2026-10-24 from `:123`: **#3193** grew that route's derive-and-count path above the call, moving it down 22; again 2026-10-17 from `:127`: **#2796** folded that route's two-line first-step delay sum into one `stepDelayMs` call; again 2026-10-18 from `:126`: **#2740** added its partial-index note 6 lines above and **#2813** replaced the 12-line steps pre-read with 3) and no longer contains the value itself. Which is why
   the registry's writer list changed under this entry's feet between `32d252b9` and `38ae90e2` — it tracks
   the literal, not the call graph, so an indirect writer is visible only through the file that holds it.
 - **How old the disagreement is.** The `'cancelled'` write is not recent: `app/api/unsubscribe/route.ts`
@@ -3747,7 +3750,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:141,166` (the first re-pinned 2026-10-22 from `:139`, same #2973 shift),
   `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:261,435`,
-  `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:123` (re-pinned 2026-10-18 from `:126` for **#2740**/**#2813**),
+  `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:145` (re-pinned 2026-10-24 from `:123` for **#3193**'s 22-line grow above the call; `:123` from `:126` 2026-10-18 for **#2740**/**#2813**),
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,
   `git cat-file -e ecbba74e:app/api/unsubscribe/route.ts`, `git log -S` provenance, `package.json` script
