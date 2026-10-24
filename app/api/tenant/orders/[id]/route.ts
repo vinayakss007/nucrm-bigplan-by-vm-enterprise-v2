@@ -17,7 +17,12 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
 // Order status state machine - defines valid transitions
+// #3184: `draft` is the column default (`drizzle/schema/billing.ts`), so it is
+// reachable as a real current status — without a key the lookup below returned
+// `undefined` and the vet was skipped entirely, admitting ANY target from a
+// brand-new order. It now mirrors `pending`, the other pre-processing state.
 const VALID_TRANSITIONS: Record<string, string[]> = {
+  draft: ['processing', 'cancelled'],
   pending: ['processing', 'cancelled'],
   processing: ['shipped', 'cancelled'],
   shipped: ['delivered', 'cancelled'],
@@ -97,6 +102,11 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     }
 
     // If status is being changed, validate the transition
+    // #3184: the exact status the vet above keys on, remembered so the write can
+    // CLAIM it. Postgres re-evaluates the WHERE under the row lock, so a
+    // concurrent transition (including a terminal delivered/cancelled landing
+    // after this read) matches zero rows instead of being silently stomped.
+    let claimStatus: string | null = null;
     if (body.status) {
       const [current] = await db
         .select({ id: orders.id, status: orders.status })
@@ -112,6 +122,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
 
       if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+      claimStatus = current.status;
       const currentStatus = current.status || 'pending';
       const allowed = VALID_TRANSITIONS[currentStatus];
 
@@ -168,8 +179,22 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(orders.id, orderId), eq(orders.tenantId, ctx.tenantId)))
+      .where(and(
+        eq(orders.id, orderId),
+        eq(orders.tenantId, ctx.tenantId),
+        ...(claimStatus !== null ? [eq(orders.status, claimStatus)] : []),
+      ))
       .returning();
+
+    // Zero rows with a claimed status = someone moved the row between the vet
+    // and this write. The transition is refused, nothing else lands (no audit,
+    // no second write) — same honest-conflict shape as #3159/#3175.
+    if (!updated && claimStatus !== null) {
+      return NextResponse.json(
+        { error: `Order status changed concurrently — cannot move '${claimStatus}' to '${body.status}'. Reload and retry.` },
+        { status: 409 },
+      );
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
