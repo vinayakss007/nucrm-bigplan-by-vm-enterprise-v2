@@ -7,67 +7,40 @@
   "links": [],
   "panels": [
     {
-      "title": "Contacts",
-      "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
-      "targets": [
-        {
-          "expr": "nucrm_contacts_total",
-          "legendFormat": "Total",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Leads",
-      "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
-      "targets": [
-        { "expr": "nucrm_leads_total", "legendFormat": "Total", "refId": "A" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Deals",
-      "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
-      "targets": [
-        { "expr": "nucrm_deals_total", "legendFormat": "Total", "refId": "A" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Companies",
-      "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
-      "targets": [
-        {
-          "expr": "nucrm_companies_total",
-          "legendFormat": "Total",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Users",
-      "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 0 },
-      "targets": [
-        { "expr": "nucrm_users_total", "legendFormat": "Total", "refId": "A" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
       "title": "Tenants",
       "type": "stat",
-      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
       "targets": [
         { "expr": "nucrm_tenants_total", "legendFormat": "Total", "refId": "A" }
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
+    {
+      "title": "CRM row counts",
+      "type": "stat",
+      "description": "#3195: this scrape exports no tenant-keyed CRM totals. Under 0039 a table guarded by tenant_isolation reads as zero whenever app.current_tenant is unset, and a metrics scrape has no tenant to set — so the fifteen gauges were retired rather than left reporting a permanent zero. 0 = withheld (alert: CrmRowCountsWithheld); the numbers come back with the aggregate read-only privilege #3102 decides.",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "targets": [
+        { "expr": "nucrm_crm_counts_exported", "legendFormat": "exported", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
     {
       "title": "Uptime",
       "type": "stat",
@@ -81,6 +54,7 @@
       ],
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
+
     {
       "title": "Heap Usage",
       "type": "gauge",
@@ -108,6 +82,7 @@
         "overrides": []
       }
     },
+
     {
       "title": "RSS Memory",
       "type": "stat",
@@ -121,6 +96,7 @@
       ],
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
     },
+
     {
       "title": "Cache Status",
       "type": "stat",
@@ -143,6 +119,7 @@
         "overrides": []
       }
     },
+
     {
       "title": "DB Active Connections",
       "type": "timeseries",
@@ -171,6 +148,7 @@
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
+
     {
       "title": "DB Latency",
       "type": "timeseries",
@@ -196,6 +174,7 @@
         "overrides": []
       }
     },
+
     {
       "title": "DB Active Queries",
       "type": "timeseries",
@@ -208,99 +187,6 @@
         }
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Contacts Created (rate)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 18 },
-      "targets": [
-        {
-          "expr": "rate(nucrm_contacts_created_total[5m])",
-          "legendFormat": "Contacts/sec",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
-    },
-    {
-      "title": "Leads Created (rate)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 18 },
-      "targets": [
-        {
-          "expr": "rate(nucrm_leads_created_total[5m])",
-          "legendFormat": "Leads/sec",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
-    },
-    {
-      "title": "Deals Created / Won / Lost",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 18 },
-      "targets": [
-        {
-          "expr": "rate(nucrm_deals_created_total[5m])",
-          "legendFormat": "Created/sec",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(nucrm_deals_won_total[5m])",
-          "legendFormat": "Won/sec",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(nucrm_deals_lost_total[5m])",
-          "legendFormat": "Lost/sec",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
-    },
-    {
-      "title": "Deal Value (cumulative)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 26 },
-      "targets": [
-        {
-          "expr": "nucrm_deals_value_total",
-          "legendFormat": "Total Value",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] }
-    },
-    {
-      "title": "Tasks Pending / Completed",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 26 },
-      "targets": [
-        {
-          "expr": "nucrm_tasks_pending_total",
-          "legendFormat": "Pending",
-          "refId": "A"
-        },
-        {
-          "expr": "nucrm_tasks_completed_total",
-          "legendFormat": "Completed",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Activities (rate)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 26 },
-      "targets": [
-        {
-          "expr": "rate(nucrm_activities_total[5m])",
-          "legendFormat": "Activities/sec",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
     }
   ],
   "schemaVersion": 39,

@@ -77,8 +77,9 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  */
 export const MIN_SCANNED_FILES = 103;
 /**
- * Tenant-keyed statements the same walk examines (measured 230). Below this the
- * read patterns stopped working, or the scope shrank to the hand list.
+ * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
+ * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
+ * the read patterns stopped working, or the scope shrank to the hand list.
  */
 export const MIN_TABLE_READS = 200;
 
@@ -681,6 +682,15 @@ export function buildTargets(root: string): string[] {
  * two (#3196 `/api/flags`, #3197 `/api/track/event`) and both are fixed at the
  * call site in this file's own PR, with the guard as the test that keeps them
  * fixed.
+ *
+ * `app/api/metrics` was the third entry in this ledger when #3186 wrote it, and
+ * it is GONE as of #3195: the route no longer reads a tenant-policyed table at
+ * all, so the directory is back in scope and the count ratchet is what says so.
+ * That is the ledger working as designed — a deferral is a claim about today,
+ * and an entry that excuses nothing is reported as a finding rather than left to
+ * rot. What #3195 did NOT do is invent the aggregate privilege the directory
+ * wanted: the CRM counts are out of the scrape, not silently zero, and the
+ * privilege shape stays #3102's decision.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -737,15 +747,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'would honour it is on a FORCE-RLS table with no tenant to set first — #3102 exactly: a '
       + 'credential that grants a row-level privilege does not exist in the shipped policy set.',
     maxFindings: 3,
-  },
-  {
-    dir: 'app/api/metrics',
-    deferredTo: '#3195',
-    why: 'The Prometheus scrape has no user and no tenant to pin: its caller is an operator, and the '
-      + 'numbers are deliberately cross-tenant fleet totals, so the privilege it needs is a narrow '
-      + 'read-only aggregate arm — the shape #3195 puts to the same decision #3102 holds open, not a '
-      + 'withTenantContext() the route could legitimately call.',
-    maxFindings: 1,
   },
 ];
 

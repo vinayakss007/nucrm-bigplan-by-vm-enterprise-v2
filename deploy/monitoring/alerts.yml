@@ -84,14 +84,24 @@ groups:
           summary: "BullMQ queue backlog > 100"
           description: "Queue {{ $labels.queue }} has >100 waiting jobs for 10 minutes — worker stalled or under-provisioned."
 
-      - alert: NoTasksPending
-        expr: nucrm_tasks_pending_total == 0
-        for: 0m
+      - alert: CrmRowCountsWithheld
+        # #3195 retired `NoTasksPending` (expr: nucrm_tasks_pending_total == 0,
+        # "All tasks completed"). That series was a permanent zero: /api/metrics
+        # counted contacts/leads/deals/companies/tasks/activities/users on the
+        # bare pool, every one of those tables is guarded by tenant_isolation,
+        # and 0039 made the policy fail CLOSED — so the rule was true on every
+        # scrape of every tenant, forever, which is #2542's "no alert has ever
+        # been delivered" from the opposite side. The gauge is gone rather than
+        # left lying, so the rule that can actually fire is the one about the
+        # hole it left: the scrape exports no CRM row counts at all until
+        # #3102/#3195 settles the aggregate-privilege question.
+        expr: nucrm_crm_counts_exported == 0
+        for: 30m
         labels:
           severity: info
         annotations:
-          summary: "All tasks completed"
-          description: "All pending tasks are now completed."
+          summary: "CRM row counts are absent from /api/metrics"
+          description: "The scrape reports nucrm_crm_counts_exported == 0 — tenant-keyed CRM totals are withheld because no shipped RLS privilege can read them fleet-wide (#3195, #3102). Panels on those series will show No data, not zero."
 
   - name: nucrm-infra
     rules:
