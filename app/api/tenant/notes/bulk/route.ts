@@ -10,7 +10,7 @@ import { db } from '@/drizzle/db';
 import { notes, contacts, deals, leads, companies, tasks } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { ownerScope } from '@/lib/api/owner-scope';
@@ -117,7 +117,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       userId: ctx.userId,
       action: 'bulk_add_note',
       entityType: entity_type,
-      newData: { count: validIds.length, entity_ids: validIds.slice(0, 20) },
+      newData: bulkIdsAudit({ idsKey: 'entity_ids', ids: validIds, affected: validIds.length }),
     });
 
     return NextResponse.json({ ok: true, affected: validIds.length });

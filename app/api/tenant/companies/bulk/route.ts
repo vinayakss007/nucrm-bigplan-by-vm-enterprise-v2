@@ -17,7 +17,7 @@ import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middlewar
 import { db } from '@/drizzle/db';
 import { companies, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, sql, inArray, or, ilike, isNull } from 'drizzle-orm';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -86,6 +86,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'No valid companies found' }, { status: 404 });
 
     let affected = 0;
+    // #3220 — the audit records the ids this action wrote. `validIds` is filtered
+    // `deletedAt IS NULL`, so for `restore` it names none of the rows touched.
+    let auditIds: string[] = validIds;
 
     // #2618 — same doctrine as the deals bulk gate (#2641): the action writes
     // the column that IS the action, so a field_permissions restriction on it
@@ -306,6 +309,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             )
           );
         affected = res.rowCount ?? 0;
+        auditIds = restorableIds;
         break;
       }
       case 'add_to_segment': {
@@ -318,8 +322,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
-        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
-        affected = resSeg.rowCount ?? memberValues.length;
+        // #3220 — RETURNING yields only the members this statement created; the ids
+        // `onConflictDoNothing` skipped must not be claimed by the audit.
+        const inserted = await db
+          .insert(segmentMembers)
+          .values(memberValues)
+          .onConflictDoNothing()
+          .returning({ entityId: segmentMembers.entityId });
+        affected = inserted.length;
+        auditIds = inserted.map(r => r.entityId);
         break;
       }
       default:
@@ -329,7 +340,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'company',
-      newData: { count: affected, company_ids: validIds.slice(0, 20), payload },
+      newData: bulkIdsAudit({ idsKey: 'company_ids', ids: auditIds, affected, payload }),
     });
 
     return NextResponse.json({ ok: true, affected, action });

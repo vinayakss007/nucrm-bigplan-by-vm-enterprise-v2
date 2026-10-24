@@ -18,7 +18,7 @@ import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -91,7 +91,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid deals found' }, { status: 404 });
 
-    let affected = 0;
+    let affected = 0, auditIds: string[] = validIds; // #3220: the audit names what the action wrote, not the request
 
     // #2616 — assign/transfer/stage/close write real deals columns
     // (assigned_to / stage_id) straight from payload keys with no
@@ -418,9 +418,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             )
           );
         const restorableIds = restorable.map(r => r.id);
-        if (!restorableIds.length) {
-          return NextResponse.json({ error: 'No deleted deals found to restore' }, { status: 404 });
-        }
+        auditIds = restorableIds;
+        if (!restorableIds.length) return NextResponse.json({ error: 'No deleted deals found to restore' }, { status: 404 });
 
         // Plan limit check: restoring deals could push count over limit
         const [tenantWithPlan] = await db
@@ -477,8 +476,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
-        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
-        affected = resSeg.rowCount ?? memberValues.length;
+        const inserted = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing().returning({ entityId: segmentMembers.entityId });
+        affected = inserted.length;
+        auditIds = inserted.map(r => r.entityId);
         break;
       }
       default:
@@ -488,7 +488,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'deal',
-      newData: { count: affected, deal_ids: validIds.slice(0, 20), payload },
+      newData: bulkIdsAudit({ idsKey: 'deal_ids', ids: auditIds, affected, payload }),
     });
 
     return NextResponse.json({ ok: true, affected, action });

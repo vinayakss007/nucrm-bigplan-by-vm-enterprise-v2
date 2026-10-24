@@ -20,7 +20,7 @@ import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, inArray, isNull, or, ilike, type SQL } from 'drizzle-orm';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -420,8 +420,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             eq(contacts.doNotContact, false),
             eq(contacts.unsubscribed, false),
           ));
-        const eligibleIds = eligibleRows.map(r => r.id);
-        const skippedOptedOut = validIds.length - eligibleIds.length;
+        const eligibleIds = eligibleRows.map(r => r.id), skippedOptedOut = validIds.length - eligibleIds.length;
+        auditIds = eligibleIds; // #3220 — an opted-out contact is named in no audit row
 
         if (eligibleIds.length === 0) {
           affected = 0;
@@ -465,8 +465,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
-        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
-        affected = resSeg.rowCount ?? memberValues.length;
+        const inserted = await db
+          .insert(segmentMembers)
+          .values(memberValues)
+          .onConflictDoNothing()
+          .returning({ entityId: segmentMembers.entityId });
+        affected = inserted.length;
+        auditIds = inserted.map(r => r.entityId);
         break;
       }
       default:
@@ -478,7 +483,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'contact',
-      newData: { count: affected, contact_ids: auditIds.slice(0, 20), payload },
+      newData: bulkIdsAudit({ idsKey: 'contact_ids', ids: auditIds, affected, payload }),
     });
 
     return NextResponse.json({ ok: true, affected, action, ...extraResult });
