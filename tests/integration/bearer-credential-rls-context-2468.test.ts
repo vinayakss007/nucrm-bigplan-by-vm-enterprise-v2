@@ -63,7 +63,7 @@
  * Self-skips when no database is reachable.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -396,7 +396,19 @@ d('public bearer-token routes establish a tenant context from the credential (#2
         await admin.query(`DROP POLICY IF EXISTS "${name}" ON "${table}"`);
       } catch (err) { mark(`drop policy ${name}`, err); }
     }
-    for (const [label, sqlText, params] of [
+    // #3165: `audit_logs` cannot be deleted on the autocommit connection.
+    // drizzle/migrations/0042_audit_log_immutability.sql installs a BEFORE DELETE
+    // trigger that refuses the row unless `app.allow_audit_purge` is set, and
+    // `SET LOCAL` only means anything inside a transaction boundary — so that one
+    // statement was unrunnable as written, and the residue it left is what made
+    // the `tenants` delete below it fail too, on every database that has the
+    // migration applied. lib/db/audit-archival.ts:179 is the sanctioned shape.
+    //
+    // One transaction with a savepoint per statement, because the per-table
+    // `restoreFailures` labels are this suite's only leak report: in a Postgres
+    // transaction an aborted statement poisons every later one, so without the
+    // savepoints a single refusal would report eleven tables that never failed.
+    const CLEANUP: [string, string, unknown[]][] = [
       ['signing_events', `DELETE FROM signing_events WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['activities', `DELETE FROM activities WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['audit_logs', `DELETE FROM audit_logs WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
@@ -409,10 +421,42 @@ d('public bearer-token routes establish a tenant context from the credential (#2
       ['contacts', `DELETE FROM contacts WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['users', `DELETE FROM users WHERE id = $1`, [UPLOADER]],
       ['tenants', `DELETE FROM tenants WHERE id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
-    ] as [string, string, unknown[]][]) {
-      try {
-        await admin.query(sqlText, params);
-      } catch (err) { mark(`cleanup ${label}`, err); }
+    ];
+    let cleanupClient: PoolClient | undefined;
+    try {
+      cleanupClient = await admin.connect();
+      await cleanupClient.query('BEGIN');
+      for (const [label, sqlText, params] of CLEANUP) {
+        try {
+          await cleanupClient.query('SAVEPOINT cleanup');
+          if (label === 'audit_logs') {
+            await cleanupClient.query(`SET LOCAL app.allow_audit_purge = 'on'`);
+          }
+          await cleanupClient.query(sqlText, params);
+          await cleanupClient.query('RELEASE SAVEPOINT cleanup');
+        } catch (err) {
+          mark(`cleanup ${label}`, err);
+          await cleanupClient.query('ROLLBACK TO SAVEPOINT cleanup').catch(() => {});
+        }
+      }
+      await cleanupClient.query('COMMIT');
+      // The switch is transaction-local by construction, and this is the assertion
+      // that it stayed that way: a session-scoped `SET app.allow_audit_purge` here
+      // would hand the next caller to draw this connection out of the pool the
+      // ability to delete audit history. Checked on the same client, before release.
+      const leaked = await cleanupClient.query<{ v: string }>(
+        `SELECT coalesce(current_setting('app.allow_audit_purge', true), 'off') AS v`,
+      );
+      if (leaked.rows[0]?.v === 'on') {
+        mark('audit purge switch survived the transaction', new Error('app.allow_audit_purge is still on'));
+      }
+    } catch (err) {
+      mark('cleanup transaction', err);
+      await cleanupClient?.query('ROLLBACK').catch(() => {});
+    } finally {
+      // Releasing with a transaction still open would hand the pooled connection
+      // back in that state, so every path above ends the transaction first.
+      cleanupClient?.release();
     }
     // #2466: only this run's role may be taken back, and `releaseRlsProbeRole`
     // returns one string per statement it could not run rather than swallowing it
@@ -543,9 +587,11 @@ d('public bearer-token routes establish a tenant context from the credential (#2
     expect(body.offer.id).toBe(quoteA.id);
     expect(body.offer.title).toBe(`Offer A ${RUN}`);
     expect(body.offer.buyer_name).toBe('Buyer A');
-    // The first view answers with the status the row held on entry (#2468 kept the
-    // pre-write semantics); the write itself is asserted below.
-    expect(body.offer.status).toBe('sent');
+    // #3159 changed what the page reports: the row held `sent` when the handler
+    // read it, and the answer now names the status the guarded write committed —
+    // `viewed`. Reporting the pre-write snapshot would be reporting a status the
+    // handler has just proved the row no longer holds.
+    expect(body.offer.status).toBe('viewed');
     expect(body.seller.name).toBe(`2468 Workspace A ${RUN}`);
 
     expect(body.line_items.map((l) => l.id), 'the planted cross-tenant line must not be visible')

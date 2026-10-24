@@ -159,15 +159,45 @@ export function readOfferMetadata(quote: { metadata: unknown }): OfferMetadata {
   return offer as OfferMetadata;
 }
 
+/**
+ * #3159 — the state machine, as data.
+ *
+ * `canTransition()` was the only expression of this table, and the only caller
+ * that could act on it was a read that had already happened: every writer did
+ * `findFirst` → `canTransition(stale, to)` → `UPDATE ... WHERE id = ...`, so the
+ * check described a status the row may no longer hold by the time the write
+ * lands. Postgres gives the transition guard away for free, but only if the same
+ * set is in the `WHERE`. Both halves therefore read this one map: the JS check
+ * and the SQL `inArray` guard cannot drift apart, the way #3156's won/lost
+ * vocabulary and #658's stage names both drifted when two copies of a rule
+ * existed.
+ */
+export const OFFER_TRANSITIONS: Readonly<Record<OfferStatus, readonly OfferStatus[]>> = {
+  draft: [],
+  // resend allowed
+  sent: ['draft', 'sent'],
+  viewed: ['sent', 'viewed'],
+  accepted: ['sent', 'viewed'],
+  declined: ['sent', 'viewed'],
+  expired: ['sent', 'viewed'],
+  cancelled: ['draft', 'sent', 'viewed'],
+};
+
+/**
+ * The from-statuses a guarded write may claim `to` from.
+ *
+ * `to` reaches this from request bodies and from a `status` column something else
+ * wrote, so an unknown target is not a type error at runtime — it is an
+ * out-of-enum string. Answering with the empty set keeps both halves of the guard
+ * saying "nothing may transition to this" instead of throwing on an undefined
+ * index, which is what `canTransition()` has always reported for an unknown
+ * target.
+ */
+export function allowedFromStatus(to: string): readonly OfferStatus[] {
+  return OFFER_TRANSITIONS[to as OfferStatus] ?? [];
+}
+
 /** Status transition guard. */
 export function canTransition(from: string, to: OfferStatus): boolean {
-  switch (to) {
-    case 'sent':      return from === 'draft' || from === 'sent'; // resend allowed
-    case 'viewed':    return from === 'sent' || from === 'viewed';
-    case 'accepted':  return from === 'sent' || from === 'viewed';
-    case 'declined':  return from === 'sent' || from === 'viewed';
-    case 'expired':   return from === 'sent' || from === 'viewed';
-    case 'cancelled': return from === 'draft' || from === 'sent' || from === 'viewed';
-    default:          return false;
-  }
+  return allowedFromStatus(to).includes(from as OfferStatus);
 }

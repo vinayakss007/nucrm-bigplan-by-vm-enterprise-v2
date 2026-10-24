@@ -120,6 +120,17 @@ vi.mock('@/drizzle/db', async () => {
     },
   });
 
+  // Drizzle's UPDATE builder is *both* thenable and `.returning()`-able, and
+  // #3159's guarded writes read the winning row off the second one: `WHERE id ∧
+  // tenant ∧ status IN (from-set)` plus `.returning({id})`, empty array = the row
+  // moved underneath us. Mocking only the thenable half makes the handler throw
+  // instead of taking its commit path, so both halves are mirrored here — and the
+  // guard is made to win, since that is what a well-behaved view of this row does.
+  const settle = (rows: unknown[]) => {
+    const p = Promise.resolve(rows);
+    return Object.assign(p, { returning: () => Promise.resolve(rows) });
+  };
+
   const makeUpdate = (insideTx: boolean) => (table: unknown) => {
     const entry = {
       table: getTableName(table as Parameters<typeof getTableName>[0]),
@@ -134,7 +145,7 @@ vi.mock('@/drizzle/db', async () => {
         return {
           where: (w: unknown) => {
             entry.where = w;
-            return Promise.resolve();
+            return settle(entry.table === 'quotes' ? [{ id: 'quote-1' }] : []);
           },
         };
       },

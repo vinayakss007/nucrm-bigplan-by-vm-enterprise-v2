@@ -20,7 +20,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -29,6 +29,7 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
+  allowedFromStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -46,6 +47,10 @@ const offerAcceptSchema = z.object({
  */
 type AcceptOutcome =
   | { kind: 'expired' }
+  // #3159 — the guard lost: the row moved to a state this transition does not
+  // admit between the read above and the write below. Reported as data, not by
+  // throwing, so the pool gets a clean connection either way (#2446's K2 rule).
+  | { kind: 'conflict' }
   | { kind: 'accepted'; acceptedAt: Date };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
@@ -74,16 +79,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     // write is now one transaction scoped to the tenant the credential resolved.
     // #2446's sibling (`app/api/public/quotes/[id]/accept`) is the shape copied.
     const outcome = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx): Promise<AcceptOutcome> => {
+      // #3159 — both writes below carried only `WHERE id = ...`. The check at the
+      // top of this handler is against a row that can change while the buyer's
+      // POST is in flight, so a seller's cancel landing after this read but
+      // before the UPDATE used to be overwritten: a cancelled offer came back to
+      // life as 'accepted', with a confirmation the seller never made. Postgres
+      // re-evaluates the WHERE against the locked row version, so claiming the
+      // transition's from-set in the write makes the loser return here instead
+      // of winning. The auto-expire arm was the same problem in reverse — an
+      // accept that committed first was being flattened to 'expired'.
       if (offer.expiresAt && new Date(offer.expiresAt).getTime() < Date.now()) {
-        await tx.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
+        const [expired] = await tx
+          .update(quotes)
+          .set({ status: 'expired', updatedAt: new Date() })
+          .where(and(
+            eq(quotes.id, offer.id),
+            eq(quotes.tenantId, offer.tenantId),
+            inArray(quotes.status, allowedFromStatus('expired')),
+          ))
+          .returning({ id: quotes.id });
+        if (!expired) return { kind: 'conflict' };
         return { kind: 'expired' };
       }
 
       const now = new Date();
-      await tx
+      const [accepted] = await tx
         .update(quotes)
         .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(eq(quotes.id, offer.id));
+        .where(and(
+          eq(quotes.id, offer.id),
+          eq(quotes.tenantId, offer.tenantId),
+          inArray(quotes.status, allowedFromStatus('accepted')),
+        ))
+        .returning({ id: quotes.id });
+      if (!accepted) return { kind: 'conflict' };
 
       // One jsonb merge through patchOfferMetadata instead of the second inline
       // jsonb_set this route used to run: same merge semantics as decline, and it
@@ -111,6 +140,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     });
 
     if (outcome.kind === 'expired') return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
+    // The offer moved under this request — nothing above was written, so no
+    // metadata, no activity row, no audit entry, and no accept happened.
+    if (outcome.kind === 'conflict') {
+      return NextResponse.json({ error: 'Offer cannot be accepted in its current state' }, { status: 409 });
+    }
 
     await logAudit({
       tenantId: offer.tenantId,
