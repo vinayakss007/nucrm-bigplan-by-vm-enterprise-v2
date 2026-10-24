@@ -52,7 +52,12 @@ vi.mock('@/lib/rbac/enforce', async (importOriginal) => {
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: vi.fn(async () => null) }));
 vi.mock('@/lib/api/read-rate-limit', () => ({ rateLimitRead: vi.fn(async () => null) }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => undefined) }));
+vi.mock('@/lib/audit', async (importOriginal) => ({
+  // #3220: only the writer is faked — `bulkIdsAudit` is the shape the bulk routes now
+  // build their payload with, so a mock that omits it turns the route into a 500.
+  ...(await importOriginal<typeof import('@/lib/audit')>()),
+  logAudit: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/audit/super-admin', () => ({ logSuperAdminAction: vi.fn(async () => undefined) }));
 
 async function queueSelects(...queues: unknown[][]) {

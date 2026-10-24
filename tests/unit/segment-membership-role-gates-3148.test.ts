@@ -54,7 +54,12 @@ vi.mock('@/lib/auth/middleware', async () => {
 });
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: async () => null }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn() }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+vi.mock('@/lib/audit', async (importOriginal) => ({
+  // #3220: only the writer is faked — `bulkIdsAudit` is the shape under test,
+  // so a mock that omits it turns every bulk route into a 500.
+  ...(await importOriginal<typeof import('@/lib/audit')>()),
+  logAudit: vi.fn(),
+}));
 vi.mock('@/lib/api/with-api-route', () => ({
   withApiRoute: <C>(fn: (request: NextRequest, context: C) => unknown) => fn,
 }));
@@ -104,6 +109,12 @@ function reset(rows: unknown[][] = []) {
         return node;
       },
       onConflictDoNothing: () => node,
+      // #3220 — the bulk segment cases now read back what they inserted, so the
+      // harness answers "every value became a row" (no conflict skipped).
+      returning: () => {
+        const vals = Array.isArray(record.values) ? record.values : [record.values];
+        return Promise.resolve(vals.map(v => ({ entityId: (v as { entityId?: string }).entityId })));
+      },
       then: (resolve: (v: unknown) => unknown) =>
         resolve({ rowCount: Array.isArray(record.values) ? record.values.length : 1 }),
     };

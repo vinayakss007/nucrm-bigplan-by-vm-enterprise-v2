@@ -15,7 +15,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -93,6 +93,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     let affected = 0;
     let skippedAlreadyConverted = 0;
+    // #3220 — the audit names the ids this action wrote. `validIds` is filtered
+    // `deletedAt IS NULL`, so for `restore` / `add_to_segment` it is a set that does
+    // not contain a single row the action touched.
+    let auditIds: string[] = validIds;
 
     switch (action) {
       case 'status': {
@@ -121,6 +125,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           const toConvert = validIds.filter(id => !convertedSet.has(id));
 
           let convertedCount = 0;
+          const convertedIds: string[] = [];
           for (const leadId of toConvert) {
             try {
               const result = await convertLeadCore({
@@ -128,12 +133,16 @@ export const POST = withApiRoute(async (req: NextRequest) => {
                 actorId: ctx.userId,
                 leadId,
               });
-              if (result.ok) convertedCount += 1;
+              if (result.ok) { convertedCount += 1; convertedIds.push(leadId); }
             } catch (err) {
               await logError({ error: err, context: 'leads/bulk:convert', tenantId: ctx.tenantId });
             }
           }
           affected = convertedCount;
+          // #3220 — a conversion that threw is not a conversion. `count` already
+          // said `convertedCount`; the id list said all of `validIds`, so the audit
+          // claimed the ones that failed and the already-converted ones it skipped.
+          auditIds = convertedIds;
           skippedAlreadyConverted = toConvert.length - convertedCount;
           break;
         }
@@ -349,6 +358,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             )
           );
         affected = res.rowCount ?? 0;
+        auditIds = restorableIds;
         break;
       }
       case 'add_to_segment': {
@@ -361,8 +371,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
-        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
-        affected = resSeg.rowCount ?? memberValues.length;
+        // #3220 — RETURNING yields exactly the members this statement created; the
+        // ids `onConflictDoNothing` skipped must not appear in the audit.
+        const inserted = await db
+          .insert(segmentMembers)
+          .values(memberValues)
+          .onConflictDoNothing()
+          .returning({ entityId: segmentMembers.entityId });
+        affected = inserted.length;
+        auditIds = inserted.map(r => r.entityId);
         break;
       }
       case 'add_to_sequence': {
@@ -421,7 +438,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'lead',
-      newData: { count: affected, lead_ids: validIds.slice(0, 20), payload },
+      newData: bulkIdsAudit({ idsKey: 'lead_ids', ids: auditIds, affected, payload }),
     });
 
     return NextResponse.json({

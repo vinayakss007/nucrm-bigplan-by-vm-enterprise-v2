@@ -160,7 +160,12 @@ vi.mock('@/lib/api/validate', () => ({
   validateBody: vi.fn(() => ({ success: true, data: mockBody.current })),
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => undefined) }));
+vi.mock('@/lib/audit', async (importOriginal) => ({
+  // #3220: only the writer is faked — `bulkIdsAudit` is the shape under test,
+  // so a mock that omits it turns every bulk route into a 500.
+  ...(await importOriginal<typeof import('@/lib/audit')>()),
+  logAudit: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/dashboard/widget-cache', () => ({ invalidateWidgetCache: vi.fn() }));
 
 const { requireAuth } = await import('@/lib/auth/middleware');

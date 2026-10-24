@@ -223,6 +223,56 @@ export async function logAudit(opts: {
   }
 }
 
+/** How many ids a bulk audit row lists before the counts take over (#3220). */
+export const BULK_AUDIT_ID_LIMIT = 20;
+
+/**
+ * #3220 — the `newData` a bulk operation writes about the ids it touched.
+ *
+ * Six routes (`app/api/tenant/{tasks,leads,deals,companies,contacts,notes}/bulk`) wrote
+ * `{ count, <entity>_ids: ids.slice(0, 20), payload }` straight from whichever id array
+ * was in scope at the top of the handler, and two things were wrong with that:
+ *
+ * 1. The set in scope is the request's *validated* set, not the set the action wrote.
+ *    For `restore` the two are disjoint by construction — `valid` is filtered
+ *    `deletedAt IS NULL`, and the case re-resolves its ids against the trash (#3154) —
+ *    so a restore of three trashed leads audited up to twenty live leads it never
+ *    touched and named none of the three it did. `add_to_segment` over-claims the same
+ *    way: `onConflictDoNothing` skips ids that were already members.
+ * 2. `slice(0, 20)` discards the rest of the list without recording that it did, so a
+ *    reader of a 250-row entry sees `count: 250` beside a 20-element array and cannot
+ *    tell a deliberately short list from a broken one. `MAX_BULK` makes that overflow
+ *    reachable by design.
+ *
+ * Callers therefore pass the set their own write targeted, and the payload states how
+ * much of it survived: `ids_listed < ids_total` reads as "this is a prefix", never as
+ * "the log is corrupt". Both fields are always present, so their absence is what would
+ * mean something went wrong. `contacts/bulk` already did (1) by hand as its own
+ * `auditIds`; this is that doctrine for all six.
+ *
+ * Deliberately not an option on `logAudit`: the truncation belongs with the bulk payload
+ * shape, and the hash chain must keep seeing a plain `newData` object.
+ */
+export function bulkIdsAudit(opts: {
+  /** The jsonb key the list is filed under, e.g. `task_ids`. */
+  idsKey: string;
+  /** The ids THIS action wrote — not the ids the caller was handed back. */
+  ids: readonly string[];
+  /** Rows the write reported, so `count` and the list can be reconciled. */
+  affected: number;
+  /** Request payload echo, kept for the filters/segment_id it carries. */
+  payload?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const listed = opts.ids.slice(0, BULK_AUDIT_ID_LIMIT);
+  return {
+    count: opts.affected,
+    [opts.idsKey]: listed,
+    ids_listed: listed.length,
+    ids_total: opts.ids.length,
+    ...(opts.payload ? { payload: opts.payload } : {}),
+  };
+}
+
 export interface HashVerificationResult {
   valid: boolean;
   totalChecked: number;

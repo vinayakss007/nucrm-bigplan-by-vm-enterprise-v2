@@ -94,7 +94,12 @@ vi.mock('@/lib/auth/middleware', () => ({
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: vi.fn(async () => null) }));
 vi.mock('@/lib/api/read-rate-limit', () => ({ rateLimitRead: vi.fn(async () => null) }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => undefined) }));
+vi.mock('@/lib/audit', async (importOriginal) => ({
+  // #3220: only the writer is faked — `bulkIdsAudit` is the shape under test,
+  // so a mock that omits it turns every bulk route into a 500.
+  ...(await importOriginal<typeof import('@/lib/audit')>()),
+  logAudit: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/audit/super-admin', () => ({ logSuperAdminAction: vi.fn(async () => undefined) }));
 vi.mock('@/lib/portal-auth', () => ({
   resolvePortalIdentity: vi.fn(async () => ({ tenantId: TENANT, contactId: 'contact-1' })),
