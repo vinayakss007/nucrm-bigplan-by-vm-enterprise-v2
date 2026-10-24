@@ -176,9 +176,12 @@ describe('Lead Warming routes', () => {
 
   describe('DELETE /api/tenant/lead-warming/campaigns/[id]', () => {
     it('archives campaign', async () => {
+      // #3212: the write now claims its row — `.returning({ id })` with a
+      // non-empty result is what lets the handler answer `ok: true`.
       mockDb.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(undefined),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'cam-1' }]),
       });
 
       const route = (await import('@/app/api/tenant/lead-warming/campaigns/[id]/route')).DELETE;
@@ -189,6 +192,21 @@ describe('Lead Warming routes', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.ok).toBe(true);
+    });
+
+    it('answers 404 when the archive matched nothing', async () => {
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      });
+
+      const route = (await import('@/app/api/tenant/lead-warming/campaigns/[id]/route')).DELETE;
+      const res = await route(
+        createTestRequest('/api/tenant/lead-warming/campaigns/cam-1', { method: 'DELETE' }),
+        { params: Promise.resolve({ id: 'cam-1' }) },
+      );
+      expect(res.status).toBe(404);
     });
   });
 
