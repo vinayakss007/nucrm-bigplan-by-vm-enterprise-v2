@@ -4,17 +4,23 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { forms, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { isEntityId } from '@/lib/id';
+import { withFormLookupContext } from '@/lib/db/form-capture-context';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const [form] = await db
+    // #3163: this handler runs for a visitor with no session, so it had no
+    // tenant context — and `forms` is FORCE-RLS'd on `app.current_tenant`, which
+    // the pool pins to '' (#2446's class). The read returned nothing for a form
+    // that exists and is published, and this route answered 404. The lookup
+    // context (migration 0132) is what makes the row visible: one form id,
+    // SELECT only, nothing else on the table.
+    const [form] = await withFormLookupContext(id, tx => tx
       .select({
         id: forms.id,
         name: forms.name,
@@ -27,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .from(forms)
       .innerJoin(tenants, eq(tenants.id, forms.tenantId))
       .where(eq(forms.id, id))
-      .limit(1);
+      .limit(1));
 
     // #2119: distinguish "form gone/unpublished" (404) from "tenant not
     // active" (403 + machine-readable code) so visitors get a truthful

@@ -91,7 +91,7 @@ export function getPinnedClient(): PoolClient | undefined {
 // a privilege GUC that survives a checkout is handed to an unrelated request under
 // PgBouncer — #2446: the portal ones name a bearer credential, not a workspace.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).

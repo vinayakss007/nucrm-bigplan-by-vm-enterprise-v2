@@ -5,9 +5,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
 import { forms, tenants, contacts, formSubmissions, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { withFormLookupContext } from '@/lib/db/form-capture-context';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createNotification } from '@/lib/notifications';
@@ -101,7 +102,16 @@ export async function POST(req: NextRequest) {
     const formData = sanitizeFormData(rawFormData as Record<string, unknown>);
 
     // 2. Fetch form and tenant context
-    const formResult = await db.select({
+    //
+    // #3163: this handler answers an ANONYMOUS caller, so it had no tenant
+    // context, and `forms` is FORCE-RLS'd against `app.current_tenant` — which
+    // lib/db/pool.ts:241 pins to '' on every checkout. The read below therefore
+    // returned ZERO rows for a published, active form and this endpoint answered
+    // 404 "Form not found or inactive" for every real submission. #2446's class,
+    // in a directory its sweep never covered. The lookup context (migration 0122's
+    // shape) makes exactly one form row visible; the tenant-scoped work that
+    // follows runs under withTenantContext(), the way #2446's own routes do.
+    const formResult = await withFormLookupContext(form_id, tx => tx.select({
       id: forms.id,
       tenantId: forms.tenantId,
       name: forms.name,
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
     .from(forms)
     .innerJoin(tenants, eq(tenants.id, forms.tenantId))
     .where(and(eq(forms.id, form_id), eq(forms.isActive, true)))
-    .limit(1);
+    .limit(1));
 
     const form = formResult[0];
 
@@ -138,7 +148,7 @@ export async function POST(req: NextRequest) {
     const message = String(formData.message || formData.notes || formData.Message || '');
     let contactId: string | null = null;
 
-    await db.transaction(async (tx) => {
+    await withTenantContext(form.tenantId, NO_USER_SENTINEL, async (tx) => {
       if (email) {
         // #1130: read within the transaction (tx.query, not db.query) so the
         // existence check and the insert below see a consistent snapshot and
@@ -243,10 +253,18 @@ export async function POST(req: NextRequest) {
     // Save message as a separate note if present — non-critical, so it runs
     // AFTER commit on the regular pool (#2222): its failure must not abort
     // the transaction that carries the lead itself.
+    //
+    // #3163: it still needs its OWN tenant context — the one above died with its
+    // transaction — because `activities` is FOR ALL-policyed and a contextless
+    // insert here is a 42501. The catch stays OUTSIDE the context: #2222's rule
+    // is that a .catch() inside a transaction turns an aborted tx into a silent
+    // rollback, and this write is deliberately the one that must not be able to
+    // undo the submission.
     if (contactId && message) {
-      await db.insert(activities).values({
+      const noteContactId = contactId;
+      await withTenantContext(form.tenantId, NO_USER_SENTINEL, tx => tx.insert(activities).values({
         tenantId: form.tenantId,
-        contactId: contactId,
+        contactId: noteContactId,
         eventType: 'note',
         metadata: {
           message: message,
@@ -254,10 +272,10 @@ export async function POST(req: NextRequest) {
           form_name: form.name
         },
         entityType: 'contact',
-        entityId: contactId,
+        entityId: noteContactId,
         action: 'form_message',
         description: `Sent message via form "${form.name}"`
-      }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
+      })).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
     }
 
 
@@ -281,9 +299,15 @@ export async function POST(req: NextRequest) {
       //
       // row-projection-exempt: #2459 whole-row by design — `fullContact` feeds
       //   syncCalculatedFields, which reads arbitrary contact columns by name.
-      const fullContact = await db.query.contacts.findFirst({
-        where: eq(contacts.id, contactId)
-      });
+      // #3163: this read needs the tenant context too. Contextless it returned
+      // undefined for a contact this same request had just written, so
+      // `syncCalculatedFields` never ran at all — another of this issue's
+      // silent-zero-row failures rather than a loud one.
+      const capturedContactId = contactId;
+      const fullContact = await withTenantContext(form.tenantId, NO_USER_SENTINEL, tx =>
+        tx.query.contacts.findFirst({
+          where: eq(contacts.id, capturedContactId)
+        }));
       if (fullContact) {
         await syncCalculatedFields(form.tenantId, 'contact', contactId, fullContact);
       }

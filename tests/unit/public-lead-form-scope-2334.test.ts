@@ -56,11 +56,23 @@ const sqlText = (arg: unknown): string =>
   new PgDialect().sqlToQuery(arg as Parameters<PgDialect['sqlToQuery']>[0]).sql;
 
 vi.mock('@/drizzle/db', () => {
+  // #3163: the form ownership lookup and the capture writes now both run inside
+  // the caller-named tenant's RLS context, because `forms`/`leads`/`companies`/
+  // `form_submissions` are FORCE-RLS'd against `app.current_tenant` and the pool
+  // pins it to '' for an anonymous caller. A context is a transaction, so the
+  // tx double has to answer the reads the context actually makes — a real
+  // drizzle tx exposes `query.forms` / `query.companies` exactly like `db` does.
+  const findForm = async (cfg: { where?: unknown }) => {
+    if (cfg?.where !== undefined) harness.state.formLookupWhere.push(cfg.where);
+    return harness.state.formRow;
+  };
   const makeTx = () => ({
     execute: async () => undefined,
     query: {
       leads: { findFirst: async () => harness.state.existingLead },
       contacts: { findFirst: async () => null },
+      forms: { findFirst: findForm },
+      companies: { findFirst: async () => ({ id: COMPANY_ID }) },
     },
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
@@ -161,7 +173,9 @@ describe('POST /api/leads/public — form scoping and submission integrity (#233
     await (await handler())(post(capture({ form_id: FORM_ID })));
     // One db.transaction() for the whole capture; the submission went through tx,
     // so a rejected submission rolls the lead back instead of stranding it.
-    expect(harness.state.transactions).toBe(1);
+    // #3163 adds exactly one more: the tenant-context transaction the ownership
+    // lookup runs in, which still precedes every write.
+    expect(harness.state.transactions).toBe(2);
     expect(harness.state.txInserts.map((i) => i.table)).toContain('form_submissions');
     expect(harness.state.dbInserts.map((i) => i.table)).not.toContain('form_submissions');
   });
@@ -184,7 +198,10 @@ describe('POST /api/leads/public — form scoping and submission integrity (#233
     expect(harness.state.txInserts).toEqual([]);
     expect(harness.state.txUpdates).toEqual([]);
     expect(harness.state.dbInserts).toEqual([]);
-    expect(harness.state.transactions).toBe(0);
+    // #3163: one transaction is open now — the READ-ONLY tenant context the
+    // ownership lookup itself needs. What this test guards is that no WRITE
+    // transaction is reached, which the three empty write logs above pin.
+    expect(harness.state.transactions).toBe(1);
   });
 
   it('asks the form lookup for active, non-deleted rows owned by tenant_id', async () => {
