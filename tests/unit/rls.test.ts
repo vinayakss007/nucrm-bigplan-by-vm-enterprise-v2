@@ -142,7 +142,11 @@ describe('db/rls', () => {
       const sql = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]).sql;
       expect(sql).toContain("set_config('app.current_user'");
       expect(sql).toContain("set_config('app.auth_lookup', 'true'");
-      expect(sql.match(/set_config/g)).toHaveLength(2);
+      // #3218 added the third: a session redemption is not a credential lookup, so
+      // it clears app.token_credential rather than leaving whatever a pre-auth
+      // request last bound. Still one round-trip — the cost #87 was about.
+      expect(sql).toContain("set_config('app.token_credential', ''");
+      expect(sql.match(/set_config/g)).toHaveLength(3);
     });
 
     it('refuses to resolve an identity for an empty userId', async () => {

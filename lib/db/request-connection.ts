@@ -90,8 +90,12 @@ export function getPinnedClient(): PoolClient | undefined {
 // intent (SET LOCAL via with*Context) but the helpers accept a bare client, and
 // a privilege GUC that survives a checkout is handed to an unrelated request under
 // PgBouncer — #2446: the portal ones name a bearer credential, not a workspace.
+// #3218 adds two more of that kind: app.token_credential names the bearer value
+// the pre-auth redemption policies match (it carries credential material, so it is
+// cleared to '' — no hash equals the empty string) and app.token_retire_user names
+// the user whose outstanding tokens a retire write may tombstone.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false), set_config('app.token_credential', '', false), set_config('app.token_retire_user', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).

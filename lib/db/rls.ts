@@ -17,27 +17,27 @@
  * while never leaking to another request's connection checkout.
  */
 
-import { db, type DbClient } from '@/drizzle/db';
+import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { setTenantCarrier, clearTenantCarrier } from '@/lib/db/tenant-carrier';
+import { hasTransaction, isMockClient, type RlsTransaction } from '@/lib/db/rls-client';
 
-/** Drizzle transaction handle as passed to `with*Context` callbacks and `set*(…, tx)`. */
-export type RlsTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
-
-/**
- * Test seam: unit tests mock `@/drizzle/db` with plain `{ select, update,
- * insert, delete }` objects that have no `transaction` / `execute`. In that
- * case there is no RLS to enforce, so context setup becomes a no-op and the
- * `with*` helpers run `fn` directly against the mock. Production always has a
- * real pool, so this branch never triggers outside tests.
- */
-export function isMockClient(client: { execute?: unknown } | undefined): boolean {
-  return !client || typeof client.execute !== 'function';
-}
-
-export function hasTransaction(client: { transaction?: unknown }): boolean {
-  return !!client && typeof client.transaction === 'function';
-}
+// The #1843/#422 500-line ratchet moved the pre-auth credential contexts to
+// `lib/db/token-credential-context.ts` (#3218) and the handle primitives to
+// `lib/db/rls-client.ts`. Both stay exported from here — this module is the
+// canonical import path for RLS context, and callers and test mocks must not
+// have to know which file a helper currently sits in.
+export { isMockClient, hasTransaction };
+export type { RlsTransaction };
+export {
+  setAuthLookupContext,
+  setAuthResolutionContext,
+  withAuthLookupContext,
+  withAuthResolutionContext,
+  setTokenIssueContext,
+  withTokenIssueContext,
+} from '@/lib/db/token-credential-context';
+export type { CredentialWriteScope } from '@/lib/db/token-credential-context';
 
 /**
  * Value carried by `app.current_tenant` for a platform console session with no
@@ -240,106 +240,6 @@ export async function setUserContext(userId: string, tx?: RlsTransaction): Promi
 }
 
 /**
- * Mark the transaction as performing a pre-auth credential lookup.
- *
- * `users` has no SELECT policy that an unauthenticated connection can satisfy
- * (read_self needs app.current_user; super_admin_read needs the security
- * context), so `handleLogin`'s `SELECT ... WHERE email = ?` matched zero rows
- * and every login attempt returned "Invalid email or password" no matter what
- * was typed. This GUC admits SELECT on users for exactly that lookup.
- *
- * It is deliberately separate from app.is_super_admin: it grants a single
- * read, never UPDATE or DELETE, so a login request cannot mutate anyone's
- * account beyond what the *_own policies already allow.
- */
-export async function setAuthLookupContext(tx?: RlsTransaction): Promise<void> {
-  const client = tx || db;
-  if (isMockClient(client)) return;
-  const isLocal = tx ? sql`true` : sql`false`;
-  await client.execute(sql`SELECT set_config('app.auth_lookup', 'true', ${isLocal})`);
-}
-
-/**
- * Resolve an identity *from* a verified token: acting user + the pre-auth read
- * privilege, applied in a single statement.
- *
- * #87: the two halves used to be two `SELECT set_config(…)` round-trips. That
- * is the price of *one extra statement* (PP-028: a flat ~200 ms each), paid on
- * every session redemption, i.e. every authenticated request that the
- * AuthContext cache did not already answer. Nothing about the privilege changes
- * here — same two GUCs, same values, same transaction-local scope — only the
- * number of times we ask for them.
- */
-export async function setAuthResolutionContext(userId: string, tx?: RlsTransaction): Promise<void> {
-  if (!userId) {
-    throw new Error('[RLS] setAuthResolutionContext called with empty userId — refusing to set empty context');
-  }
-  const client = tx || db;
-  if (isMockClient(client)) return;
-  const isLocal = tx ? sql`true` : sql`false`;
-  await client.execute(
-    sql`SELECT set_config('app.current_user', ${userId}, ${isLocal}), set_config('app.auth_lookup', 'true', ${isLocal})`
-  );
-}
-
-/**
- * Run a pre-auth credential lookup (login, SSO subject match) with the minimum
- * read privilege it needs. Keep the callback to the lookup itself.
- */
-export async function withAuthLookupContext<T>(
-  fn: (tx: RlsTransaction) => Promise<T>
-): Promise<T> {
-  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
-  return await db.transaction(async (tx) => {
-    await setAuthLookupContext(tx);
-    return fn(tx);
-  });
-}
-
-/**
- * Mark the transaction as issuing a pre-auth credential token.
- *
- * `password_resets`, `email_verifications` and `oauth_codes` each carry only
- * `*_user_own` policies keyed on app.current_user — a value that does not exist
- * before a user has logged in. Pre-auth flows (password reset request, email
- * verification, OAuth code issuance) cannot insert credential rows under those
- * policies, and the claim/consume UPDATEs (marking deleted_at / used_at) match
- * zero rows silently.
- *
- * `app.token_issue` admits INSERT and UPDATE on exactly those three tables,
- * gated by each policy's own freshness / consumed-flag conditions. It is
- * deliberately NOT `app.auth_lookup`: that GUC means "this request is doing a
- * credential lookup" (SELECT only); a claim is a mutation. Mixing them would
- * let a lookup context also write.
- *
- * Set for the shortest possible sequence — the INSERT or UPDATE that creates
- * or consumes the credential — and cleared on connection release by both reset
- * lists (`lib/db/pool.ts`, `lib/db/request-connection.ts`).
- */
-export async function setTokenIssueContext(tx?: RlsTransaction): Promise<void> {
-  const client = tx || db;
-  if (isMockClient(client)) return;
-  const isLocal = tx ? sql`true` : sql`false`;
-  await client.execute(sql`SELECT set_config('app.token_issue', 'true', ${isLocal})`);
-}
-
-/**
- * Run `fn` inside a transaction carrying the `app.token_issue` privilege for
- * its full duration. Used by pre-auth credential issuance (password reset
- * request, email verification, OAuth code issuance) and claim/consume (marking
- * a token deleted_at / used_at) where no authenticated user exists yet.
- */
-export async function withTokenIssueContext<T>(
-  fn: (tx: RlsTransaction) => Promise<T>
-): Promise<T> {
-  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
-  return await db.transaction(async (tx) => {
-    await setTokenIssueContext(tx);
-    return fn(tx);
-  });
-}
-
-/**
  * Mark the transaction as resolving an email-tracking id.
  *
  * `email_tracking` has only `tenant_isolation`, which compares tenant_id to
@@ -387,41 +287,6 @@ export async function withUserContext<T>(
   if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await setUserContext(userId, tx);
-    return fn(tx);
-  });
-}
-
-/**
- * Redeem a *verified* session token — the full pre-tenant read sequence that
- * turns a presented cookie into an AuthContext.
- *
- * Combines two narrow privileges in a single transaction:
- *   app.current_user = userId   (taken from a cryptographically verified
- *                                session token, never from client input)
- *   app.auth_lookup  = 'true'   (admits the keyed sessions/users lookups)
- *
- * WHY BOTH ARE NEEDED (PP-026)
- * The only policy on `sessions` was `sessions_user_own`, whose USING clause
- * keys off app.current_user — the very value the redemption read exists to
- * establish. Chicken and egg: a session minted at login could never be
- * redeemed, so every authenticated request answered 401 "Session expired"
- * while signup/login themselves kept returning 2xx. `tenant_members` and
- * `roles` had the same shape via tenant_isolation (they need a tenant the
- * membership read is supposed to discover); 0127 (#2626) adds self-scoped
- * SELECT policies for them instead of widening the tenant-bound ones.
- *
- * Read-only by construction: neither GUC grants INSERT/UPDATE/DELETE here.
- */
-export async function withAuthResolutionContext<T>(
-  userId: string,
-  fn: (tx: RlsTransaction) => Promise<T>
-): Promise<T> {
-  if (!userId) {
-    throw new Error('[RLS] withAuthResolutionContext called with empty userId');
-  }
-  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
-  return await db.transaction(async (tx) => {
-    await setAuthResolutionContext(userId, tx);
     return fn(tx);
   });
 }
