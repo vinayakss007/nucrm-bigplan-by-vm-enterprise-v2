@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Accepted out-of-range override edges for scripts/check-override-ranges.mjs (#3167).",
+    "Each entry says: this parent is knowingly given a version outside the range it",
+    "declared, because an override in package.json forces it. Match key is",
+    "\"<parent> -> <name>\" (version-independent, so bumping the override target does",
+    "not silently change what was approved — re-read the reason when the version moves).",
+    "Add an entry only with a reason. Prefer a version-scoped override over a new entry:"
+  ],
+  "_schema": {
+    "parent": "lock key with the node_modules/ prefix stripped",
+    "name": "overridden package",
+    "range": "what the parent actually declared",
+    "forced_by": "the override entry in package.json that wins",
+    "reason": "why this is safe"
+  },
+  "entries": [
+    {
+      "parent": "@esbuild-kit/core-utils",
+      "name": "esbuild",
+      "range": "~0.18.20",
+      "forced_by": "\"@esbuild-kit/core-utils\": { \"esbuild\": \"^0.25.0\" }",
+      "reason": "Deliberate nested override: the 0.18 line is what the advisory-free build needs. Scope is already limited to this parent, so no other esbuild consumer is touched."
+    },
+    {
+      "parent": "exceljs",
+      "name": "uuid",
+      "range": "^8.3.0",
+      "forced_by": "\"exceljs\": { \"uuid\": \"^11.1.1\" }",
+      "reason": "Deliberate nested override off the deprecated uuid 8.x line. exceljs only uses v4 generation, whose call shape is unchanged in 11.x."
+    },
+    {
+      "parent": "lighthouse",
+      "name": "ws",
+      "range": "^7.0.0",
+      "forced_by": "\"ws\": \"^8.21.0\"",
+      "reason": "Blanket ws floor set to clear the ws advisory. Both ws-7 consumers are dev-time (lighthouse, bundle analyzer) and use only the default connect/send surface."
+    },
+    {
+      "parent": "webpack-bundle-analyzer",
+      "name": "ws",
+      "range": "^7.3.1",
+      "forced_by": "\"ws\": \"^8.21.0\"",
+      "reason": "Same blanket ws floor as above; dev-time ANALYZE build path only."
+    }
+  ]
+}
