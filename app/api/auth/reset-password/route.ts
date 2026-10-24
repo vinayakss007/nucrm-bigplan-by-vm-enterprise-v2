@@ -7,7 +7,8 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { withSecurityContext } from '@/lib/db/rls';
+import { setTokenIssueContext, setUserContext } from '@/lib/db/rls';
+import { db } from '@/drizzle/db';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
@@ -45,12 +46,14 @@ export async function POST(request: NextRequest) {
     // (TOCTOU double-use). The conditional UPDATE ... WHERE deleted_at IS NULL
     // RETURNING lets exactly one request win: the row is claimed in a single
     // atomic statement, and a second request gets zero rows back.
+    //
     // Pre-auth by construction: the holder of a reset token has proven nothing
-    // that RLS recognises, and this transaction reads the token row, rewrites
-    // `users`, and deletes+inserts `sessions`. Those are platform-level writes
-    // authorised by a signed single-use token, so they run in a security
-    // context rather than pretending to be a tenant request.
-    const claimed = await withSecurityContext(async (tx) => {
+    // that RLS recognises, so the claim runs under app.token_issue (the narrow
+    // privilege that admits UPDATE/INSERT on password_resets without an
+    // authenticated user). Once the row is claimed we know userId and switch to
+    // app.current_user for the users/sessions writes.
+    const claimed = await db.transaction(async (tx) => {
+      await setTokenIssueContext(tx);
       const [reset] = await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })
@@ -62,6 +65,8 @@ export async function POST(request: NextRequest) {
         .returning({ id: passwordResets.id, userId: passwordResets.userId });
 
       if (!reset) return null;
+
+      await setUserContext(reset.userId, tx);
 
       const sessionToken = await createToken(reset.userId);
       const sessionTokenHash = await hashToken(sessionToken);

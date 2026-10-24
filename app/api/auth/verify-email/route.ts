@@ -11,7 +11,8 @@ import { users, emailVerifications } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { withAuthLookupContext, withSecurityContext } from '@/lib/db/rls';
+import { withAuthLookupContext, setTokenIssueContext, setUserContext } from '@/lib/db/rls';
+import { db } from '@/drizzle/db';
 
 const schema = z.object({ token: z.string().min(1) });
 
@@ -48,15 +49,12 @@ export async function POST(request: NextRequest) {
 
     const row = result[0];
     if (!row) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
-    
-    // The write is authorised by the token itself, so it runs in the platform
-  // security context rather than pretending to be a tenant request.
-  // #3075: the lookup above is only a fast path — the claim is this
-  // conditional UPDATE inside the same transaction that flips email_verified.
-  // Two concurrent clicks on an unclaimed token used to both redeem it; under
-  // READ COMMITTED the second UPDATE blocks on the row lock, re-checks
-  // `used_at IS NULL`, and claims nothing.
-  const claimed = await withSecurityContext(async (tx) => {
+
+    // The claim is authorised by the token itself, so it runs with the
+    // token_issue privilege (UPDATE on email_verifications) plus the user
+    // context (UPDATE on users). Both are SET LOCAL inside one transaction.
+    const claimed = await db.transaction(async (tx) => {
+      await setTokenIssueContext(tx);
       const [win] = await tx
         .update(emailVerifications)
         .set({ usedAt: new Date() })
@@ -68,6 +66,8 @@ export async function POST(request: NextRequest) {
         .returning({ id: emailVerifications.id });
 
       if (!win) return false;
+
+      await setUserContext(row.userId, tx);
 
       await tx.update(users)
         .set({ emailVerified: true })
