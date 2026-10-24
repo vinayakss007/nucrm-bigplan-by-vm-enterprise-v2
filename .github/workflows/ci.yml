@@ -408,6 +408,15 @@ jobs:
           npm run db:bootstrap -- --yes
           npm run db:drift-check
 
+      # #3167 — no top-level `overrides` entry may force a package outside the
+      # range its parent declares. Appended here rather than next to the other
+      # `guard:*` steps because the register cites `ci.yml` up to `:409`, and
+      # inserting above those coordinates moves them out from under
+      # `guard:coords` (see the note at :349). This job already runs `npm ci`,
+      # which the guard needs for `semver`.
+      - name: Override range guard (#3167)
+        run: npm run guard:override-ranges
+
   # #2596 — every process.env name the app reads must be in `.env.example`, or
   # carry a written reason in `scripts/env-coverage-allowlist.json`. The failure
   # this removes is silent: a deployment that never sets a variable takes its
