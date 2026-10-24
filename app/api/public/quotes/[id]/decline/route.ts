@@ -5,8 +5,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
+import { allowedFromStatus, canTransition } from '@/lib/offers';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -22,6 +23,11 @@ type DeclineOutcome =
   | { kind: 'no_contact' }
   | { kind: 'no_quote' }
   | { kind: 'bad_state' }
+  /**
+   * The guarded write matched no row: the quote moved between the read and the
+   * `UPDATE`. `committedStatus` is what the column holds now.
+   */
+  | { kind: 'conflict'; committedStatus: string }
   | { kind: 'declined'; declinedAt: Date; tenantId: string; quoteId: string };
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,14 +81,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       if (!quote) return { kind: 'no_quote' };
 
-      const validStatuses = ['sent', 'viewed'];
-      if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
+      // #3177: same defect as the accept half — a local copy of the from-set
+      // checked against an unlocked read, then an unconditional write keyed on
+      // the id alone. `declined` and `cancelled` overlap in OFFER_TRANSITIONS
+      // ({sent, viewed} ∩ {draft, sent, viewed}), so whichever committed last
+      // owned the column: a decline could bury a cancel the seller had already
+      // made, and a second decline tab restamped `declinedAt`.
+      if (!canTransition(String(quote.status), 'declined')) return { kind: 'bad_state' };
 
       const now = new Date();
-      await tx
+      const [declined] = await tx
         .update(quotes)
         .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(eq(quotes.id, quote.id));
+        .where(and(
+          eq(quotes.id, quote.id),
+          eq(quotes.tenantId, quote.tenantId),
+          inArray(quotes.status, allowedFromStatus('declined')),
+        ))
+        .returning({ id: quotes.id });
+      if (!declined) {
+        const [fresh] = await tx
+          .select({ status: quotes.status })
+          .from(quotes)
+          .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId)))
+          .limit(1);
+        return { kind: 'conflict', committedStatus: fresh?.status ?? '' };
+      }
 
       await tx.insert(activities).values({
         tenantId: quote.tenantId,
@@ -110,6 +134,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (outcome.kind === 'no_quote') return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     if (outcome.kind === 'bad_state') {
       return NextResponse.json({ error: 'Quote cannot be declined in its current state' }, { status: 409 });
+    }
+    // #3177: the customer sees the same refusal as a quote that was never
+    // declinable, but this one moved first — `status` is the column as the
+    // database holds it, not the status this handler meant to write.
+    if (outcome.kind === 'conflict') {
+      return NextResponse.json(
+        { error: 'Quote cannot be declined in its current state', status: outcome.committedStatus },
+        { status: 409 },
+      );
     }
 
     await logAudit({
