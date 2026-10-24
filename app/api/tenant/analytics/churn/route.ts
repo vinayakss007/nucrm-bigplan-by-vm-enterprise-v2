@@ -21,6 +21,32 @@ import { logError } from '@/lib/errors-server';
 const calculateSchema = z.object({ contact_id: uuidField });
 
 /**
+ * #2774 — where a `probability` in this response actually came from.
+ *
+ * `public.calculate_churn_risk` (`drizzle/migrations/0032_missing_db_functions.sql`)
+ * is `RETURN 0.1;`: it never reads `p_contact_id`, `contacts`, an activity
+ * signal or `churn_predictions`. So the number this handler answers is a stored
+ * constant the database hands back, identical for every contact in every
+ * tenant — not a score about the contact in the request body.
+ *
+ * The verb the old doc comment used ("Calculate churn risk") and a bare
+ * `probability` key both implied a computation had happened. What is missing is
+ * the scoring RULE, which #2774 states is an owner decision (which signals
+ * count, whether this endpoint should compute at all or only read the stored
+ * `churn_predictions.churnProbability`, and whether a computed score is
+ * persisted). This file does not make that decision; it stops asserting the
+ * opposite one. The source is reported as data so no consumer can render the
+ * placeholder as a prediction.
+ *
+ * Additive only — `ok`, `probability` and `prediction` keep their names, types
+ * and meaning, so existing consumers are unaffected.
+ */
+type ChurnProbabilitySource = 'database_placeholder';
+const CHURN_PROBABILITY_SOURCE: ChurnProbabilitySource = 'database_placeholder';
+/** The function the value was read out of, so the response names its own source. */
+const CHURN_PROBABILITY_SOURCE_FUNCTION = 'public.calculate_churn_risk';
+
+/**
  * GET /api/tenant/analytics/churn
  * Get churn predictions.
  *
@@ -84,7 +110,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 /**
  * POST /api/tenant/analytics/churn
- * Calculate churn risk for a contact.
+ * Read this contact's churn score and the stored `churn_predictions` row.
+ *
+ * #2774 — the word "Calculate" in the old summary was the bug's other half: the
+ * RPC this handler calls returns a hard-coded constant, so nothing about the
+ * contact is calculated here. The response now says so with `probabilitySource`,
+ * `probabilitySourceFunction` and `isModelled`, and returns the stored
+ * prediction row beside the score because that row — not the RPC — is the only
+ * per-contact churn data in the database.
  *
  * The doc comment used to advertise `.../churn/calculate`, which is not a route:
  * there is no `calculate/route.ts` under `app/api/tenant/analytics/`, so a client
@@ -136,9 +169,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // this repo), so `as number || 0` was doubly wrong — the body carried
     // "0.1" while the cast said number, and `|| 0` could never fire because
     // every non-empty string is truthy. Coerce, then fall back on the number.
-    const raw = (result.rows[0] as Record<string, unknown> | undefined)?.['probability'];
+    //
+    // The declared type is the driver's real shape, not the shape the old cast
+    // assumed: this read can legitimately answer `"0.1"` (a `numeric` string),
+    // `0.1` (a driver that did parse it), `null` (SQL NULL) or nothing at all
+    // (no row). Hence `unknown` in, `number` out — the fallback runs on the
+    // number, where `0` and `NaN` are distinguishable and a `|| 0` on the
+    // string could neither fire for `"0"` nor reject `"abc"`.
+    const raw: unknown = (result.rows[0] as Record<string, unknown> | undefined)?.['probability'];
     const parsed = Number(raw);
-    const probability = Number.isFinite(parsed) ? parsed : 0;
+    /** The documented fallback for a value that is not a number: `0`, as a number. */
+    const probability: number = Number.isFinite(parsed) ? parsed : 0;
 
     const [prediction] = await db.select()
       .from(churnPredictions)
@@ -149,6 +190,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       ok: true,
       probability,
       prediction,
+      // #2774 — the score's provenance, as data. Every key above keeps its
+      // name, type and meaning, so this is additive for existing consumers.
+      // `probability` is the value the placeholder function stored, and
+      // `prediction` is the tenant's own `churn_predictions` row; they are
+      // allowed to disagree, and nothing here reconciles them into a score.
+      probabilitySource: CHURN_PROBABILITY_SOURCE,
+      probabilitySourceFunction: CHURN_PROBABILITY_SOURCE_FUNCTION,
+      isModelled: false,
     });
  
  
