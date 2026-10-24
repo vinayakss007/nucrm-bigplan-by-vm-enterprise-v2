@@ -292,12 +292,27 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       }
     }
 
-    await db.transaction(async (tx) => {
-      await tx.delete(fileAttachments).where(eq(fileAttachments.id, id));
+    // #3194: this is a hard DELETE that used to name only the row id and ignore
+    // whether it landed, so the counter half and the `{ ok: true }` claimed success
+    // for a row this statement never removed. Postgres re-evaluates the WHERE under
+    // the row lock, so the tenant the read above proved now lives in the clause too
+    // (every sibling write in this family already says so — #2383/#3159/#3189), and
+    // the delete is read back. The S3 object is already gone above — that half is
+    // honestly irrecoverable — but the DB/counter half answers 404 rather than
+    // reporting a removal it did not make.
+    const deleted = await db.transaction(async (tx) => {
+      const [removed] = await tx
+        .delete(fileAttachments)
+        .where(and(eq(fileAttachments.id, id), eq(fileAttachments.tenantId, ctx.tenantId)))
+        .returning({ id: fileAttachments.id });
+      if (!removed) return null;
       await tx.update(tenants)
         .set({ storageUsedBytes: sql`GREATEST(0, ${tenants.storageUsedBytes} - ${file.fileSize || 0})` })
         .where(eq(tenants.id, ctx.tenantId));
+      return removed;
     });
+
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:'delete', entityType:'file', entityId: id });
     return NextResponse.json({ ok: true });
