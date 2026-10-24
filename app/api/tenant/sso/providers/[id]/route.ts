@@ -72,7 +72,11 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       isActive: v.is_active ?? false,
       updatedAt: new Date(),
     })
-    .where(eq(ssoProviders.id, id))
+    // #3194: name the tenant in the write, not only in the read above. Tenancy
+    // was rest entirely on the `existing.tenantId !== ctx.tenantId` veto, so
+    // the SQL itself said nothing about whose row it may touch — every sibling
+    // write in this codebase names tenant_id, this was the exception.
+    .where(and(eq(ssoProviders.id, id), eq(ssoProviders.tenantId, ctx.tenantId)))
     .returning({
       id: ssoProviders.id,
       providerType: ssoProviders.providerType,
@@ -106,10 +110,17 @@ export const DELETE = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    await db
+    // #3194: same — the write names its tenant, reads back, and a zero-row
+    // claim (the row moved or was deleted in the gap) is the 404 the read
+    // above already knows how to answer, instead of an `{ ok: true }` for a
+    // row this statement never touched.
+    const [deleted] = await db
       .update(ssoProviders)
       .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(ssoProviders.id, id));
+      .where(and(eq(ssoProviders.id, id), eq(ssoProviders.tenantId, ctx.tenantId), isNull(ssoProviders.deletedAt)))
+      .returning({ id: ssoProviders.id });
+
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

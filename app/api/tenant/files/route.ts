@@ -292,12 +292,26 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       }
     }
 
-    await db.transaction(async (tx) => {
-      await tx.delete(fileAttachments).where(eq(fileAttachments.id, id));
+    // #3194: the hard delete named only the row id — tenancy rested entirely
+    // on the findFirst above, and a row deleted between that read and this
+    // statement still earned an `{ ok: true }` AND a second subtraction from
+    // the tenant's storage counter. The delete now names its tenant and reads
+    // back; the counter move rides on the claim actually landing. (The S3
+    // object delete above is idempotent — a concurrent remover did the same.)
+    const removed = await db.transaction(async (tx) => {
+      const [gone] = await tx
+        .delete(fileAttachments)
+        .where(and(eq(fileAttachments.id, id), eq(fileAttachments.tenantId, ctx.tenantId)))
+        .returning({ id: fileAttachments.id });
+      if (!gone) return false;
+
       await tx.update(tenants)
         .set({ storageUsedBytes: sql`GREATEST(0, ${tenants.storageUsedBytes} - ${file.fileSize || 0})` })
         .where(eq(tenants.id, ctx.tenantId));
+      return true;
     });
+
+    if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:'delete', entityType:'file', entityId: id });
     return NextResponse.json({ ok: true });
