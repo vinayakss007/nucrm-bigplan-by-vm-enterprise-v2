@@ -1,13 +1,4 @@
 {
   "_comment": "#2301 grandfathered HIGH/CRITICAL npm advisories. Each entry needs a written `reason`. The guard FAILS on any advisory not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs --update",
-  "entries": [
-    {
-      "ghsa": "GHSA-MRHX-C7XC-M3W5",
-      "pkg": "zod",
-      "range": "<4.6.6",
-      "severity": "high",
-      "title": "Zod can exhaust memory while validating oversized constrained collections",
-      "reason": "zod 3.25.76, nested under node_modules/chromium-bidi@17.0.2 — the chain is lighthouse@13.5.0 (devDependency) -> puppeteer-core@25.9.0 -> chromium-bidi@17.0.2 -> zod. Every one of those entries is `dev: true` in package-lock.json, and the advisory is memory exhaustion while validating an oversized constrained collection: the only collections this zod instance validates are CDP protocol messages from the Chromium puppeteer launches locally for `scripts/lighthouse-audit.ts`. Nothing attacker-controlled reaches it, and the app does not: PDF generation is pdfkit (`lib/pdf/render.ts` states \"no headless Chromium, puppeteer\"), and the runtime zod is 4.6.7 via package.json `^4.6.7`, outside the affected range. Not bumpable yet: puppeteer-core@25.16.0 (latest) still pins chromium-bidi@17.0.2, whose own range is `zod: ^3.24.1`; forcing the nested copy to zod 4 would be the 3->4 major under a package written against 3 that #3167 just removed. Fix path: when puppeteer-core consumes a chromium-bidi declaring zod >=4.6.6, re-run `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs --update` and this entry drops out."
-    }
-  ]
+  "entries": []
 }
