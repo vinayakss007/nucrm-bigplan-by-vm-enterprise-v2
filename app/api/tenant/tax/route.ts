@@ -172,8 +172,16 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Tax rate ID is required' }, { status: 400 });
     }
 
+    // #3212: `tax_rates` spreads `utils.lifecycle()`, not `utils.audit()`, so it
+    // has no `deleted_by` column. Drizzle builds the SET clause from the table's
+    // own column map, so an undeclared key renders as nothing — this tombstone
+    // never recorded a deleter, it only looked like it did. The
+    // `as Record<string, unknown>` cast is what hid that from tsc, so it goes
+    // too and the compiler now enforces the column list. If "who deleted this
+    // rate" is ever required, it belongs in a `logAudit` call (this handler has
+    // none); adding a column would be DDL and is out of scope here.
     const [row] = await db.update(taxRates)
-      .set({ isActive: false, deletedAt: sql`now()`, deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
+      .set({ isActive: false, deletedAt: sql`now()`, updatedAt: new Date() })
       .where(and(eq(taxRates.id, id), eq(taxRates.tenantId, ctx.tenantId)))
       .returning();
 

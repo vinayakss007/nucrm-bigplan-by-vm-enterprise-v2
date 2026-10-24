@@ -136,9 +136,14 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     }
 
     // Soft delete
+    // #3212: `territories` spreads `utils.lifecycle()`, not `utils.audit()`, so it
+    // has no `deleted_by` column. Drizzle renders a set key the table does not
+    // declare as nothing, so `deletedBy: ctx.userId` was silently dropped and the
+    // tombstone recorded no deleter. The `as Record<string, unknown>` cast is what
+    // hid this from tsc; it goes too, so the compiler now enforces the column list.
     const [row] = await db
       .update(territories)
-      .set({ deletedAt: new Date(), deletedBy: ctx.userId, updatedAt: new Date() } as Record<string, unknown>)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(territories.id, id), eq(territories.tenantId, ctx.tenantId)))
       .returning();
 
