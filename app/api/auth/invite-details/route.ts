@@ -7,8 +7,8 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getCurrentUserForToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
-import { invitations, tenants, users } from '@/drizzle/schema';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
+import { invitations, tenants } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -21,22 +21,27 @@ export async function GET(request: NextRequest) {
     const token = new URL(request.url).searchParams.get('token');
     if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
 
-    const inv = await db
-      .select({
-        email: invitations.email,
-        roleSlug: invitations.roleSlug,
-        expiresAt: invitations.expiresAt,
-        tenantName: tenants.name,
-        primaryColor: tenants.primaryColor,
-      })
-      .from(invitations)
-      .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
-      .where(and(
-        eq(invitations.token, token),
-        isNull(invitations.acceptedAt),
-        gt(invitations.expiresAt, new Date())
-      ))
-      .then(res => res[0]);
+    // #3182: `invitations` carries only `tenant_isolation`, and the workspace is
+    // exactly what this read has to find, so the contextless pool read answered 0
+    // rows and the invite page 404d "Invitation not found or has expired" for every
+    // genuine link. 0133 gives this SELECT an arm on `app.portal_lookup_token`.
+    const inv = await withPortalLookupContext({ accessToken: token }, (lookup) =>
+      lookup
+        .select({
+          email: invitations.email,
+          roleSlug: invitations.roleSlug,
+          expiresAt: invitations.expiresAt,
+          tenantName: tenants.name,
+          primaryColor: tenants.primaryColor,
+        })
+        .from(invitations)
+        .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+        .where(and(
+          eq(invitations.token, token),
+          isNull(invitations.acceptedAt),
+          gt(invitations.expiresAt, new Date())
+        ))
+        .then(res => res[0]));
 
     if (!inv) return NextResponse.json({ error: 'Invitation not found or has expired' }, { status: 404 });
 
@@ -47,14 +52,12 @@ export async function GET(request: NextRequest) {
       const sessionToken = cookieStore.get('nucrm_session')?.value;
       if (sessionToken) {
         // #2216: only count a live session, not a revoked-but-unexpired JWT.
+        // #3182: the `users` re-read that used to follow is gone — it ran on the bare
+        // pool, where `users_read_self` admits nothing without app.current_user, so it
+        // answered undefined and `isLoggedIn` was permanently false. The session
+        // already carries the verified email.
         const p = await getCurrentUserForToken(sessionToken);
-        if (p) {
-          const u = await db.query.users.findFirst({
-            where: eq(users.id, p.id),
-            columns: { email: true }
-          });
-          isLoggedIn = u?.email?.toLowerCase() === inv.email.toLowerCase();
-        }
+        isLoggedIn = !!p?.email && p.email.toLowerCase() === inv.email.toLowerCase();
       }
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
 

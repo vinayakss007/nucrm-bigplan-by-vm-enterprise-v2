@@ -11,7 +11,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 import { getCurrentUserForToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
+import { withTenantContext } from '@/lib/db/rls';
 import { invitations, tenants, users, roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
 
@@ -36,36 +37,51 @@ export async function POST(request: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const { token: inviteToken } = validated.data;
 
-    const inv = await db
-      .select({
-        id: invitations.id,
-        tenantId: invitations.tenantId,
-        email: invitations.email,
-        roleSlug: invitations.roleSlug,
-        invitedBy: invitations.invitedBy,
-        tenantName: tenants.name,
-      })
-      .from(invitations)
-      .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
-      .where(and(
-        eq(invitations.token, inviteToken),
-        isNull(invitations.acceptedAt),
-        gt(invitations.expiresAt, new Date())
-      ))
-      .then(res => res[0]);
+    // #3182: this row is what names the workspace, so the read cannot run in a tenant
+    // context the request does not have yet. `invitations` carries only
+    // `tenant_isolation`, so the contextless pool read answered 0 rows and the route
+    // returned 404 "Invitation not found or expired" for every genuine invitation.
+    // Migration 0133 adds a SELECT-only arm on `app.portal_lookup_token` — the same
+    // credential GUC 0122/0123 use — and every write below runs in the tenant
+    // context this lookup supplies.
+    const inv = await withPortalLookupContext({ accessToken: inviteToken }, (lookup) =>
+      lookup
+        .select({
+          id: invitations.id,
+          tenantId: invitations.tenantId,
+          email: invitations.email,
+          roleSlug: invitations.roleSlug,
+          invitedBy: invitations.invitedBy,
+          tenantName: tenants.name,
+        })
+        .from(invitations)
+        .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+        .where(and(
+          eq(invitations.token, inviteToken),
+          isNull(invitations.acceptedAt),
+          gt(invitations.expiresAt, new Date())
+        ))
+        .then(res => res[0]));
 
     if (!inv) return NextResponse.json({ error: 'Invitation not found or expired' }, { status: 404 });
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { email: true }
-    });
-
-    if (!user || user.email.toLowerCase() !== inv.email.toLowerCase()) {
+    // #3182: this used to re-read `users` on the bare pool to get the address. That
+    // read is policed by `users_read_self` (app.current_user), so it answered
+    // undefined and every invite — right token or not — came back
+    // 403 "This invitation is for a different email address". The session already
+    // carries the verified address: getCurrentUserForToken() resolves it through
+    // withAuthResolutionContext (#2216), so there is nothing left to read.
+    if (!session.email || session.email.toLowerCase() !== inv.email.toLowerCase()) {
       return NextResponse.json({ error: 'This invitation is for a different email address' }, { status: 403 });
     }
 
-    await db.transaction(async (tx) => {
+    // #3182: a db.transaction() handle carries no tenant GUCs, so this block was both
+    // refused (the `tenant_members` INSERT raised 42501) and silently inert (the
+    // `accepted_at` UPDATE matched no visible row and affected 0). withTenantContext
+    // sets app.current_tenant and app.current_user for the whole block, which is what
+    // `tenants_authenticated_update` and `users_update_own` need alongside
+    // `tenant_isolation`'s WITH CHECK.
+    await withTenantContext(inv.tenantId, userId, async (tx) => {
       // Find role
       const role = await tx.query.roles.findFirst({
         where: and(

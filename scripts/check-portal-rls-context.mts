@@ -586,11 +586,20 @@ function tsFiles(path: string): string[] {
 
 /**
  * The anonymous request surface: everything that answers a caller with no
- * session. `app/api/public/**` + the portal-auth files are #2446's; the last
+ * session. `app/api/public/**` + the portal-auth files are #2446's; the middle
  * three are #3163's, and they were the gap — the capture path (`/api/forms/submit`,
  * `/api/leads/public`) and the public form renderer (`/api/tenant/forms/public`)
  * read and wrote tenant-policyed tables on the pool, which is the same silent
  * zero-row failure this guard was written for, on routes this guard never walked.
+ *
+ * The last two are #3182's invitation-acceptance routes. They are named
+ * individually rather than as `app/api/auth`, because that directory is 20-odd
+ * routes and most of them resolve a session rather than a credential — the
+ * honest scope of this guard is "routes that read a policyed table before they
+ * have a tenant", and only these two do that today. The wider question (this
+ * list is hand-maintained while `check-public-row-projection.mts` derives its
+ * scope from `proxy.ts`) is filed separately from #3182 and deliberately not
+ * answered here.
  */
 export const DEFAULT_TARGETS = [
   'app/api/public',
@@ -600,6 +609,8 @@ export const DEFAULT_TARGETS = [
   'app/api/forms/submit',
   'app/api/tenant/forms/public',
   'app/api/leads/public',
+  'app/api/auth/accept-invite/route.ts',
+  'app/api/auth/invite-details/route.ts',
 ];
 
 export async function run(
