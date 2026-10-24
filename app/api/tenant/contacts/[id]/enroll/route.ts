@@ -60,8 +60,19 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     // Upsert enrollment + increment enroll count atomically
     const [enrollment] = await db.transaction(async (tx) => {
+      // #3193: the id is minted here rather than left to `defaultRandom()` because
+      // the two outcomes of the upsert — INSERT and ON CONFLICT DO UPDATE — are
+      // otherwise indistinguishable in the RETURNING row, and only the first one
+      // makes the table grow. `id` is deliberately absent from the `set` below, so
+      // the conflict branch hands back the row it found under that row's own id:
+      // an id that is not the one generated here is proof no enrollment was
+      // created. A pre-read cannot say that — two racing requests would each find
+      // no active row and each count, while #2740's partial unique index lets only
+      // one of them insert.
+      const newEnrollmentId = crypto.randomUUID();
       const [e] = await tx.insert(sequenceEnrollments)
         .values({
+          id: newEnrollmentId,
           tenantId: ctx.tenantId,
           sequenceId: sequence_id,
           contactId: contactId,
@@ -88,9 +99,20 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         })
         .returning();
 
-      await tx.update(sequences)
-        .set({ enrollCount: sql`${sequences.enrollCount} + 1` })
-        .where(eq(sequences.id, sequence_id));
+      // #3193: bump only when this statement actually created the row. The column
+      // counts enrollment rows — the other four writers (`sequences/[id]`, the contacts
+      // and leads bulk routes, `lib/automation/engine.ts`) each add the number of rows
+      // their insert actually returned — so the unconditional `+ 1` here made a
+      // double-clicked enroll button, or an automation re-enrolling a contact that was
+      // already active, raise a number no cancel path ever lowers
+      // (`cancelOpenEnrollments` only moves `status`). COALESCE matches those four: the
+      // column is nullable and `NULL + 1` is NULL, which would freeze the tally at
+      // nothing for the rest of the row's life.
+      if (e && e.id === newEnrollmentId) {
+        await tx.update(sequences)
+          .set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + 1` })
+          .where(eq(sequences.id, sequence_id));
+      }
 
       return [e];
     });

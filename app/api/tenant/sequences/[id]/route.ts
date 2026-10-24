@@ -62,8 +62,21 @@ export const GET = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
     }
 
+    // #3193: the relational read above hands back `sequences.enroll_count`, a tally of
+    // accepted enrollment calls that nothing ever decrements. The list route derives
+    // the figure from the table (`sequences/route.ts`, same #3193), so both readings of
+    // the number equal the enrollment rows for this sequence and neither trusts the
+    // counter. Same predicate as #2740's conflict target: live rows of this tenant.
+    const [enrolled] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(sequenceEnrollments)
+      .where(and(
+        eq(sequenceEnrollments.tenantId, ctx.tenantId),
+        eq(sequenceEnrollments.sequenceId, sequenceId),
+        isNull(sequenceEnrollments.deletedAt),
+      ));
+
     return NextResponse.json({
-      data: sequence,
+      data: { ...sequence, enrollCount: enrolled?.count ?? 0 },
     });
  
  

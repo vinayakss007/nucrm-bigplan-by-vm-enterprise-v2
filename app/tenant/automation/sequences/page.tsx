@@ -73,7 +73,11 @@ interface Sequence {
   name?: string | null;
   description?: string | null;
   is_active?: boolean | null;
-  enroll_count?: number | null;
+  // #3193: `enrollCount`, not `enroll_count` — the route serializes drizzle's row
+  // (camelCase) straight into JSON, so the snake_case key was always undefined here
+  // and the card fell back to "0 enrolled" whatever the sequence held. The value is
+  // now derived from `sequence_enrollments` by the route, not read off the counter.
+  enrollCount?: number | null;
   steps?: unknown[];
 }
 
@@ -274,7 +278,7 @@ export default function SequencesPage() {
                     {seq.is_active ? 'Active' : 'Paused'}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">{seq.description || `${Array.isArray(seq.steps) ? seq.steps.length : 0} steps · ${seq.enroll_count ?? 0} enrolled`}</p>
+                <p className="text-xs text-muted-foreground">{seq.description || `${Array.isArray(seq.steps) ? seq.steps.length : 0} steps · ${seq.enrollCount ?? 0} enrolled`}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => del(seq.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500">
