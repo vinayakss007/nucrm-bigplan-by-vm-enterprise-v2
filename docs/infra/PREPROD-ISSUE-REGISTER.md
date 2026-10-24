@@ -3730,7 +3730,11 @@ database`, and exactly two FAILs:
 CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
   (c) **Make the wiring greppable** — route `ci.yml:221` and `:254` (re-pinned from `:219`/`:252` on 2026-10-11 by **#2566**, originally from `:217`/`:250` by **#2539**) through `npm run guard:audit` /
-  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:63`/`:64 (re-pinned 2026-10-15 from `:62/:63`: one script line inserted above)`) so "which
+  `npm run guard:semgrep` (the same two commands, already aliases — keyed here on 2026-10-24 by **#3201** as
+  `package.json:"guard:audit"` and `package.json:"guard:semgrep"` instead of the `:63`/`:64` pair they
+  replace, a pair that had itself been re-pinned on 2026-10-15 from `:62`/`:63` when one script line was
+  inserted above. The second half had been written as a bare `:64`, which carries no filename, so
+  `guard:coords` never resolved it at all; keying it is what makes it attributable) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
   change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
   `register-drift` themselves. A control that is invisible to the obvious audit command is a
