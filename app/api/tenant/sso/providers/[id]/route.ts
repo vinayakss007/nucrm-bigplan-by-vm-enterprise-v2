@@ -72,7 +72,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       isActive: v.is_active ?? false,
       updatedAt: new Date(),
     })
-    .where(eq(ssoProviders.id, id))
+    .where(and(eq(ssoProviders.id, id), eq(ssoProviders.tenantId, ctx.tenantId)))
     .returning({
       id: ssoProviders.id,
       providerType: ssoProviders.providerType,
@@ -106,10 +106,13 @@ export const DELETE = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    await db
+    const deleted = await db
       .update(ssoProviders)
       .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(ssoProviders.id, id));
+      .where(and(eq(ssoProviders.id, id), eq(ssoProviders.tenantId, ctx.tenantId)))
+      .returning({ id: ssoProviders.id });
+
+    if (!deleted.length) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

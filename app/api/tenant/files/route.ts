@@ -292,12 +292,20 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       }
     }
 
+    let deletedCount = 0;
     await db.transaction(async (tx) => {
-      await tx.delete(fileAttachments).where(eq(fileAttachments.id, id));
-      await tx.update(tenants)
-        .set({ storageUsedBytes: sql`GREATEST(0, ${tenants.storageUsedBytes} - ${file.fileSize || 0})` })
-        .where(eq(tenants.id, ctx.tenantId));
+      const deleted = await tx.delete(fileAttachments)
+        .where(and(eq(fileAttachments.id, id), eq(fileAttachments.tenantId, ctx.tenantId)))
+        .returning({ id: fileAttachments.id });
+      deletedCount = deleted.length;
+      if (deletedCount > 0) {
+        await tx.update(tenants)
+          .set({ storageUsedBytes: sql`GREATEST(0, ${tenants.storageUsedBytes} - ${file.fileSize || 0})` })
+          .where(eq(tenants.id, ctx.tenantId));
+      }
     });
+
+    if (deletedCount === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:'delete', entityType:'file', entityId: id });
     return NextResponse.json({ ok: true });
