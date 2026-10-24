@@ -14,6 +14,7 @@ import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit, limiters, getRateLimitHeaders } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { logError } from '@/lib/errors-server';
+import { withTokenIssueContext } from '@/lib/db/rls';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -72,10 +73,19 @@ export async function POST(request: NextRequest) {
         const token = randomBytes(32).toString('hex');
         const tokenHash = createHash('sha256').update(token).digest('hex');
 
-        await db.insert(passwordResets).values({
-          userId: user.id,
-          token: tokenHash,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+        // #3102: this is the pre-auth path — nobody has a session yet, so
+        // `app.current_user` is empty and `password_resets_user_own` (0088, FOR
+        // ALL, keyed on it) refuses the INSERT outright with 42501. 0134 added
+        // `password_resets_token_issue` for exactly this write: INSERT only,
+        // behind app.token_issue, WITH CHECK-ing a non-null user_id and a future
+        // expires_at. The helper opens its own transaction so the SET LOCAL
+        // privilege cannot outlive this one statement.
+        await withTokenIssueContext(async (tx) => {
+          await tx.insert(passwordResets).values({
+            userId: user.id,
+            token: tokenHash,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+          });
         });
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';

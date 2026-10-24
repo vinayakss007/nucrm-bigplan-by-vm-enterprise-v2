@@ -27,6 +27,10 @@ vi.mock('@/lib/db/rls', () => ({
   withTenantContext: vi.fn(),
   withUserContext: vi.fn(),
   withAuthLookupContext: vi.fn(),
+  // #3102: POST /api/auth/forgot-password now wraps its pre-auth token INSERT
+  // in this helper (0134's `password_resets_token_issue`). Unlisted here it
+  // would be an undefined export on the mock the moment the branch is taken.
+  withTokenIssueContext: vi.fn(),
   setTenantContext: vi.fn(),
 }));
 vi.mock('@/lib/modules/auto-install', () => ({ installDefaultModules: vi.fn() }));

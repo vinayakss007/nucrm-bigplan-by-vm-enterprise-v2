@@ -939,6 +939,13 @@
       "when": 1792749194413,
       "tag": "0133_invitations_credential_lookup_rls",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 134,
+      "when": 1792827729000,
+      "tag": "0134_pre_auth_token_rls",
+      "breakpoints": true
     }
   ]
 }

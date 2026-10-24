@@ -15,8 +15,9 @@ import { getAppUrl } from '../app-url';
  */
 
 import { users, passwordResets, sessions } from '@/drizzle/schema';
+import { db } from '@/drizzle/db';
 import { eq, isNull, and, gt } from 'drizzle-orm';
-import { withAuthLookupContext, withSecurityContext } from '@/lib/db/rls';
+import { withAuthLookupContext, setTokenIssueContext, setUserContext, withTokenIssueContext } from '@/lib/db/rls';
 import { createHash, randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
@@ -32,10 +33,11 @@ const RESET_TOKEN_LENGTH = 32;
 export async function clearResetToken(userId: string): Promise<void> {
   try {
     // PP-026: password_resets only carried `password_resets_user_own`, which
-  // keys off app.current_user — but a reset is authorised by the token, not by
-  // a session, so no user context exists here. Runs in the platform-security
-  // context that 0088 admits for this table.
-  await withSecurityContext(async (tx) =>
+    // keys off app.current_user — but a reset is authorised by the token, not by
+    // a session, so no user context exists here. Runs with the token_issue
+    // privilege that admits UPDATE on password_resets without an authenticated
+    // user (0134).
+    await withTokenIssueContext(async (tx) =>
       await tx
       .update(passwordResets)
       .set({ deletedAt: new Date() })
@@ -95,7 +97,7 @@ export async function requestPasswordReset(
     // reset links were redeemable at once — and until the expiry window each
     // old URL was a standing credential. Retire the previous tokens in the
     // same platform-security context that owns this table (PP-026).
-    await withSecurityContext(async (tx) => {
+    await withTokenIssueContext(async (tx) => {
       await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })
@@ -273,7 +275,13 @@ export async function resetPassword(
     // still-live token for that user, and session invalidation moves inside
     // the same transaction (its failure now rolls the whole reset back
     // instead of being console.error'd away).
-    const resetUserId = await withSecurityContext(async (tx) => {
+    //
+    // Pre-auth by construction: the claim runs under app.token_issue (the
+    // narrow privilege that admits UPDATE/INSERT on password_resets without an
+    // authenticated user). Once the row is claimed we know userId and switch
+    // to app.current_user for the users/sessions writes.
+    const resetUserId = await db.transaction(async (tx) => {
+      await setTokenIssueContext(tx);
       const [claimed] = await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })
@@ -285,6 +293,8 @@ export async function resetPassword(
         .returning({ userId: passwordResets.userId });
 
       if (!claimed) return null;
+
+      await setUserContext(claimed.userId, tx);
 
       await tx
         .update(users)

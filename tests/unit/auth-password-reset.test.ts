@@ -32,11 +32,20 @@ let mockUpdate: ReturnType<typeof vi.fn>;
 let mockInsert: ReturnType<typeof vi.fn>;
 let mockDelete: ReturnType<typeof vi.fn>;
 
-vi.mock('@/drizzle/db', () => ({
-  get db() {
-    return { select: mockSelect, update: mockUpdate, insert: mockInsert, delete: mockDelete };
-  },
-}));
+vi.mock('@/drizzle/db', () => {
+  const mockTxFactory = () => ({
+    select: mockSelect,
+    update: mockUpdate,
+    insert: mockInsert,
+    delete: mockDelete,
+    transaction: vi.fn(async (fn) => fn(mockTxFactory())),
+  });
+  return {
+    get db() {
+      return mockTxFactory();
+    },
+  };
+});
 vi.mock('@/drizzle/schema', () => ({ users: {}, passwordResets: {}, sessions: {} }));
 vi.mock('@/drizzle/relations', () => ({}));
 // #3076 (guardrails §4): mirror the real SendResult, not undefined.

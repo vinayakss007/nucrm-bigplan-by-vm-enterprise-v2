@@ -6,8 +6,8 @@ const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
+vi.mock('@/drizzle/db', () => {
+  const mockTx = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -36,14 +36,58 @@ vi.mock('@/drizzle/db', () => ({
     delete: vi.fn(() => ({
       where: vi.fn(() => mockDelete()),
     })),
-  },
-}));
+    transaction: vi.fn(async (fn) => fn(mockTx)),
+  };
+  return {
+    db: mockTx,
+  };
+});
 
 vi.mock('@/lib/email/service', () => ({
   // #3076 (guardrails §4): sendEmail resolves SendResult {success,...} and never
   // throws; the old `mockResolvedValue(undefined)` was a lie about the contract.
   sendEmail: vi.fn().mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-mock' }),
 }));
+
+vi.mock('@/lib/db/rls', () => {
+  const mockTx = {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => mockSelect()),
+        })),
+        innerJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(() => mockSelect()),
+          })),
+        })),
+      })),
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(() => mockInsert()),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => {
+          const rows = mockUpdate();
+          return Object.assign(rows, { returning: () => rows });
+        }),
+      })),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(() => mockDelete()),
+    })),
+    transaction: vi.fn(async (fn) => fn(mockTx)),
+    execute: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    withAuthLookupContext: vi.fn(async (fn) => fn(mockTx)),
+    withSecurityContext: vi.fn(async (fn) => fn(mockTx)),
+    setTokenIssueContext: vi.fn().mockResolvedValue(undefined),
+    setUserContext: vi.fn().mockResolvedValue(undefined),
+    withTokenIssueContext: vi.fn(async (fn) => fn(mockTx)),
+  };
+});
 
 vi.mock('@/lib/auth/session', () => ({
   hashPassword: vi.fn().mockResolvedValue('$hashed$'),

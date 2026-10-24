@@ -297,6 +297,49 @@ export async function withAuthLookupContext<T>(
 }
 
 /**
+ * Mark the transaction as issuing a pre-auth credential token.
+ *
+ * `password_resets`, `email_verifications` and `oauth_codes` each carry only
+ * `*_user_own` policies keyed on app.current_user — a value that does not exist
+ * before a user has logged in. Pre-auth flows (password reset request, email
+ * verification, OAuth code issuance) cannot insert credential rows under those
+ * policies, and the claim/consume UPDATEs (marking deleted_at / used_at) match
+ * zero rows silently.
+ *
+ * `app.token_issue` admits INSERT and UPDATE on exactly those three tables,
+ * gated by each policy's own freshness / consumed-flag conditions. It is
+ * deliberately NOT `app.auth_lookup`: that GUC means "this request is doing a
+ * credential lookup" (SELECT only); a claim is a mutation. Mixing them would
+ * let a lookup context also write.
+ *
+ * Set for the shortest possible sequence — the INSERT or UPDATE that creates
+ * or consumes the credential — and cleared on connection release by both reset
+ * lists (`lib/db/pool.ts`, `lib/db/request-connection.ts`).
+ */
+export async function setTokenIssueContext(tx?: RlsTransaction): Promise<void> {
+  const client = tx || db;
+  if (isMockClient(client)) return;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(sql`SELECT set_config('app.token_issue', 'true', ${isLocal})`);
+}
+
+/**
+ * Run `fn` inside a transaction carrying the `app.token_issue` privilege for
+ * its full duration. Used by pre-auth credential issuance (password reset
+ * request, email verification, OAuth code issuance) and claim/consume (marking
+ * a token deleted_at / used_at) where no authenticated user exists yet.
+ */
+export async function withTokenIssueContext<T>(
+  fn: (tx: RlsTransaction) => Promise<T>
+): Promise<T> {
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
+  return await db.transaction(async (tx) => {
+    await setTokenIssueContext(tx);
+    return fn(tx);
+  });
+}
+
+/**
  * Mark the transaction as resolving an email-tracking id.
  *
  * `email_tracking` has only `tenant_isolation`, which compares tenant_id to
