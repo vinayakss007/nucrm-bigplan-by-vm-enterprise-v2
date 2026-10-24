@@ -107,6 +107,12 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
 
 
     // Validate status transition if status is being changed
+    // #3189: when a status change is in play, the write claims the exact status
+    // this vet keyed on (below, in the UPDATE's WHERE). The vet reads an
+    // unlocked row, `concurrencyGuard` above is opt-in, and its guard read is a
+    // SEPARATE statement from this write — so without the claim, a terminated
+    // contract could be resurrected by an in-flight `suspended` PUT.
+    const claimsStatus = Boolean(allowedFields.status);
     if (allowedFields.status && allowedFields.status !== existing.status) {
       const VALID_TRANSITIONS: Record<string, string[]> = {
         draft: ['active', 'cancelled'],
@@ -135,8 +141,22 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(contracts.id, contractId), eq(contracts.tenantId, ctx.tenantId)))
+      .where(and(
+        eq(contracts.id, contractId),
+        eq(contracts.tenantId, ctx.tenantId),
+        ...(claimsStatus ? [eq(contracts.status, existing.status)] : []),
+      ))
       .returning();
+
+    // Zero rows with a claimed status = someone moved the row between the read
+    // and this write. Refuse the transition, land nothing else — same honest
+    // conflict shape as #3159/#3175/#3184.
+    if (!updated && claimsStatus) {
+      return NextResponse.json(
+        { error: `Contract status changed concurrently — cannot move '${existing.status}' to '${allowedFields.status}'. Reload and retry.` },
+        { status: 409 },
+      );
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
