@@ -16,6 +16,7 @@ import { leads, tenants, plans, companies, leadActivities, forms, formSubmission
 import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import { isEntityId } from '@/lib/id';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -98,15 +99,23 @@ export async function POST(request: NextRequest) {
       if (!isEntityId(form_id)) {
         return NextResponse.json({ error: 'Invalid form id' }, { status: 400 });
       }
-      const form = await db.query.forms.findFirst({
-        where: and(
-          eq(forms.id, form_id),
-          eq(forms.tenantId, tenant_id),
-          eq(forms.isActive, true),
-          isNull(forms.deletedAt),
-        ),
-        columns: { id: true, tenantId: true },
-      });
+      // #3163: `forms` is FORCE-RLS'd against `app.current_tenant`, which the pool
+      // pins to '' for a caller with no session — contextless this read returned
+      // nothing and the endpoint answered 404 "Invalid or inactive form" for a
+      // form that is active and DOES belong to this tenant. The tenant was
+      // proven to exist and be active above, so this ownership check runs in that
+      // tenant's context (the #2446 shape); no public read policy is needed here,
+      // because unlike /api/forms/submit the caller already named the workspace.
+      const form = await withTenantContext(tenant_id, NO_USER_SENTINEL, tx =>
+        tx.query.forms.findFirst({
+          where: and(
+            eq(forms.id, form_id),
+            eq(forms.tenantId, tenant_id),
+            eq(forms.isActive, true),
+            isNull(forms.deletedAt),
+          ),
+          columns: { id: true, tenantId: true },
+        }));
       if (!form) {
         return NextResponse.json({ error: 'Invalid or inactive form' }, { status: 404 });
       }
@@ -147,7 +156,13 @@ export async function POST(request: NextRequest) {
     // endpoint creates/updates a lead, not a contact. Named accordingly.
     let leadId!: string;
 
-    await db.transaction(async (tx) => {
+    // #3163: the capture write runs in the caller-named workspace's context —
+    // proven to exist and be active above. On the bare pool every statement in
+    // this transaction died on 42501 (`leads`, `companies`, `form_submissions`
+    // and `lead_activities` are all FOR ALL-policyed with no separate WITH
+    // CHECK, so their USING validates new rows), which is why public lead
+    // capture answered 500 rather than saving. Same fix as #2446's portal writes.
+    await withTenantContext(tenant_id, NO_USER_SENTINEL, async (tx) => {
       if (safeCompany.trim()) {
         const existingCo = await tx.query.companies.findFirst({
           where: and(
@@ -314,14 +329,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ exists: false });
     }
 
-    const contact = await db.query.contacts.findFirst({
-      where: and(
-        eq(contacts.tenantId, tenant_id),
-        eq(sql`lower(${contacts.email})`, email),
-        eq(contacts.isArchived, false)
-      ),
-      columns: { id: true }
-    });
+    const contact = await withTenantContext(tenant_id, NO_USER_SENTINEL, tx =>
+      tx.query.contacts.findFirst({
+        where: and(
+          eq(contacts.tenantId, tenant_id),
+          eq(sql`lower(${contacts.email})`, email),
+          eq(contacts.isArchived, false)
+        ),
+        columns: { id: true }
+      }));
 
     return NextResponse.json({ exists: !!contact });
   } catch {

@@ -60,17 +60,24 @@ export type TenantTable = { js: string; sql: string };
 
 /** A derived set this small means the schema stopped loading, not the product. */
 export const MIN_TENANT_KEYED_TABLES = 100;
-/** `find app/api/public -name route.ts` = 14, plus the three portal-auth files. */
-export const MIN_SCANNED_FILES = 17;
+/**
+ * `find app/api/public -name route.ts` = 14, plus the three portal-auth files,
+ * plus the three capture files #3163 added to `DEFAULT_TARGETS`. Pinned at the
+ * current surface on purpose: a floor left at 17 would say OK the day a capture
+ * directory stops existing, which is how #2446's sweep missed this path at all.
+ */
+export const MIN_SCANNED_FILES = 20;
 /** If the walk finds no tenant-keyed read at all, the patterns stopped working. */
 export const MIN_TABLE_READS = 20;
 
 /**
  * Every call that binds a handle with RLS GUCs set: six from `lib/db/rls.ts`,
- * and `withPortalLookupContext` from `lib/db/portal-lookup-context.ts` (where
- * #2472 moved it to stay under the #1843 line ratchet). The guard matches on the
- * *call name* at each site, so the split changes nothing it can see — this list
- * is only where the names come from.
+ * `withPortalLookupContext` from `lib/db/portal-lookup-context.ts` (where
+ * #2472 moved it to stay under the #1843 line ratchet), and
+ * `withFormLookupContext` from `lib/db/form-capture-context.ts` (#3163's
+ * anonymous form-render/capture lookup). The guard matches on the *call name* at
+ * each site, so the split changes nothing it can see — this list is only where
+ * the names come from.
  */
 export const CONTEXT_HELPERS = [
   'withTenantContext',
@@ -80,6 +87,7 @@ export const CONTEXT_HELPERS = [
   'withAuthResolutionContext',
   'withTrackingLookupContext',
   'withPortalLookupContext',
+  'withFormLookupContext',
 ];
 
 /**
@@ -184,6 +192,18 @@ export async function loadTenantTables(root = '.'): Promise<Map<string, TenantTa
  * sentence like "a bare `db.select()` loses the context" in a route's own
  * comment is not counted as a read. Strings and template literals are left
  * alone — raw SQL lives in them and must stay visible to the patterns.
+ *
+ * Regex literals are skipped over, not blanked. They cannot be blanked (a guard
+ * that erases code is not reading the code), but they must not be parsed as
+ * strings either: `escapeHtmlEntities` ends in `.replace(/'/g, '&#x27;')`, and
+ * an apostrophe that opens a "string" runs to the next quote in the file, which
+ * leaves every `//` comment between them visible. Measured on
+ * `app/api/leads/public/route.ts` before #3163 widened this guard's targets: the
+ * phantom string started at :44 and the next quote was the `''` of a comment at
+ * :103, so the prose at :89 — "a non-uuid reached `eq(forms.id, …)`" — was
+ * reported as a bare-pool read of `forms`. A false positive here is not noise:
+ * the only way to silence it is a baseline entry, and the baseline exists to
+ * hold real deferrals.
  */
 export function maskComments(src: string): string {
   const out = src.split('');
@@ -192,6 +212,9 @@ export function maskComments(src: string): string {
   };
   let i = 0;
   const n = src.length;
+  // Where `/` can only be a regex: division needs an operand before it, so a
+  // letter, digit, `_`, `$`, `)`, `]` or `}`-of-an-object-literal means divide.
+  const AFTER_OPERAND = /[A-Za-z0-9_$)\]]/;
   while (i < n) {
     const c = src[i];
     const d = src[i + 1];
@@ -207,6 +230,23 @@ export function maskComments(src: string): string {
       while (j < n && !(src[j] === '*' && src[j + 1] === '/')) j++;
       blank(i, Math.min(j + 2, n));
       i = j + 2;
+      continue;
+    }
+    if (c === '/' && !AFTER_OPERAND.test(src.slice(0, i).replace(/\s+$/, '').slice(-1) ?? '')) {
+      let j = i + 1;
+      let cls = false;
+      while (j < n) {
+        const e = src[j];
+        if (e === '\\') { j += 2; continue; }
+        // `[` is literal inside a class, and `/` closes one it never opened.
+        if (e === '[') { cls = true; j++; continue; }
+        if (e === ']' && cls) { cls = false; j++; continue; }
+        if (e === '\n') break;
+        if (e === '/' && !cls) { j++; break; }
+        j++;
+      }
+      while (j < n && /[dgimsuy]/.test(src[j])) j++;
+      i = j;
       continue;
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -544,7 +584,23 @@ function tsFiles(path: string): string[] {
   return out;
 }
 
-export const DEFAULT_TARGETS = ['app/api/public', 'lib/portal-auth.ts', 'lib/portal-session.ts', 'app/api/tenant/portal/login'];
+/**
+ * The anonymous request surface: everything that answers a caller with no
+ * session. `app/api/public/**` + the portal-auth files are #2446's; the last
+ * three are #3163's, and they were the gap — the capture path (`/api/forms/submit`,
+ * `/api/leads/public`) and the public form renderer (`/api/tenant/forms/public`)
+ * read and wrote tenant-policyed tables on the pool, which is the same silent
+ * zero-row failure this guard was written for, on routes this guard never walked.
+ */
+export const DEFAULT_TARGETS = [
+  'app/api/public',
+  'lib/portal-auth.ts',
+  'lib/portal-session.ts',
+  'app/api/tenant/portal/login',
+  'app/api/forms/submit',
+  'app/api/tenant/forms/public',
+  'app/api/leads/public',
+];
 
 export async function run(
   targets: string[],

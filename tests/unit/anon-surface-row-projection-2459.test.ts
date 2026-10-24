@@ -156,8 +156,13 @@ describe('GET /api/tenant/portal/login reads (#2459)', () => {
 
 describe('the anonymous surface keeps its one measured exception', () => {
   const forms = readFileSync(join(ROOT, 'app/api/forms/submit/route.ts'), 'utf8');
+  // The name group allows whatever RLS-context wrapper sits between `await` and
+  // the query (#3163 moved the anonymous capture's reads inside
+  // withTenantContext, because a contextless read of a tenant-policyed table is
+  // a silent zero-row read). `[^;]{0,120}?` cannot cross a statement boundary,
+  // so the two sites below still match one at a time and keep their names.
   const relational = [...forms.matchAll(
-    /(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+)?(?:tx|db)\.query\.contacts\.findFirst\(\{[\s\S]*?\n\s*\}\)/g,
+    /(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+[^;]{0,120}?)?(?:tx|db)\.query\.contacts\.findFirst\(\{[\s\S]*?\n\s*\}\)/g,
   )];
 
   it('projects the contact lookup that only needs id and tags', () => {
