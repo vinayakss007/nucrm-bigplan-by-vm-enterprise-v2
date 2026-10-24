@@ -13,12 +13,18 @@
  * #2227: status:'sent' + sentAt are persisted only after the email is
  * delivered. On delivery failure the invoice keeps its old status and the
  * route answers 502 so the UI can retry honestly.
+ *
+ * #3168: on success the status write is a guarded claim — `draft → sent` and
+ * nothing else, scoped to the tenant — because `invoices.status` belongs to the
+ * payment ledger. A send that loses that claim emails the customer, records the
+ * activity, and reports the status the ledger actually holds.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, contacts, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { INVOICE_SENDABLE_FROM } from '@/lib/billing/payments';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
@@ -118,8 +124,39 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // If this write fails the handler 500s via the outer catch: the customer
     // has the email, and a retry may duplicate it — the honest-failure
     // direction we prefer (#2227).
-    await db.transaction(async (tx) => {
-      await tx.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
+    //
+    // #3168: this used to be `UPDATE invoices SET status='sent' WHERE id=$1`,
+    // unguarded and unscoped. Two things were wrong with it. The status is owned
+    // by the payment ledger, so re-emailing a paid invoice demoted it below its
+    // own `amount_paid`, and re-emailing a cancelled or void one reopened a
+    // document the ledger refuses to touch. And tenancy rested entirely on the
+    // pre-read above, an SMTP round-trip earlier — a window, not a guard. The
+    // write now claims the from-set `INVOICE_SENDABLE_FROM` and its tenant in the
+    // WHERE, which Postgres re-evaluates under the row lock; zero rows back means
+    // the invoice moved while this handler was talking to the provider, so the
+    // committed status is re-read and reported instead of a status that was never
+    // written. The email did go out either way, so the timeline still records it.
+    const status = await db.transaction(async (tx): Promise<string> => {
+      const now = new Date();
+      const [claimed] = await tx
+        .update(invoices)
+        .set({ status: 'sent', sentAt: now, updatedAt: now })
+        .where(and(
+          eq(invoices.id, id),
+          eq(invoices.tenantId, ctx.tenantId),
+          inArray(invoices.status, INVOICE_SENDABLE_FROM),
+        ))
+        .returning({ id: invoices.id });
+
+      let committed = 'sent';
+      if (!claimed) {
+        const [fresh] = await tx
+          .select({ status: invoices.status })
+          .from(invoices)
+          .where(and(eq(invoices.id, id), eq(invoices.tenantId, ctx.tenantId)))
+          .limit(1);
+        committed = fresh?.status ?? String(invoice.status);
+      }
 
       if (invoice.contactId) {
         await tx.insert(activities).values({
@@ -135,9 +172,13 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             invoice_number: invoice.invoiceNumber,
             total_amount: invoice.totalAmount,
             to_email: toEmail,
+            // #3168: distinguishes "this send issued the document" from "this
+            // send re-emailed an invoice the ledger had already moved on".
+            status_after_send: committed,
           },
         });
       }
+      return committed;
     });
 
     await logAudit({
@@ -146,10 +187,10 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       action: 'invoice_sent',
       entityType: 'invoice',
       entityId: id,
-      newData: { to_email: toEmail, email_result: emailResult },
+      newData: { to_email: toEmail, email_result: emailResult, status },
     });
 
-    return NextResponse.json({ ok: true, status: 'sent', to_email: toEmail, email: emailResult });
+    return NextResponse.json({ ok: true, status, to_email: toEmail, email: emailResult });
   } catch (err) {
     await logError({ error: err, context: 'tenant/invoices/[id]/send POST', requestMethod: 'POST' });
     return apiError(err);

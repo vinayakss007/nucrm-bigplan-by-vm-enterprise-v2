@@ -29,6 +29,19 @@ type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Statuses that describe payment progress and may therefore be recomputed. */
 const PAYMENT_DRIVEN_STATUSES = new Set(['draft', 'sent', 'partially_paid', 'paid', 'overdue']);
 
+/**
+ * The from-statuses the send route may claim `sent` from.
+ *
+ * `status` is this module's column: every value in `PAYMENT_DRIVEN_STATUSES` is
+ * derived from the ledger by `recalculateInvoicePayments`, and the derivation
+ * above reaches `sent` from money, never from a delivery. Issuing the document
+ * is the one event still allowed to write it, and only while the row is a
+ * `draft` — overwriting `paid` or `partially_paid` with `sent` makes the row
+ * contradict its own summary, and overwriting `cancelled` or `void` resurrects
+ * a document the recalculation deliberately refuses to touch (#3168).
+ */
+export const INVOICE_SENDABLE_FROM: readonly string[] = ['draft'];
+
 export interface InvoiceTotals {
   totalAmount: number;
   amountPaid: number;
