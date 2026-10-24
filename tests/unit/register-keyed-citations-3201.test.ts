@@ -464,15 +464,23 @@ describe('the real register, keyed where a key exists', () => {
   const all = extractCitations(lines);
   const keyed = all.filter((c: { kind: string }) => c.kind === 'key');
 
-  it('carries exactly the six pointers #3198 re-pinned by hand, all of them keyed now', () => {
-    expect(keyed.map((c: { cite: string }) => c.cite).sort()).toEqual([
+  it('carries the six pointers #3198 re-pinned by hand, each keyed to its own alias', () => {
+    // Asserted as "these six are keyed" plus "nothing outside package.json is keyed yet",
+    // not as an exact global count: the pilot's scope is the six, and a later staged slice
+    // (#3201's own ask) must be able to key more pointers without breaking this file.
+    const cites = keyed.map((c: { cite: string }) => c.cite);
+    for (const want of [
+      'package.json:"guard:cron-lock"',
       'package.json:"db:deploy-migrate"',
       'package.json:"db:drift-check"',
       'package.json:"guard:catch-empty"',
-      'package.json:"guard:cron-lock"',
       'package.json:"guard:panel-error-state"',
-      'package.json:"guard:panel-error-state"',
-    ]);
+    ]) {
+      expect(cites.filter((x: string) => x === want).length).toBeGreaterThan(0);
+    }
+    // `guard:panel-error-state` was cited twice positionally, and is keyed twice.
+    expect(cites.filter((x: string) => x === 'package.json:"guard:panel-error-state"')).toHaveLength(2);
+    expect(new Set(keyed.map((c: { path: string }) => c.path))).toEqual(new Set(['package.json']));
     // None of the six may still be written positionally: the pilot converts the pointer, it
     // does not add a second one beside it.
     expect(
@@ -491,12 +499,16 @@ describe('the real register, keyed where a key exists', () => {
     expect(extractCommentCitations(lines)).toEqual([]);
   });
 
-  it('leaves the guard totals exactly where they were before any pointer was keyed', () => {
-    // Measured at c38b5deb: 468 instances, 463 resolvable, 5 unmatchable prose paths. Keying
-    // a pointer must not remove it from the set that is checked — only change the question.
+  it('counts every keyed pointer into the set the guard checks — keying did not shrink it', () => {
+    // Measured at `cce06902`, this PR's parent, and at a child of each of both trees: 468
+    // citation instances, 463 resolvable, 5 unmatchable prose paths — IDENTICAL before and
+    // after the six were keyed (the guard tables are in the PR body). Asserted as the
+    // invariant plus a floor rather than as a fixed total, because the register grows; what
+    // must never happen is a keyed pointer quietly leaving the checked set.
+    const tracked = spawnSync('git', ['ls-files'], { encoding: 'utf8', cwd: ROOT }).stdout.split('\n').filter(Boolean);
     const d = computeCoordDelta({
       lines,
-      tracked: spawnSync('git', ['ls-files'], { encoding: 'utf8', cwd: ROOT }).stdout.split('\n').filter(Boolean),
+      tracked,
       readFile: (p: string) => {
         try {
           return readFileSync(join(ROOT, p), 'utf8');
@@ -505,10 +517,11 @@ describe('the real register, keyed where a key exists', () => {
         }
       },
     });
-    expect(d.total).toBe(468);
-    expect(d.checked).toBe(463);
-    expect(d.keyed).toBe(6);
-    expect(d.skipped.size).toBe(5);
+    expect(keyed.length).toBeGreaterThanOrEqual(6);
+    expect(d.keyed).toBe(keyed.length);
+    expect(d.checked).toBe(d.total - d.skipped.size);
+    expect(d.total).toBeGreaterThanOrEqual(468);
     expect(d.drifted).toEqual([]);
+    for (const c of keyed) expect(d.skipped.has(c.cite)).toBe(false);
   });
 });

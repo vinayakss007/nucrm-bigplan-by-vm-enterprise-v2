@@ -44,8 +44,10 @@
  *     so the honest number is `same − authored by HEAD`. `git log` on main says how big the
  *     blind spot is tonight; the count is printed.
  *   - A citation whose line was already out of range when it was written has no "then"
- *     content to compare against. Counted as unverifiable, never as drift, and `guard:coords`
- *     still fails it if it is out of range at HEAD too.
+ *     content to compare against (and a keyed citation whose key was absent, ambiguous or
+ *     unparsable in the file then is the same case). Counted as unverifiable, never as
+ *     drift, and `guard:coords` still fails it if it is out of range at HEAD too — a key
+ *     that is missing at HEAD is NOT, that one is drift, and it is fatal.
  *   - A citation on a register line that is not committed yet. blame answers those with 40
  *     zeros, so they are counted separately rather than quietly scored: this is the state of
  *     anyone editing a re-pin PR, which is exactly who runs this screen by hand. The blame is

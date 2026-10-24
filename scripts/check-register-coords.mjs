@@ -14,7 +14,8 @@
  * at exactly the rate the cited files move, so this guard makes the drift blocking
  * using the same baseline-ratchet pattern as `guard:audit` (#2301):
  *   - every `path:N` citation in the register must resolve to a NON-BLANK, in-range
- *     line of a tracked file,
+ *     line of a tracked file, and every `path:"key"` citation (#3201) to exactly one
+ *     key held by that file's JSON object,
  *   - drift that is already known and has a PR in flight is listed with a written
  *     `reason` in scripts/register-coords-allowlist.json,
  *   - a NEW drift fails CI,
@@ -26,7 +27,8 @@
  *     register also cites vendored (`next/dist/...`), generated (`_06uykto._.js`)
  *     and container-absolute paths. The count and list are printed so a mass
  *     "file was renamed under the register" event stays visible.
- *   - A citation is `drifted` only when every candidate is blank or out-of-range.
+ *   - A citation is `drifted` only when EVERY candidate fails it — blank or out-of-range
+ *     for a `path:N`, missing / ambiguous / non-JSON / unparsable for a `path:"key"`.
  *     Suffix matching means `pool.ts:233` resolves against `lib/db/pool.ts`; if two
  *     tracked files end with the same path fragment, one live target is enough.
  *   - A citation minted inside an HTML comment FAILS, with no allowlist escape. Liveness
@@ -157,11 +159,11 @@ export function commentMask(text) {
 
 /**
  * Citations minted INSIDE an HTML comment. The register's convention is that a dated
- * correction comment records coordinates as prose ("line 159"), never `path:line`,
- * because `CITE_RE` cannot tell a record about a coordinate from a claim about one:
- * every token minted here silently joins the set the guard resolves and the tally it
- * prints. Measured on the first such comment written by hand — 12 tokens, all of them
- * resolving, none of them a claim anyone reviewed.
+ * correction comment records coordinates as prose ("line 159"), never `path:line` and —
+ * since #3201 — never `path:"key"`, because `CITE_RE` cannot tell a record about a
+ * coordinate from a claim about one: every token minted here silently joins the set the
+ * guard resolves and the tally it prints. Measured on the first such comment written by
+ * hand — 12 tokens, all of them resolving, none of them a claim anyone reviewed.
  */
 export function extractCommentCitations(lines) {
   const text = lines.join('\n');
