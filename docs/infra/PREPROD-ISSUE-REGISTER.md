@@ -4149,13 +4149,17 @@ not wired in).
 
 - **Naming is behaviour: a policy migration CI cannot see by name does not exist.** The first draft was
   tagged `0124_retire_ticket_portal_token`, which does not match the discovery regex in
-  `scripts/apply-rls-ci.mjs:33` (`/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
+  `scripts/apply-rls-ci.mjs:53` (`/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
   CI provisions its database with `db:sync` plus that sweep and never runs `db:migrate` (PP-060), so a
   `DROP POLICY` file the sweep skips leaves **the retired grant installed** in every CI and
   `drizzle-kit push`-provisioned workspace while a migrated production database moved on — the suites
   would have been measuring a database that does not exist after deploy. Renamed to
   `0124_retire_ticket_portal_token_rls_lookup`; the sweep log for this branch reads
   `APPLIED: 0124_retire_ticket_portal_token_rls_lookup`.
+  **(2026-10-24, #3179)** that regex is now a *fallback*, not the selector: discovery asks each
+  migration's SQL what it does (`SECURITY_SQL_RE`, `scripts/apply-rls-ci.mjs:60`), so a policy file
+  whose name carries none of those tokens is still applied. The naming rule recorded above keeps
+  working — it is simply no longer load-bearing, which was the point.
 
 - **How it was verified, on a database built the way CI builds one.**
 
