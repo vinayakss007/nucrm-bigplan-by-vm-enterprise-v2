@@ -85,6 +85,8 @@ jobs:
         run: npm run guard:cron-lock && npm run guard:field-permissions
       - name: Raw-SQL identifier + statement_timeout guard (#2528)
         run: npm run guard:raw-sql
+      - name: Override range guard (#3167)
+        run: npm run guard:override-ranges
 
   test-unit:
     name: Unit Tests
