@@ -1105,7 +1105,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   (GET + DELETE), `backups/[id]/download/route.ts` and `restore/route.ts` (GET + POST).
   Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
   statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
-  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94 (re-pinned 2026-10-24: **#3163** extended the list)`, one statement of nine `set_config`s) clears `app.is_super_admin` on
+  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94 (re-pinned 2026-10-24: **#3163** extended the list; same day **#3102** appended its tenth reset, `app.token_issue`)`, one statement of ten `set_config`s) clears `app.is_super_admin` on
   release — and since **#2446**, the three `app.portal_lookup_*` GUCs too, same statement — which is what makes the wider scope safe. It also reaches helpers that take `db`
   itself (`concurrencyGuard` in PATCH), which a `tx` would not.
 - **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
@@ -2226,7 +2226,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   the literals `'true'`/`'false'` (`lib/db/rls.ts:169` `setSuperAdminContext`, `:217` `setImpersonationContext` — tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
   proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
-  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`)`, `lib/db/request-connection.ts:94` — both
+  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`)`, `lib/db/request-connection.ts:94 (2026-10-24: **#3102** extended this list the same way, the line did not move)` — both
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
@@ -2264,7 +2264,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   minted, no HTTP write of any kind, no row values read — counts and catalog metadata only.
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
-- **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`)` (the same nine-`set_config` reset),
+- **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`)` (the same ten-`set_config` reset),
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
@@ -3462,7 +3462,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
 - **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
-  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`)` (text extended by **#2446**'s
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`)` (text extended by **#2446**'s
   `app.portal_lookup_*` reset names, construct unchanged), `pg_class`, `pg_policy`, `pg_roles`.
   <!-- coordinate corrections for #2456 (2026-10-08): seven sentences in this register — four in PP-058
        (this section's three, plus its row in the Summary table above), two in PP-057, one in PP-041 — cited
@@ -3981,7 +3981,8 @@ not wired in).
   outbound webhook or an OAuth client doing a `client_credentials` exchange. #2415 is the same bug
   class, already fixed here for the e-signature links; these six had simply never been probed.
 - **Why opening them is defensible — what authenticates instead, read in each handler.**
-  `app/api/auth/oauth/token/route.ts:17` self-limits to 20/min and `:64` compares `client_secret`
+  `app/api/auth/oauth/token/route.ts:18 (re-pinned 2026-10-24 from `:17`: **#3102** added one import line above it)` self-limits to 20/min and `:65` (same shift; the bare pointer was
+  `:64` before that import) compares `client_secret`
   length-first and then with `timingSafeEqual`; `app/api/auth/oauth/revoke/route.ts:16` and `:63`
   are the same pair. `app/api/webhooks/razorpay/route.ts:57` returns 503 unless the provider is
   configured and `:71` HMACs the **raw** body before parsing it — with no
