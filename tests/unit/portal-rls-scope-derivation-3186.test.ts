@@ -20,10 +20,16 @@
  * findings, and the answer is not "baseline them all": most are a DIFFERENT
  * question — cron iterates tenants deliberately (#2539), webhooks authenticate
  * by signing secret and must resolve a tenant from a provider payload, and
- * `oauth`/`sso`/`unsubscribe`/`metrics` all act on a credential that grants no
- * row-level privilege in the shipped policy set (#3102, #3195). Calling those
- * #2446 breaks would be a false alarm; hiding them would re-open the hole. So
- * each is deferred BY DIRECTORY and pinned by a COUNT that may only go down.
+ * `oauth`/`sso`/`unsubscribe` all act on a credential that grants no row-level
+ * privilege in the shipped policy set (#3102). Calling those #2446 breaks would
+ * be a false alarm; hiding them would re-open the hole. So each is deferred BY
+ * DIRECTORY and pinned by a COUNT that may only go down.
+ *
+ * `app/api/metrics` was in that ledger and is not any more: #3195 took the
+ * bare-pool CRM aggregate out of the scrape, so the directory excuses nothing,
+ * the entry had to go, and the assertion below is what made deleting it the only
+ * way to stay green. Note what #3195 did NOT do — it did not answer #3102's
+ * privilege question; the counts are withheld, not read.
  *
  * Two findings were not that: `/api/flags` and `/api/track/event` read
  * `tenant_members` for a caller whose identity the route had already verified.
@@ -116,12 +122,17 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
     // No directory that the #2446 rule can actually judge may hide behind a
-    // deferral: the anonymous portal surface stays reported.
+    // deferral: the anonymous portal surface stays reported. The list is what
+    // is left AFTER #3195 took `app/api/metrics` off it — re-adding it would
+    // have to reopen this assertion, and the reason it was deleted (the route
+    // reads no tenant-policyed table at all) is pinned in
+    // tests/unit/metrics-tenant-count-3195.test.ts.
     for (const entry of SCOPE_DEFERRALS) {
       expect(entry.dir, entry.deferredTo).toMatch(
-        /^app\/api\/(cron|webhooks|auth\/oauth|auth\/sso|unsubscribe|metrics|tenant\/plugins\/webhook)$/,
+        /^app\/api\/(cron|webhooks|auth\/oauth|auth\/sso|unsubscribe|tenant\/plugins\/webhook)$/,
       );
     }
+    expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
   });
 
   it('rejects a reason too short to argue with, a non-issue, a rooted dir, and a zero pin', () => {
@@ -189,9 +200,12 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
 /**
  * The (a)-bucket: a route that already knows who the caller is, reading a
  * policyed table on the pool. #3196 and #3197 — fixed here rather than deferred,
- * because unlike cron/webhooks/metrics there IS a GUC for these reads to key on
+ * because unlike cron/webhooks there IS a GUC for these reads to key on
  * (`app.current_user`, which is what 0127's `tenant_members_self_read` and
- * `users_read_self` are written against).
+ * `users_read_self` are written against). #3195's metrics scrape is the
+ * contrast case: no user, no tenant, no GUC that answers a fleet total — so it
+ * could not be bound the way these two were, and it was taken out of the guard's
+ * scope by deleting the read instead.
  */
 describe('the two session-authenticated reads the wider walk found are bound (#3196, #3197)', () => {
   const fixed = [

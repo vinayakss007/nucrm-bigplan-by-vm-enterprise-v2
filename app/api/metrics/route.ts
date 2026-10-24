@@ -75,9 +75,9 @@ export async function GET(request: NextRequest) {
   const metrics: string[] = [];
   try {
     // ── Database gauges FIRST (#2118) ──────────────────────────
-    // Under pool saturation the heavy CRM counts time out; these gauges are
-    // the signal operators need during exactly that incident, so they run
-    // before anything else and are isolated behind their own deadline.
+    // Under pool saturation the sections behind their own deadlines time out;
+    // these gauges are the signal operators need during exactly that incident,
+    // so they run before anything else and are isolated ahead of it.
     try {
       const t0 = Date.now();
       await withTimeout(db.execute(sql`SELECT 1`), 'db_latency');
@@ -108,61 +108,83 @@ export async function GET(request: NextRequest) {
       push(metrics, 'nucrm_db_pool_up', 'DB pool stats section emitted fresh values', 'gauge', 0);
     }
 
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // ── CRM Counts ─────────────────────────────────────────────
-    // #2146: ONE aggregate statement instead of 15 queries per scrape. The
-    // Promise.all fan-out (#2118) fixed scrape timeouts but Sentry still
-    // flagged every scrape as N+1 (1636 events) and each subquery took its
-    // own pool checkout, feeding pool pressure (#2145). Same values, same
-    // per-section deadline so a slow count still cannot 500 the scrape.
+    // ── Fleet size, and the counts this scrape may NOT claim ────────
+    // #3195. This section used to answer fifteen CRM gauges with one aggregate
+    // statement (#2146) over contacts / leads / deals / companies / tasks /
+    // activities / users, run on the bare pool — and every one of those numbers
+    // was a permanent zero. Not an error: a zero. `0039` made `tenant_isolation`
+    // fail CLOSED, so with `app.current_tenant` unset the predicate deparse is
+    // NULL, the count counts nothing, and the scrape still looked healthy.
+    // Measured on a fully migrated database as a NOSUPERUSER / NOBYPASSRLS role
+    // with five fixture contacts spread over two tenants — see
+    // tests/integration/metrics-tenant-count-3195.test.ts, which re-runs exactly
+    // this statement:
+    //
+    //   BYPASSRLS truth                          contacts_total = 5
+    //   no GUC          (what the pool answered) contacts_total = 0
+    //   tenant GUC = tenant A                    contacts_total = 2
+    //   tenant GUC = tenant B                    contacts_total = 3
+    //   tenant GUC = nil sentinel                contacts_total = 0
+    //
+    // That last line is why the #3196/#3197 remedy does not transfer. Wrapping
+    // the read in withTenantContext() needs a tenant to pin, and the sentinel
+    // the pre-tenant paths use casts to a uuid that matches no row — so it
+    // reproduces the zero instead of lifting it. This route has no identity at
+    // all: its caller is a scraper holding METRICS_SECRET, and what it was asked
+    // for is cross-tenant fleet totals.
+    //
+    // The issue lists three ways out and two of them are not this PR's to take:
+    //  1. a narrow SELECT-only aggregate privilege — the honest fix, but it is
+    //     a NEW policy over these six tables, so a migration, and #3195 files it
+    //     as an arm of #3102's open decision rather than answering it here. It
+    //     also cannot reuse a GUC that already exists: measured against
+    //     pg_policies, the six already in both pool reset lists (lib/db/pool.ts,
+    //     lib/db/request-connection.ts) open `users` + `api_keys`
+    //     (app.auth_lookup), `email_tracking` (app.tracking_lookup),
+    //     quotes/csat_surveys/signing_requests/invitations (app.portal_lookup_*),
+    //     and `forms` (app.form_lookup_id) — none of them contacts, leads,
+    //     deals, companies, tasks or activities, and borrowing a login
+    //     credential for telemetry is #3102's call to make, not one to sneak in.
+    //     `app.is_super_admin` is not on the table at all (#2253).
+    //  2. per-tenant totals, labelled or looped-and-summed. A label changes the
+    //     dashboards' cardinality; the loop costs one transaction per tenant per
+    //     scrape (34 tenants on the local database, measured), which is the pool
+    //     pressure #2118/#2145/#2146 just spent themselves removing from this
+    //     route, and it would break the 12s section deadline long before a real
+    //     fleet ceiling.
+    //  3. stop claiming what cannot be read. ← taken here.
+    //
+    // Absence is the honest encoding, and it is the alertable one:
+    // `nucrm_tasks_pending_total == 0` in deploy/monitoring/alerts.yml was true
+    // on every scrape of every tenant forever, which is #2542's "no alert has
+    // ever been delivered" seen from the other side — a gauge that has always
+    // read zero cannot distinguish a quiet CRM from a dead policy.
+    // `nucrm_crm_counts_exported 0` says which it is without pretending to be a
+    // row count, and the CRM series are back the moment 1 or 2 lands.
+    push(metrics, 'nucrm_crm_counts_exported',
+      'CRM rows this scrape is allowed to count. 0 = withheld: the tenant-keyed counts are '
+      + 'unreadable without an aggregate privilege (#3195, #3102); alert on this == 0',
+      'gauge', 0);
     try {
-      const countsRes = await withTimeout(db.execute(sql`
+      // `tenants` is the one table here that needs no context. Its only SELECT
+      // policy is `tenants_read_all`, whose USING clause is the literal `true`
+      // (pg_policies, measured), so the fleet size is a claim this scrape can
+      // actually support: the same NOBYPASSRLS role with no GUC set read
+      // active = 1 against a table holding 1 active tenant, and the route's own
+      // dashboard panel has never been lying. It stays; everything keyed on a
+      // tenant_id does not.
+      const tenantsRes = await withTimeout(db.execute(sql`
         SELECT
-          (SELECT count(*)::int FROM contacts  WHERE deleted_at IS NULL)                          AS contacts_total,
-          (SELECT count(*)::int FROM leads     WHERE deleted_at IS NULL)                          AS leads_total,
-          (SELECT count(*)::int FROM deals     WHERE deleted_at IS NULL)                          AS deals_total,
-          (SELECT count(*)::int FROM companies WHERE deleted_at IS NULL)                          AS companies_total,
-          (SELECT count(*)::int FROM tasks     WHERE status = 'pending'   AND deleted_at IS NULL) AS tasks_pending,
-          (SELECT count(*)::int FROM tasks     WHERE status = 'completed' AND deleted_at IS NULL) AS tasks_completed,
-          (SELECT count(*)::int FROM activities)                                                  AS activities_total,
-          (SELECT count(*)::int FROM tenants WHERE status = 'active')                             AS tenants_active,
-          (SELECT count(*)::int FROM users)                                                       AS users_total,
-          (SELECT count(*)::int FROM contacts WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS contacts_created_24h,
-          (SELECT count(*)::int FROM leads    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS leads_created_24h,
-          (SELECT count(*)::int FROM deals    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS deals_created_24h,
-          (SELECT count(*)::int FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-             JOIN pipelines  p ON p.id = d.pipeline_id
-            WHERE d.deleted_at IS NULL AND s.name ILIKE 'won')                                   AS deals_won,
-          (SELECT count(*)::int FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-             JOIN pipelines  p ON p.id = d.pipeline_id
-            WHERE d.deleted_at IS NULL AND s.name ILIKE 'lost')                                  AS deals_lost,
-          (SELECT COALESCE(sum(d.amount::numeric), 0)::text FROM deals d
-             JOIN deal_stages s ON s.id = d.stage_id
-            WHERE d.deleted_at IS NULL AND lower(s.name) != 'lost')                              AS pipeline_value
-      `), 'counts');
-      const c = (countsRes.rows[0] ?? {}) as Record<string, unknown>;
-      const num = (key: string): number => Number(c[key] ?? 0);
-      push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', num('contacts_total'));
-      push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', num('leads_total'));
-      push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', num('deals_total'));
-      push(metrics, 'nucrm_companies_total', 'Total companies in CRM', 'gauge', num('companies_total'));
-      push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', num('tasks_pending'));
-      push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', num('activities_total'));
-      push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', num('tenants_active'));
-      push(metrics, 'nucrm_users_total', 'Total users', 'gauge', num('users_total'));
-      push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', num('tasks_completed'));
-      push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', num('contacts_created_24h'));
-      push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', num('leads_created_24h'));
-      push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', num('deals_created_24h'));
-      push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', num('deals_won'));
-      push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', num('deals_lost'));
-      push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', num('pipeline_value'));
-      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 1);
+          (SELECT count(*)::int FROM tenants WHERE status = 'active') AS tenants_active,
+          (SELECT count(*)::int FROM tenants)                         AS tenants_total
+      `), 'tenants');
+      const t = (tenantsRes.rows[0] ?? {}) as Record<string, unknown>;
+      const num = (key: string): number => Number(t[key] ?? 0);
+      push(metrics, 'nucrm_tenants_total', 'Active tenants (fleet size; tenants has no tenant_id, so no RLS context is needed)', 'gauge', num('tenants_active'));
+      push(metrics, 'nucrm_tenants_overall_total', 'Tenants of any status', 'gauge', num('tenants_total'));
+      push(metrics, 'nucrm_metrics_counts_up', 'Tenant-count section emitted fresh values', 'gauge', 1);
     } catch {
-      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 0);
+      push(metrics, 'nucrm_metrics_counts_up', 'Tenant-count section emitted fresh values', 'gauge', 0);
     }
 
     // ── Redis / Cache Metrics ──────────────────────────────────
