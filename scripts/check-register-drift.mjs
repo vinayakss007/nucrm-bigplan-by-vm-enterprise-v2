@@ -18,6 +18,15 @@
  * that authored that register line (`git blame`), reads the cited file at THAT commit and at
  * HEAD, and compares the content of line N. Different content = the pointer moved.
  *
+ * Keyed citations (#3201) ask the same question one level closer to what the sentence means.
+ * `package.json:"db:drift-check"` has no line number, so there is nothing to relocate: the
+ * screen resolves the key in that file's JSON object at the authoring revision and at HEAD
+ * and compares the two VALUES. Inserting an unrelated script line above it is invisible to
+ * the check — which is the entire point, because that insertion is what made a `path:N`
+ * pointer describe a change nobody had made — while renaming or deleting the key is exactly
+ * a drift, and a missing key at HEAD fails loudly rather than being counted as unverifiable.
+ * Positional citations keep their line-content comparison untouched.
+ *
  *   node scripts/check-register-drift.mjs              # exit 1 on un-allowlisted drift
  *   node scripts/check-register-drift.mjs --update     # rewrite the allowlist from live drift
  *
@@ -50,7 +59,13 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
-import { DEFAULT_REGISTER_PATH, extractCitations, resolvePath } from './check-register-coords.mjs';
+import {
+  DEFAULT_REGISTER_PATH,
+  extractCitations,
+  resolvePath,
+  resolveJsonKey,
+  canonicalCite,
+} from './check-register-coords.mjs';
 
 export const DEFAULT_DRIFT_ALLOWLIST_PATH = 'scripts/register-drift-allowlist.json';
 
@@ -102,6 +117,22 @@ export function parseBlameRevs(porcelain) {
 
 const trimAt = (rows, n) => (rows && n >= 1 && n <= rows.length ? rows[n - 1].trim() : null);
 
+/** `contentAt` hands back lines; a JSON document has to be re-joined to be parsed. */
+const joined = (rows) => (rows === null || rows === undefined ? null : rows.join('\n'));
+
+/**
+ * What a keyed pointer held at one revision, as a string comparable against the other side.
+ * `null` means "this revision cannot answer" — no such key, an ambiguous key, a file that is
+ * not JSON, or JSON that does not parse. The caller sorts those into `unverifiable` (when it
+ * is the THEN side, which has no fact to compare against) and into `moved` (when it is the
+ * NOW side, which is the drift we are looking for).
+ */
+function keyAt(rows, path, key) {
+  if (rows === null) return null;
+  const r = resolveJsonKey(joined(rows), path, key);
+  return r.ok ? r.value : null;
+}
+
 /**
  * The whole measurement, with git injected so it can be tested against fixtures.
  *
@@ -112,14 +143,17 @@ const trimAt = (rows, n) => (rows && n >= 1 && n <= rows.length ? rows[n - 1].tr
  *                  absolute: prose a citation-shaped regex cannot tell about)
  *   gone         — no tracked file at HEAD, but there WAS one when the line was written
  *   unverifiable — a file matched at both ends, yet line N did not exist when it was written
- *   moved        — line N's content at HEAD is not the content it had when written
+ *                  (or, for a keyed pointer, the key was not there to read when it was written)
+ *   moved        — line N's content at HEAD is not the content it had when written; for a
+ *                  keyed pointer, the key's VALUE differs, or the key is gone
  *   same         — it still is
  * `selfAuthored` counts the `same` whose authoring sha is the measured sha: unchanged by
  * construction, which is a limitation to read, not a pass to celebrate. `uncommitted`
  * counts citations whose register line has no commit yet — blame reports them under
  * `UNCOMMITTED_SHA`, and a line that is not in history has no "then" to compare. Both are
  * the same class of thing: a pointer this screen structurally cannot check, so it is
- * disclosed in the tally instead of absorbed into `same`.
+ * disclosed in the tally instead of absorbed into `same`. `keyed` counts how many of the
+ * instances were read by key rather than by line, so the tally says which question was asked.
  */
 export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha }) {
   const citations = extractCitations(lines);
@@ -130,9 +164,9 @@ export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha 
   };
   const fileCache = new Map();
   const content = (rev, path) => {
-    const key = `${rev}|${path}`;
-    if (!fileCache.has(key)) fileCache.set(key, contentAt(rev, path));
-    return fileCache.get(key);
+    const cacheKey = `${rev}|${path}`;
+    if (!fileCache.has(cacheKey)) fileCache.set(cacheKey, contentAt(rev, path));
+    return fileCache.get(cacheKey);
   };
 
   const out = {
@@ -140,6 +174,7 @@ export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha 
     same: 0,
     selfAuthored: 0,
     uncommitted: 0,
+    keyed: 0,
     moved: [],
     unverifiable: [],
     unresolved: [],
@@ -148,9 +183,9 @@ export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha 
 
   for (const c of citations) {
     const rev = blame.get(c.regLine) ?? null;
-    const nowCands = resolvePath(tracked(headSha), c.path);
+    const nowCands = resolvePath(tracked(headSha), c.path, c.kind);
     if (nowCands.length === 0) {
-      if (rev && rev !== UNCOMMITTED_SHA && resolvePath(tracked(rev), c.path).length > 0) {
+      if (rev && rev !== UNCOMMITTED_SHA && resolvePath(tracked(rev), c.path, c.kind).length > 0) {
         out.gone.push({ ...c, rev });
         continue;
       }
@@ -165,9 +200,34 @@ export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha 
       out.unverifiable.push({ ...c, why: 'no blame entry for this register line' });
       continue;
     }
-    const thenCands = resolvePath(tracked(rev), c.path);
+    const thenCands = resolvePath(tracked(rev), c.path, c.kind);
     if (thenCands.length === 0) {
       out.unverifiable.push({ ...c, why: `${c.path} was not tracked at ${rev.slice(0, 8)}` });
+      continue;
+    }
+    if (c.kind === 'key') {
+      out.keyed += 1;
+      const thenVals = thenCands.map((p) => keyAt(content(rev, p), p, c.key));
+      const nowVals = nowCands.map((p) => keyAt(content(headSha, p), p, c.key));
+      if (!thenVals.some((x) => x !== null)) {
+        out.unverifiable.push({ ...c, why: `"${c.key}" held no readable value at ${rev.slice(0, 8)}` });
+        continue;
+      }
+      if (nowVals.some((x) => x !== null && x !== '' && thenVals.includes(x))) {
+        out.same += 1;
+        if (rev === headSha) out.selfAuthored += 1;
+        continue;
+      }
+      const why = nowVals.every((x) => x === null)
+        ? `the key is not readable in the current tree (absent, ambiguous, or the file does not parse)`
+        : `the key's value is not what it was when the sentence was written`;
+      out.moved.push({
+        ...c,
+        rev,
+        why,
+        then: thenVals.filter((x) => x !== null).slice(0, 2),
+        now: nowVals.filter((x) => x !== null).slice(0, 2),
+      });
       continue;
     }
     const now = nowCands.map((p) => trimAt(content(headSha, p), c.n));
@@ -188,8 +248,15 @@ export function computeDriftDelta({ lines, blame, trackedAt, contentAt, headSha 
   return out;
 }
 
+/**
+ * Same contract as `applyAllowlist` in the coords guard (#3201): matching is on the
+ * canonical `cite`, and it is form-sensitive. An entry written for `package.json:110`
+ * never silences `package.json:"db:drift-check"` — if a keyed pointer drifts, that means
+ * the key was renamed or deleted or its value edited, and the sentence has to be
+ * re-read, not hushed.
+ */
 export function applyDriftAllowlist(moved, allowEntries) {
-  const keys = new Set(allowEntries.map((e) => e.cite));
+  const keys = new Set(allowEntries.map(canonicalCite).filter(Boolean));
   const movedKeys = new Set(moved.map((m) => m.cite));
   return {
     fatal: moved.filter((m) => !keys.has(m.cite)),
@@ -207,7 +274,10 @@ const NOTE =
   '  written. Fix the register (re-pin the coordinate against the current tree and keep the\n' +
   '  superseded number in the dated correction comment, as #2416 does) — or, only when the\n' +
   '  drift is genuinely waiting on another PR, add an entry with a written `reason` to\n' +
-  `  ${DEFAULT_DRIFT_ALLOWLIST_PATH} in a reviewed PR.\n`;
+  `  ${DEFAULT_DRIFT_ALLOWLIST_PATH} in a reviewed PR.\n` +
+  '\n  If this pointer names a JSON object member, keying it is the fix that outlives the\n' +
+  '  next re-pin: `package.json:"db:drift-check"` compares the value, so a line inserted\n' +
+  '  above it is nothing this screen has to be told about. #3201.\n';
 
 export function main(argv = process.argv.slice(2)) {
   let args;
@@ -345,7 +415,9 @@ export function main(argv = process.argv.slice(2)) {
   const measured = d.instances - d.unresolved.length;
   console.log(
     `[check-register-drift] at ${headSha.slice(0, 8)}: ${d.instances} citation instances, ` +
-      `${measured} resolvable to a tracked file, ${d.same} still say what was written ` +
+      `${measured} resolvable to a tracked file` +
+      (d.keyed ? ` (${d.keyed} of them read by JSON key, not line number)` : '') +
+      `, ${d.same} still say what was written ` +
       `(${d.selfAuthored} of those were written by this very revision and so cannot be checked against history)` +
       (d.uncommitted
         ? `, plus ${d.uncommitted} on register lines that are not committed yet, which no revision has written and nothing here can check`
@@ -375,12 +447,14 @@ export function main(argv = process.argv.slice(2)) {
       `\n\x1b[31m✖ register content drift found (#2416 follow-up).\x1b[0m\n` +
         `\n  ${fatal.length} citation(s) in ${args.register} now point at different CONTENT than the\n` +
         `  revision that wrote them had there — a live line, but the wrong one, which is\n` +
-        `  exactly what guard:coords cannot see:\n\n` +
+        `  exactly what guard:coords cannot see. For a keyed citation the key's VALUE is that\n` +
+        `  content, so "moved" here means renamed, deleted or re-pointed — never "shifted":\n\n` +
         fatal
           .map(
             (m) =>
-              `    - reg:${m.regLine}  ${m.cite}  (written at ${m.rev.slice(0, 8)})\n` +
-              `        then: ${JSON.stringify(m.then[0] ?? '')}\n` +
+              `    - reg:${m.regLine}  ${m.cite}  (written at ${m.rev.slice(0, 8)})` +
+              (m.why ? `\n        why:  ${m.why}` : '') +
+              `\n        then: ${JSON.stringify(m.then[0] ?? '')}\n` +
               `        now:  ${JSON.stringify(m.now[0] ?? '')}`,
           )
           .join('\n') +
