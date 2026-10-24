@@ -106,6 +106,22 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     if (guard) return guard;
 
 
+    // #3189: whenever the payload carries a status, the write CLAIMS the status this
+    // request read. The pre-read above is unlocked; `concurrencyGuard` is opt-in
+    // (`lib/api/concurrency.ts:103` returns null with no `expectedUpdatedAt`, which
+    // is the default client) and even when a client does send it, it reads
+    // `updatedAt` in its own statement, so a transition landing in between still
+    // passes. Postgres re-evaluates the UPDATE's WHERE under the row lock, so
+    // naming the from-status there turns a stale write into zero rows instead of a
+    // silent stomp — including a terminal `expired`/`terminated`/`cancelled` being
+    // resurrected by an in-flight edit.
+    //
+    // Claimed for a same-status payload too: `{status:'active'}` against a row that
+    // was terminated in the gap is exactly as much of a resurrection as
+    // `{status:'renewed'}` would have been, and the vet below never runs there.
+    const claimStatus: string | null =
+      allowedFields.status !== undefined ? existing.status : null;
+
     // Validate status transition if status is being changed
     if (allowedFields.status && allowedFields.status !== existing.status) {
       const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -135,8 +151,25 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(contracts.id, contractId), eq(contracts.tenantId, ctx.tenantId)))
+      .where(and(
+        eq(contracts.id, contractId),
+        eq(contracts.tenantId, ctx.tenantId),
+        // Defense-in-depth: the tenant clause stays even though RLS also enforces
+        // it, as on every sibling write in this family (#3159/#3175/#3184).
+        ...(claimStatus !== null ? [eq(contracts.status, claimStatus)] : []),
+      ))
       .returning();
+
+    // A claimed status and zero rows back is not a missing contract — the pre-read
+    // found it. It is the race itself: someone moved this row between that read and
+    // this write, so the transition is refused and nothing else lands (no
+    // `contract.updated` audit, no success body).
+    if (!updated && claimStatus !== null) {
+      return NextResponse.json(
+        { error: `Contract status changed concurrently — cannot move '${claimStatus}' to '${allowedFields.status}'. Reload and retry.` },
+        { status: 409 },
+      );
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
