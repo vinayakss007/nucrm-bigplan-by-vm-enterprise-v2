@@ -5,8 +5,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
+import { allowedFromStatus, canTransition } from '@/lib/offers';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -22,6 +23,12 @@ type AcceptOutcome =
   | { kind: 'no_quote' }
   | { kind: 'bad_state' }
   | { kind: 'expired' }
+  /**
+   * The guarded write matched no row: the quote moved between the read and the
+   * `UPDATE`. `committedStatus` is what the column holds now, re-read after the
+   * losing claim.
+   */
+  | { kind: 'conflict'; committedStatus: string }
   | { kind: 'accepted'; acceptedAt: Date; tenantId: string; quoteId: string };
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -74,22 +81,59 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       if (!quote) return { kind: 'no_quote' };
 
-      const validStatuses = ['sent', 'viewed'];
-      if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
+      // #3177: `OFFER_TRANSITIONS` in lib/offers.ts is the state machine that
+      // owns this column, and the seller half of its writers already claims its
+      // from-set in the WHERE (#3159). This route read the row, checked it
+      // against a local copy of that set, then wrote unconditionally — so the
+      // later commit won the column whatever it had been checking: a cancel that
+      // landed after this read was overwritten back to `accepted`, and a second
+      // accept tab restamped `acceptedAt` and inserted a second activity row.
+      // Both writes now claim the from-set the shipped table declares and name
+      // the tenant; a zero-row result means the row moved, so the committed
+      // status is re-read and returned as data, and the 409 is built outside the
+      // transaction.
+      if (!canTransition(String(quote.status), 'accepted')) return { kind: 'bad_state' };
 
       const now = new Date();
+
+      // What a lost claim actually left behind. The re-read keeps the tombstone
+      // filter (#2382), so a delete that landed while this claim was losing
+      // answers as the same 404 the pre-read would have given rather than
+      // reporting a status no customer can see.
+      const lostClaim = async (): Promise<AcceptOutcome> => {
+        const [fresh] = await tx
+          .select({ status: quotes.status })
+          .from(quotes)
+          .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId), isNull(quotes.deletedAt)))
+          .limit(1);
+        if (!fresh) return { kind: 'no_quote' };
+        return { kind: 'conflict', committedStatus: fresh.status ?? '' };
+      };
+
       if (quote.expiresAt && new Date(quote.expiresAt).getTime() < now.getTime()) {
-        await tx
+        const [expired] = await tx
           .update(quotes)
           .set({ status: 'expired', updatedAt: now })
-          .where(eq(quotes.id, quote.id));
-        return { kind: 'expired' };
+          .where(and(
+            eq(quotes.id, quote.id),
+            eq(quotes.tenantId, quote.tenantId),
+            inArray(quotes.status, allowedFromStatus('expired')),
+          ))
+          .returning({ id: quotes.id });
+        if (expired) return { kind: 'expired' };
+        return lostClaim();
       }
 
-      await tx
+      const [accepted] = await tx
         .update(quotes)
         .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(eq(quotes.id, quote.id));
+        .where(and(
+          eq(quotes.id, quote.id),
+          eq(quotes.tenantId, quote.tenantId),
+          inArray(quotes.status, allowedFromStatus('accepted')),
+        ))
+        .returning({ id: quotes.id });
+      if (!accepted) return lostClaim();
 
       await tx.insert(activities).values({
         tenantId: quote.tenantId,
@@ -119,6 +163,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (outcome.kind === 'no_quote') return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     if (outcome.kind === 'bad_state') {
       return NextResponse.json({ error: 'Quote cannot be accepted in its current state' }, { status: 409 });
+    }
+    // #3177: the same answer the customer sees for a quote that was never in a
+    // state to accept — but this one got there first. `committedStatus` is the
+    // column as the database holds it, not the status this handler meant to write.
+    if (outcome.kind === 'conflict') {
+      return NextResponse.json(
+        { error: 'Quote cannot be accepted in its current state', status: outcome.committedStatus },
+        { status: 409 },
+      );
     }
     if (outcome.kind === 'expired') return NextResponse.json({ error: 'Quote has expired' }, { status: 410 });
 
