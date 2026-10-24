@@ -257,18 +257,15 @@ async function processCampaign(
 }
 
 /**
- * Get contacts eligible for warming (respecting filters, cooldown, opt-out)
+ * Get contacts eligible for warming (respecting filters, cooldown, opt-out, soft deletion)
  */
- 
- 
 async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactToWarm[]> {
   const filter = (campaign.targetFilter as Record<string, unknown>) || {};
 
-  // Build WHERE conditions
- 
- 
+  // #3224 — a trashed contact is the tenant's strongest opt-out, and this set is mailed to:
+  // the tombstone belongs in the selector because nothing downstream re-reads the row.
   const conditions: (SQL<unknown> | undefined)[] = [
-    eq(contacts.tenantId, campaign.tenantId),
+    eq(contacts.tenantId, campaign.tenantId), isNull(contacts.deletedAt),
     or(eq(contacts.doNotContact, false), isNull(contacts.doNotContact)),
   ];
 
@@ -491,7 +488,9 @@ async function processBirthdayCampaigns(
       })
       .from(contacts)
       .where(and(
-        eq(contacts.tenantId, campaign.tenantId),
+        // #3224 — a birthday greeting is mailed straight from this row; a deleted contact is not
+        // an audience. Same rule as `getEligibleContacts`, which is above this one in the file.
+        eq(contacts.tenantId, campaign.tenantId), isNull(contacts.deletedAt),
         or(eq(contacts.doNotContact, false), isNull(contacts.doNotContact)),
         sql`EXTRACT(MONTH FROM ${contacts.birthday}) = ${todayMonth}`,
         sql`EXTRACT(DAY FROM ${contacts.birthday}) = ${todayDay}`,
