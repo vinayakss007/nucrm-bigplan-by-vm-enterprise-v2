@@ -62,11 +62,12 @@ export type TenantTable = { js: string; sql: string };
 export const MIN_TENANT_KEYED_TABLES = 100;
 /**
  * `find app/api/public -name route.ts` = 14, plus the three portal-auth files,
- * plus the three capture files #3163 added to `DEFAULT_TARGETS`. Pinned at the
- * current surface on purpose: a floor left at 17 would say OK the day a capture
- * directory stops existing, which is how #2446's sweep missed this path at all.
+ * plus the three capture files #3163 added to `DEFAULT_TARGETS`, plus the two
+ * invitation-acceptance routes #3182 added. Pinned at the current surface on
+ * purpose: a floor left at 17 would say OK the day a capture directory stops
+ * existing, which is how #2446's sweep missed this path at all.
  */
-export const MIN_SCANNED_FILES = 20;
+export const MIN_SCANNED_FILES = 22;
 /** If the walk finds no tenant-keyed read at all, the patterns stopped working. */
 export const MIN_TABLE_READS = 20;
 

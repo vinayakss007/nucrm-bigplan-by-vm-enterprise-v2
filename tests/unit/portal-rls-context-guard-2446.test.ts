@@ -303,9 +303,9 @@ describe('the walk is the portal surface, and it fails closed', () => {
     expect(res.unused).toEqual([]);
   }, 60_000);
 
-  it('walks 20 files: 14 public routes, the three portal-auth files, the three capture routes (#3163)', async () => {
+  it('walks 22 files: 14 public routes, the three portal-auth files, the three capture routes (#3163), the two invitation routes (#3182)', async () => {
     const res = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
-    expect(res.files).toBe(20);
+    expect(res.files).toBe(22);
     // The floor IS the surface now. Left at 17 it would still say OK the day a
     // capture directory stops existing — which is how #2446's sweep never looked
     // at this path in the first place.

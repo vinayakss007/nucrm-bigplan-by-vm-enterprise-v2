@@ -94,13 +94,14 @@ describe('0133: the grant is a credential read and nothing else', () => {
     expect(down).not.toMatch(/DROP POLICY.*(portal_clients|support_tickets|quotes|csat_surveys|signing_requests|platform_settings)"/);
   });
 
-  it('is journalled after 0131, with no duplicate idx', () => {
+  it('is journalled last, with idx equal to its position, and no duplicate idx', () => {
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: { idx: number; tag: string }[];
     };
     const at = journal.entries.findIndex((e) => e.tag === '0133_invitations_credential_lookup');
-    expect(at).toBeGreaterThan(-1);
+    expect(at).toBe(journal.entries.length - 1);
     const prev = journal.entries[at - 1];
+    expect(journal.entries[at].idx).toBe(at);
     expect(journal.entries[at].idx).toBeGreaterThan(prev.idx);
     const idxs = journal.entries.map((e) => e.idx);
     expect(new Set(idxs).size).toBe(idxs.length);
