@@ -36,12 +36,17 @@ Every base table composes these — reuse them verbatim or the constraints drift
   > `isNull(<table>.deletedAt)`** in its `WHERE`. Missing that is the whole defect
   > class of #3224 (lead-warming mailed soft-deleted contacts) and #3228 (five
   > send sinks + two AI hydrations did the same) — both shipped with the write half
-  > correct, so the code *looked* fine. `deletedAt` reaches tables via
-  > `utils.lifecycle()` / `utils.audit()` across `crm.ts`, `automation.ts`,
-  > `billing.ts`, `files.ts`, `marketing.ts` and ~40 schema files total (plus a
-  > direct `deleted_at` column at `support.ts:86`), so every read in the app is in
-  > scope. Verified: **403** `isNull(<t>.deletedAt)` predicates across `app/` +
-  > `lib/`. See README invariant and 06 Phase 6.
+  > correct, so the code *looked* fine. `deletedAt` reaches **200 of the 226
+  > `pgTable`s** — 46 through `utils.audit()` and 153 through `utils.lifecycle()`
+  > across 39 of the 63 `drizzle/schema/*.ts` files — plus exactly one table that
+  > declares the column by hand: **`failed_webhooks`** (`support.ts:76`, column at
+  > `:86`). Not `support_tickets` — that is the next table in the same file
+  > (`:95-160`) and has no `deletedAt` at all. So every read in the app is in
+  > scope. Verified: **426** `isNull(<t>.deletedAt)` predicates across `app/` +
+  > `lib/` (in 218 files), counted with
+  > `git grep -o -E "isNull\\([A-Za-z_.]*\\.deletedAt\\)" origin/main -- app lib | wc -l`;
+  > the 403 this line carried was measured before #3227/#3229 landed. See README
+  > invariant and 06 Phase 6.
 
 - `audit()` — lifecycle + `createdBy` / `updatedBy` / `deletedBy` → `users.id`
   set-null (`utils.ts:77-82`).
