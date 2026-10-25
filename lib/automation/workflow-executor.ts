@@ -23,7 +23,7 @@ import {
   tasks,
   callLogs,
 } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import {
   evaluateCondition,
@@ -88,7 +88,9 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
     const [contact] = await db
       .select()
       .from(contacts)
-      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)))
+      // #3228 — this hydration is where `ctx.email` comes from, and `send_email` uses `ctx.email`
+      // as its recipient, so every tenant workflow mailed a trashed contact on each trigger.
+      .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId), isNull(contacts.deletedAt)))
       .limit(1);
     if (contact) {
       ctx.contact = contact;
@@ -106,7 +108,7 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
     const [deal] = await db
       .select()
       .from(deals)
-      .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId)))
+      .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId), isNull(deals.deletedAt)))
       .limit(1);
     if (deal) {
       ctx.deal = deal;
@@ -362,7 +364,7 @@ async function executeActionNode(
         if (!contactId || !tag) break;
         const [existing] = await dbOrTx.select({ tags: contacts.tags })
           .from(contacts)
-          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId)))
+          .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, tenantId), isNull(contacts.deletedAt)))
           .limit(1);
         const currentTags = existing?.tags || [];
         if (!currentTags.includes(tag)) {

@@ -20,7 +20,7 @@ import {
   dealStages,
   invoices,
 } from '@/drizzle/schema';
-import { eq, and, or, asc, desc } from 'drizzle-orm';
+import { eq, and, isNull, or, asc, desc } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
@@ -230,7 +230,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
           .from(contacts)
           // #2525: was a bare `db` read of another tenant's contact by id; now
           // inside this transaction and scoped to this tenant.
-          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, ticket.contactId)))
+          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, ticket.contactId), isNull(contacts.deletedAt)))
           .limit(1);
 
           if (contact?.email) {

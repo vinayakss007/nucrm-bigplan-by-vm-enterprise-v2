@@ -53,9 +53,13 @@ vi.mock('@/drizzle/schema/core', () => ({
   users: {},
 }));
 
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  // #3228: the module now also builds `isNull(contacts.deletedAt)` — a whole-module mock would
+  // hide that sibling export, so the real one stays visible and the fake overrides only eq/and.
+  ...(await importOriginal<typeof import('drizzle-orm')>()),
   eq: vi.fn((...a: unknown[]) => ({ type: 'eq', args: a })),
   and: vi.fn((...conds: unknown[]) => ({ type: 'and', conds })),
+  isNull: vi.fn((a: unknown) => ({ type: 'isNull', arg: a })),
 }));
 
 describe('AI Summarize', () => {

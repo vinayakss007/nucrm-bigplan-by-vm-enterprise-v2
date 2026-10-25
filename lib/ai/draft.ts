@@ -20,7 +20,7 @@
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals } from '@/drizzle/schema/crm';
 import { tenants, users } from '@/drizzle/schema/core';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 export type EntityType = 'contact' | 'deal' | 'company' | 'lead' | 'ticket';
 
@@ -65,14 +65,16 @@ export async function hydrateDraftContext(
           company_id: contacts.companyId,
         })
         .from(contacts)
-        .where(eq(contacts.id, ref.entityId))
+        // #3228 — a trashed contact is not worth AI credits: the deleted row is what the tenant
+        // removed, so it must not become the prompt context. Same rule as #3224's hydration.
+        .where(and(eq(contacts.id, ref.entityId), isNull(contacts.deletedAt)))
         .limit(1);
       if (c && (await belongsToTenant('contact', c.id, tenantId))) {
         ctx.contact = c;
         if (c.company_id) {
           const [co] = await db
             .select({ id: companies.id, name: companies.name, industry: companies.industry, website: companies.website })
-            .from(companies).where(eq(companies.id, c.company_id)).limit(1);
+            .from(companies).where(and(eq(companies.id, c.company_id), isNull(companies.deletedAt))).limit(1);
           if (co) ctx.company = co;
         }
       }
@@ -90,7 +92,7 @@ export async function hydrateDraftContext(
           close_date: deals.closeDate,
         })
         .from(deals)
-        .where(eq(deals.id, ref.entityId))
+        .where(and(eq(deals.id, ref.entityId), isNull(deals.deletedAt)))
         .limit(1);
       if (d && (await belongsToTenant('deal', d.id, tenantId))) {
         ctx.deal = d;
@@ -102,13 +104,13 @@ export async function hydrateDraftContext(
               last_name: contacts.lastName,
               email: contacts.email,
             })
-            .from(contacts).where(eq(contacts.id, d.contact_id)).limit(1);
+            .from(contacts).where(and(eq(contacts.id, d.contact_id), isNull(contacts.deletedAt))).limit(1);
           if (c) ctx.contact = c;
         }
         if (d.company_id) {
           const [co] = await db
             .select({ id: companies.id, name: companies.name, industry: companies.industry })
-            .from(companies).where(eq(companies.id, d.company_id)).limit(1);
+            .from(companies).where(and(eq(companies.id, d.company_id), isNull(companies.deletedAt))).limit(1);
           if (co) ctx.company = co;
         }
       }
@@ -118,7 +120,7 @@ export async function hydrateDraftContext(
       const [co] = await db
         .select({ id: companies.id, name: companies.name, industry: companies.industry, website: companies.website })
         .from(companies)
-        .where(eq(companies.id, ref.entityId))
+        .where(and(eq(companies.id, ref.entityId), isNull(companies.deletedAt)))
         .limit(1);
       if (co && (await belongsToTenant('company', co.id, tenantId))) {
         ctx.company = co;
@@ -136,15 +138,17 @@ export async function hydrateDraftContext(
 
 /** Cheap row-belongs-to-tenant guard — used only as a defence-in-depth check. */
 async function belongsToTenant(kind: 'contact' | 'deal' | 'company', id: string, tenantId: string): Promise<boolean> {
+  // #3228 — the tombstone belongs in a tenancy guard too: a deleted row is not a record this
+  // tenant can pay to have drafted, summarised or mailed, whatever the answer is for live rows.
   if (kind === 'contact') {
-    const [r] = await db.select({ tenantId: contacts.tenantId }).from(contacts).where(eq(contacts.id, id)).limit(1);
+    const [r] = await db.select({ tenantId: contacts.tenantId }).from(contacts).where(and(eq(contacts.id, id), isNull(contacts.deletedAt))).limit(1);
     return r?.tenantId === tenantId;
   }
   if (kind === 'deal') {
-    const [r] = await db.select({ tenantId: deals.tenantId }).from(deals).where(eq(deals.id, id)).limit(1);
+    const [r] = await db.select({ tenantId: deals.tenantId }).from(deals).where(and(eq(deals.id, id), isNull(deals.deletedAt))).limit(1);
     return r?.tenantId === tenantId;
   }
-  const [r] = await db.select({ tenantId: companies.tenantId }).from(companies).where(eq(companies.id, id)).limit(1);
+  const [r] = await db.select({ tenantId: companies.tenantId }).from(companies).where(and(eq(companies.id, id), isNull(companies.deletedAt))).limit(1);
   return r?.tenantId === tenantId;
 }
 

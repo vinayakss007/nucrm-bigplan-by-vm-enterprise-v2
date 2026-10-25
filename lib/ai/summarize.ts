@@ -6,7 +6,7 @@
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals } from '@/drizzle/schema/crm';
 import { tenants, users } from '@/drizzle/schema/core';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { chat } from './gateway';
 
 export type SummarizeEntityType = 'contact' | 'deal' | 'company';
@@ -51,7 +51,7 @@ async function fetchEntityContext(
           updatedAt: contacts.updatedAt,
         })
         .from(contacts)
-        .where(and(eq(contacts.id, entityId), eq(contacts.tenantId, tenantId)))
+        .where(and(eq(contacts.id, entityId), eq(contacts.tenantId, tenantId), isNull(contacts.deletedAt)))
         .limit(1);
       if (!rows || rows.length === 0) return null;
       const c = rows[0]!;
@@ -60,7 +60,7 @@ async function fetchEntityContext(
         const [co] = await db
           .select({ name: companies.name })
           .from(companies)
-          .where(and(eq(companies.id, c.companyId), eq(companies.tenantId, tenantId)))
+          .where(and(eq(companies.id, c.companyId), eq(companies.tenantId, tenantId), isNull(companies.deletedAt)))
           .limit(1);
         if (co) companyName = co.name;
       }
@@ -96,7 +96,7 @@ async function fetchEntityContext(
           updatedAt: deals.updatedAt,
         })
         .from(deals)
-        .where(and(eq(deals.id, entityId), eq(deals.tenantId, tenantId)))
+        .where(and(eq(deals.id, entityId), eq(deals.tenantId, tenantId), isNull(deals.deletedAt)))
         .limit(1);
       if (!rows || rows.length === 0) return null;
       const d = rows[0]!;
@@ -106,7 +106,7 @@ async function fetchEntityContext(
         const cRows = await db
           .select({ firstName: contacts.firstName, lastName: contacts.lastName })
           .from(contacts)
-          .where(and(eq(contacts.id, d.contactId), eq(contacts.tenantId, tenantId)))
+          .where(and(eq(contacts.id, d.contactId), eq(contacts.tenantId, tenantId), isNull(contacts.deletedAt)))
           .limit(1);
         if (cRows && cRows.length > 0) contactName = `${cRows[0]!.firstName} ${cRows[0]!.lastName ?? ''}`.trim();
       }
@@ -114,7 +114,7 @@ async function fetchEntityContext(
         const coRows = await db
           .select({ name: companies.name })
           .from(companies)
-          .where(and(eq(companies.id, d.companyId), eq(companies.tenantId, tenantId)))
+          .where(and(eq(companies.id, d.companyId), eq(companies.tenantId, tenantId), isNull(companies.deletedAt)))
           .limit(1);
         if (coRows && coRows.length > 0) companyName = coRows[0]!.name;
       }
@@ -152,7 +152,7 @@ async function fetchEntityContext(
           updatedAt: companies.updatedAt,
         })
         .from(companies)
-        .where(and(eq(companies.id, entityId), eq(companies.tenantId, tenantId)))
+        .where(and(eq(companies.id, entityId), eq(companies.tenantId, tenantId), isNull(companies.deletedAt)))
         .limit(1);
       if (!rows || rows.length === 0) return null;
       const co = rows[0]!;

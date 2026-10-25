@@ -56,7 +56,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     let contactName = 'there';
     if (invoice.contactId) {
       const contact = await db.query.contacts.findFirst({
-        where: eq(contacts.id, invoice.contactId),
+        // #3228 — the invoice is guarded above (`isNull(invoices.deletedAt)`), but the recipient
+        // was resolved from an unguarded contact read, so a contact in the trash still got the
+        // bill. With the tombstone here the contact resolves to nothing and the route falls to
+        // its existing 'provide to_email or attach a contact' refusal.
+        where: and(eq(contacts.id, invoice.contactId), isNull(contacts.deletedAt)),
         columns: { firstName: true, lastName: true, email: true },
       });
       if (!toEmail && contact?.email) toEmail = contact.email;

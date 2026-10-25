@@ -12,7 +12,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { deals, contacts, tenants, activities } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
@@ -401,6 +401,9 @@ async function handleDealWon(ctx: AuthContext, dealId: string, row: typeof deals
           and(
             eq(contacts.id, row.contactId),
             eq(contacts.tenantId, ctx.tenantId),
+            // #3228 — `doNotContact` was the only consent column this read checked, so a contact
+            // in the trash still got the deal-won congratulation mail.
+            isNull(contacts.deletedAt),
             eq(contacts.doNotContact, false)
           )
         )
