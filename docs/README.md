@@ -43,17 +43,17 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **20** guards by alias —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **22** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
-`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:panel-error-state`,
-`guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`, `guard:raw-sql`,
-`guard:rls`, `guard:schemas` — plus **3** invoked as direct `node` commands (`check-audit-baseline.mjs`,
-`check-semgrep-baseline.mjs`, `check-env-coverage.mjs`). `package.json` defines **28** `guard:*` aliases in total, so
-**5 run on no workflow at all** — `guard:catalog-grants`, `guard:migration-redecl`, `guard:register-drift`,
-`guard:running-config`, `guard:vocab`. They are local commands (`npm run`), not tripwires; a push that breaks one is
-green. Measured 2026-10-19 against `package.json` and `.github/workflows/*.yml`; the paragraph said **16 + 2** when it
-was last measured on 2026-10-10, and the two additions since are `guard:panel-error-state` (`7893b2b0`, #2832) and
-`guard:catch-empty` (`4dbeeaea`, #2828). It said 7 when first written.
+`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:override-ranges`,
+`guard:panel-error-state`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
+`guard:raw-sql`, `guard:rls`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
+and **3** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:register-drift`, `guard:running-config`).
+`package.json` defines **29** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
+the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
+`constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
+and the four additions since those measurements are #2832, #2828, #3167 and #3241.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
