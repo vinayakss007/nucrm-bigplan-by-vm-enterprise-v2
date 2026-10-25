@@ -85,6 +85,15 @@ A "base CRM" that violates any of them is not this app:
   filtered by them too, so a claim that cannot see its own row silently updates zero
   rows. See 03 § 1 (pre-auth redemption) for the four GUCs
   (`app.auth_lookup`, `app.token_issue`, `app.token_credential`, `app.token_retire_user`).
+  Three more migrations re-ran the same two traps and added two more rules:
+  **a credential column no policy names is unrevocable** (0136 admitted only
+  `refresh_token`, so `/oauth/revoke` silently deleted zero `access_token` rows
+  until 0137), **every arm needs its own read** (0137/0138 each ship a
+  `*_claim_read` SELECT beside the write), and **the privilege GUC and the
+  row-narrowing value can be one and the same** (0138's
+  `app.unsubscribe_contact`). Any new one of these has to be appended to *both*
+  connection-reset lists — `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts`
+  pins the two lists equal and pinned to the literal count.
 
 ## Provenance
 
