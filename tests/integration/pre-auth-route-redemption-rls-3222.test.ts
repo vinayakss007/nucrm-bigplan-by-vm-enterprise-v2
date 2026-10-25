@@ -49,14 +49,21 @@
  *    the application role, so a correct client secret answered `401 invalid_client` and
  *    the refresh-rotation `DELETE` was the same silent zero-row write this issue is
  *    about. 0136 gives both statements a policy that can admit their row.
+ *  - `POST /api/auth/oauth/revoke`: the same client read, then the retirement. #3231:
+ *    before 0137 no context could reach an `access_token` row at all, and the endpoint
+ *    answered `{"ok":true,"revoked":false}` over a token that was still live — for the
+ *    one route whose job is to stop a grant working, that is the worst version of
+ *    #3075's zero-row write. These cases revoke by each hint and by none, refuse a
+ *    token belonging to a different client, refuse an expired row, and read the table
+ *    back so `revoked` is checked against rows actually claimed.
  *
  * IT READS THE SHIPPED POLICY SET, IT DOES NOT INSTALL ONE
  * --------------------------------------------------------
  * CI provisions its database with `db:sync` + `node scripts/apply-rls-ci.mjs`
- * (`.github/workflows/ci.yml`:176), whose discovery does include `0134`, `0135` and
- * `0136` — verified against the real corpus, not assumed. So this file probes for those
- * at load time and, if they are not there, skips with a message naming that command
- * rather than creating the policies itself. #2474's rule in
+ * (`.github/workflows/ci.yml`:176), whose discovery does include `0134`, `0135`, `0136`
+ * and `0137` — verified against the real corpus, not assumed. So this file probes for
+ * those at load time and, if they are not there, skips with a message naming that
+ * command rather than creating the policies itself. #2474's rule in
  * `tests/helpers/rls-probe-role.ts` is the reason: a suite that installs shared,
  * fixed-name catalog objects has to un-install them at teardown, and two suites
  * mutating the same policy names from parallel workers interleave a drop against the
@@ -66,8 +73,9 @@
  * do with the code under test.
  *
  * `PRE_AUTH_ROUTE_3222_APPLY_MISSING=1` opts into applying `0134`, then `0135`, then
- * `0136` (that order, because `0134`'s text re-creates the arms `0135` narrows) and
- * leaves them in place, which is the state CI's provisioning produces anyway. That is
+ * `0136`, then `0137` (that order, because `0134`'s text re-creates the arms `0135`
+ * narrows) and leaves them in place, which is the state CI's provisioning produces
+ * anyway. That is
  * the switch for demonstrating the red side: against a database without the arms the
  * suite fails seven tests with `Invalid or expired reset link` / `Invalid or expired
  * verification link` on genuinely valid tokens — the exact silent zero-row write this
@@ -90,13 +98,14 @@ const MIGRATIONS_DIR = join(import.meta.dirname!, '..', '..', 'drizzle', 'migrat
 const NARROW_FILE = '0135_pre_auth_token_rls_narrow.sql';
 const ISSUE_FILE = '0134_pre_auth_token_rls.sql';
 const OAUTH_FILE = '0136_pre_auth_oauth_rls.sql';
+const REVOKE_FILE = '0137_pre_auth_oauth_revoke.sql';
 
 /**
- * The privilege set the four flows depend on, by name — `0135`'s eleven arms plus
- * `0136`'s four. Each is looked up through `pg_policies` by name only, so the suite
- * asserts that the shipped objects are installed without restating what they say
- * (#2455's other half: a test that re-types a policy proves a copy of it, not the
- * migration).
+ * The privilege set the four flows depend on, by name — `0135`'s eleven arms,
+ * `0136`'s four and `0137`'s two. Each is looked up through `pg_policies` by name
+ * only, so the suite asserts that the shipped objects are installed without
+ * restating what they say (#2455's other half: a test that re-types a policy proves
+ * a copy of it, not the migration).
  */
 const REQUIRED_ARMS = [
   'password_resets_auth_lookup',
@@ -116,6 +125,10 @@ const REQUIRED_ARMS = [
   'oauth_tokens_token_issue',
   'oauth_tokens_refresh_claim_read',
   'oauth_tokens_refresh_claim',
+  // #3231 — /revoke's access-token claim. Without these two the endpoint can retire a
+  // refresh row and nothing else, in any branch, however it sets its context.
+  'oauth_tokens_access_claim_read',
+  'oauth_tokens_access_claim',
 ];
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: {} as Record<string, string> }));
@@ -179,14 +192,14 @@ if (probe.reachable && !probe.canMintRole) {
   );
 } else if (!probe.armsApplied && selfApplied) {
   console.warn(
-    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134, 0135 and 0136, and leaving ' +
-    'them installed — that is the state `node scripts/apply-rls-ci.mjs` produces, and dropping ' +
-    'them again at teardown is what races a parallel worker (#2474).',
+    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134, 0135, 0136 and 0137, and ' +
+    'leaving them installed — that is the state `node scripts/apply-rls-ci.mjs` produces, and ' +
+    'dropping them again at teardown is what races a parallel worker (#2474).',
   );
 } else if (probe.reachable && !probe.armsApplied) {
   console.warn(
-    '[#3222] skipping the route-level RLS suite: this database does not carry 0135\'s or ' +
-    '0136\'s arms. ' +
+    '[#3222] skipping the route-level RLS suite: this database does not carry 0135\'s, ' +
+    '0136\'s or 0137\'s arms. ' +
     'CI provisions them with `node scripts/apply-rls-ci.mjs` after `db:sync` ' +
     '(.github/workflows/ci.yml:176) — run the same here, or set ' +
     'PRE_AUTH_ROUTE_3222_APPLY_MISSING=1 to let this suite apply them itself.',
@@ -229,6 +242,19 @@ const REFRESH_LIVE = randomBytes(32).toString('hex');
 const REFRESH_EXPIRED = randomBytes(32).toString('hex');
 const OAUTH_TENANT = randomUUID();
 
+// #3231 — /revoke's fixtures. Two live rows so each branch can consume its own, and a
+// second active client, because the cross-client refusal is the only thing that proves
+// the route's `client_id` predicate still binds once an arm admits the credential row.
+const CLIENT2_UUID = randomUUID();
+const CLIENT2_ID = `3222-client2-${RUN}`;
+const CLIENT2_SECRET = randomBytes(24).toString('hex');
+const REVOKE_ACC_1 = `3222-rev-acc-1-${RUN}`;
+const REVOKE_RFR_1 = `3222-rev-rfr-1-${RUN}`;
+const REVOKE_ACC_2 = `3222-rev-acc-2-${RUN}`;
+const REVOKE_RFR_2 = `3222-rev-rfr-2-${RUN}`;
+const REVOKE_ACC_3 = `3222-rev-acc-3-${RUN}`;
+const REVOKE_RFR_3 = `3222-rev-rfr-3-${RUN}`;
+
 const FUTURE = new Date(Date.now() + 3_600_000);
 const PAST = new Date(Date.now() - 3_600_000);
 
@@ -244,6 +270,7 @@ type Handlers = {
   reset: { POST: (r: NextRequest) => Promise<Response> };
   verify: { POST: (r: NextRequest) => Promise<Response> };
   token: { POST: (r: NextRequest) => Promise<Response> };
+  revoke: { POST: (r: NextRequest) => Promise<Response> };
   passwordReset: { clearResetToken: (userId: string) => Promise<void> };
 };
 let H: Handlers;
@@ -268,8 +295,9 @@ function jsonReq(body: unknown, ip: string): NextRequest {
   });
 }
 
-function formReq(fields: Record<string, string>, ip: string): NextRequest {
-  return new NextRequest('http://localhost:3000/api/auth/oauth/token', {
+/** The URL only names the endpoint for `checkRateLimit`'s logging; the action is on the form body. */
+function formReq(fields: Record<string, string>, ip: string, path = '/api/auth/oauth/token'): NextRequest {
+  return new NextRequest(`http://localhost:3000${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': ip },
     body: new URLSearchParams(fields).toString(),
@@ -334,6 +362,7 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       await admin.query(readFileSync(join(MIGRATIONS_DIR, ISSUE_FILE), 'utf8'));
       await admin.query(readFileSync(join(MIGRATIONS_DIR, NARROW_FILE), 'utf8'));
       await admin.query(readFileSync(join(MIGRATIONS_DIR, OAUTH_FILE), 'utf8'));
+      await admin.query(readFileSync(join(MIGRATIONS_DIR, REVOKE_FILE), 'utf8'));
     }
 
     const oldHash = await (await import('../../lib/auth/session')).hashPassword(OLD_PASSWORD);
@@ -370,10 +399,18 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       { id: randomUUID(), userId: USER_A, tokenHash: sha(VERIFY_EXPIRED), expiresAt: PAST },
     ]);
 
-    await adminDb.insert(appSchema.oauthClients).values({
-      id: CLIENT_UUID, tenantId: OAUTH_TENANT, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET,
-      name: `3222 client ${RUN}`, redirectUris: 'https://client.example.test/cb', isActive: true,
-    });
+    await adminDb.insert(appSchema.oauthClients).values([
+      {
+        id: CLIENT_UUID, tenantId: OAUTH_TENANT, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET,
+        name: `3222 client ${RUN}`, redirectUris: 'https://client.example.test/cb', isActive: true,
+      },
+      // #3231: the cross-client refusal needs a client that authenticates cleanly and
+      // owns nothing — otherwise a zero-row claim could just be a bad secret.
+      {
+        id: CLIENT2_UUID, tenantId: OAUTH_TENANT, clientId: CLIENT2_ID, clientSecret: CLIENT2_SECRET,
+        name: `3222 client2 ${RUN}`, redirectUris: 'https://other.example.test/cb', isActive: true,
+      },
+    ]);
     await adminDb.insert(appSchema.oauthCodes).values([
       { clientId: CLIENT_UUID, userId: USER_A, code: CODE_A, redirectUri: 'https://client.example.test/cb', scope: 'read', expiresAt: FUTURE },
       { clientId: CLIENT_UUID, userId: USER_A, code: CODE_SPENT, redirectUri: 'https://client.example.test/cb', scope: 'read', expiresAt: FUTURE, usedAt: PAST },
@@ -385,6 +422,13 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     await adminDb.insert(appSchema.oauthTokens).values([
       { clientId: CLIENT_UUID, userId: USER_A, accessToken: `3222-live-access-${RUN}`, refreshToken: REFRESH_LIVE, scope: 'read write', expiresAt: FUTURE },
       { clientId: CLIENT_UUID, userId: USER_A, accessToken: `3222-exp-access-${RUN}`, refreshToken: REFRESH_EXPIRED, scope: 'read', expiresAt: PAST },
+      // #3231: three rows that each carry a distinct value in BOTH token columns, so a
+      // hint can select the column and the no-hint branch still has a column that does
+      // not match. All live, all client A's, all owned by USER_A, so a revocation that
+      // reached the wrong row shows up as a count rather than an accident.
+      { clientId: CLIENT_UUID, userId: USER_A, accessToken: REVOKE_ACC_1, refreshToken: REVOKE_RFR_1, scope: 'read', expiresAt: FUTURE },
+      { clientId: CLIENT_UUID, userId: USER_A, accessToken: REVOKE_ACC_2, refreshToken: REVOKE_RFR_2, scope: 'read', expiresAt: FUTURE },
+      { clientId: CLIENT_UUID, userId: USER_A, accessToken: REVOKE_ACC_3, refreshToken: REVOKE_RFR_3, scope: 'read', expiresAt: FUTURE },
     ]);
 
     await admin.query(
@@ -416,6 +460,7 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       reset: (await import('../../app/api/auth/reset-password/route')) as Handlers['reset'],
       verify: (await import('../../app/api/auth/verify-email/route')) as Handlers['verify'],
       token: (await import('../../app/api/auth/oauth/token/route')) as Handlers['token'],
+      revoke: (await import('../../app/api/auth/oauth/revoke/route')) as Handlers['revoke'],
       passwordReset: (await import('../../lib/auth/password-reset')) as Handlers['passwordReset'],
     };
   });
@@ -432,9 +477,9 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     // No policy teardown: this file reads the shipped set rather than installing its
     // own, so there is nothing of its making to remove. See the header.
     for (const [label, sqlText, params] of [
-      ['oauth_tokens', 'DELETE FROM oauth_tokens WHERE client_id = (SELECT id FROM oauth_clients WHERE client_id = $1)', [CLIENT_ID]],
-      ['oauth_codes', 'DELETE FROM oauth_codes WHERE client_id = (SELECT id FROM oauth_clients WHERE client_id = $1)', [CLIENT_ID]],
-      ['oauth_clients', 'DELETE FROM oauth_clients WHERE client_id = $1', [CLIENT_ID]],
+      ['oauth_tokens', 'DELETE FROM oauth_tokens WHERE client_id = ANY($1::uuid[])', [[CLIENT_UUID, CLIENT2_UUID]]],
+      ['oauth_codes', 'DELETE FROM oauth_codes WHERE client_id = ANY($1::uuid[])', [[CLIENT_UUID, CLIENT2_UUID]]],
+      ['oauth_clients', 'DELETE FROM oauth_clients WHERE id = ANY($1::uuid[])', [[CLIENT_UUID, CLIENT2_UUID]]],
       ['password_resets', 'DELETE FROM password_resets WHERE user_id = ANY($1::uuid[])', [[USER_A, USER_B]]],
       ['email_verifications', 'DELETE FROM email_verifications WHERE user_id = ANY($1::uuid[])', [[USER_A, USER_B]]],
       ['sessions', 'DELETE FROM sessions WHERE user_id = ANY($1::uuid[])', [[USER_A, USER_B]]],
@@ -745,6 +790,166 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       const spent = await admin.query(
         'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REFRESH_LIVE]);
       expect(countOf(spent.rows), 'the rotated row stays retired').toBe(0);
+    });
+  });
+
+  // ── OAuth revocation: the acceptance criteria for #3231 ────────────────────
+  // Measured on this database as the same probe role, before 0137 existed:
+  //
+  //   no context                            SELECT … FROM oauth_clients WHERE client_id = …  -> 0 rows
+  //   app.token_issue                       DELETE … WHERE refresh_token = …                 -> 0 rows
+  //   app.token_issue + app.token_credential, the refresh column                             -> 1 row
+  //   app.token_issue + app.token_credential, the access  column                             -> 0 rows,
+  //                                                                                             row still live
+  //
+  // The first line is #3225's shape repeating on a second route; the third is what 0136
+  // already allowed. The fourth is the hole: RFC 7009 revocation is mostly about *access*
+  // tokens, and no `oauth_tokens` DELETE arm matched on `access_token` at all — so the
+  // endpoint answered 200 `{ revoked: false }` and left the token valid. 0137 supplies the
+  // access arm, the route binds both its read and its writes, and the block below drives
+  // the handler over the restricted pool.
+  describe('POST /api/auth/oauth/revoke retires a token under enforced RLS (#3231)', () => {
+    const clientRows = async () => countOf((await admin.query(
+      'SELECT count(*)::int AS n FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID])).rows);
+    const revoke = (fields: Record<string, string>) =>
+      H.revoke.POST(formReq(fields, nextIp(), '/api/auth/oauth/revoke'));
+
+    it('the before-state: either half of the grant on its own claims nothing', async () => {
+      // The two misses #3102 shipped and #3225 re-litigated, on the column 0137 adds.
+      // A DELETE whose claim does not match is `DELETE 0`, not an error, which the
+      // route reported as `revoked: false` — an answer indistinguishable from "that
+      // token was never yours", from the outside, and wrong in both of these cases.
+      const flagOnly = await asRole(
+        'DELETE FROM oauth_tokens WHERE access_token = $1 RETURNING id',
+        { 'app.token_issue': 'true' },
+        [REVOKE_ACC_1]);
+      expect(flagOnly.error).toBeUndefined();
+      expect(flagOnly.rowCount, 'app.token_issue alone names no row').toBe(0);
+
+      const credentialOnly = await asRole(
+        'DELETE FROM oauth_tokens WHERE access_token = $1 RETURNING id',
+        { 'app.token_credential': REVOKE_ACC_1 },
+        [REVOKE_ACC_1]);
+      expect(credentialOnly.rowCount, 'the credential alone is not a grant — app.token_issue is').toBe(0);
+
+      const live = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE access_token = $1', [REVOKE_ACC_1]);
+      expect(countOf(live.rows), 'both misses are RLS, not an absent row').toBe(1);
+    });
+
+    it('0137\'s access arm admits the row the credential names, and the transaction\'s rollback undoes the claim', async () => {
+      const claimed = await asRole(
+        'DELETE FROM oauth_tokens WHERE access_token = $1 RETURNING id',
+        { 'app.token_issue': 'true', 'app.token_credential': REVOKE_ACC_1 },
+        [REVOKE_ACC_1]);
+      expect(claimed.error).toBeUndefined();
+      expect(claimed.rowCount, 'the named access token is in reach').toBe(1);
+
+      // asRole rolls every probe back, so a count of 1 here is the proof that the arm
+      // worked on the row that exists — not that some row had already been deleted.
+      const still = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE access_token = $1', [REVOKE_ACC_1]);
+      expect(countOf(still.rows), 'the probe wrote nothing durably').toBe(1);
+    });
+
+    it('refuses a bad client secret and deletes nothing', async () => {
+      const before = await clientRows();
+      const res = await revoke({
+        token: REVOKE_ACC_1, token_type_hint: 'access_token', client_id: CLIENT_ID, client_secret: 'not-the-secret',
+      });
+      const { status, body } = await statusAndBody(res);
+      expect(status, `a bad secret answered ${JSON.stringify(body)}`).toBe(401);
+      expect(body.error).toBe('invalid_client');
+      expect(await clientRows(), 'a 401 is a refusal, not a partial revocation').toBe(before);
+    });
+
+    it('a second client authenticating cleanly still cannot retire the first client\'s token', async () => {
+      // The cross-client refusal is the only assertion here that distinguishes an arm
+      // that works from an arm that admits too much: with `app.token_credential` set to
+      // a real live token, the RLS filter is satisfied, so a 0-row answer can only come
+      // from the route's own `client_id` predicate surviving the migration.
+      const res = await revoke({
+        token: REVOKE_ACC_1, token_type_hint: 'access_token', client_id: CLIENT2_ID, client_secret: CLIENT2_SECRET,
+      });
+      const { status, body } = await statusAndBody(res);
+      expect(status, `the second client answered ${JSON.stringify(body)}`).toBe(200);
+      expect(body.revoked, 'client B owns no rows').toBe(false);
+
+      const live = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE access_token = $1', [REVOKE_ACC_1]);
+      expect(countOf(live.rows), 'client A\'s token is untouched').toBe(1);
+    });
+
+    it('token_type_hint=access_token revokes on the access column', async () => {
+      const res = await revoke({
+        token: REVOKE_ACC_1, token_type_hint: 'access_token', client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+      });
+      const { status, body } = await statusAndBody(res);
+      expect(status, `revoke answered ${JSON.stringify(body)}`).toBe(200);
+      expect(body.revoked, 'the statement this issue is about').toBe(true);
+
+      // Gone by both of its columns: the row is retired, not marked, so a caller
+      // holding the refresh half of the same row loses it too.
+      const gone = await admin.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM oauth_tokens
+          WHERE access_token = $1 OR refresh_token = $2`, [REVOKE_ACC_1, REVOKE_RFR_1]);
+      expect(countOf(gone.rows)).toBe(0);
+    });
+
+    it('token_type_hint=refresh_token revokes on the refresh column', async () => {
+      const res = await revoke({
+        token: REVOKE_RFR_2, token_type_hint: 'refresh_token', client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+      });
+      const { status, body } = await statusAndBody(res);
+      expect(status, `revoke answered ${JSON.stringify(body)}`).toBe(200);
+      expect(body.revoked).toBe(true);
+
+      const gone = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REVOKE_RFR_2]);
+      expect(countOf(gone.rows), 'the hint selected the column 0136 bound, not 0137\'s').toBe(0);
+    });
+
+    it('no hint runs both deletes, counts the row once, and the non-matching delete is a clean no-op', async () => {
+      // The branch that reads most like a bug: two DELETEs share one
+      // `app.token_credential`, so exactly one of them can match. Before 0137 both
+      // halves of this returned 0 for an access token; a count of 1 here, rather than 0
+      // or 2, is what the route's `deletedCount` reduce is for.
+      const before = await clientRows();
+      const res = await revoke({
+        token: REVOKE_ACC_3, client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+      });
+      const { status, body } = await statusAndBody(res);
+      expect(status, `revoke without a hint answered ${JSON.stringify(body)}`).toBe(200);
+      expect(body.revoked).toBe(true);
+
+      expect(await clientRows(), 'one row retired, not one row counted twice').toBe(before - 1);
+      const gone = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE access_token = $1', [REVOKE_ACC_3]);
+      expect(countOf(gone.rows)).toBe(0);
+    });
+
+    it('an unknown token and an expired one are both reported as not revoked, and the expired row stays put', async () => {
+      const before = await clientRows();
+      for (const [label, token] of [
+        ['never issued', `3222-no-such-token-${RUN}`],
+        ['expired', `3222-exp-access-${RUN}`],
+      ] as const) {
+        const res = await revoke({
+          token, token_type_hint: 'access_token', client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+        });
+        const { status, body } = await statusAndBody(res);
+        expect(status, `${label} token answered ${JSON.stringify(body)}`).toBe(200);
+        expect(body.revoked, `${label} token is not a revocation`).toBe(false);
+      }
+
+      expect(await clientRows(), 'a refusal writes nothing').toBe(before);
+      const expired = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE access_token = $1', [`3222-exp-access-${RUN}`]);
+      // The row exists and its expiry is past: it is the `expires_at > now()` in both
+      // claim arms, not an absent row, that keeps a revocation from claiming it — which
+      // is also why the token endpoint refuses it as invalid_grant rather than minting
+      // from it.
+      expect(countOf(expired.rows), 'a live-only predicate must not delete the expired row').toBe(1);
     });
   });
 });
