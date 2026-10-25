@@ -175,6 +175,26 @@ vocabulary:
   re-exported through `rls.ts` — it is imported directly
   (`app/api/unsubscribe/route.ts:30`).
 
+**The arm inventory, per table** (`password_resets` / `email_verifications` /
+`oauth_codes`), as 0135 leaves them — 11 `CREATE POLICY` statements, four per table
+plus two for `password_resets`:
+
+| Arm | Command | Clause shape |
+| --- | ------- | ------------ |
+| `*_auth_lookup` | SELECT | `app.auth_lookup` + `<token_col> = app.token_credential` + `deleted_at IS NULL` + `expires_at > now()` |
+| `*_token_claim_read` | SELECT | `app.token_issue` + `<token_col> = app.token_credential`, **no liveness clause** — it must admit the row both before *and* after the tombstone, which is exactly why the lookup arm above cannot double as it |
+| `*_token_claim` | UPDATE | same USING as the claim read plus `deleted_at IS NULL AND expires_at > now()`; `WITH CHECK (deleted_at IS NOT NULL)` (or `used_at` set) |
+| `*_token_issue` | INSERT | left exactly as 0134 wrote it — an INSERT has no pre-existing row to hide behind |
+| `password_resets_token_retire` + `_retire_read` | UPDATE / SELECT | keyed on `app.token_retire_user → user_id`, the one-live-token rule (#3075) |
+
+The token column is `token` / `token_hash` / `code` per table. Set all of this
+through `setTokenIssueContext` / `withTokenIssueContext` — a `CredentialWriteScope`
+carrying `credential` and `retireUser` — rather than hand-writing `set_config`;
+`lib/auth/password-reset.ts` is the worked example (`withAuthLookupContext` at
+`:77`, `:211`, `:237`; the claim's credential at `:300`; the retire at `:318`; the
+whole thing wrapped by `withTokenIssueContext` at `:47` and `:109`). It imports the
+helpers from `@/lib/db/rls` (`:20`), which is the point of that façade.
+
 ## 2. Role permissions — `can()`
 
 - Stored as `roles.permissions` jsonb default `{}` (`core.ts:174`), loaded in
