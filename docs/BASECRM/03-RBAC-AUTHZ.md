@@ -22,13 +22,40 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   own policies — the isolation is real, not advisory.
 - **Baseline policy** `tenant_isolation` (`0037:238-252`) auto-attaches FOR ALL to
   every `public` table with a uuid `tenant_id`. USING is strict when `tenant_id`
-  is NOT NULL; WITH CHECK is always strict (you cannot write a row into someone
-  else's tenant).
-- **Fail-closed** (`0039:12-22`): the check is
-  `tenant_id = NULLIF(current_setting('app.current_tenant'), '')::uuid`.
-  No GUC set → `NULL` → **zero rows match** (deny), rather than a SQL error. An
-  unauthenticated or mis-wired query sees an empty tenant, not a crash and not
-  the world.
+  is NOT NULL (`0037:239`) and admits global rows when it is nullable
+  (`0037:241`); WITH CHECK is always strict
+  (`tenant_id::text = current_setting('app.current_tenant')`, `0037:249`).
+  **Read the next bullet before copying this one — 0039 replaced it, and the
+  sentence above describes 0037, not the shipped policy.**
+- **Fail-closed** (`0039:12-22` is the *reason*; the emitted policy is
+  `0039:64-75`): the check becomes
+  `tenant_id IS NULL OR tenant_id = (CASE WHEN NULLIF(current_setting('app.current_tenant', true),'') IS NULL THEN NULL ELSE NULLIF(…)::uuid END)`.
+  No GUC set → the comparison is `NULL` → **no tenant-owning row matches** (deny),
+  rather than the `invalid input syntax for type uuid` error 0037's bare cast
+  raised when the GUC was empty. An unauthenticated or mis-wired query sees an
+  empty tenant, not a crash and not the world.
+  Two things 0039 changed that the old bullets here did not say:
+  1. **it does not branch on nullability** — the same expression goes onto every
+     table that already had the policy (`0039:30-53` only filters on
+     `data_type = 'uuid'` and on the policy existing), so `tenant_id IS NULL` is
+     in the USING clause of tables whose column is NOT NULL. Harmless there
+     (no such row can exist); load-bearing on the nullable remainder, where a
+     GUC-less read legitimately sees the global rows. That is why the checkpoint
+     in `06` says "a query with no GUC returns **the tenant's** rows: none" and
+     not "returns 0 rows" — the flat version is only true per-column-constraint,
+     and a rebuilder asserting it against a global-row table will chase a bug
+     that is the design.
+  2. **it dropped the explicit WITH CHECK** — 0037 wrote one; `0039:65-75` ships
+     a `FOR ALL` with only USING, and Postgres then reuses USING as the write
+     check (the rule `0136:45` spells out for exactly this reason). So "you
+     cannot write a row into someone else's tenant" survives, but "you cannot
+     write a row with no tenant" no longer does — and that is the shape
+     #3246's three deferred classes describe (`app/api/webhooks`,
+     `app/api/auth/sso`, `app/api/tenant/plugins/webhook`: per their
+     `SCOPE_DEFERRALS` entries, no tenant GUC exists to set before the provider
+     payload, IdP assertion or installation row resolves the tenant). For those
+     handlers the tenantless-write guard is the application's, not the policy's;
+     claiming RLS covers it would be the false alarm #3186 is about.
 - **GUCs are session-local.** `withTenantContext(tenant,user,tx)`
   (`lib/db/rls.ts:120`) runs `SELECT set_config('app.current_tenant', $1, true)`
   (is_local=true → dies at COMMIT/ROLLBACK). Cleared on pool checkout/return
@@ -198,8 +225,15 @@ helpers from `@/lib/db/rls` (`:20`), which is the point of that façade.
 ## 2. Role permissions — `can()`
 
 - Stored as `roles.permissions` jsonb default `{}` (`core.ts:174`), loaded in
-  `requireAuth` (`middleware.ts:341`), surfaced as
+  `requireAuth` (`middleware.ts:200`), surfaced as
   `AuthContext.permissions: Record<string,boolean>` (`:29`).
+  This bullet said `:341` until 2026-10-25 @ `5760c2538`, and `:341` is not a
+  `requireAuth` coordinate at all — it is the `COALESCE(roles.permissions, …)`
+  select line inside its query, which `01-ARCHITECTURE.md:51` correctly cites for
+  *that*. `01`'s heading and `06`'s step both named `:200` the whole time, so
+  the two files disagreed about the same symbol; the drift went unnoticed
+  because `:341` is inside a 500-line file, where a wrong number still points
+  at something plausible.
 - **`can(ctx, perm)`** (`lib/auth/middleware.ts:432-435`): super-admin/admin
   bypass, else `permissions['all'] === true || permissions[perm] === true`.
   `requirePerm()` returns 403 (`:437-442`).
