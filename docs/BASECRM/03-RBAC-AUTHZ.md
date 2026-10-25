@@ -30,19 +30,21 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   unauthenticated or mis-wired query sees an empty tenant, not a crash and not
   the world.
 - **GUCs are session-local.** `withTenantContext(tenant,user,tx)`
-  (`lib/db/rls.ts:118`) runs `SELECT set_config('app.current_tenant', $1, true)`
+  (`lib/db/rls.ts:120`) runs `SELECT set_config('app.current_tenant', $1, true)`
   (is_local=true → dies at COMMIT/ROLLBACK). Cleared on pool checkout/return
   (`lib/db/pool.ts:241` inline on release; in `lib/db/request-connection.ts` the
-  `RESET_TENANT_GUCS_SQL` constant at `:97-98`, issued at the checkout/return call
-  site `:245` — `:93-94` is now the *comment* explaining why the privilege GUCs are
-  cleared, not the statement; `pool.ts:241` unchanged, the `request-connection` half
-  re-pinned 2026-10-25 @ `2d8aed836` from `:93-94,241`) and by PgBouncer
-  `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). That one reset statement
-  clears **twelve** `set_config`s in the tree measured here — the tenant/user/super
-  + lookup GUCs plus the three pre-auth privilege GUCs `app.token_issue`,
-  `app.token_credential` and `app.token_retire_user` (#3218/#3102); there is **no**
-  `app.oauth_client_id` in this checkout. See § 1 pre-auth redemption below for
-  what those three guard.
+  `RESET_TENANT_GUCS_SQL` constant at `:103`, issued at the checkout/return call
+  site `:251` — the lines above it are the *comment* explaining why the privilege
+  GUCs are cleared, not the statement; re-pinned 2026-10-25 @ `2ff3e88b5` from
+  `:97-98,245`, which was itself a re-pin of `:93-94,241`) and by PgBouncer
+  `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). Each of those reset
+  statements clears **fourteen** `set_config`s in the tree measured here:
+  tenant/user/super-admin, the `app.auth_lookup` + `app.tracking_lookup` lookups,
+  the three `app.portal_lookup_*` GUCs plus `app.form_lookup_id`, and the five
+  credential GUCs — `app.token_issue`, `app.token_credential`,
+  `app.token_retire_user` (#3218/#3102), `app.oauth_client_id` (#3225) and
+  `app.unsubscribe_contact` (#3237). See § 1 pre-auth redemption below for what
+  those guard.
 
 ### Super-admin scope — the deliberate asymmetry
 
@@ -85,18 +87,17 @@ helper), `withTrackingLookupContext` (`:265`, was `:322`),
 `NO_TENANT_SENTINEL`/`NO_USER_SENTINEL` nil-UUIDs (`:50`/`:62`). The pre-auth
 credential helpers were moved **out of `rls.ts`** to
 `lib/db/token-credential-context.ts` under #3218; `rls.ts` only **re-exports**
-them (`rls.ts:32-39`), so the import surface described above is unchanged but
+them (`rls.ts:32-41`), so the import surface described above is unchanged but
 grepping `rls.ts` for the definitions finds nothing (a rebuilder used to be sent
 to the now-wrong `rls.ts:289` / `rls.ts:372` — `:289` is `await setUserContext(...)`
 inside `withUserContext`, and `:372` never existed). They are:
 `withAuthLookupContext` (`token-credential-context.ts:90`, sets `app.auth_lookup`
 for the pre-tenant email→user lookup) and `withAuthResolutionContext`
-(`token-credential-context.ts:202`) — plus `setAuthLookupContext` (`:47`),
-`setAuthResolutionContext` (`:68`), `setTokenIssueContext` (`:142`) and
-`withTokenIssueContext` (`:170`) documented under § 1 pre-auth redemption below.
+(`token-credential-context.ts:257`) — plus `setAuthLookupContext` (`:47`),
+`setAuthResolutionContext` (`:68`), `setTokenIssueContext` (`:197`) and
+`withTokenIssueContext` (`:225`) documented under § 1 pre-auth redemption below.
 
-### Pre-auth credential redemption — the GUC vocabulary and the trap (0134/0135)
-
+### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0138)
 Three user-scoped, secret-bearing tables — **`password_resets`**,
 **`email_verifications`**, **`oauth_codes`** — carry only a `*_user_own` policy
 that needs `app.current_user`, which pre-auth flows (forgot-password, verify-email,
@@ -106,9 +107,9 @@ the vocabulary the rest of this doc must use for them:
 | GUC | Set by | Guards |
 | --- | ------ | ------ |
 | `app.auth_lookup` | `withAuthLookupContext` (`token-credential-context.ts:90`) | "this request is a credential **lookup**" — a boolean, it names *kind*, never *which* |
-| `app.token_issue` | `setTokenIssueContext` (`:142`) / `withTokenIssueContext` (`:170`) | the INSERT of a freshly minted credential row + its own claim read/update |
-| `app.token_credential` | named by `setAuthLookupContext` (`:47`, credential arg sets it at `:53`) and `setTokenIssueContext` (`:157`) | the **specific token value** the query is matching |
-| `app.token_retire_user` | `setTokenIssueContext` (`:158`, its `retireUser` scope) | the one user whose outstanding `password_resets` a retire write may tombstone |
+| `app.token_issue` | `setTokenIssueContext` (`:197`) / `withTokenIssueContext` (`:225`) | the INSERT of a freshly minted credential row + its own claim read/update |
+| `app.token_credential` | named by `setAuthLookupContext` (`:47`, credential arg sets it at `:53`) and `setTokenIssueContext` (`:212`) | the **specific token value** the query is matching |
+| `app.token_retire_user` | `setTokenIssueContext` (`:213`, its `retireUser` scope) | the one user whose outstanding `password_resets` a retire write may tombstone |
 
 **The invariant — name the credential, do not merely declare "pre-auth."** 0134's
 SELECT arm was `USING (app.auth_lookup = 'true' AND deleted_at IS NULL AND
@@ -121,7 +122,7 @@ tokens. 0135 narrowed every `*_auth_lookup` arm to also require
 same shape for `token_hash` / `code`). A pre-auth read of these three tables **must
 name the credential it is matching** — the same shape `app.portal_lookup_token` /
 `app.form_lookup_id` already had. `app.token_credential` therefore appears in BOTH
-reset lists (`pool.ts:241`, `request-connection.ts:97-98`), cleared to `''` so no
+reset lists (`pool.ts:241`, `request-connection.ts:103`), cleared to `''` so no
 real hash ever equals it.
 
 **The corollary trap — SELECT gates UPDATE, and filters RETURNING.** A row-level
@@ -136,8 +137,43 @@ this reason. 0135 fixed it with a per-table **claim-context SELECT arm**
 no freshness clause, so it admits the row before *and* after the tombstone —
 `0135:117-124`), and gave `password_resets` a `*_token_retire` +
 `*_token_retire_read` pair keyed on `app.token_retire_user` (`0135:138-159`). **A
-claim that cannot see its own row silently updates zero rows.** 0136 (`oauth_client_id`)
-was not in the tree this doc was drilled against (`2d8aed836`).
+claim that cannot see its own row silently updates zero rows.**
+
+**The same two traps, re-run one layer up (0136–0138).** The OAuth endpoints and
+`/api/unsubscribe` each hit the *identical* failure and each got the *identical*
+fix, so treat these as three worked examples of the rule rather than new
+vocabulary:
+
+- **0136 `pre_auth_oauth_rls`** (#3225) gave `oauth_clients` a SELECT arm
+  `app.auth_lookup = 'true' AND client_id = current_setting('app.oauth_client_id')`
+  (`:104`) — a fifth GUC, and the reason `app.oauth_client_id` is on both reset
+  lists: the client id is public but the row it selects carries
+  `client_secret`, so a stale value picks a *victim's* client for whatever request
+  inherits the checkout. For `oauth_tokens` it added the INSERT arm
+  `oauth_tokens_token_issue` (`:115`) and the refresh-token claim pair
+  `oauth_tokens_refresh_claim_read` / `oauth_tokens_refresh_claim`
+  (`:125`, `:135`), both keyed on `app.token_issue` +
+  `refresh_token = app.token_credential`. Setter:
+  `setOAuthClientLookupContext` (`token-credential-context.ts:127`, GUC at `:135`).
+- **0137 `pre_auth_oauth_revoke`** (#3231) added no GUC at all. `/oauth/revoke`
+  deletes an **access** token, and 0136 only ever admitted the **refresh** column,
+  so the revoke matched zero rows. Fix: `oauth_tokens_access_claim` (DELETE, `:76`)
+  + `oauth_tokens_access_claim_read` (SELECT, `:86`) — same clause shape,
+  `access_token = app.token_credential`. *A credential column that no policy names
+  is unrevocable.*
+- **0138 `pre_auth_unsubscribe_contact_rls`** (#3237) let `/api/unsubscribe` flip
+  `contacts.do_not_contact`. Here the privilege and the row-narrowing value are the
+  **same** GUC: `contacts_unsubscribe_claim_read` (SELECT, `:135`) and
+  `contacts_unsubscribe_claim` (UPDATE, `:144`) key on
+  `id = NULLIF(current_setting('app.unsubscribe_contact'), '')::uuid`, with
+  `WITH CHECK (do_not_contact = true AND unsubscribed = true)` so the arm can only
+  ever widen the opt-out. Unset → `NULLIF` → `NULL` → zero rows, the standard deny.
+  Setter `setUnsubscribeContactContext`
+  (`lib/db/unsubscribe-contact-context.ts:84`); `setUnsubscribeTenantContext`
+  (`:100`) additionally sets `app.current_tenant`/`app.current_user` (`:107-108`)
+  for the tenant-scoped writes that follow. Note this one module is **not**
+  re-exported through `rls.ts` — it is imported directly
+  (`app/api/unsubscribe/route.ts:30`).
 
 ## 2. Role permissions — `can()`
 

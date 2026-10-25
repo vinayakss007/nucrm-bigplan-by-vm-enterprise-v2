@@ -97,7 +97,7 @@ will drift; the file references and the invariants are the durable content.
 
 **Re-drilled 2026-10-25 against `main = 2d8aed836` (#3232).** The wrong citations
 were re-pinned (the `0079`→`0080` drop-migration, five `schemas.ts` coordinates, the
-`token-credential-context.ts` auth helpers + `rls.ts:32-39` re-export, the
+`token-credential-context.ts` auth helpers + `rls.ts:32-41` re-export, the
 `request-connection.ts` reset site, and the `lib/.../resolve-stage.ts` path), the
 `amount` default was corrected to the numeric `.default(0)`, and the two invariants
 above (soft-delete read half, pre-auth credential-name rule) were added. Each moved
@@ -105,4 +105,20 @@ citation keeps its superseded number in a dated `(re-pinned 2026-10-25 from :X)`
 parenthetical so the next audit can tell a fix from a guess. Line numbers here are
 valid only at that SHA — trust the **symbol names** (`dealQuerySchema`,
 `RESET_TENANT_GUCS_SQL`, `withAuthLookupContext`, `stageFailureMessage`) over any raw
-`:N`. `0136_pre_auth_oauth_rls.sql` / `app.oauth_client_id` were **not** in this tree.
+`:N`. That pass recorded that `0136_pre_auth_oauth_rls.sql` / `app.oauth_client_id`
+were not in the tree it read. They were true of `2d8aed836` and of nothing since:
+`#3230` landed 0136 four commits later.
+
+**Re-measured 2026-10-25 against `main = 2ff3e88b5` (#3244).** The tree moved under
+the doc again. `#3236` added 0137 and `#3242` added 0138,
+`lib/db/unsubscribe-contact-context.ts` and a **fourteenth** reset GUC, which pushed
+`RESET_TENANT_GUCS_SQL` from `lib/db/request-connection.ts:101` to `:103` and its
+issue site from `:249` to `:251`. Re-pinned here: 01's context-helper and
+reset bullets plus a fresh sizing census (**918** `*.test.*` files — 866 unit /
+39 integration / 12 dashboard / 1 api; **139** journal steps; **277** `.sql` files),
+02's GUC list reorganised by *writing file* (rls / token-credential / portal-lookup /
+form-capture / unsubscribe-contact) instead of pretending everything lives in
+`rls.ts`, and 03's pre-auth walk extended to 0134–0138 with `rls.ts:118`→`:120`.
+Two assertions from the `docs/basecrm-citation-drill` branch are deliberately **not**
+ported because they contradict the code: that the reset clears *twelve* GUCs, and
+that `app.oauth_client_id` is absent from the reset lists.
