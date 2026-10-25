@@ -42,6 +42,17 @@
  * there), so when Redis is down this returns a refusal and the job does not
  * run. That is the pre-existing behaviour — what changes is that the caller can
  * now tell.
+ *
+ * #3259, because the refusals below are NOT all the same event: a client that
+ * has not finished its Redis handshake also answered `acquired: false`, and the
+ * first cron request of a process start always saw one — `getRedisClient()`
+ * builds the client lazily on that very call, so its status was still
+ * `'connecting'`. Deterministic, not a race: every restart skipped its first run
+ * and both `recordCronSkip` and the 423 blamed another instance, while the retry
+ * that "proved it working" was just the second call finding the ready state.
+ * `lib/cache/redis-ready.ts` gives that one case a bounded grace window before
+ * the fail-closed answer, so a refusal here means contention or a Redis that is
+ * actually down.
  */
 import { NextResponse } from 'next/server';
 import { acquireLock } from '@/lib/cache';

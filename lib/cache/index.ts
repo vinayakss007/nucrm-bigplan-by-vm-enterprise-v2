@@ -24,6 +24,7 @@
  */
 
 import { Redis } from 'ioredis';
+import { waitForRedisReady } from './redis-ready';
 
 // -------------------------------------------------------------------
 // Redis Circuit Breaker
@@ -308,6 +309,14 @@ const REFRESH_SCRIPT = `
 
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
+  // #3259: getRedisClient() builds the client lazily, so the first caller of a
+  // process used to hand the check below a client still `'connecting'` — a
+  // not-yet-established connection read as contention, and every cron route
+  // answered 423 "lock-held" on its own first run after a restart. One bounded
+  // grace window per client instance, shared by concurrent probes: see
+  // lib/cache/redis-ready.ts, which also covers why a Redis that really is down
+  // still fails closed here, instantly, from the second probe onwards.
+  if (redis) await waitForRedisReady(redis);
   // #M3: on Redis unavailability, fail CLOSED by default (acquired:false) so
   // getOrSet takes its retry/stale path instead of every replica running the
   // fallback at once (the stampede this lock prevents); it still returns a

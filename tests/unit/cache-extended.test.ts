@@ -251,6 +251,11 @@ describe('Cache Module - Extended', () => {
       redis.status = 'connecting';
       const { acquireLock } = await import('@/lib/cache');
 
+      // #3259: acquireLock now spends ONE bounded grace window waiting for this
+      // client to become ready — which this fake never does — and then still gets
+      // the same fail-closed answer, so the call costs ~1.5s of real time and no
+      // SET. The window is per client instance: the second probe of a Redis that
+      // is actually down is instant again (tests/unit/cron-lock-first-call-ready-3259.test.ts).
       expect(await acquireLock('test:lock')).toEqual({ acquired: setting === 'true', value: '' });
       expect(redis.call).not.toHaveBeenCalled();
     });
