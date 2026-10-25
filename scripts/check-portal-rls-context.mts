@@ -718,11 +718,16 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
   },
   {
     dir: 'app/api/auth/oauth',
-    deferredTo: '#3102',
-    why: 'Token issuance and revocation read oauthClients from the pool before any session exists, '
-      + 'keyed on the client credential the caller presented — the same privilege arm #3102 has not '
-      + 'specified yet, so a context helper here would have nothing to pin.',
-    maxFindings: 2,
+    deferredTo: '#3231',
+    why: 'One read left, and it is not the token endpoint\'s: `revoke/route.ts:40` authenticates a '
+      + 'client with the same contextless `oauthClients` read #3225 bound on `/token`. Measured as the '
+      + 'application role, 0 rows with no context and 1 row under 0136\'s `app.oauth_client_id` arm, so '
+      + '/token\'s own read is bound now (2 -> 1) and what still excuses this one is #3231\'s missing '
+      + 'privilege: no `oauth_tokens` arm matches on `access_token` at all, so `/revoke`\'s access-token '
+      + 'and no-hint branches cannot retire a row however the route is wrapped. Setting a context here '
+      + 'before that arm exists would still leave the endpoint half-dead, and inventing the arm is '
+      + '#3231\'s call, not this guard\'s.',
+    maxFindings: 1,
   },
   {
     dir: 'app/api/auth/sso',
