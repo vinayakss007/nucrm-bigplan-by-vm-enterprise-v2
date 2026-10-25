@@ -204,11 +204,23 @@ survives user deletion).
 - CI guard: `scripts/check-migration-rls-dml.mjs` (`npm run guard:migration-rls`)
   fails a migration that mutates a FORCE-RLS table without setting the right GUC.
 
-The **GUCs** (set in `lib/db/rls.ts`): `app.current_tenant` (`:88,128,239,281`),
-`app.current_user` (`:88,…`), `app.is_super_admin` (`SUPER_ADMIN_GUC :138,169,217`),
-`app.auth_lookup` (`:259`), `app.tracking_lookup` (`:311`),
-`app.portal_lookup_token|tenant|email` (0122/0123, `lib/db/portal-lookup-context.ts`),
-`app.allow_audit_purge`. Cleared on checkout/return as noted in 01.
+The **GUCs** (set in `lib/db/rls.ts`): `app.current_tenant`
+(`setTenantContext :90`, `clearTenantContext :109`, `withTenantContext :130`,
+`setImpersonationContext :220`), `app.current_user` (the same four statements),
+`app.is_super_admin` (`SUPER_ADMIN_GUC :140`, `setSuperAdminContext :171`,
+`setImpersonationContext :219`), `app.tracking_lookup`
+(`setTrackingLookupContext :256`). The **auth/credential** GUCs
+(`app.auth_lookup`, `app.token_issue`, `app.token_credential`,
+`app.token_retire_user`, `app.oauth_client_id`) are set in
+`lib/db/token-credential-context.ts`, not here — see 03 § 1a. Plus
+`app.portal_lookup_token|tenant|email` (0122/0123,
+`lib/db/portal-lookup-context.ts`) and `app.form_lookup_id` (0124). One more, of
+a different kind: `app.allow_audit_purge` is not an RLS grant but the
+transaction-local switch the audit-immutability trigger reads (0042; set at
+`lib/db/audit-archival.ts:179`) and it is deliberately **not** in the reset list,
+because `SET LOCAL` dies at COMMIT. Cleared on checkout/return as noted in 01 —
+**every privilege GUC must appear in both reset lists**, or it survives a
+checkout into an unrelated request.
 
 ## Migrations
 

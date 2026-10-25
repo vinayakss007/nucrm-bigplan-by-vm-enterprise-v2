@@ -30,11 +30,14 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   unauthenticated or mis-wired query sees an empty tenant, not a crash and not
   the world.
 - **GUCs are session-local.** `withTenantContext(tenant,user,tx)`
-  (`lib/db/rls.ts:118`) runs `SELECT set_config('app.current_tenant', $1, true)`
+  (`lib/db/rls.ts:120`) runs `SELECT set_config('app.current_tenant', $1, true)`
   (is_local=true → dies at COMMIT/ROLLBACK). Cleared on pool checkout/return by
-  the `RESET_TENANT_GUCS_SQL` statement (`lib/db/pool.ts:241`, inline; and
-  `lib/db/request-connection.ts:98` → called at `:245`, keyed to the *symbol* not
-  the line — #3230 and #3232 both move that file) and by PgBouncer
+  the `RESET_TENANT_GUCS_SQL` statement — today that is **thirteen** GUCs in one
+  `SELECT`, and the two reset sites are `lib/db/pool.ts:241` (inline in the
+  `release` handler) and `lib/db/request-connection.ts:101` (the constant),
+  executed on checkout at `:249`. Pin these to the *symbol*, not the line:
+  `#3230` moved `request-connection.ts` by three lines while this document was
+  being re-drilled. Third layer: PgBouncer
   `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`).
 
 ### 1a. Pre-auth credential redemption — the fourth kind of grant
@@ -45,10 +48,11 @@ them: `password_resets`, `email_verifications` and `oauth_codes` each originally
 carried one policy (`*_user_own`, requiring `app.current_user = user_id`), so an
 `INSERT` raised 42501, a `SELECT` returned zero rows, and the tombstone `UPDATE`
 that consumes a token matched nothing **silently**. That is migrations
-`0134_pre_auth_token_rls.sql` (#3102) and `0135_pre_auth_token_rls_narrow.sql`
-(#3218/#3102), and it added three GUCs to the vocabulary: `app.auth_lookup`,
-`app.token_issue`, `app.token_credential` (plus `app.token_retire_user` for the
-by-user invalidation). All four are in the checkout reset list — see the
+`0134_pre_auth_token_rls.sql` (#3102), `0135_pre_auth_token_rls_narrow.sql`
+(#3218/#3102) and `0136_pre_auth_oauth_rls.sql` (#3225/#3230), and across the
+three they added **five** GUCs to the vocabulary: `app.auth_lookup`,
+`app.token_issue`, `app.token_credential`, `app.token_retire_user` and
+`app.oauth_client_id`. All five are in the checkout reset list — see the
 `RESET_TENANT_GUCS_SQL` bullet above, which is what makes them safe to hold.
 
 Two rules came out of this, and a rebuild must get **both**:
@@ -66,8 +70,9 @@ Two rules came out of this, and a rebuild must get **both**:
    pre-auth redemption was simply missing it. **A boolean GUC on a
    secret-bearing table is a cross-tenant read.** The GUC is cleared to `''`, not
    unset, because no hash equals the empty string.
-2. **An RLS `UPDATE` is gated by the table's `SELECT` policies too.** A row the
-   role cannot see cannot be updated, and the *new* image must stay visible or
+2. **An RLS `UPDATE` — or `DELETE` — is gated by the table's `SELECT` policies
+   too.** A row the role cannot see cannot be updated, and the *new* image must
+   stay visible or
    the statement raises 42501. Measured against 0134: the claim
    `UPDATE password_resets SET deleted_at = now() WHERE token = … RETURNING id`
    returned `rowCount = 0` with the row genuinely left live — so
@@ -90,18 +95,53 @@ Per table (`password_resets` / `email_verifications` / `oauth_codes`), as
 `password_resets` additionally gets `*_token_retire` (UPDATE scoped by
 `app.token_retire_user` → `user_id`) and `*_token_retire_read` (its read pair).
 Set them through `setTokenIssueContext` / `withTokenIssueContext`
-(`lib/db/token-credential-context.ts:142`/`:170`, a `CredentialWriteScope`
+(`lib/db/token-credential-context.ts:197`/`:225`, a `CredentialWriteScope`
 carrying `credential` and `retireUser`) rather than hand-writing `set_config`;
 `lib/auth/password-reset.ts` is the worked example (`:77`, `:211`, `:237` for the
-lookup arms, `:295` for the claim). 0135 is written as a `DO $$` block with
-`DROP POLICY IF EXISTS` per arm — the repo's shape for policies (Postgres has no
-`CREATE POLICY IF NOT EXISTS`), so replaying `db:migrate` is a no-op and a
-database that never had 0134 still lands in the right state.
+lookup arms, `:300` for the claim, `:318` for the retire). 0135 is written as a
+`DO $$` block with `DROP POLICY IF EXISTS` per arm — the repo's shape for
+policies (Postgres has no `CREATE POLICY IF NOT EXISTS`), so replaying
+`db:migrate` is a no-op and a database that never had 0134 still lands in the
+right state.
+
+**0136 extends the same doctrine to the OAuth client flow** (`app/api/auth/oauth/token/route.ts`),
+and it is worth reading as the worked example of *two different credentials in
+one request*. Four policies: `oauth_clients_client_lookup` (SELECT —
+`app.auth_lookup='true' AND client_id = current_setting('app.oauth_client_id')`),
+`oauth_tokens_token_issue` (INSERT `WITH CHECK` on `app.token_issue` plus
+`user_id IS NOT NULL AND expires_at > now()`), and
+`oauth_tokens_refresh_claim_read` + `oauth_tokens_refresh_claim` (SELECT + DELETE,
+both on `refresh_token = app.token_credential` under `app.token_issue`) — the
+rotation path. Four details a rebuild will get wrong:
+
+- `app.oauth_client_id` is **not** a second use of `app.token_credential`. That
+  slot carries bearer material (the reset token, the refresh token); the client
+  id is public-ish request data, and sharing the slot would let a client
+  assertion satisfy a credential predicate. `setOAuthClientLookupContext`
+  (`token-credential-context.ts:127`, wrapped by `withOAuthClientLookupContext`
+  `:145`, called at `route.ts:56`) therefore sets `app.auth_lookup='true'`,
+  **clears** `app.token_credential` to `''` in the same statement, and sets
+  `app.oauth_client_id`.
+- The INSERT arm names no credential, and that is correct: rule 1 gates *reads* of
+  an existing row. A new row's own values are the `WITH CHECK`, which is why 0136
+  puts the liveness conditions there instead.
+- The rotation claim is a **DELETE**, so unlike 0135's claim-context read arm it
+  *keeps* a liveness condition (`expires_at > now()`). 0135 had to drop liveness
+  because its claim *writes* a tombstone the next read must still see; here the
+  row goes away, so nothing later needs to look at it. Same naming rule, different
+  liveness — decide it from what the claim does to the row, not from a template.
+- Before 0136 the token endpoint could not authenticate a client at all under
+  FORCE RLS: a correct `client_id` + secret still resolved to "no such client"
+  (measured as `401 invalid_client`), and `INSERT INTO oauth_tokens` raised
+  42501. Worse, the *refresh* rotation was a silent zero-row write — the same
+  failure mode as rule 2 above — so the presented refresh token stayed valid
+  forever, rotation never happened, and #3075's replay defence was simply not
+  being enforced on this path.
+
 `tests/integration/pre-auth-route-redemption-rls-3222.test.ts` and
-`tests/unit/pre-auth-token-rls-credential-3218.test.ts` pin both halves;
-`app/api/auth/oauth/token/route.ts` is the site still being hardened by #3230
-(`0136_pre_auth_oauth_rls.sql`) — check what it names before trusting this
-section's table list.
+`tests/unit/pre-auth-token-rls-credential-3218.test.ts` pin the 0134/0135
+halves; 0136's own assertions ship with it (`0136_pre_auth_oauth_rls.sql`,
+#3225/#3230).
 
 ### Super-admin scope — the deliberate asymmetry
 
@@ -127,9 +167,9 @@ exactly the caller's own membership rows.
 
 ### withSecurityContext — the super-admin escape hatch (use sparingly)
 
-`withSecurityContext(fn)` (`lib/db/rls.ts:181-189`) opens a transaction and runs
-`setSuperAdminContext(tx)` (`:165`) → `set_config('app.is_super_admin','true',true)`.
-It is **not request-scoped** (doc `:154-163`) — wrap the *smallest possible*
+`withSecurityContext(fn)` (`lib/db/rls.ts:183-191`) opens a transaction and runs
+`setSuperAdminContext(tx)` (`:167`) → `set_config('app.is_super_admin','true',true)`.
+It is **not request-scoped** (doc `:157-166`) — wrap the *smallest possible*
 statement set. Callers: pre-auth bootstrap/signup/SSO provisioning
 (`app/api/setup/create-admin/route.ts`, `app/api/v1/auth/route.ts`,
 `lib/auth/sso.ts`), super-admin audit (`lib/audit/super-admin.ts`), the
@@ -137,23 +177,25 @@ brute-force store, and the acceptance harness's raw DB checks. A rebuild should
 reach for `withTenantContext` first and `withSecurityContext` only for genuinely
 cross-tenant platform work (e.g. seeding `product_templates`).
 
-Sibling helpers: `withUserContext` (`rls.ts:280`),
-`setTrackingLookupContext` / `withTrackingLookupContext` (`rls.ts:250`/`:265`,
-set `app.tracking_lookup`), `setUserContext` (`rls.ts:232`),
-`setImpersonationContext` (`rls.ts:206`, 3 GUCs in one statement),
-`NO_TENANT_SENTINEL`/`NO_USER_SENTINEL` nil-UUIDs (`rls.ts:50/:62`).
+Sibling helpers: `withUserContext` (`rls.ts:282`),
+`setTrackingLookupContext` / `withTrackingLookupContext` (`rls.ts:252`/`:267`,
+set `app.tracking_lookup`), `setUserContext` (`rls.ts:234`),
+`setImpersonationContext` (`rls.ts:208`, 3 GUCs in one statement —
+`app.is_super_admin`, `app.current_tenant`, `app.current_user`),
+`NO_TENANT_SENTINEL`/`NO_USER_SENTINEL` nil-UUIDs (`rls.ts:52/:64`).
 
 The **auth/credential** helpers are *not* defined in `rls.ts` — they moved to
-`lib/db/token-credential-context.ts` and `rls.ts:32-38` only re-exports them, so
+`lib/db/token-credential-context.ts` and `rls.ts:32-41` only re-exports them, so
 the import path `@/lib/db/rls` still works but a grep inside `rls.ts` finds
 nothing (the first edition of this file pointed at `rls.ts:289`/`:372`; `rls.ts`
-is 337 lines, so `:372` never existed and `:289` is a `setUserContext` call):
+is 339 lines, so `:372` never existed and `:289` is a `setUserContext` call):
 
 | Helper | Defined at | GUC it sets |
 | ------ | ---------- | ----------- |
 | `setAuthLookupContext` / `withAuthLookupContext` | `token-credential-context.ts:47` / `:90` | `app.auth_lookup` (+ `app.token_credential`, § 1a) |
-| `setAuthResolutionContext` / `withAuthResolutionContext` | `:68` / `:202` | `app.current_user` **and** `app.auth_lookup='true'`, and it **clears** `app.token_credential` to `''` — the resolved caller gets the lookup grant, never a live credential |
-| `setTokenIssueContext` / `withTokenIssueContext` | `:142` / `:170` | `app.token_issue`, `app.token_credential`, `app.token_retire_user` |
+| `setAuthResolutionContext` / `withAuthResolutionContext` | `:68` / `:257` | `app.current_user` **and** `app.auth_lookup='true'`, and it **clears** `app.token_credential` to `''` — the resolved caller gets the lookup grant, never a live credential |
+| `setOAuthClientLookupContext` / `withOAuthClientLookupContext` | `:127` / `:145` | `app.auth_lookup='true'`, `app.oauth_client_id`, and it **clears** `app.token_credential` (§ 1a, 0136) |
+| `setTokenIssueContext` / `withTokenIssueContext` | `:197` / `:225` | `app.token_issue`, `app.token_credential`, `app.token_retire_user` |
 
 `withAuthLookupContext` is the pre-tenant email→user lookup used by login
 (`api-handlers.ts:118,282`), API-key auth (`lib/auth/api-key.ts:38`) and

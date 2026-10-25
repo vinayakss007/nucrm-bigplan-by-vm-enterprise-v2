@@ -85,14 +85,18 @@ coexisting shapes and the `apiError()` helper (`lib/api-error.ts:37`).
   transaction started anywhere in a handler still carries the right GUCs.
 - **`lib/db/client.ts`** is a thin compat shim re-exporting `getPool` plus raw
   `query` / `withTransaction` helpers.
-- **Context helpers** (`lib/db/rls.ts`): `withTenantContext` (`:118`),
-  `withUserContext` (`:337`), `withAuthLookupContext` (`:289`),
-  `withTrackingLookupContext` (`:322`), `withSecurityContext` (`:181-189`),
-  `setImpersonationContext` (`:206`). See 02/03 for what each SETs and why
+- **Context helpers** (`lib/db/rls.ts`): `withTenantContext` (`:120`),
+  `withUserContext` (`:282`), `withTrackingLookupContext` (`:267`),
+  `withSecurityContext` (`:183-191`), `setImpersonationContext` (`:208`). The
+  auth/credential helpers (`withAuthLookupContext`, `withAuthResolutionContext`,
+  `withTokenIssueContext`, `withOAuthClientLookupContext`) are *defined* in
+  `lib/db/token-credential-context.ts` and only re-exported from `rls.ts:32-41`.
+  See 02/03 for what each SETs and why
   `withSecurityContext` is super-admin-scoped and must wrap the *smallest*
   possible statement set.
 - **Reset on return**: GUCs are cleared on connection checkout/return
-  (`lib/db/pool.ts:241`, `lib/db/request-connection.ts:93-94,241`) and PgBouncer
+  (`lib/db/pool.ts:241`, `RESET_TENANT_GUCS_SQL` at
+  `lib/db/request-connection.ts:101` → called at `:249`) and PgBouncer
   runs `server_reset_query='DISCARD ALL'` (`lib/db/rls.ts:10-17`). A leaked GUC
   across tenants is prevented at *three* layers.
 
