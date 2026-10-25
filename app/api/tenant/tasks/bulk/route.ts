@@ -17,7 +17,7 @@ import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middlewar
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
-import { logAudit } from '@/lib/audit';
+import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -87,6 +87,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
 
     const validIds = valid.map(r => r.id);
+    // #3220 — the audit trail records the ids the action actually wrote, which for
+    // `restore` and `add_to_segment` is NOT this set. `validIds` is filtered
+    // `deletedAt IS NULL`, so it cannot contain a single row a restore touched.
+    // Same doctrine `contacts/bulk` already carries as its own `auditIds`.
+    let auditIds: string[] = validIds;
     // #3154 — `restore` is the one action whose rows CANNOT be in this set: it is
     // filtered `deletedAt IS NULL`, so every trashed id the caller named has
     // already been dropped and the only honest call of the verb was answered 404
@@ -363,6 +368,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             )
           );
         affected = res.rowCount ?? 0;
+        auditIds = restorableIds;
         break;
       }
       case 'add_to_segment': {
@@ -375,8 +381,18 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
-        const resSeg = await db.insert(segmentMembers).values(memberValues).onConflictDoNothing();
-        affected = resSeg.rowCount ?? memberValues.length;
+        // #3220 — `onConflictDoNothing` silently skips the ids that are already
+        // members, so `rowCount` was honest about how many rows were created while
+        // the audit named every id the request carried. RETURNING yields exactly the
+        // members this statement inserted, in the same statement (#3075 already
+        // claims with RETURNING for the same reason — no extra round trip, PP-028).
+        const inserted = await db
+          .insert(segmentMembers)
+          .values(memberValues)
+          .onConflictDoNothing()
+          .returning({ entityId: segmentMembers.entityId });
+        affected = inserted.length;
+        auditIds = inserted.map(r => r.entityId);
         break;
       }
       default:
@@ -386,7 +402,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
       action: `bulk_${action}`, entityType: 'task',
-      newData: { count: affected, task_ids: validIds.slice(0, 20), payload },
+      newData: bulkIdsAudit({ idsKey: 'task_ids', ids: auditIds, affected, payload }),
     });
 
     return NextResponse.json({ ok: true, affected, action });

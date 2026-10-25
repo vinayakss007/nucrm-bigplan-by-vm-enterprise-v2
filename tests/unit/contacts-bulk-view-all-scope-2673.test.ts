@@ -55,7 +55,12 @@ vi.mock('@/lib/auth/middleware', async () => {
 });
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: async () => null }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn() }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+vi.mock('@/lib/audit', async (importOriginal) => ({
+  // #3220: only the writer is faked — `bulkIdsAudit` is the shape under test,
+  // so a mock that omits it turns every bulk route into a 500.
+  ...(await importOriginal<typeof import('@/lib/audit')>()),
+  logAudit: vi.fn(),
+}));
 vi.mock('@/lib/dashboard/widget-cache', () => ({ invalidateWidgetCache: vi.fn() }));
 vi.mock('@/lib/cron/sequence-steps', () => ({ cancelOpenEnrollments: vi.fn() }));
 vi.mock('@/lib/api/with-api-route', () => ({
