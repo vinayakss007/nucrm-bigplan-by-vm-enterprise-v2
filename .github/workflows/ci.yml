@@ -529,8 +529,12 @@ jobs:
           ALTER TABLE "invoices" ADD CONSTRAINT "chk_invoices_status"
             CHECK ("status" IN ('draft','sent','paid','overdue','cancelled','partially_paid','written_off','pending'));
           SQL
-          npm run guard:vocab -- --json > /tmp/vocab-negative.log 2>&1
-          code=$?
+          # GitHub's default shell for a `run:` step is `bash -e`, and `set -uo pipefail` does not
+          # clear it, so the expected failure has to be captured with `|| code=$?` — written bare,
+          # the shell aborts on the guard's exit 1 before a single assertion runs and the step reports
+          # a red control with no annotation. Verified locally under `bash -e`.
+          code=0
+          npm run guard:vocab -- --json > /tmp/vocab-negative.log 2>&1 || code=$?
           if [ "$code" != "1" ]; then
             echo "::error::PP-059 the constraint-vocabulary guard exited $code against a database that rejects 'void', which lib/api/schemas/billing.ts writes. Expected 1: the step is not measuring the database."
             cat /tmp/vocab-negative.log
