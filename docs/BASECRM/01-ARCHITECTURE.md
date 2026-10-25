@@ -128,15 +128,16 @@ and the DB-role/password realign that a fresh hotpatched DB requires.
 
 ## Sizing (so a rebuild budgets correctly)
 
-Large repo. Re-measured at `2ff3e88b5`:
+Large repo. Re-measured at `33f0b7306`:
 
-- **918 `*.test.*` files** under `tests/` — 866 in `tests/unit`, 39 in
+- **919 `*.test.*` files** under `tests/` — 867 in `tests/unit`, 39 in
   `tests/integration`, 12 in `tests/dashboard`, 1 in `tests/api`. Command:
   `git ls-tree -r --name-only HEAD -- tests | grep -E '\.test\.[^.]+$'`, split
   with `cut -d/ -f2 | uniq -c`. (Playwright `.spec.ts` files are not in it.)
 - The unit run summed to **14,505 passed / 8 skipped / 2 failed** across four
-  `--shard=n/4` legs when it was last run here (at `7330f2105`, three merges ago,
-  so two unit files short of today's tree). Both failures were
+  `--shard=n/4` legs when it was last run here (at `7330f2105`, four merges and
+  four unit files short of today's tree — 915 files then, 919 now — so read it as
+  an order of magnitude, not a rate). Both failures were
   `tests/integration/invite-rls-context-3182.test.ts`, which reaches a real
   enforced-RLS database, so treat them as environment-dependent — run `npm test`
   for the authoritative rate on the box you are on.

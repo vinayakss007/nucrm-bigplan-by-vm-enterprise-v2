@@ -131,3 +131,12 @@ form-capture / unsubscribe-contact) instead of pretending everything lives in
 Two assertions from the `docs/basecrm-citation-drill` branch are deliberately **not**
 ported because they contradict the code: that the reset clears *twelve* GUCs, and
 that `app.oauth_client_id` is absent from the reset lists.
+
+**Re-checked 2026-10-25 against `main = 33f0b7306` (#3241's CI job).** One merge moved
+a number and no coordinate: the sizing census is **919** `*.test.*` files — **867** unit
+/ 39 integration / 12 dashboard / 1 api, the +1 being
+`tests/unit/ci-constraint-vocab-job-3241.test.ts`. The journal is still **139** entries
+(highest `idx` 138) over **277** `.sql` files, `RESET_TENANT_GUCS_SQL` is still
+`request-connection.ts:103` issued at `:251`, and the reset still clears the same
+**fourteen** `app.*` GUCs — `#3241` wired an existing guard into CI and added no GUC,
+no migration and no schema table, so 01/02/03's pins are untouched by it.
