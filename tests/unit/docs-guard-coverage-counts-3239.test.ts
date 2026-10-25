@@ -7,15 +7,18 @@
  * #3239 — the guard census in `docs/README.md` was measured by a command that
  * cannot produce the number the prose carries.
  *
- * Two defects, one shape. `docs/README.md:163` told every reader who wanted to
- * re-check the count to run `grep -n 'run: npm run guard'
- * .github/workflows/ci.yml` and read the line count off it. `ci.yml` chains three
- * aliases behind `&&` on one line and two on another, and an alias invoked inside a
- * `run: |` block sits on a line that does not contain the pattern at all — so the
- * grep reports fewer guards than the workflow runs, and the prose it was supposed
- * to check had drifted below the truth without the check ever disagreeing loudly.
- * That is the reasoning #2306 retracted for the role guards: a screen whose
- * arithmetic is wrong is a second opinion, not a check.
+ * Two defects, one shape. The block under "How current is 'current'?" told every
+ * reader who wanted to re-check the count to run `grep -n 'run: npm run guard'
+ * .github/workflows/ci.yml` and read the line count off it. That grep is gone from the
+ * block — #3248 replaced it with the alias-aware `node -e` census command this file
+ * reads, which sits at `docs/README.md:163` on `main` and at `:181` on this branch,
+ * where the corrected counts and a second command push the block down. `ci.yml` chains
+ * three aliases behind `&&` on one line and two on another, and an alias invoked inside
+ * a `run: |` block sits on a line that does not contain the pattern at all — so the
+ * grep reports fewer guards than the workflow runs, and the prose it was supposed to
+ * check had drifted below the truth without the check ever disagreeing loudly. That is
+ * the reasoning #2306 retracted for the role guards: a screen whose arithmetic is
+ * wrong is a second opinion, not a check.
  *
  * The second defect is the same lie one level down. `scripts/check-migration-
  * redeclarations.mjs` justified leaving its alias unwired by naming a test that
@@ -30,6 +33,18 @@
  * case the grep misses. The census paragraph is checked against the workflow rather
  * than against a remembered number, so it stays checkable whichever way the tree
  * moves.
+ *
+ * This file is #3248's, merged at `f8d28d0ee`, and #3240 claims the rest of #3239: the
+ * eight counts in the block this command lives in, the preprod `psql` snapshot's
+ * wording, and the product footer. Three things were added on top of their screen and
+ * the rest is verbatim — the grep citation above re-pinned to the tree this file reads,
+ * `18 where 21 are run` corrected to `18 where 22 are run` because 22 is what this
+ * `ci.yml` measures, and the number the command prints tied to the number the paragraph
+ * declares. That tie is the one addition that changes what can fail:
+ * `expect(n).toBe(aliasesInvoked(ciText).size)` agrees by construction, because the
+ * documented command and this file's function are the same arithmetic, so prose and
+ * workflow can drift apart while it stays green. Only `printed == paragraph.declares`
+ * lets the document disagree with itself.
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'child_process';
@@ -48,6 +63,16 @@ const aliasTotal = Object.keys(JSON.parse(readFileSync(join(ROOT, 'package.json'
 function aliasesInvoked(text: string): Set<string> {
   const body = text.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
   return new Set([...body.matchAll(/npm run (guard:[a-z-]+)/g)].map((m) => m[1]));
+}
+
+/** What the census paragraph claims — read out of the document, never remembered here. */
+function censusParagraph(): { declares: number; named: string[] } {
+  const para = readmeText.match(/enforces \*\*(\d+)\*\*[^—]*—([\s\S]*?)—\s*plus/);
+  expect(para, 'the census paragraph must keep the shape this check reads').not.toBeNull();
+  return {
+    declares: Number(para![1]),
+    named: [...para![2].matchAll(/`(guard:[a-z-]+)`/g)].map((m) => m[1]),
+  };
 }
 
 /** The census command, taken from the document so this tests what a reader runs. */
@@ -75,15 +100,13 @@ describe('the census paragraph is a claim about the workflow, not about grep (#3
   });
 
   it('names only guards ci.yml really invokes, and as many as it says it names', () => {
-    const para = readmeText.match(/enforces \*\*(\d+)\*\*[^—]*—([\s\S]*?)—\s*plus/);
-    expect(para, 'the census paragraph must keep the shape this check reads').not.toBeNull();
-    const named = [...para![2].matchAll(/`(guard:[a-z-]+)`/g)].map((m) => m[1]);
+    const { declares, named } = censusParagraph();
     expect(named.length).toBeGreaterThan(0);
     for (const alias of named) {
       expect(invoked.has(alias), `${alias} is enumerated but ci.yml does not invoke it`).toBe(true);
       expect(aliasTotal).toContain(alias);
     }
-    expect(Number(para![1])).toBe(named.length);
+    expect(declares).toBe(named.length);
   });
 
   it('still distinguishes the aliases no workflow runs from the ones the paragraph counts', () => {
@@ -105,6 +128,20 @@ describe('the documented measuring command measures (#3239)', () => {
     const [n, total] = out.match(/^(\d+)\/(\d+)/)!.slice(1).map(Number);
     expect(total).toBe(aliasTotal.length);
     expect(n).toBe(aliasesInvoked(ciText).size);
+  });
+
+  it('prints exactly the number the paragraph declares, which is the claim the command exists for', () => {
+    // The test above agrees by construction — the documented command and this file's
+    // `aliasesInvoked()` are the same arithmetic, so they can both be wrong together
+    // and were, which is how #3239's paragraph drifted under its own check. The
+    // document's promise is that the `A/B` a reader pastes equals the **N** the
+    // "current by definition" paragraph carries, so that equality is what pins here:
+    // wire a guard into `ci.yml` without editing the prose, or edit the prose without
+    // wiring it, and this is red.
+    const [printed] = runDocCommand(ROOT).match(/^(\d+)\/(\d+)/)!.slice(1).map(Number);
+    const { declares, named } = censusParagraph();
+    expect(declares).toBe(named.length);
+    expect(printed).toBe(declares);
   });
 
   it('on a synthetic workflow counts chains and run-block bodies, and nothing from a comment', () => {
@@ -130,7 +167,7 @@ describe('the documented measuring command measures (#3239)', () => {
         },
       }));
       expect(runDocCommand(dir)).toBe('3/4 guard aliases ci.yml runs');
-      // The grep this replaced would have answered 1 line here, and 18 where 21 are run.
+      // The grep this replaced would have answered 1 line here, and 18 where 22 run.
       const lines = readFileSync(join(dir, '.github', 'workflows', 'ci.yml'), 'utf8')
         .split('\n').filter((l) => /^\s*run:.*npm run guard:/.test(l)).length;
       expect(lines).toBeLessThan(3);

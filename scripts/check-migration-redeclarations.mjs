@@ -26,8 +26,8 @@
  * existed (`git log --all --diff-filter=A -- '*migration-redeclaration-screen*'`
  * is empty). A phantom assertor is worse than none: it makes an unwired guard
  * read as wired, which is exactly the reasoning #2306 retracted for the role
- * guards. The real one imports this module and pins the set, so it is named
- * here for the next reader to check rather than take on faith.
+ * guards. The real one imports this module at `:31` and pins the set at `:139`, so
+ * it is named here for the next reader to check rather than take on faith.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
