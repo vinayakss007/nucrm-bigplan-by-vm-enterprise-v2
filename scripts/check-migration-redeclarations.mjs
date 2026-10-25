@@ -18,8 +18,16 @@
  * failing, prune them) following the register-drift screen's convention.
  *
  * Usage: node scripts/check-migration-redeclarations.mjs
- * Also asserted from tests/unit/migration-redeclaration-screen-2510.test.ts,
- * so CI runs it on every push even without workflow wiring.
+ * Also asserted from tests/unit/super-admin-audit-text-2510.test.ts:139, which
+ * re-derives the whole set against `drizzle/migrations` and fails if this
+ * allowlist gains or loses an entry — so CI runs it on every push even without
+ * workflow wiring. #3239: this header used to name a different assertor, one
+ * in the `migration-redeclaration-screen` family, and that file has never
+ * existed (`git log --all --diff-filter=A -- '*migration-redeclaration-screen*'`
+ * is empty). A phantom assertor is worse than none: it makes an unwired guard
+ * read as wired, which is exactly the reasoning #2306 retracted for the role
+ * guards. The real one imports this module and pins the set, so it is named
+ * here for the next reader to check rather than take on faith.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
