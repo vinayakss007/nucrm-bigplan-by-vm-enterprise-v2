@@ -879,7 +879,7 @@ export const leadOffers = pgTable('lead_offers', {
 // `dealStages` (deal_stages) — the table that deals.stageId references and that
 // every pipeline/deal/onboarding flow uses. Its only writer (modules/setup)
 // was pointed at dealStages in this change, leaving pipeline_stages dead; it is
-// dropped by migration 0079_drop_pipeline_stages.
+// dropped by migration 0080_drop_pipeline_stages.
 
 // ── 19. MEETINGS ────────────────────────────────────────
 export const meetings = pgTable('meetings', {

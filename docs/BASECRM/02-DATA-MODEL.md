@@ -29,10 +29,50 @@ Every base table composes these — reuse them verbatim or the constraints drift
   table has it.
 - `lifecycle()` — `createdAt` / `updatedAt` / `deletedAt` (`utils.ts:68-72`).
   Soft delete is the norm; DELETE endpoints set `deletedAt`, not the row.
+  **The read half of that rule is not optional: every select against a
+  soft-deletable table must carry `isNull(<table>.deletedAt)`** — see
+  "Soft delete is a two-sided rule" below.
 - `audit()` — lifecycle + `createdBy` / `updatedBy` / `deletedBy` → `users.id`
   set-null (`utils.ts:77-82`).
 - `metadata()` — jsonb default `{}` (`utils.ts:55`).
 - Index helpers `tenantIdx` / `metadataIdx` / `activeIdx` (`utils.ts:95-99`).
+  `activeIdx` is itself partial — `.where(sql\`deleted_at IS NULL\`)` — which is
+  the same rule showing up a third time.
+
+### Soft delete is a two-sided rule (#3224, #3228, #3232)
+
+**199 of the 226 tables** in `drizzle/schema/*.ts` carry `deleted_at` — 200
+sites compose `utils.lifecycle()` / `utils.audit()`, and exactly one table
+declares the column by hand (`support_tickets`, `support.ts:86`). So this is not
+a corner of the model; it is the model.
+
+Writing the tombstone is the easy half and every route does it. The half that has
+produced real bugs is **reading** it back:
+
+- A tombstoned row is still a **physical row**. FORCE RLS hides other tenants'
+  rows; it does nothing about the caller's own deleted ones. A select that
+  forgets `isNull(x.deletedAt)` returns them as if live.
+- `app.current_tenant` scoping and `view_all` ownership gates all still pass —
+  the row is legitimately in this tenant. Nothing else downstream catches it.
+- The failure is invisible in review, because the code *looks* like it obeys the
+  soft-delete convention: it wrote the tombstone correctly, after all.
+
+Two defect classes were shipped out of exactly this gap: #3224 (lead-warming
+campaigns mailed soft-deleted contacts; AI auto-followup drafted off them) and
+#3228 (invoice/offer/deal/ticket send sinks and the `lib/ai/draft.ts` +
+`lib/ai/summarize.ts` hydrations, same cause). Neither was caught by a policy
+failure or a tenant leak — both were "we emailed a person this tenant deleted".
+
+**Rebuild rule:** every `SELECT` on a soft-deletable table composes
+`isNull(<table>.deletedAt)` into its `WHERE` — including hydration reads that
+follow a foreign key one hop away (`deals → contacts`, `invoices → contacts`),
+which is where both of the above leaked. A `findFirst`/`findMany` relation read
+is not exempt; it needs the same predicate. Prefer a partial index
+(`activeIdx`'s `WHERE deleted_at IS NULL`) so the predicate is also the fast
+path, and keep the unique indexes you care about partial too —
+`automations_tenant_name_live_unique (tenant_id, name) WHERE deleted_at IS NULL`
+(migration 0129, 04 § apply-step 3) is the precedent: a non-partial unique would
+let one deleted row block the name forever.
 
 ## Base-CRM tables
 
@@ -75,7 +115,9 @@ Every base table composes these — reuse them verbatim or the constraints drift
 - **`deal_stages`** (`crm.ts:307`) — `pipelineId!`→`pipelines` cascade, `name!`,
   `order` 0; index `(pipeline_id, order)`.
   > ⚠️ **`pipeline_stages` is a dead table** — dropped by migration
-  > `0079_drop_pipeline_stages.sql` (`crm.ts:878-882`). A stale
+  > `0080_drop_pipeline_stages.sql` (`crm.ts:878-882`; the schema comment there
+  > named it `0079_` until #3232 corrected it — `0079` is
+  > `0079_trgm_search_indexes.sql`). A stale
   > `pipeline_stages_tenant_isolation` policy still lingers in 0054:263. The live
   > stages table is **`deal_stages`**. Rebuild against `deal_stages`.
 - **`deals`** (`crm.ts:323`) — `tenantId`, `contactId/companyId/pipelineId`
@@ -83,9 +125,13 @@ Every base table composes these — reuse them verbatim or the constraints drift
   defaultNow, `title!`, `amount` numeric(15,2) default `'0'`, `closeDate`,
   `wonAt`, `assignedTo`, `customFields` jsonb + GIN (`:361`), `audit()`.
   > Two rebuild traps live here: `stageId` is **NOT NULL** (the API forces an
-  > explicit stage — see 05 § Deals create), and `amount .default('0')` is what
-  > leaked through `updateDealSchema.partial()` in #2627 (the PATCH-zeroed-value
-  > bug). Strip defaults from the update schema (`schemas.ts:74-77`).
+  > explicit stage — see 05 § Deals create), and the `amount` default leaked
+  > through `updateDealSchema`'s `.partial()` in #2627 (the PATCH-zeroed-value
+  > bug). Keep the two defaults distinct: the **DB** column default is the string
+  > `'0'` (`numeric(15,2)`) and node-postgres hands `numeric` back as a *string*
+  > (the #2757/#2774 class), while the **zod** default on `createDealSchema` is
+  > the number `0`. Strip defaults from the update schema —
+  > `createDealSchema`/`updateDealSchema` in `lib/api/schemas.ts:224`/`:241`.
 - **`custom_field_defs`** (`crm.ts:369`, index prefix `idx_custom_fields_*`) —
   `entityType!`, `fieldKey!`, `fieldLabel!`, `fieldType! 'text'`, `fieldOptions`,
   `isRequired`, `isCalculated/formula`;

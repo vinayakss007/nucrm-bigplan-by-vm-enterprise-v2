@@ -40,7 +40,7 @@ each step names the file(s) that must exist and the invariant that proves it. Re
    `field_permissions`, `audit_logs` (userId **not** an FK).
 3. CRM tables in `crm.ts`: `companies`, `contacts`, `leads`
    (`UNIQUE(tenant_id,lead_oid)`), `pipelines`, **`deal_stages`** (NOT
-   `pipeline_stages` — that table is dropped by 0079, 02), `deals`
+   `pipeline_stages` — that table is dropped by 0080, 02), `deals`
    (**`stage_id` NOT NULL**, `amount numeric(15,2) default '0'`, `customFields`
    jsonb+GIN), `custom_field_defs`
    (**`UNIQUE(tenant_id,entity_type,field_key)`**), products/quotes/tags/forms/notes.
@@ -65,20 +65,36 @@ handler trusts "the app filters by tenant".
 3. **Fail-closed** USING/WITH CHECK via
    `NULLIF(current_setting('app.current_tenant'),'')::uuid` (model: 0039:12-22).
    Prove it: a query with no GUC returns 0 rows, not an error, not the world.
-4. GUC helpers in `lib/db/rls.ts`: `withTenantContext`, `withUserContext`,
-   `withAuthLookupContext`, `withSecurityContext` (SET LOCAL, narrow scope, 03).
-   Clear GUCs on pool return + `DISCARD ALL` (PgBouncer).
-5. **Named platform policies** only where genuinely needed (users, tenants,
+4. GUC helpers: `withTenantContext`, `withUserContext`, `withSecurityContext`
+   live in `lib/db/rls.ts`; the **auth/credential** ones
+   (`withAuthLookupContext`, `withAuthResolutionContext`,
+   `withTokenIssueContext`) live in `lib/db/token-credential-context.ts` and are
+   re-exported from `rls.ts:32-38` so the import path stays one module (SET LOCAL,
+   narrow scope, 03). Clear GUCs on pool return + `DISCARD ALL` (PgBouncer) — the
+   repo clears **twelve** in one statement (`RESET_TENANT_GUCS_SQL`), and every
+   privilege GUC you add must be added to *both* reset lists or it survives a
+   checkout into an unrelated request (#2446).
+5. Pre-auth credential redemption (03 § 1a): `password_resets`,
+   `email_verifications`, `oauth_codes` need INSERT/SELECT/UPDATE policies that do
+   not depend on an authenticated user, and **each arm must name the credential**
+   (`app.token_credential` compared to the table's token column) — a boolean
+   `app.auth_lookup` alone is a cross-tenant token read, which is 0134's bug that
+   0135 had to fix. Then give each table a no-liveness `*_token_claim_read` SELECT
+   arm, because an RLS `UPDATE` is gated by the `SELECT` policies: a claim that
+   cannot see its own row updates zero rows and the route reports "invalid token".
+   Model: `0134_pre_auth_token_rls.sql`, `0135_pre_auth_token_rls_narrow.sql`.
+6. **Named platform policies** only where genuinely needed (users, tenants,
    product_templates, login_blocks — 03 § asymmetry). Do **not** add
    super-admin bypass to deals/leads/contacts/companies/tasks/members/roles.
-6. **0127 equivalent** — the narrow SELECT-only, `app.current_user`-keyed
+7. **0127 equivalent** — the narrow SELECT-only, `app.current_user`-keyed
    `tenant_members_self_read` + `roles_tenant_member_read` policies so login can
    resolve membership pre-tenant. Do NOT use `app.is_super_admin` for this.
-7. Add CI guard `scripts/check-migration-rls-dml.mjs` so a later migration cannot
+8. Add CI guard `scripts/check-migration-rls-dml.mjs` so a later migration cannot
    mutate a FORCE-RLS table without the right GUC.
 
 **Checkpoint:** cross-tenant read returns empty; unset-GUC denies; a member can
-`SELECT` their own `tenant_members`/`roles` with only `app.current_user` set.
+`SELECT` their own `tenant_members`/`roles` with only `app.current_user` set; a
+pre-auth claim that names the wrong credential sees nothing.
 
 ## Phase 3 — Connection pin + auth context
 
@@ -167,8 +183,23 @@ Per 05. Rebuild the envelope honestly (pick one shape), then deals list/create/
 leads/contacts with the alias vocabulary, correct per-entity limits (deals 500,
 leads/contacts 200).
 
+Then the rule that has cost the most rework since this set was first written
+(02 § "Soft delete is a two-sided rule"): **every `SELECT` on a soft-deletable
+table composes `isNull(<table>.deletedAt)`** — list routes, single-row reads,
+bulk actions, cron sweeps, AI hydrations, and the one-hop hydration reads behind
+a foreign key (`deals → contacts`, `invoices → contacts`, `quote → contact`).
+A `db.query.<rel>.findFirst` is not exempt. Nothing catches this for you: FORCE
+RLS scopes the tenant, `view_all` scopes the owner, and the tombstoned row is
+legitimately in both — so the code reviews clean and the app emails a contact the
+tenant deleted. That is precisely what #3224 (lead-warming + AI auto-followup)
+and #3228 (invoice/offer/deal/ticket send sinks + `lib/ai/draft.ts` +
+`lib/ai/summarize.ts`) had to be fixed for, and both were found by reading the
+rendered SQL, not by a failing policy.
+
 **Checkpoint:** `PATCH` without `amount` keeps the value (#2627/P7); stageless
-create 400s for admin too; export/import honour field permissions.
+create 400s for admin too; export/import honour field permissions; a soft-deleted
+contact is invisible to the list, the detail read, the bulk restore set, and any
+outbound send path.
 
 ## Phase 7 — Auth safety
 

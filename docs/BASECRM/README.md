@@ -68,6 +68,22 @@ A "base CRM" that violates any of them is not this app:
 - **Template apply is idempotent** and the DB is the source of truth. See 04.
 - **Auth rate limiting fails closed.** No usable client IP on an auth action →
   503, never a shared `unknown` bucket. See 03/07.
+- **Soft delete is two-sided.** 199 of the 226 tables carry `deleted_at`; writing
+  the tombstone is the easy half and every route does it. **Every read must
+  compose `isNull(<table>.deletedAt)`**, including hydration reads one hop away
+  (`deals → contacts`, `invoices → contacts`) — RLS does not hide your own
+  deleted rows, and the code looks correct without it. Two shipped defect
+  classes came from the missing half (#3224 outbound mailing, #3228 send sinks +
+  AI hydrations). See 02 "Soft delete is a two-sided rule".
+- **A pre-auth grant must name the credential.** `password_resets`,
+  `email_verifications` and `oauth_codes` are readable before anyone is
+  authenticated, so the grant is a GUC — and a **boolean** GUC
+  (`app.auth_lookup`) on a secret-bearing table is a cross-tenant read: 0134
+  shipped that mistake and any pre-auth read saw every live token. Arms must
+  compare `app.token_credential` against the table's credential column. Related
+  trap: an RLS `UPDATE` is gated by the table's `SELECT` policies too, so a claim
+  that cannot see its own row consumes nothing *silently* — hence the
+  no-liveness `*_token_claim_read` arms. See 03 § 1a.
 
 ## Provenance
 
@@ -77,3 +93,21 @@ Documented from `main` after PRs #2644 (template source of truth), #2647
 register drift), #2654/#2655 (settings fetch + CI enforcement), and the live
 acceptance run 40/40 (nonce `AGLXXJ`). Line numbers are `main`-head era and
 will drift; the file references and the invariants are the durable content.
+
+**Re-drilled 2026-10-25 against `main = 868681d91` (#3232).** All 215 backticked
+file references were resolved against the tree: the 14 migration citations
+(`0037:238`, `0039:12`, `0054:13/147/263`, `0088:74/413/485/493`, `0127:50/59`)
+are exact, and the set was corrected on five that had moved —
+`0079_drop_pipeline_stages.sql` → `0080_` (the schema comment at
+`drizzle/schema/crm.ts:882` carried the same wrong number), five
+`lib/api/schemas.ts` limits/aliases that were 130–165 lines stale, the
+auth-context helpers that left `lib/db/rls.ts` for
+`lib/db/token-credential-context.ts`, and one path written as
+`lib/.../resolve-stage.ts`. Two invariants that landed *after* the first edition
+were absent from it and are now stated above: the two-sided soft delete (#3224,
+#3228) and pre-auth credential naming (0134, 0135, #3102, #3218). Cite the
+**symbol** (`RESET_TENANT_GUCS_SQL`, `dealQuerySchema`, `withAuthLookupContext`)
+in preference to a bare number when you re-pin — the register had the same lesson
+as #3201. Known moving target: #3230 is editing `lib/db/{pool,request-connection,rls,token-credential-context}.ts`
+and adding `0136_pre_auth_oauth_rls.sql` right now, so § 1a's coordinates are the
+most likely to age first.

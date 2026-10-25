@@ -32,7 +32,7 @@ Every handler runs `requireAuth` → `withApiRoute` (01) then the checks below.
 
 | Method · Path | Contract | Ref |
 | ------------- | -------- | --- |
-| GET `/api/tenant/deals?limit=` | auth; without `deals.view_all` filter to own rows; `{data,total}`; **limit ≤ 500** (`schemas.ts:81`) | `route.ts:56-58,122` |
+| GET `/api/tenant/deals?limit=` | auth; without `deals.view_all` filter to own rows; `{data,total}`; **limit ≤ 500** (`lib/api/schemas.ts:245`) | `route.ts:56-58,122` |
 | POST `/api/tenant/deals` | `deals.create` + rate 100/h; **stage mandatory for ALL roles**; 201 `{data}` | `route.ts:131-266` |
 | GET `/api/tenant/deals/[id]` | `deals.view`; no `deals.view_all` + not owner → **404** | `[id]/route.ts:67-71` |
 | PATCH `/api/tenant/deals/[id]` | `deals.edit`; ownership 404 gate `:160-164`; optimistic `_version`/`updated_at` `:167-169` | `[id]/route.ts:92` |
@@ -44,7 +44,8 @@ Every handler runs `requireAuth` → `withApiRoute` (01) then the checks below.
 ### Deals create — the stage trap (#658-adjacent)
 
 `deals.stage_id → deal_stages.id` is **NOT NULL** (02). The create path calls
-`resolveDealStage` (`lib/.../resolve-stage.ts:117`); if it resolves to `'missing'`
+`resolveDealStage` (`lib/deals/resolve-stage.ts:117`, the `reason: 'missing'`
+return); if it resolves to `'missing'`
 the route returns **400** (`deals/route.ts:160-162`, message `resolve-stage.ts:127`).
 This is true **for admin and rep alike** — a stageless POST 400s for everyone. It
 is a *pre-existing contract*, **not** a field-permission artifact (verified: admin
@@ -56,7 +57,11 @@ bare POST.
 ### Deals PATCH — preserve-what-you-didnt-send (#2627)
 
 `updateDealSchema` **strips column defaults** so a `.partial()` does not inherit
-`amount.default('0')` (`schemas.ts:74-77`). PATCH `{title}` on a deal worth 12345
+`createDealSchema`'s `amount: z.coerce.number().min(0).optional().default(0)`
+(`lib/api/schemas.ts:224`, `createDealSchema`; the override is `:241`,
+`updateDealSchema` — note the default is the **number** `0`, not the string
+`'0'`; the DB column's `numeric(15,2)` default is `'0'`, which node-postgres
+hands back as a *string*, see #2757). PATCH `{title}` on a deal worth 12345
 → title updates, **amount stays 12345** (acceptance P7 asserts on the DB row, not
 the echo). This is the fix for the "PATCH without amount zeroes deal value" bug.
 Layered on top: if `amount` is a *restricted field* for the role, PATCH is still
@@ -94,24 +99,25 @@ a nonce-unique title so a repeat run does not skip its own row.
 
 | Method · Path | Contract | Ref |
 | ------------- | -------- | --- |
-| GET `/api/tenant/leads?limit=` | auth; `leads.view_all` gate `:90-92`; `{data,total,limit,offset,hasMore}` `:204-209`; **limit ≤ 200** (`schemas.ts:178`) | `leads/route.ts:44` |
+| GET `/api/tenant/leads?limit=` | auth; `leads.view_all` gate `:90-92`; `{data,total,limit,offset,hasMore}` `:204-209`; **limit ≤ 200** (`lib/api/schemas.ts:342`) | `leads/route.ts:44` |
 | POST `/api/tenant/leads` | `leads.create` + rate 100/h (`:228`) | `leads/route.ts:228` |
 | POST `/api/tenant/leads/bulk` | `action:'status'` reads `payload.lead_status` against an allowlist (`bulk/route.ts:88-93`); restricted → 403 mirror (`:63-79`) | `leads/bulk/route.ts` |
 | POST `/api/tenant/contacts` | accepts `job_title ?? title` (`:214`), `lead_source` (`:217`), `lead_status ?? 'new'` (`:216`); created row echoes `user_id` for `createdBy` (`:295`) | `contacts/route.ts` |
-| GET `/api/tenant/contacts?limit=` | **limit ≤ 200** (`schemas.ts:51`); without `contacts.view_all` → own rows | `contacts/route.ts` |
+| GET `/api/tenant/contacts?limit=` | **limit ≤ 200** (`lib/api/schemas.ts:215`); without `contacts.view_all` → own rows | `contacts/route.ts` |
 
 > **Limit gotcha, corrected against source**: deals max is **500**
-> (`schemas.ts:81`), but **leads and contacts max is 200** (`leadQuerySchema`
-> `schemas.ts:178`, `contactQuerySchema` `:51`) — *not 100*. Over max → 400 from
-> `validateQuery` (`lib/api/validate.ts:52-67`). The acceptance harness uses
-> `limit=100` for leads/contacts to stay safely under the cap; it is a choice, not
-> the ceiling.
+> (`lib/api/schemas.ts:245`, `dealQuerySchema`), but **leads and contacts max is
+> 200** (`leadQuerySchema` `:342`, `contactQuerySchema` `:215`) — *not 100*. Over
+> max → 400 from `validateQuery` (`lib/api/validate.ts:52-67`). The acceptance
+> harness uses `limit=100` for leads/contacts to stay safely under the cap; it is
+> a choice, not the ceiling.
 
 ### Alias vocabulary (the #2618 read/write half)
 
 Leads list exposes both `status` and `lead_status`; the filter param the route
 forwards is `lead_status` (`leads/route.ts:56`) though the schema also declares
-bare `status` (`schemas.ts:180`). Contacts POST accepts `title` **or** `job_title`.
+bare `status` (`leadQuerySchema` in `lib/api/schemas.ts:344`, `lead_status` at
+`:347`). Contacts POST accepts `title` **or** `job_title`.
 `created_by` is echoed as `user_id`. All of these are handled by the
 `READ_ALIASES` map in `enforce.ts` (03 § 3) — restricting the column strips every
 alias spelling. Acceptance P6.12/P6.15 assert the alias copies are cleared on read
