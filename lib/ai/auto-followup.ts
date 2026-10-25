@@ -114,19 +114,24 @@ export async function processAutoFollowups(
             companyId: contacts.companyId,
           })
           .from(contacts)
-          .where(eq(contacts.id, fu.contactId))
+          .where(and(eq(contacts.id, fu.contactId), isNull(contacts.deletedAt)))
           .limit(1);
-        if (c) {
-          contactName = [c.firstName, c.lastName].filter(Boolean).join(' ') || '';
-          contactEmail = c.email ?? undefined;
-          if (c.companyId) {
-            const [comp] = await db
-              .select({ name: companies.name })
-              .from(companies)
-              .where(eq(companies.id, c.companyId))
-              .limit(1);
-            companyName = comp?.name ?? undefined;
-          }
+        // #3224 — the follow-up named this contact, so an empty result now means the row has
+        // been deleted. Drafting anyway would bill the tenant AI credits for a message
+        // addressed to nobody, so the skip is reported through the result the cron tallies.
+        if (!c) {
+          results.push({ followUpId: fu.id, drafted: false, error: 'contact_unavailable' });
+          continue;
+        }
+        contactName = [c.firstName, c.lastName].filter(Boolean).join(' ') || '';
+        contactEmail = c.email ?? undefined;
+        if (c.companyId) {
+          const [comp] = await db
+            .select({ name: companies.name })
+            .from(companies)
+            .where(and(eq(companies.id, c.companyId), isNull(companies.deletedAt)))
+            .limit(1);
+          companyName = comp?.name ?? undefined;
         }
       }
 
@@ -134,7 +139,7 @@ export async function processAutoFollowups(
         const [d] = await db
           .select({ title: deals.title })
           .from(deals)
-          .where(eq(deals.id, fu.dealId))
+          .where(and(eq(deals.id, fu.dealId), isNull(deals.deletedAt)))
           .limit(1);
         dealTitle = d?.title ?? undefined;
       }
