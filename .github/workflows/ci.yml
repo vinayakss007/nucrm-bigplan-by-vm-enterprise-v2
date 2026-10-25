@@ -445,3 +445,118 @@ jobs:
 
       - name: Every environment variable is documented or allowlisted
         run: node scripts/check-env-coverage.mjs
+
+  # PP-059 / #3241 — `npm run guard:vocab` is the only command in this repository
+  # that asks a REAL database what its `CHECK` constraints will actually reject, and
+  # until now nothing invoked it: `grep -rn -E 'run:.*(guard:vocab|check-constraint-vocab)' .github/workflows/`
+  # returned **0** across all 7 workflow files (the single hit, `schema-drift.yml:7`,
+  # is a comment naming the gap). The failure class is measured, not theoretical:
+  # `0050`'s text vocabularies were frozen, the code kept growing, and `notifications`
+  # and `ai_activity` held ZERO rows for their entire history while the application
+  # reported success (#43) — half of the rejections were swallowed by catch blocks.
+  #
+  # WHAT THIS JOB PROVES, AND WHAT IT DOES NOT. `fresh-install` already builds a
+  # database from the migration chain on every pull request (`ci.yml:401-409`) and
+  # then walks past it. This job builds the same shape and reads
+  # `pg_get_constraintdef` of it, so the claim is exactly: "the database this branch
+  # produces accepts every value this branch's code writes." Two failure modes become
+  # visible that nothing sees today — a new `required` value whose migration adds the
+  # wrong literal (the registry test passes: the file exists and is journaled), and a
+  # migration that NARROWS an existing vocabulary. It is not a claim about pre-prod:
+  # PP-059's live half stays open because `0112` and `0120` sit in the backlog PP-057
+  # counts and PP-060 shows nothing can apply it — an owner decision, not a CI
+  # failure, and reaching that database needs a `PREPROD_DATABASE_URL` secret.
+  #
+  # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopted:
+  # a green run is only evidence once a deliberately narrowed constraint turns it
+  # red. Without the second half the job is an assertion that a green screen means
+  # something — precisely the reasoning #2306 retracted for the role guards.
+  #
+  # Appended as a NEW JOB at the end of the file. `ci.yml` is 447 lines on the branch
+  # this issue was written against and `ci.yml:447` (`node scripts/check-env-coverage.mjs`)
+  # is itself a cited coordinate, as are `:401`, `:221` and `:254` — so any placement
+  # above the end of the file moves register pointers out from under
+  # `npm run guard:coords`. Cost is one `npm ci` + one chain build + two guard
+  # reads, in parallel with the other jobs; `fresh-install` measures this shape at
+  # 1m16s and the critical path is `Unit Tests`, so nothing is added to wall clock.
+  #
+  # Opt out deliberately with the `CONSTRAINT_VOCAB_GUARD_ENABLED` variable set to
+  # "false" — same posture as the schema-drift guard.
+  constraint-vocab:
+    name: Constraint vocabulary against the chain-built catalog (#3241)
+    if: vars.CONSTRAINT_VOCAB_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_vocab
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # The chain, never `db:sync`: the guard's own argument is that a migration
+      # which exists on disk but was never applied is how #43 happened, so the
+      # database it measures has to be one the journal produced. `DATABASE_URL` is
+      # re-exported per step because the file-level `env:` at `:11` names
+      # `nucrm_test`, which no service in THIS job creates.
+      - name: Build the schema from the migration chain
+        run: |
+          set -euo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_vocab
+          export DATABASE_SSL=false
+          npm run db:bootstrap -- --yes
+
+      - name: Positive control — the chain-built catalog accepts every value the code writes
+        run: |
+          set -uo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_vocab
+          export DATABASE_SSL=false
+          npm run guard:vocab 2>&1 | tee "$RUNNER_TEMP/guard-vocab-positive.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error::#3241 the migration chain produces a database whose CHECK constraints reject a value the code writes (23514) — findings above. Widen the constraint in a new migration and list the value in scripts/constraint-vocab.json, or stop writing it. Do not delete the registry entry to silence this job."
+          fi
+          exit "$code"
+
+      # The acceptance criterion is "the screen fires", not "the screen is green".
+      # Re-narrowing `chk_invoices_status` to the eight values it accepted before
+      # `0112` widened it for `'void'` is enough to prove the comparison reads
+      # `pg_constraint` rather than the registry file: the guard must exit 1 naming
+      # `invoices.status`, `'void'` and `missing-in-db`.
+      - name: Negative control — a CHECK narrower than the code MUST turn the guard red
+        run: |
+          set -uo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_vocab
+          export DATABASE_SSL=false
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+            "ALTER TABLE invoices DROP CONSTRAINT chk_invoices_status;
+             ALTER TABLE invoices ADD CONSTRAINT chk_invoices_status CHECK (status = ANY (ARRAY['draft','sent','paid','overdue','cancelled','partially_paid','written_off','pending']))"
+          if npm run guard:vocab -- --json 2>&1 | tee "$RUNNER_TEMP/guard-vocab-negative.log"; then
+            echo "::error::#3241 the guard PASSED a database that rejects invoices.status='void' — it is measuring scripts/constraint-vocab.json, not the live catalog. This job proves nothing until the negative control fails."
+            exit 1
+          fi
+          grep -q '"id": "invoices.status"' "$RUNNER_TEMP/guard-vocab-negative.log" || {
+            echo "::error::#3241 the guard failed, but not on invoices.status — the negative control did not exercise the comparison it exists to prove. Inspect guard-vocab-negative.log."
+            exit 1
+          }
+          grep -q "'void'" "$RUNNER_TEMP/guard-vocab-negative.log" || {
+            echo "::error::#3241 the guard failed on invoices.status without naming 'void' — a different constraint is being compared than this control breaks."
+            exit 1
+          }
+          echo "OK: a CHECK the database enforces more narrowly than the code writes turns this screen red, exactly as PP-059 requires."
