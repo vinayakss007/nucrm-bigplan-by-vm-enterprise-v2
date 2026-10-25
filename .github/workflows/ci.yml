@@ -536,7 +536,7 @@ jobs:
             cat /tmp/vocab-negative.log
             exit 1
           fi
-          if ! grep -q '"kind":"missing-in-db"' /tmp/vocab-negative.log || ! grep -q 'invoices.status' /tmp/vocab-negative.log; then
+          if ! grep -qE '"kind": *"missing-in-db"' /tmp/vocab-negative.log || ! grep -qE '"id": *"invoices.status"' /tmp/vocab-negative.log; then
             echo "::error::PP-059 the guard exited 1 but did not report invoices.status as missing-in-db. It went red for some other reason, which is not a control."
             cat /tmp/vocab-negative.log
             exit 1
