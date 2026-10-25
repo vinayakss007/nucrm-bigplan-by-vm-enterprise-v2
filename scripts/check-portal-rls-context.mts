@@ -667,7 +667,7 @@ export function buildTargets(root: string): string[] {
  * backup role), `app/api/webhooks/*` authenticates by signing secret and must
  * resolve a tenant from a provider payload, and `auth/sso` redeems a credential
  * before a tenant is known — which is
- * #3102's open decision about the privilege shape for pre-auth reads, not a
+ * a pre-auth lookup-arm decision, tracked in #3246 since #3102 closed, not a
  * missing `withTenantContext()` call. Claiming them as #2446 breaks would be a
  * false alarm; pretending the guard cannot see them would re-open the hole
  * #3186 is about.
@@ -692,7 +692,7 @@ export function buildTargets(root: string): string[] {
  * and an entry that excuses nothing is reported as a finding rather than left to
  * rot. What #3195 did NOT do is invent the aggregate privilege the directory
  * wanted: the CRM counts are out of the scrape, not silently zero, and the
- * privilege shape stays #3102's decision.
+ * privilege shape stays #3246's decision.
  *
  * `app/api/auth/oauth` left the ledger from the other direction — bound rather than
  * removed-from-scope — and it took two issues to do it. #3186 measured 2 findings
@@ -711,6 +711,22 @@ export function buildTargets(root: string): string[] {
  * opened by `withUnsubscribeContactContext` and closed by the statement that hands the
  * claimed row's tenant to the enrollment and activity writes. Those are the 3 findings,
  * and they are bound now.
+ *
+ * The last three entries pointed at #3102 until 2026-10-25, when it closed COMPLETED
+ * (`0134`–`0137`, plus #3225/#3231/#3237). `verifyDeferral` only checks the shape of
+ * `deferredTo`, never that the issue it names is still open, so the pointer went stale
+ * quietly — the counts stayed at their ceilings and each entry's `why` still described
+ * a decision that had been made. They now name #3246, which is the issue that actually
+ * holds this work: an app-minted bearer credential is a different privilege shape from
+ * a tenant derived from a provider's signing secret (`webhooks`), an issuer/state
+ * handoff (`auth/sso`) or an anonymous callback URL (`plugins/webhook`), and none of the
+ * three is #3102's scope retro-fitted. The entries themselves are unchanged: same dirs,
+ * same 44/2/1 ceilings, same green run. What a stale pointer costs is the honest question
+ * here, and the answer is that a ratchet nobody is watching still has to be pointed at
+ * someone. Making the screen refuse a closed issue needs the GitHub API at guard time,
+ * which is out of scope for a pointer fix and is what #3246's remaining steps are for:
+ * bind each of these three reads and delete the entry, the way #3225, #3231 and #3237
+ * each deleted one.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -730,26 +746,26 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
   },
   {
     dir: 'app/api/webhooks',
-    deferredTo: '#3102',
+    deferredTo: '#3246',
     why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
-      + 'which is the pre-auth credential-privilege decision #3102 still holds open; no tenant GUC '
-      + 'exists to set before that resolution happens.',
+      + 'which is the pre-auth lookup-arm decision #3246 now tracks; a signature proves the sender, '
+      + 'not the tenant, so no GUC exists to set before that resolution happens.',
     maxFindings: 44,
   },
   {
     dir: 'app/api/auth/sso',
-    deferredTo: '#3102',
+    deferredTo: '#3246',
     why: 'The IdP handoff resolves ssoProviders by issuer/state before a tenant or user is known; '
-      + 'that read belongs to #3102\'s credential-lookup decision, not to a missing transaction '
-      + 'context, and inventing a GUC for it is not this guard\'s call.',
+      + 'that read is #3246\'s lookup arm, not a missing transaction context, and inventing a GUC '
+      + 'for it is not this guard\'s call.',
     maxFindings: 2,
   },
   {
     dir: 'app/api/tenant/plugins/webhook',
-    deferredTo: '#3102',
+    deferredTo: '#3246',
     why: 'A plugin callback URL that `proxy.ts` keeps anonymous still has to look up which tenant a '
-      + 'plugin installation belongs to; that is #3102\'s pre-auth privilege shape, and the route is '
-      + 'under app/api/tenant only by naming.',
+      + 'plugin installation belongs to, which is the arm #3246 tracks; the route is under '
+      + 'app/api/tenant only by naming.',
     maxFindings: 1,
   },
 ];
