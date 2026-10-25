@@ -34,6 +34,8 @@ export {
   setAuthResolutionContext,
   withAuthLookupContext,
   withAuthResolutionContext,
+  setOAuthClientLookupContext,
+  withOAuthClientLookupContext,
   setTokenIssueContext,
   withTokenIssueContext,
 } from '@/lib/db/token-credential-context';

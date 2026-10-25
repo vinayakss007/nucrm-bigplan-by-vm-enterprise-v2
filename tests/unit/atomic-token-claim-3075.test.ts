@@ -100,6 +100,9 @@ vi.mock('@/lib/db/rls', () => ({
   // the stubs mirror that: run the callback on the same recording handle.
   withTokenIssueContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
   setTokenIssueContext: async () => undefined,
+  // #3225: the client read names its client. Same reasoning as the two above — the
+  // real helper is a GUC SET, and the recording handle below has no `execute`.
+  withOAuthClientLookupContext: async (_cid: string, fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
   setUserContext: async () => undefined,
   setTenantContext: vi.fn(),
 }));

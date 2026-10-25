@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
 import { logError } from '@/lib/errors-server';
-import { withAuthLookupContext, setTokenIssueContext } from '@/lib/db/rls';
+import { withAuthLookupContext, setTokenIssueContext, withOAuthClientLookupContext } from '@/lib/db/rls';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,17 +40,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [client] = await db
-      .select({
-        // 2 of `oauth_clients`' 9 columns (measured via getTableColumns): the id
-        // the tokens hang off, plus the secret this route exists to verify.
-        // tenant_id, redirect_uris and created_by have no reader here.
-        id: oauthClients.id,
-        clientSecret: oauthClients.clientSecret,
-      })
-      .from(oauthClients)
-      .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
-      .limit(1);
+    // #3225: this read is what authenticated a *client*, and until 0136 there was no
+    // policy that could admit its row. `oauth_clients` carried only 0088's
+    // tenant_isolation, and a token exchange has no tenant — it is authorised by the
+    // client secret, so nothing here ever sets app.current_tenant. Measured on the
+    // local force-RLS dev database as the application role: 0 rows with no context,
+    // 0 rows with app.auth_lookup alone, 1 row once the client's own tenant is named.
+    // The endpoint therefore answered `401 invalid_client` for a correct id and a
+    // correct secret — every grant it serves died on this statement.
+    //
+    // The context names the client id, not a credential: 0136's
+    // oauth_clients_client_lookup arm compares client_id against app.oauth_client_id,
+    // so this admits exactly the row whose id was just presented and no other client's
+    // secret.
+    const [client] = await withOAuthClientLookupContext(clientId, async (tx) =>
+      await tx
+        .select({
+          // 2 of `oauth_clients`' 9 columns (measured via getTableColumns): the id
+          // the tokens hang off, plus the secret this route exists to verify.
+          // tenant_id, redirect_uris and created_by have no reader here.
+          id: oauthClients.id,
+          clientSecret: oauthClients.clientSecret,
+        })
+        .from(oauthClients)
+        .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
+        .limit(1));
 
     if (!client) {
       return NextResponse.json(
@@ -130,7 +144,21 @@ export async function POST(request: NextRequest) {
       // can both pass it. The claim is this conditional UPDATE: under READ
       // COMMITTED the second writer blocks on the row lock, then re-evaluates
       // `used_at IS NULL` against the committed row and claims zero rows.
-      const redemption = await db.transaction(async (tx) => {
+      //
+      // #3225: the mint is why `app.token_issue` has to be set for this whole
+      // transaction. 0136's `oauth_tokens_token_issue` arm is the only INSERT grant
+      // this path has — measured on the force-RLS dev database, the insert raised
+      // `42501 new row violates row-level security policy` there, the claim rolled
+      // back with it, and the caller got `500 server_error` on a valid code.
+      //
+      // It is inserted without `.returning()`, and the response is built from the two
+      // uuids above rather than read back. RETURNING output is filtered by the table's
+      // SELECT policies (0135's header carries that measurement), so reading the fresh
+      // row would need a fourth arm naming a token this request minted itself — a
+      // GUC for the privilege, and the route already holds the values it generated.
+      const issuedAccessToken = uuidv4();
+      const issuedRefreshToken = uuidv4();
+      const redeemed = await db.transaction(async (tx) => {
         await setTokenIssueContext(tx, { credential: code });
         const [claimed] = await tx
           .update(oauthCodes)
@@ -142,45 +170,30 @@ export async function POST(request: NextRequest) {
           ))
           .returning({ id: oauthCodes.id });
 
-        if (!claimed) return null;
+        if (!claimed) return false;
 
-        return tx
-          .insert(oauthTokens)
-          .values({
-            clientId: client.id,
-            userId: authCode.userId,
-            accessToken: uuidv4(),
-            refreshToken: uuidv4(),
-            scope: authCode.scope,
-            expiresAt: new Date(Date.now() + 3600 * 1000),
-          })
-          // The response is built from these two fields alone — this is the
-          // OAuth token endpoint, so RETURNING * would hand the caller columns
-          // it never asked for.
-          .returning({
-            accessToken: oauthTokens.accessToken,
-            refreshToken: oauthTokens.refreshToken,
-          });
+        await tx.insert(oauthTokens).values({
+          clientId: client.id,
+          userId: authCode.userId,
+          accessToken: issuedAccessToken,
+          refreshToken: issuedRefreshToken,
+          scope: authCode.scope,
+          expiresAt: new Date(Date.now() + 3600 * 1000),
+        });
+
+        return true;
       });
 
-      if (redemption === null) {
+      if (!redeemed) {
         return NextResponse.json(
           { error: 'invalid_grant', error_description: 'Invalid or expired code' },
           { status: 400 }
         );
       }
 
-      const token = redemption[0];
-      if (!token) {
-        return NextResponse.json(
-          { error: 'server_error', error_description: 'Failed to create token' },
-          { status: 500 }
-        );
-      }
-
       return NextResponse.json({
-        access_token: token.accessToken,
-        refresh_token: token.refreshToken,
+        access_token: issuedAccessToken,
+        refresh_token: issuedRefreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
         scope: authCode.scope,
@@ -201,7 +214,25 @@ export async function POST(request: NextRequest) {
       // doubling the live refresh-token set. Under READ COMMITTED the second
       // DELETE blocks on the row lock, then re-evaluates its predicates
       // against the committed row and claims zero rows.
+      //
+      // #3225: it needed a context to run in. This transaction set no GUC at all, so
+      // the DELETE had no policy that could admit the presented row: measured on the
+      // force-RLS dev database it matched 0 rows and the row was still live when read
+      // back as the owner — which the handler reported as `invalid_grant` while the
+      // refresh token stayed valid indefinitely, the exact opposite of rotation and
+      // #3075's replay defence unenforced here. `app.token_credential` is the
+      // presented token, so 0136's claim arms admit that one row and no other; the
+      // read arm alongside them is what the DELETE's own USING and its RETURNING both
+      // have to pass.
+      //
+      // Not `setUserContext(consumed.userId)` — that works (measured: `oauth_tokens_user_own`
+      // is an ALL policy, and its USING doubles as the WITH CHECK) but it opens every
+      // `*_own` policy in the schema for a request that authenticated a client, not a
+      // person. See 0136's header.
+      const issuedAccessToken = uuidv4();
+      const issuedRefreshToken = uuidv4();
       const rotated = await db.transaction(async (tx) => {
+        await setTokenIssueContext(tx, { credential: refreshToken });
         const [consumed] = await tx
           .delete(oauthTokens)
           .where(and(
@@ -221,24 +252,18 @@ export async function POST(request: NextRequest) {
 
         if (!consumed) return null;
 
-        return tx
-          .insert(oauthTokens)
-          .values({
-            clientId: client.id,
-            userId: consumed.userId,
-            accessToken: uuidv4(),
-            refreshToken: uuidv4(),
-            scope: consumed.scope,
-            expiresAt: new Date(Date.now() + 3600 * 1000),
-          })
-          // The response is built from these fields alone — this is the OAuth
-          // token endpoint, so RETURNING * would hand the caller columns it
-          // never asked for.
-          .returning({
-            accessToken: oauthTokens.accessToken,
-            refreshToken: oauthTokens.refreshToken,
-            scope: oauthTokens.scope,
-          });
+        // Inserted without `.returning()` — see the authorization_code branch above.
+        // The scope is the one the consumed row carried, which the DELETE read back.
+        await tx.insert(oauthTokens).values({
+          clientId: client.id,
+          userId: consumed.userId,
+          accessToken: issuedAccessToken,
+          refreshToken: issuedRefreshToken,
+          scope: consumed.scope,
+          expiresAt: new Date(Date.now() + 3600 * 1000),
+        });
+
+        return { scope: consumed.scope };
       });
 
       if (rotated === null) {
@@ -248,20 +273,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const newToken = rotated[0];
-      if (!newToken) {
-        return NextResponse.json(
-          { error: 'server_error', error_description: 'Failed to create token' },
-          { status: 500 }
-        );
-      }
-
       return NextResponse.json({
-        access_token: newToken.accessToken,
-        refresh_token: newToken.refreshToken,
+        access_token: issuedAccessToken,
+        refresh_token: issuedRefreshToken,
         token_type: 'Bearer',
         expires_in: 3600,
-        scope: newToken.scope,
+        scope: rotated.scope,
       });
     }
 
