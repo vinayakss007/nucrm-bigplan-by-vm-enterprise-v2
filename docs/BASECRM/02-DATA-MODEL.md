@@ -36,12 +36,17 @@ Every base table composes these — reuse them verbatim or the constraints drift
   > `isNull(<table>.deletedAt)`** in its `WHERE`. Missing that is the whole defect
   > class of #3224 (lead-warming mailed soft-deleted contacts) and #3228 (five
   > send sinks + two AI hydrations did the same) — both shipped with the write half
-  > correct, so the code *looked* fine. `deletedAt` reaches tables via
-  > `utils.lifecycle()` / `utils.audit()` across `crm.ts`, `automation.ts`,
-  > `billing.ts`, `files.ts`, `marketing.ts` and ~40 schema files total (plus a
-  > direct `deleted_at` column at `support.ts:86`), so every read in the app is in
-  > scope. Verified: **403** `isNull(<t>.deletedAt)` predicates across `app/` +
-  > `lib/`. See README invariant and 06 Phase 6.
+  > correct, so the code *looked* fine. `deletedAt` reaches **200 of the 226
+  > `pgTable`s** — 46 through `utils.audit()` and 153 through `utils.lifecycle()`
+  > across 39 of the 63 `drizzle/schema/*.ts` files — plus exactly one table that
+  > declares the column by hand: **`failed_webhooks`** (`support.ts:76`, column at
+  > `:86`). Not `support_tickets` — that is the next table in the same file
+  > (`:95-160`) and has no `deletedAt` at all. So every read in the app is in
+  > scope. Verified: **426** `isNull(<t>.deletedAt)` predicates across `app/` +
+  > `lib/` (in 218 files), counted with
+  > `git grep -o -E "isNull\\([A-Za-z_.]*\\.deletedAt\\)" origin/main -- app lib | wc -l`;
+  > the 403 this line carried was measured before #3227/#3229 landed. See README
+  > invariant and 06 Phase 6.
 
 - `audit()` — lifecycle + `createdBy` / `updatedBy` / `deletedBy` → `users.id`
   set-null (`utils.ts:77-82`).
@@ -179,23 +184,47 @@ survives user deletion).
 - CI guard: `scripts/check-migration-rls-dml.mjs` (`npm run guard:migration-rls`)
   fails a migration that mutates a FORCE-RLS table without setting the right GUC.
 
-The **GUCs** (set in `lib/db/rls.ts`): `app.current_tenant` (`:88,128,239,281`),
-`app.current_user` (`:88,…`), `app.is_super_admin` (`SUPER_ADMIN_GUC :138,169,217`),
-`app.auth_lookup` (`:259`), `app.tracking_lookup` (`:311`),
-`app.portal_lookup_token|tenant|email` (0122/0123, `lib/db/portal-lookup-context.ts`),
-`app.allow_audit_purge`. Cleared on checkout/return as noted in 01.
+The **GUCs**, and the file that actually writes each one (re-measured at
+`2ff3e88b5`; a `rls.ts` citation past `:339` is stale by construction):
+
+- `lib/db/rls.ts` — `app.current_tenant` (`:90,109,130,220`),
+  `app.current_user` (`:90,109,130,221,241`), `app.is_super_admin`
+  (`SUPER_ADMIN_GUC` defined `:140`, written `:171,219`),
+  `app.tracking_lookup` (`:256`). `app.auth_lookup` is *mentioned* in `rls.ts:250`
+  but never set there.
+- `lib/db/token-credential-context.ts` — `app.auth_lookup` (`:52,77,133`),
+  `app.token_credential` (`:53,78,134,212`), `app.current_user` (`:76`),
+  `app.oauth_client_id` (`:135`), `app.token_issue` (`:211`),
+  `app.token_retire_user` (`:213`). Its helpers are the only ones re-exported
+  through `rls.ts:32-41`.
+- `lib/db/portal-lookup-context.ts` — `app.portal_lookup_token|tenant|email`
+  (constants `:28-30`, written by `setPortalLookupContext` `:130`; 0122/0123).
+- `lib/db/form-capture-context.ts` — `app.form_lookup_id` (constant `:38`,
+  written by `setFormLookupContext` `:74`).
+- `lib/db/unsubscribe-contact-context.ts` — `app.unsubscribe_contact`
+  (constant `:52`, written `:87`; `setUnsubscribeTenantContext` `:100` also sets
+  `app.current_tenant`/`app.current_user` at `:107-108`; migration 0138).
+- `app.allow_audit_purge` is not a `set_config` at all — it is `SET LOCAL` in
+  `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
+
+Cleared on checkout/return as noted in 01: the two reset lists
+(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **fourteen** GUCs,
+and `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts:192-206` pins them equal
+to each other *and* to that literal count. A new context GUC therefore means
+editing both lists **and** bumping the `toBe(14)`. Nothing checks the lists
+against the *writers* above, so a GUC that is set but never reset still passes.
 
 ## Migrations
 
 - **Convention**: 4-digit zero-padded `NNNN_name.sql` + sibling
-  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 259 `.sql` files,
-  129 `.down.sql` (the down set is partial — early migrations predate rollbacks).
-- **Journal**: `drizzle/migrations/meta/_journal.json` — 130 entries, idx 0..129.
+  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 277 `.sql` files,
+  138 `.down.sql` (the down set is partial — early migrations predate rollbacks).
+- **Journal**: `drizzle/migrations/meta/_journal.json` — 139 entries, idx 0..138.
   **Snapshots**: only `0000/0001/0002/0018_snapshot.json` exist → the chain is
   largely **hand-written SQL**, not `drizzle-kit`-generated. `drizzle.config.ts`
   points `out: './drizzle/migrations'`, `schema: ./drizzle/schema/index.ts`.
-- **Runner**: `scripts/migrate.ts` (`package.json:88`; `--bootstrap` `:90`;
-  `db:deploy-migrate` → `scripts/deploy-migrate.ts`). Reads journal at
+- **Runner**: `scripts/migrate.ts` (`package.json:89`; `--bootstrap` `:91`;
+  `db:deploy-migrate` → `scripts/deploy-migrate.ts` `:90`). Reads journal at
   `scripts/migrate.ts:125`, consults/stamps ledger `drizzle.__drizzle_migrations`
   (`:68,348-374`). On a fresh DB with an empty ledger it replays every journal
   file — **which is why every policy DDL is DROP-then-CREATE idempotent**

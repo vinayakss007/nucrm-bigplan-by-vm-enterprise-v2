@@ -85,14 +85,24 @@ coexisting shapes and the `apiError()` helper (`lib/api-error.ts:37`).
   transaction started anywhere in a handler still carries the right GUCs.
 - **`lib/db/client.ts`** is a thin compat shim re-exporting `getPool` plus raw
   `query` / `withTransaction` helpers.
-- **Context helpers** (`lib/db/rls.ts`): `withTenantContext` (`:118`),
-  `withUserContext` (`:337`), `withAuthLookupContext` (`:289`),
-  `withTrackingLookupContext` (`:322`), `withSecurityContext` (`:181-189`),
-  `setImpersonationContext` (`:206`). See 02/03 for what each SETs and why
+- **Context helpers** (`lib/db/rls.ts`): `withTenantContext` (`:120`),
+  `withUserContext` (`:282`), `withTrackingLookupContext` (`:267`),
+  `withSecurityContext` (`:183-191`), `setImpersonationContext` (`:208`). The
+  auth/credential helpers — `withAuthLookupContext`,
+  `withAuthResolutionContext`, `withTokenIssueContext`,
+  `withOAuthClientLookupContext` — are *defined* in
+  `lib/db/token-credential-context.ts` (`:90`, `:257`, `:225`, `:145`) and only
+  re-exported from `rls.ts:32-41`, so `rls.ts` remains the canonical import path
+  while the definitions live elsewhere; cite the symbol, not a `rls.ts` line.
+  The other pre-auth context modules are *not* re-exported — `portal-lookup-context.ts`,
+  `form-capture-context.ts` and `unsubscribe-contact-context.ts` are imported
+  straight from their own file (e.g. `app/api/unsubscribe/route.ts:30`).
+  See 02/03 for what each SETs and why
   `withSecurityContext` is super-admin-scoped and must wrap the *smallest*
   possible statement set.
-- **Reset on return**: GUCs are cleared on connection checkout/return
-  (`lib/db/pool.ts:241`, `lib/db/request-connection.ts:93-94,241`) and PgBouncer
+- **Reset on return**: every `app.*` GUC is cleared on connection checkout/return
+  (`lib/db/pool.ts:241`, `RESET_TENANT_GUCS_SQL` at
+  `lib/db/request-connection.ts:103` → issued at `:251`) and PgBouncer
   runs `server_reset_query='DISCARD ALL'` (`lib/db/rls.ts:10-17`). A leaked GUC
   across tenants is prevented at *three* layers.
 
@@ -118,7 +128,25 @@ and the DB-role/password realign that a fresh hotpatched DB requires.
 
 ## Sizing (so a rebuild budgets correctly)
 
-Large repo: ~599 unit/integration test files (9,500+ unit tests), a 129-step
-migration chain, 259 `.sql` migration files, 462 `*.test.*` files per AGENTS.md.
+Large repo. Re-measured at `33f0b7306`:
+
+- **919 `*.test.*` files** under `tests/` — 867 in `tests/unit`, 39 in
+  `tests/integration`, 12 in `tests/dashboard`, 1 in `tests/api`. Command:
+  `git ls-tree -r --name-only HEAD -- tests | grep -E '\.test\.[^.]+$'`, split
+  with `cut -d/ -f2 | uniq -c`. (Playwright `.spec.ts` files are not in it.)
+- The unit run summed to **14,505 passed / 8 skipped / 2 failed** across four
+  `--shard=n/4` legs when it was last run here (at `7330f2105`, four merges and
+  four unit files short of today's tree — 915 files then, 919 now — so read it as
+  an order of magnitude, not a rate). Both failures were
+  `tests/integration/invite-rls-context-3182.test.ts`, which reaches a real
+  enforced-RLS database, so treat them as environment-dependent — run `npm test`
+  for the authoritative rate on the box you are on.
+- **139 migration steps** (`drizzle/migrations/meta/_journal.json`, highest
+  `idx` 138) spread over **277 `.sql` files** — 139 forward + 138 `.down.sql`.
+
+`AGENTS.md:124-127` still carries the 2026-10-04 census (462 files, 425 unit /
+25 integration / 11 dashboard / 1 elsewhere), i.e. roughly half of what is
+actually on `main` now. The stale number to fix lives there, not here.
+
 The *base* CRM is a small subset of tables and routes; the rest is product
 surface layered on the same substrate. 06-REBUILD-GUIDE isolates the minimum set.

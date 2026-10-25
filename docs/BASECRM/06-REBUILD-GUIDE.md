@@ -40,7 +40,8 @@ each step names the file(s) that must exist and the invariant that proves it. Re
    `field_permissions`, `audit_logs` (userId **not** an FK).
 3. CRM tables in `crm.ts`: `companies`, `contacts`, `leads`
    (`UNIQUE(tenant_id,lead_oid)`), `pipelines`, **`deal_stages`** (NOT
-   `pipeline_stages` — that table is dropped by 0079, 02), `deals`
+   `pipeline_stages` — that table is dropped by `0080_drop_pipeline_stages.sql`;
+   `0079` is `trgm_search_indexes` (02), `deals`
    (**`stage_id` NOT NULL**, `amount numeric(15,2) default '0'`, `customFields`
    jsonb+GIN), `custom_field_defs`
    (**`UNIQUE(tenant_id,entity_type,field_key)`**), products/quotes/tags/forms/notes.
@@ -74,7 +75,17 @@ handler trusts "the app filters by tenant".
 6. **0127 equivalent** — the narrow SELECT-only, `app.current_user`-keyed
    `tenant_members_self_read` + `roles_tenant_member_read` policies so login can
    resolve membership pre-tenant. Do NOT use `app.is_super_admin` for this.
-7. Add CI guard `scripts/check-migration-rls-dml.mjs` so a later migration cannot
+7. **Pre-auth credential arms (0134–0138)** — the forgot-password / verify-email /
+   OAuth / unsubscribe reads have *no* `app.current_user`, so a `*_user_own` policy
+   cannot serve them. Give each such table (a) a lookup arm that **names the
+   credential** (`<token_col> = current_setting('app.token_credential')`, never the
+   bare `app.auth_lookup` boolean), (b) a claim-context SELECT arm so the UPDATE can
+   see its own row, and (c) a row-narrowing value GUC where the claim is by id
+   (`app.unsubscribe_contact`, 0138). Then put every new GUC on **both** connection
+   reset lists — `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts` pins them
+   equal and pins the count. 03 § 1 explains the two failure modes this prevents
+   (cross-user token enumeration; silently-zero-row claims).
+8. Add CI guard `scripts/check-migration-rls-dml.mjs` so a later migration cannot
    mutate a FORCE-RLS table without the right GUC.
 
 **Checkpoint:** cross-tenant read returns empty; unset-GUC denies; a member can
