@@ -54,6 +54,7 @@
     "guard:chain": "node scripts/check-migration-chain.mjs",
     "guard:migration-redecl": "node scripts/check-migration-redeclarations.mjs",
     "guard:migration-rls": "node scripts/check-migration-rls-dml.mjs",
+    "guard:rollback-coverage": "node scripts/check-down-migration-coverage.mjs",
     "guard:counters": "node scripts/check-counter-increments.mjs",
     "guard:csv": "node scripts/check-csv-blob.mjs",
     "guard:portal-softdelete": "npx tsx scripts/check-portal-soft-delete.mts",

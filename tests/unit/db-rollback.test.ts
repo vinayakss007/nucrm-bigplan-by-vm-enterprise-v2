@@ -42,8 +42,48 @@ const MIGRATIONS_DIR = path.join(REPO_ROOT, 'drizzle', 'migrations');
 
 /** Migration with a separate `.down.sql` file. */
 const TAG_DOWN_FILE = '0034_add_form_views_count';
-/** Migration with an inline `-- DOWN` / `-- END DOWN` section. */
-const TAG_INLINE = '0036_backup_records_checksum';
+/** A later migration, also rollbackable — used to pin journal ordering. */
+const TAG_LATER = '0036_backup_records_checksum';
+
+/**
+ * The inline `-- DOWN` / `-- END DOWN` convention, exercised against a fixture.
+ *
+ * This used to be `0036_backup_records_checksum`, read from the real migrations
+ * directory. **#3284** moved that section into `0036_backup_records_checksum.down.sql`,
+ * because a sibling file is what `lib/db/rollback.ts` looks for first and an inline
+ * section is invisible to `scripts/rollback-migration.ts` once one exists — so the
+ * real tree now has ZERO inline-only rollbacks, and the inline path, exactly like the
+ * no-rollback path below, has to be exercised against a synthetic directory. The two
+ * migrations that still carry an inline section (`0036`, `0039_rls_fail_closed_policy`)
+ * both have a `.down.sql`, which is the precedence the
+ * `prefers the .down.sql file when both conventions are present` test pins.
+ */
+function inlineOnlyFixture(): { dir: string; tag: string } {
+  const dir = makeFixtureDir();
+  const tag = '9997_inline_only';
+  fs.writeFileSync(
+    path.join(dir, `${tag}.sql`),
+    [
+      'ALTER TABLE backup_records ADD COLUMN checksum text;',
+      '-- DOWN Migration: drop the checksum columns again',
+      '-- DOWN',
+      'BEGIN;',
+      'ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum_algorithm;',
+      'ALTER TABLE backup_records DROP COLUMN IF EXISTS checksum;',
+      'COMMIT;',
+      '-- END DOWN',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(dir, 'meta', '_journal.json'),
+    JSON.stringify({
+      version: '7',
+      dialect: 'postgresql',
+      entries: [{ idx: 0, version: '7', when: 1700000000000, tag, hash: 'inlinefixture' }],
+    }),
+  );
+  return { dir, tag };
+}
 /**
  * Migration with no rollback SQL at all — a fixture (the real migrations
  * directory now has 100% rollback coverage, so the no-rollback path is
@@ -109,7 +149,8 @@ describe('parseRollbackSql', () => {
   });
 
   it('extracts an inline -- DOWN / -- END DOWN section', async () => {
-    const sql = await parseRollbackSql(TAG_INLINE, MIGRATIONS_DIR);
+    const { dir, tag } = inlineOnlyFixture();
+    const sql = await parseRollbackSql(tag, dir);
     expect(sql).not.toBeNull();
     expect(sql).toContain('DROP COLUMN IF EXISTS checksum');
     expect(sql).toContain('DROP COLUMN IF EXISTS checksum_algorithm');
@@ -213,19 +254,22 @@ describe('verifyRollbackCoverage', () => {
     const coverage = verifyRollbackCoverage(MIGRATIONS_DIR);
     const byTag = new Map(coverage.entries.map((e) => [e.tag, e]));
     expect(byTag.get('0034_add_form_views_count')?.source).toBe('down-file');
-    expect(byTag.get('0036_backup_records_checksum')?.source).toBe('inline');
+    // #3284: 0036's DOWN now lives in the file the runner reads, not in the up.
+    expect(byTag.get('0036_backup_records_checksum')?.source).toBe('down-file');
+    expect(fs.existsSync(path.join(MIGRATIONS_DIR, '0036_backup_records_checksum.down.sql'))).toBe(true);
+    expect(coverage.entries.filter((e) => e.source === 'inline')).toHaveLength(0);
   });
 });
 
 describe('listAppliedMigrations', () => {
   it('returns applied migrations newest-first with rollback availability', async () => {
     mockQuery.mockResolvedValue({
-      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]),
+      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_LATER]),
     });
 
     const applied = await listAppliedMigrations(MIGRATIONS_DIR);
 
-    expect(applied.map((m) => m.tag)).toEqual([TAG_INLINE, TAG_DOWN_FILE]);
+    expect(applied.map((m) => m.tag)).toEqual([TAG_LATER, TAG_DOWN_FILE]);
     expect(applied[0]!.hasRollback).toBe(true);
     expect(applied[1]!.hasRollback).toBe(true);
     expect(applied[0]!.appliedAt).toBeInstanceOf(Date);
@@ -243,7 +287,7 @@ describe('listAppliedMigrations', () => {
 describe('rollbackMigration', () => {
   it('refuses an out-of-order rollback without force', async () => {
     mockQuery.mockResolvedValue({
-      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]),
+      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_LATER]),
     });
 
     await expect(rollbackMigration(TAG_DOWN_FILE, { migrationsDir: MIGRATIONS_DIR })).rejects.toThrow(
@@ -255,7 +299,7 @@ describe('rollbackMigration', () => {
 
   it('allows an out-of-order rollback when force is passed', async () => {
     mockQuery.mockResolvedValue({
-      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]),
+      rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_LATER]),
     });
 
     const result = await rollbackMigration(TAG_DOWN_FILE, {
@@ -267,16 +311,19 @@ describe('rollbackMigration', () => {
   });
 
   it('commits and deletes the migration state row on a real run', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]) });
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_LATER]) });
 
     const client = makeFakeClient();
     mockWithMigrationLock.mockImplementation(
       async (fn: (c: unknown) => Promise<unknown>) => fn(client),
     );
 
-    const result = await rollbackMigration(TAG_INLINE, { migrationsDir: MIGRATIONS_DIR });
+    const { dir, tag } = inlineOnlyFixture();
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([tag]) });
 
-    expect(result).toMatchObject({ tag: TAG_INLINE, committed: true, dryRun: false, source: 'inline' });
+    const result = await rollbackMigration(tag, { migrationsDir: dir });
+
+    expect(result).toMatchObject({ tag, committed: true, dryRun: false, source: 'inline' });
     expect(result.stateRowDeleted).toBe(true);
     expect(client.queries).toContain('BEGIN');
     expect(client.queries).toContain('COMMIT');
@@ -288,17 +335,17 @@ describe('rollbackMigration', () => {
   });
 
   it('does not commit on dryRun', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]) });
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_LATER]) });
 
     const client = makeFakeClient();
     mockWithMigrationLock.mockImplementation(
       async (fn: (c: unknown) => Promise<unknown>) => fn(client),
     );
 
-    const result = await rollbackMigration(TAG_INLINE, {
-      migrationsDir: MIGRATIONS_DIR,
-      dryRun: true,
-    });
+    const { dir, tag } = inlineOnlyFixture();
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([tag]) });
+
+    const result = await rollbackMigration(tag, { migrationsDir: dir, dryRun: true });
 
     expect(result.dryRun).toBe(true);
     expect(result.committed).toBe(false);
@@ -309,7 +356,8 @@ describe('rollbackMigration', () => {
   });
 
   it('rolls the transaction back when the rollback SQL fails', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_DOWN_FILE, TAG_INLINE]) });
+    const inline = inlineOnlyFixture();
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([inline.tag]) });
 
     const queries: string[] = [];
     const client = {
@@ -324,7 +372,7 @@ describe('rollbackMigration', () => {
     );
 
     await expect(
-      rollbackMigration(TAG_INLINE, { migrationsDir: MIGRATIONS_DIR }),
+      rollbackMigration(inline.tag, { migrationsDir: inline.dir }),
     ).rejects.toThrow('boom');
     expect(queries).toContain('ROLLBACK');
     expect(queries).not.toContain('COMMIT');
@@ -350,7 +398,7 @@ describe('rollbackMigration', () => {
   });
 
   it('throws when the migration is not recorded as applied', async () => {
-    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_INLINE]) });
+    mockQuery.mockResolvedValue({ rows: stateRowsFromJournal([TAG_LATER]) });
     await expect(
       rollbackMigration(TAG_DOWN_FILE, { migrationsDir: MIGRATIONS_DIR }),
     ).rejects.toThrow(/not recorded as applied/i);
@@ -359,7 +407,7 @@ describe('rollbackMigration', () => {
   it('throws when nothing has been applied', async () => {
     mockQuery.mockResolvedValue({ rows: [] });
     await expect(
-      rollbackMigration(TAG_INLINE, { migrationsDir: MIGRATIONS_DIR }),
+      rollbackMigration(TAG_LATER, { migrationsDir: MIGRATIONS_DIR }),
     ).rejects.toThrow(/nothing to roll back/i);
   });
 });
