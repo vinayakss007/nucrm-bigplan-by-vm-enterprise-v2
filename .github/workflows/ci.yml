@@ -491,7 +491,7 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: nucrm_test
+          POSTGRES_DB: nucrm_chain
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         options: >-
@@ -511,15 +511,28 @@ jobs:
 
       - run: npm ci
 
-      - name: Build the schema from the migration chain (never db:sync, which would make this tautological)
+      # The chain, never `db:sync`: the guard's own argument is that a migration which exists on disk
+      # but was never applied is how #43 happened, so the database it measures has to be one the
+      # journal produced. `POSTGRES_DB` above names the same database `env.DATABASE_URL` points at,
+      # so nothing here has to CREATE it and no step can fall back to the file-level `nucrm_test`.
+      - name: Build the schema from the migration chain
         run: |
           set -euo pipefail
-          psql "postgresql://postgres:postgres@localhost:5432/nucrm_test" -v ON_ERROR_STOP=1 \
-            -c 'CREATE DATABASE nucrm_chain'
           npm run db:bootstrap -- --yes
 
+      # `|| code=$?`-style capture because GitHub's default `run:` shell is `bash -e`, and because a
+      # bare `npm run guard:vocab | tee` would replace the guard's exit code with tee's. The human
+      # table is deliberately not `--json`: on failure it prints `[missing-in-db] invoices.status`
+      # plus the writers, which is what the reader of a red job needs.
       - name: Positive control - the chain-built database accepts every value the registry says code writes
-        run: npm run guard:vocab
+        run: |
+          set -uo pipefail
+          npm run guard:vocab 2>&1 | tee "$RUNNER_TEMP/guard-vocab-positive.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            echo "::error::PP-059 the migration chain produces a database whose CHECK constraints reject a value the code writes (23514) — findings above. Widen the constraint in a new migration and list the value in scripts/constraint-vocab.json, or stop writing it. Do not delete the registry entry to silence this job."
+          fi
+          exit "$code"
 
       - name: Negative control - a CHECK that rejects 'void' MUST turn this guard red
         run: |
@@ -534,15 +547,20 @@ jobs:
           # the shell aborts on the guard's exit 1 before a single assertion runs and the step reports
           # a red control with no annotation. Verified locally under `bash -e`.
           code=0
-          npm run guard:vocab -- --json > /tmp/vocab-negative.log 2>&1 || code=$?
+          npm run guard:vocab -- --json > "$RUNNER_TEMP/guard-vocab-negative.log" 2>&1 || code=$?
           if [ "$code" != "1" ]; then
             echo "::error::PP-059 the constraint-vocabulary guard exited $code against a database that rejects 'void', which lib/api/schemas/billing.ts writes. Expected 1: the step is not measuring the database."
-            cat /tmp/vocab-negative.log
+            cat "$RUNNER_TEMP/guard-vocab-negative.log"
             exit 1
           fi
-          if ! grep -qE '"kind": *"missing-in-db"' /tmp/vocab-negative.log || ! grep -qE '"id": *"invoices.status"' /tmp/vocab-negative.log; then
+          if ! grep -qE '"kind": *"missing-in-db"' "$RUNNER_TEMP/guard-vocab-negative.log" || ! grep -qE '"id": *"invoices.status"' "$RUNNER_TEMP/guard-vocab-negative.log"; then
             echo "::error::PP-059 the guard exited 1 but did not report invoices.status as missing-in-db. It went red for some other reason, which is not a control."
-            cat /tmp/vocab-negative.log
+            cat "$RUNNER_TEMP/guard-vocab-negative.log"
+            exit 1
+          fi
+          if ! grep -q "'void'" "$RUNNER_TEMP/guard-vocab-negative.log"; then
+            echo "::error::PP-059 the guard failed on invoices.status without naming 'void' — a different constraint is being compared than the one this control breaks."
+            cat "$RUNNER_TEMP/guard-vocab-negative.log"
             exit 1
           fi
           echo "OK: a value the code writes that this database rejects turns the guard red, naming the constraint and its writer."
