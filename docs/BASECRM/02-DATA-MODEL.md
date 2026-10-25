@@ -36,8 +36,8 @@ Every base table composes these — reuse them verbatim or the constraints drift
   set-null (`utils.ts:77-82`).
 - `metadata()` — jsonb default `{}` (`utils.ts:55`).
 - Index helpers `tenantIdx` / `metadataIdx` / `activeIdx` (`utils.ts:95-99`).
-  `activeIdx` is itself partial — `.where(sql\`deleted_at IS NULL\`)` — which is
-  the same rule showing up a third time.
+  `activeIdx` is itself partial — the index it builds carries
+  `WHERE deleted_at IS NULL` — the same rule showing up a third time.
 
 ### Soft delete is a two-sided rule (#3224, #3228, #3232)
 

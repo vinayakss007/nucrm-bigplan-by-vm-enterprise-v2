@@ -146,8 +146,8 @@ set `app.tracking_lookup`), `setUserContext` (`rls.ts:232`),
 The **auth/credential** helpers are *not* defined in `rls.ts` — they moved to
 `lib/db/token-credential-context.ts` and `rls.ts:32-38` only re-exports them, so
 the import path `@/lib/db/rls` still works but a grep inside `rls.ts` finds
-nothing (this is where `03` pointed at `rls.ts:289`/`:372`; `rls.ts` is 337 lines,
-so `:372` never existed):
+nothing (the first edition of this file pointed at `rls.ts:289`/`:372`; `rls.ts`
+is 337 lines, so `:372` never existed and `:289` is a `setUserContext` call):
 
 | Helper | Defined at | GUC it sets |
 | ------ | ---------- | ----------- |
