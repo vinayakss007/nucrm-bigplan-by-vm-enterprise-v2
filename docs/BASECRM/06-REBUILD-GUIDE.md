@@ -162,13 +162,26 @@ re-assign returns 200 `created:false`.
 
 ## Phase 6 — Core CRM flows
 
-Per 05. Rebuild the envelope honestly (pick one shape), then deals list/create/
-[id]/bulk/import/export with the stage-required and preserve-amount contracts,
-leads/contacts with the alias vocabulary, correct per-entity limits (deals 500,
-leads/contacts 200).
+Per 05:
+
+1. Rebuild the envelope honestly (pick one shape).
+2. deals list / create / `[id]` / bulk / import / export with the
+   **stage-required** and **preserve-amount** contracts; correct per-entity limits
+   (deals 500, leads/contacts 200 — see 05 § limits).
+3. leads/contacts with the alias vocabulary (`status`/`lead_status`,
+   `title`/`job_title`, `created_by`/`user_id`).
+4. **Apply the soft-delete read rule everywhere.** Every `SELECT` against a table
+   that carries `deletedAt` (any `utils.lifecycle()` / `utils.audit()` table, 02 §
+   factories) must add `isNull(<table>.deletedAt)` to its `WHERE`. The write half
+   (DELETE sets `deletedAt`) is **not** enough: FORCE RLS hides cross-tenant rows but
+   never hides your *own* tombstones, so a list / hydration / outbound-send read that
+   omits the filter re-surfaces deleted rows — the exact #3224/#3228 class, both of
+   which shipped with the write half correct. The reference tree carries **403** such
+   predicates across `app/` + `lib/`; match that discipline.
 
 **Checkpoint:** `PATCH` without `amount` keeps the value (#2627/P7); stageless
-create 400s for admin too; export/import honour field permissions.
+create 400s for admin too; export/import honour field permissions; a soft-deleted
+deal/lead/contact is absent from every list and outbound query.
 
 ## Phase 7 — Auth safety
 

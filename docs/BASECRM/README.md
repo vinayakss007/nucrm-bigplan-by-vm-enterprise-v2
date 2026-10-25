@@ -68,6 +68,23 @@ A "base CRM" that violates any of them is not this app:
 - **Template apply is idempotent** and the DB is the source of truth. See 04.
 - **Auth rate limiting fails closed.** No usable client IP on an auth action →
   503, never a shared `unknown` bucket. See 03/07.
+- **Soft delete has a read half, and the read half is the invariant.** DELETE
+  endpoints set `deletedAt`, not the row — but `tenant_isolation` filters by tenant
+  and **not** by `deletedAt`, so a tombstone is still physically present and FORCE
+  RLS will return it. **Every `SELECT` against any table carrying `deletedAt` must
+  filter `isNull(<table>.deletedAt)`.** Omitting it is the #3224/#3228 defect class
+  (lead-warming mailed soft-deleted contacts; send sinks + AI hydrations did the
+  same) — both shipped with the write half *correct*, so the code looked fine. See
+  02 § factories.
+- **A pre-auth credential read must name the credential, and RLS SELECT gates
+  UPDATE.** A pre-auth read of `password_resets` / `email_verifications` /
+  `oauth_codes` has to compare against `app.token_credential`, never just flip the
+  boolean `app.auth_lookup` (0134 gated on the boolean alone → any pre-auth read saw
+  every live row of three secret-bearing tables; 0135 narrowed it). Corollary: an
+  RLS `UPDATE` is checked against the table's SELECT policies and its `RETURNING` is
+  filtered by them too, so a claim that cannot see its own row silently updates zero
+  rows. See 03 § 1 (pre-auth redemption) for the four GUCs
+  (`app.auth_lookup`, `app.token_issue`, `app.token_credential`, `app.token_retire_user`).
 
 ## Provenance
 
@@ -77,3 +94,15 @@ Documented from `main` after PRs #2644 (template source of truth), #2647
 register drift), #2654/#2655 (settings fetch + CI enforcement), and the live
 acceptance run 40/40 (nonce `AGLXXJ`). Line numbers are `main`-head era and
 will drift; the file references and the invariants are the durable content.
+
+**Re-drilled 2026-10-25 against `main = 2d8aed836` (#3232).** The wrong citations
+were re-pinned (the `0079`→`0080` drop-migration, five `schemas.ts` coordinates, the
+`token-credential-context.ts` auth helpers + `rls.ts:32-39` re-export, the
+`request-connection.ts` reset site, and the `lib/.../resolve-stage.ts` path), the
+`amount` default was corrected to the numeric `.default(0)`, and the two invariants
+above (soft-delete read half, pre-auth credential-name rule) were added. Each moved
+citation keeps its superseded number in a dated `(re-pinned 2026-10-25 from :X)`
+parenthetical so the next audit can tell a fix from a guess. Line numbers here are
+valid only at that SHA — trust the **symbol names** (`dealQuerySchema`,
+`RESET_TENANT_GUCS_SQL`, `withAuthLookupContext`, `stageFailureMessage`) over any raw
+`:N`. `0136_pre_auth_oauth_rls.sql` / `app.oauth_client_id` were **not** in this tree.

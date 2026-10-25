@@ -29,6 +29,20 @@ Every base table composes these — reuse them verbatim or the constraints drift
   table has it.
 - `lifecycle()` — `createdAt` / `updatedAt` / `deletedAt` (`utils.ts:68-72`).
   Soft delete is the norm; DELETE endpoints set `deletedAt`, not the row.
+  > ⚠️ **The read half is the invariant, not an afterthought.** A soft-deleted
+  > row is still physically present, and `tenant_isolation` filters by tenant —
+  > it does **not** hide `deletedAt`, so FORCE RLS will happily return the tombstone.
+  > **Every `SELECT` against any table carrying `deletedAt` must filter
+  > `isNull(<table>.deletedAt)`** in its `WHERE`. Missing that is the whole defect
+  > class of #3224 (lead-warming mailed soft-deleted contacts) and #3228 (five
+  > send sinks + two AI hydrations did the same) — both shipped with the write half
+  > correct, so the code *looked* fine. `deletedAt` reaches tables via
+  > `utils.lifecycle()` / `utils.audit()` across `crm.ts`, `automation.ts`,
+  > `billing.ts`, `files.ts`, `marketing.ts` and ~40 schema files total (plus a
+  > direct `deleted_at` column at `support.ts:86`), so every read in the app is in
+  > scope. Verified: **403** `isNull(<t>.deletedAt)` predicates across `app/` +
+  > `lib/`. See README invariant and 06 Phase 6.
+
 - `audit()` — lifecycle + `createdBy` / `updatedBy` / `deletedBy` → `users.id`
   set-null (`utils.ts:77-82`).
 - `metadata()` — jsonb default `{}` (`utils.ts:55`).
@@ -75,7 +89,10 @@ Every base table composes these — reuse them verbatim or the constraints drift
 - **`deal_stages`** (`crm.ts:307`) — `pipelineId!`→`pipelines` cascade, `name!`,
   `order` 0; index `(pipeline_id, order)`.
   > ⚠️ **`pipeline_stages` is a dead table** — dropped by migration
-  > `0079_drop_pipeline_stages.sql` (`crm.ts:878-882`). A stale
+  > `0080_drop_pipeline_stages.sql` (re-pinned 2026-10-25 @ `2d8aed836`: the doc
+  > had copied the stale comment at `crm.ts:878-883`, which named `0079`; `0079` is
+  > `0079_trgm_search_indexes.sql`. #3232 fixed the comment and this line together —
+  > the comment now reads `0080_…`). A stale
   > `pipeline_stages_tenant_isolation` policy still lingers in 0054:263. The live
   > stages table is **`deal_stages`**. Rebuild against `deal_stages`.
 - **`deals`** (`crm.ts:323`) — `tenantId`, `contactId/companyId/pipelineId`
@@ -83,9 +100,13 @@ Every base table composes these — reuse them verbatim or the constraints drift
   defaultNow, `title!`, `amount` numeric(15,2) default `'0'`, `closeDate`,
   `wonAt`, `assignedTo`, `customFields` jsonb + GIN (`:361`), `audit()`.
   > Two rebuild traps live here: `stageId` is **NOT NULL** (the API forces an
-  > explicit stage — see 05 § Deals create), and `amount .default('0')` is what
-  > leaked through `updateDealSchema.partial()` in #2627 (the PATCH-zeroed-value
-  > bug). Strip defaults from the update schema (`schemas.ts:74-77`).
+  > explicit stage — see 05 § Deals create), and the **API** `createDealSchema`
+  > `amount .default(0)` (a number — re-pinned 2026-10-25 @ `2d8aed836`; this line
+  > used to write `.default('0')`, matching the DB column default above, but the
+  > zod default is numeric `0` at `schemas.ts:224`) is what leaked through
+  > `updateDealSchema.partial()` in #2627 (the PATCH-zeroed-value bug). Strip
+  > defaults from the update schema (`updateDealSchema` `schemas.ts:238-241`, was
+  > `:74-77`).
 - **`custom_field_defs`** (`crm.ts:369`, index prefix `idx_custom_fields_*`) —
   `entityType!`, `fieldKey!`, `fieldLabel!`, `fieldType! 'text'`, `fieldOptions`,
   `isRequired`, `isCalculated/formula`;
