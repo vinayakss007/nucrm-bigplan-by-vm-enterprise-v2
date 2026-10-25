@@ -130,7 +130,15 @@ form-capture / unsubscribe-contact) instead of pretending everything lives in
 `rls.ts`, and 03's pre-auth walk extended to 0134–0138 with `rls.ts:118`→`:120`.
 Two assertions from the `docs/basecrm-citation-drill` branch are deliberately **not**
 ported because they contradict the code: that the reset clears *twelve* GUCs, and
-that `app.oauth_client_id` is absent from the reset lists.
+that `app.oauth_client_id` is absent from the reset lists. **That sentence is now
+itself behind the branch it describes**: `#3234` has been re-pushed since
+(head `206a35b64`, 2026-10-25 15:47Z) and its head now names `app.oauth_client_id`
+where it belongs, but still says **thirteen** GUCs cleared where the code clears
+fourteen — one short of `#3242`'s `app.unsubscribe_contact`. The count is therefore
+not remembered in prose by anyone any more:
+`tests/unit/basecrm-citation-drill-3244.test.ts` counts the `set_config(` calls on
+`pool.ts:241` and `request-connection.ts:104` and fails if the docs say anything
+other than what they hold.
 
 **Re-checked 2026-10-25 against `main = 33f0b7306` (#3241's CI job).** One merge moved
 a number and no coordinate: the sizing census is **919** `*.test.*` files — **867** unit
@@ -141,11 +149,12 @@ a number and no coordinate: the sizing census is **919** `*.test.*` files — **
 **fourteen** `app.*` GUCs — `#3241` wired an existing guard into CI and added no GUC,
 no migration and no schema table, so 01/02/03's pins are untouched by it.
 
-**Re-drilled a third time the same day, against `main = 5760c2538` (#3244's follow-up).**
-The `:N` set was re-derived with a scanner over every `file.ext:NNN` in this directory
-and each hit checked by hand, which found five pointers and one *claim* the previous two
-passes had left wrong. The scan counts **155** coordinates: **57** carry a path long
-enough for the tripwire to resolve them on its own, and the other **98** are bare
+**Re-drilled a third time the same day, against `main = 5760c2538` and landed on
+`main = 54be92020` (#3244's follow-up).** The `:N` set was re-derived with a scanner over
+every `file.ext:NNN` in this directory and each hit checked by hand, which found four
+wrong pointers, one stale census figure and one wrong *claim* among the things the
+previous two passes had left. The scan counts **155** coordinates: **57** carry a path
+long enough for the tripwire to resolve them on its own, and the other **98** are bare
 `file.ext:NNN` — the test only resolves those where its `PINNED` pairs name the file, so
 the remainder were checked by hand this pass and are what the next hand pass inherits.
 Both figures are of the text *after* this pass edited it, which is the only honest way

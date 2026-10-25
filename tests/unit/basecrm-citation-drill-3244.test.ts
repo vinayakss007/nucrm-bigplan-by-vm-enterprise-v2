@@ -444,11 +444,21 @@ describe('#3244 follow-up — the reset-list count 02 quotes is the count the co
     expect(rcN, `request-connection.ts:${RC_RESET[1]} clears ${rcN}`).toBe(14);
   });
 
-  it('and 02 and 03 say fourteen, not a remembered smaller number', () => {
+  it('and the docs that state the operative count say fourteen, not a remembered smaller number', () => {
+    // The stale counts are not hypothetical: the superseded `#3234` branch head said
+    // *twelve* and its re-push says *thirteen*, both behind the code. Only the files
+    // that state the number as fact are screened — `README.md` narrates the audit
+    // history and quotes those wrong numbers on purpose, so a directory-wide check
+    // would fail on the sentence that exists to prevent the mistake.
     for (const doc of ['docs/BASECRM/02-DATA-MODEL.md', 'docs/BASECRM/03-RBAC-AUTHZ.md']) {
       const t = readFileSync(join(ROOT, doc), 'utf8');
       expect(t, `${doc} dropped the fourteen claim`).toContain('fourteen');
-      expect(t, `${doc} resurrects a stale count`).not.toMatch(/(twelve|thirteen) `?set_config/);
+    }
+    for (const doc of ['docs/BASECRM/02-DATA-MODEL.md', 'docs/BASECRM/03-RBAC-AUTHZ.md', 'docs/BASECRM/06-REBUILD-GUIDE.md']) {
+      expect(
+        readFileSync(join(ROOT, doc), 'utf8'),
+        `${doc} resurrects a superseded reset-list count`,
+      ).not.toMatch(/(twelve|thirteen)\s+(`?set_config|GUC)/i);
     }
   });
 });
