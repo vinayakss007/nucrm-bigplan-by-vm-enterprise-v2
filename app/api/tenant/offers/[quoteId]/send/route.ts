@@ -75,7 +75,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     let contactName = 'there';
     if (quote.contactId) {
       const contact = await db.query.contacts.findFirst({
-        where: eq(contacts.id, quote.contactId),
+        // #3228 — same shape as the invoice mailer: the quote is tombstone-guarded, the recipient
+        // was not, so a contact the tenant deleted was still mailed the offer and its public link.
+        where: and(eq(contacts.id, quote.contactId), isNull(contacts.deletedAt)),
         columns: { firstName: true, lastName: true, email: true },
       });
       if (!toEmail && contact?.email) toEmail = contact.email;

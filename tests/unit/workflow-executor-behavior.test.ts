@@ -41,9 +41,13 @@ vi.mock('@/drizzle/schema', () => ({
   callLogs: {},
 }));
 vi.mock('@/drizzle/relations', () => ({}));
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  // #3228: the executor now builds `isNull(x.deletedAt)` too; without the real sibling exports
+  // (and this fake's `isNull`) the whole module fails to import.
+  ...(await importOriginal<typeof import('drizzle-orm')>()),
   eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),
   and: (...c: unknown[]) => ({ __and: c }),
+  isNull: (a: unknown) => ({ __isNull: a }),
 }));
 
 // ── DB mock harness ──────────────────────────────────────────────────────────
