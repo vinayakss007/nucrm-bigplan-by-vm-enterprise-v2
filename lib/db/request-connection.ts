@@ -97,9 +97,11 @@ export function getPinnedClient(): PoolClient | undefined {
 // #3225 adds app.oauth_client_id, which names the OAuth client whose row
 // oauth_clients_client_lookup admits — the client id is public but the row it selects
 // carries the client_secret, so a value left on the connection picks a victim's
-// client for whatever request inherits the checkout.
+// client for whatever request inherits the checkout. #3237 adds app.unsubscribe_contact, naming the one
+// contact 0138's claim arm admits a write to; left set, the next checkout could opt out a stranger.
+// #2446's rule is that every privilege GUC is on both lists, which is what this line is for.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false), set_config('app.token_credential', '', false), set_config('app.token_retire_user', '', false), set_config('app.oauth_client_id', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false), set_config('app.token_credential', '', false), set_config('app.token_retire_user', '', false), set_config('app.oauth_client_id', '', false), set_config('app.unsubscribe_contact', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).

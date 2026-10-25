@@ -20,8 +20,8 @@
  * findings, and the answer is not "baseline them all": most are a DIFFERENT
  * question — cron iterates tenants deliberately (#2539), webhooks authenticate
  * by signing secret and must resolve a tenant from a provider payload, and
- * `oauth`/`sso`/`unsubscribe` all act on a credential that grants no row-level
- * privilege in the shipped policy set (#3102). Calling those #2446 breaks would
+ * `sso` acts on a credential that grants no row-level privilege in the shipped
+ * policy set (#3102). Calling those #2446 breaks would
  * be a false alarm; hiding them would re-open the hole. So each is deferred BY
  * DIRECTORY and pinned by a COUNT that may only go down.
  *
@@ -30,6 +30,12 @@
  * the entry had to go, and the assertion below is what made deleting it the only
  * way to stay green. Note what #3195 did NOT do — it did not answer #3102's
  * privilege question; the counts are withheld, not read.
+ *
+ * `app/api/auth/oauth` (#3225, #3231) and `app/api/unsubscribe` (#3237) left the
+ * ledger the other way: their privilege was invented, the reads were bound, and
+ * the count went to zero. The last block in this file is the unsubscribe one,
+ * because "the entry was deleted because the guard stopped seeing a reason" needs
+ * proving in both directions.
  *
  * Two findings were not that: `/api/flags` and `/api/track/event` read
  * `tenant_members` for a caller whose identity the route had already verified.
@@ -126,10 +132,13 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     // is left AFTER #3195 took `app/api/metrics` off it — re-adding it would
     // have to reopen this assertion, and the reason it was deleted (the route
     // reads no tenant-policyed table at all) is pinned in
-    // tests/unit/metrics-tenant-count-3195.test.ts.
+    // tests/unit/metrics-tenant-count-3195.test.ts. `app/api/auth/oauth` and
+    // `app/api/unsubscribe` came off the same regex when #3225/#3231 and #3237
+    // invented their privileges and bound the reads; a route that has been fixed
+    // must not be able to take its exemption back.
     for (const entry of SCOPE_DEFERRALS) {
       expect(entry.dir, entry.deferredTo).toMatch(
-        /^app\/api\/(cron|webhooks|auth\/oauth|auth\/sso|unsubscribe|tenant\/plugins\/webhook)$/,
+        /^app\/api\/(cron|webhooks|auth\/sso|tenant\/plugins\/webhook)$/,
       );
     }
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
@@ -239,4 +248,44 @@ describe('the two session-authenticated reads the wider walk found are bound (#3
         .toMatch(/is not bound by a context-establishing call|the bare pool/);
     });
   }
+});
+
+/**
+ * The ledger's other exit: `app/api/unsubscribe` was deferred because no GUC could
+ * name the row its verified link had to write (#3102's open question). #3237 answered
+ * it — 0138's claim pair behind `app.unsubscribe_contact`, opened by
+ * `withUnsubscribeContactContext` — so the entry's 3 findings went to zero and the
+ * entry had to go. This is the proof that the deletion was earned rather than convenient:
+ * the guard sees all three statements, finds none of them unbound, and would report
+ * them again the moment the context call disappeared.
+ */
+describe('the unsubscribe route the wider walk could not bind is bound now (#3237)', () => {
+  const file = 'app/api/unsubscribe/route.ts';
+  const tables = ['contacts', 'sequenceEnrollments', 'activities'];
+
+  it('the guard sees all three policyed statements it deferred for', () => {
+    const js = findReads(maskComments(readFileSync(join(ROOT, file), 'utf8')), repoTables).map((r) => r.js);
+    for (const table of tables) expect(js, `${table} read`).toContain(table);
+  });
+
+  it('and reports nothing, with no baseline and no deferral in the way', () => {
+    const raw = readFileSync(join(ROOT, file), 'utf8');
+    expect(analyzeSource(file, raw, repoTables, [], ROOT).violations, file).toEqual([]);
+    // The entry is gone, so nothing in the ledger can be covering this directory.
+    expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/unsubscribe');
+  });
+
+  it('renaming the context call brings all three findings back', () => {
+    // Non-vacuity, the same shape as #3196/#3197 above: the analyzer binds a
+    // callback parameter by the NAME of the context helper that owns it, so a
+    // route that quietly drops `withUnsubscribeContactContext` for a lookalike
+    // loses the privilege and not the report.
+    const raw = readFileSync(join(ROOT, file), 'utf8')
+      .replace(/withUnsubscribeContactContext\(/g, 'noteUnsubscribeContactContext(');
+    const offenders = analyzeSource(file, raw, repoTables, [], ROOT).violations
+      .filter((x) => tables.includes(x.table));
+    expect(offenders.map((x) => x.table).sort(), file).toEqual([...tables].sort());
+    expect(offenders.map((x) => x.problem).join('\n'), file)
+      .toMatch(/is not bound by a context-establishing call|the bare pool/);
+  });
 });
