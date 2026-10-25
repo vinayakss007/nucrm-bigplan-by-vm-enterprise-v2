@@ -663,8 +663,8 @@ export function buildTargets(root: string): string[] {
  * is the #2446 bug — most of the 114 measured here are a different question:
  * `app/api/cron/*` iterates tenants deliberately (#2539's lock work, #2540's
  * backup role), `app/api/webhooks/*` authenticates by signing secret and must
- * resolve a tenant from a provider payload, and `auth/oauth`, `auth/sso` and
- * `unsubscribe` all redeem a credential before a tenant is known — which is
+ * resolve a tenant from a provider payload, and `auth/sso` and `unsubscribe`
+ * redeem a credential before a tenant is known — which is
  * #3102's open decision about the privilege shape for pre-auth reads, not a
  * missing `withTenantContext()` call. Claiming them as #2446 breaks would be a
  * false alarm; pretending the guard cannot see them would re-open the hole
@@ -691,6 +691,15 @@ export function buildTargets(root: string): string[] {
  * rot. What #3195 did NOT do is invent the aggregate privilege the directory
  * wanted: the CRM counts are out of the scrape, not silently zero, and the
  * privilege shape stays #3102's decision.
+ *
+ * `app/api/auth/oauth` left the ledger from the other direction — bound rather than
+ * removed-from-scope — and it took two issues to do it. #3186 measured 2 findings
+ * there; #3225 wrapped `/token`'s client read and its grant writes and left `/revoke`'s
+ * identical read standing at 1; #3231 wrapped that read in the same
+ * `withOAuthClientLookupContext` and gave `oauth_tokens` the `access_token` claim arm
+ * the entry said had to exist first. The entry's own rule — an exemption that excuses
+ * nothing is itself a finding — is what turned it red, and deleting it is the honest
+ * green.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -715,19 +724,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'which is the pre-auth credential-privilege decision #3102 still holds open; no tenant GUC '
       + 'exists to set before that resolution happens.',
     maxFindings: 44,
-  },
-  {
-    dir: 'app/api/auth/oauth',
-    deferredTo: '#3231',
-    why: 'One read left, and it is not the token endpoint\'s: `revoke/route.ts:40` authenticates a '
-      + 'client with the same contextless `oauthClients` read #3225 bound on `/token`. Measured as the '
-      + 'application role, 0 rows with no context and 1 row under 0136\'s `app.oauth_client_id` arm, so '
-      + '/token\'s own read is bound now (2 -> 1) and what still excuses this one is #3231\'s missing '
-      + 'privilege: no `oauth_tokens` arm matches on `access_token` at all, so `/revoke`\'s access-token '
-      + 'and no-hint branches cannot retire a row however the route is wrapped. Setting a context here '
-      + 'before that arm exists would still leave the endpoint half-dead, and inventing the arm is '
-      + '#3231\'s call, not this guard\'s.',
-    maxFindings: 1,
   },
   {
     dir: 'app/api/auth/sso',

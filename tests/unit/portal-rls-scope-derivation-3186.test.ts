@@ -170,9 +170,14 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
   });
 
   it('prefixes do not overlap: one finding, one deferral', () => {
-    const { kept, deferred } = applyDeferrals([v('app/api/auth/oauth/token/route.ts')], SCOPE_DEFERRALS);
-    expect(kept.filter((k) => k.file === 'app/api/auth/oauth/token/route.ts')).toEqual([]);
-    expect(deferred.filter((d) => d.dir === 'app/api/auth/oauth').map((d) => d.count)).toEqual([1]);
+    // The nested entry is the interesting one: `app/api/tenant/plugins/webhook` sits
+    // inside `app/api/tenant`, which is in scope unconditionally, so a finding there has
+    // to land on exactly one count and not be claimed twice. (#3186 wrote this against
+    // `app/api/auth/oauth`, which #3225 and #3231 bounded out of the ledger — see the
+    // note above SCOPE_DEFERRALS.)
+    const { kept, deferred } = applyDeferrals([v('app/api/tenant/plugins/webhook/callback/route.ts')], SCOPE_DEFERRALS);
+    expect(kept.filter((k) => k.file === 'app/api/tenant/plugins/webhook/callback/route.ts')).toEqual([]);
+    expect(deferred.filter((d) => d.dir === 'app/api/tenant/plugins/webhook').map((d) => d.count)).toEqual([1]);
   });
 
   it('each live deferral sits EXACTLY on its pin — growth and rot both fail', async () => {

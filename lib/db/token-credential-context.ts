@@ -156,21 +156,21 @@ export async function withOAuthClientLookupContext<T>(
 /**
  * Mark the transaction as issuing a pre-auth credential token.
  *
- * `password_resets`, `email_verifications` and `oauth_codes` each carry only
- * `*_user_own` policies keyed on app.current_user — a value that does not exist
- * before a user has logged in. Pre-auth flows (password reset request, email
- * verification, OAuth code issuance) cannot insert credential rows under those
- * policies, and the claim/consume UPDATEs (marking deleted_at / used_at) match
- * zero rows silently.
+ * `password_resets`, `email_verifications`, `oauth_codes` and `oauth_tokens` carry only
+ * `*_user_own` policies keyed on app.current_user — a value that does not exist before a
+ * user has logged in. Pre-auth flows (password reset, email verification, and the OAuth
+ * code/token issuance, rotation and revocation) cannot write their rows under those
+ * policies: a claim UPDATE or a retirement DELETE matches zero rows, silently.
  *
- * `app.token_issue` admits INSERT and UPDATE on exactly those three tables,
+ * `app.token_issue` admits those writes on exactly those four tables — 0134/0135 for
+ * the first three, 0136 for the refresh rotation, 0137 for an access-token revocation —
  * gated by each policy's own freshness / consumed-flag conditions. It is
  * deliberately NOT `app.auth_lookup`: that GUC means "this request is doing a
  * credential lookup" (SELECT only); a claim is a mutation. Mixing them would
  * let a lookup context also write.
  *
- * Set for the shortest possible sequence — the INSERT or UPDATE that creates
- * or consumes the credential — and cleared on connection release by both reset
+ * Set for the shortest possible sequence — the INSERT, UPDATE or DELETE that creates,
+ * consumes or retires the credential — and cleared on connection release by both reset
  * lists (`lib/db/pool.ts`, `lib/db/request-connection.ts`).
  *
  * `scope` says which credential the write is about, and it is not decoration.

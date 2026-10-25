@@ -362,3 +362,67 @@ describe('0136 spends the GUCs the helpers above set (#3225)', () => {
     expect(down).not.toMatch(/CREATE POLICY/);
   });
 });
+
+describe('0137 gives the same slot the access column (#3231)', () => {
+  // 0136 left `oauth_tokens` with no arm matching on `access_token`, so the endpoint
+  // that exists to revoke one had nothing to set *into*. These are 0136's refresh pair
+  // with the other column named — which is the whole claim this file makes, so it is
+  // read off the shipped SQL rather than restated.
+  const up = readFileSync(join(ROOT, 'drizzle/migrations/0137_pre_auth_oauth_revoke.sql'), 'utf8');
+  const down = readFileSync(join(ROOT, 'drizzle/migrations/0137_pre_auth_oauth_revoke.down.sql'), 'utf8');
+
+  function arm(name: string): string {
+    const m = new RegExp(`CREATE POLICY "${name}" ON "[a-z_]+"([\\s\\S]*?);`, 'g').exec(up);
+    if (!m) throw new Error(`policy ${name} not found in 0137`);
+    return m[1]!;
+  }
+
+  const CRED = `current_setting('app.token_credential', true)`;
+
+  it('is registered in the drizzle journal', () => {
+    const journal = JSON.parse(
+      readFileSync(join(ROOT, 'drizzle/migrations/meta/_journal.json'), 'utf8'),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const entry = journal.entries.find((e) => e.tag === '0137_pre_auth_oauth_revoke');
+    expect(entry).toBeDefined();
+    expect(entry!.idx).toBe(137);
+  });
+
+  it.each(['oauth_tokens_access_claim_read', 'oauth_tokens_access_claim'])('%s claims the presented row only while it is live', (name) => {
+    const body = arm(name);
+    expect(body).toContain(`app.token_issue`);
+    expect(body).toContain(`"access_token" = ${CRED}`);
+    expect(body).toMatch(/expires_at > now\(\)/i);
+    // The half that makes the arm narrow rather than wide: the credential is compared
+    // to a GUC, never to a column of its own row, and no tenant or user slot appears —
+    // a revoke request has no tenant, which is what 0136's client lookup discovered.
+    expect(body).not.toMatch(/app\.(current_user|current_tenant|oauth_client_id)/);
+  });
+
+  it('names the access column and not the refresh one', () => {
+    // The two arms are the pair that has to stay distinguishable: an arm keyed on both
+    // columns would let one presented string reach two rows, which is exactly what the
+    // no-hint branch's `deletedCount` reduce is counting on not happening.
+    expect(arm('oauth_tokens_access_claim')).not.toContain('"refresh_token"');
+    const refresh = readFileSync(join(ROOT, 'drizzle/migrations/0136_pre_auth_oauth_rls.sql'), 'utf8');
+    expect(refresh).not.toMatch(/"access_token" = current_setting\('app\.token_credential'/);
+  });
+
+  it('the DELETE arm carries no WITH CHECK', () => {
+    // Measured, not stylistic: a DELETE has no WITH CHECK clause to fail, so a claim
+    // that matches nothing is `DELETE 0` — the silent zero-row write this issue is
+    // about. The route distinguishes revoked from not-revoked on that count alone, so
+    // the count being the DELETE's own is the assertion.
+    const body = arm('oauth_tokens_access_claim');
+    expect(body).toContain('FOR DELETE');
+    expect(body).toContain('USING');
+    expect(body).not.toContain('WITH CHECK');
+  });
+
+  it('the down migration drops both arms and creates none', () => {
+    for (const name of ['oauth_tokens_access_claim', 'oauth_tokens_access_claim_read']) {
+      expect(down, `${name} must be retired on the way down`).toContain(`DROP POLICY IF EXISTS "${name}"`);
+    }
+    expect(down).not.toMatch(/CREATE POLICY/);
+  });
+});

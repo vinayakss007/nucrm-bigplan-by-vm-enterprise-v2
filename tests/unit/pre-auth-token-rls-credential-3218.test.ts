@@ -20,10 +20,14 @@
  * of a call site that forgets the argument is exactly the second bullet above:
  * zero rows, "invalid or expired token", forever. So the recorder below does not
  * assert the SQL text — it asserts that the value handed to the privilege is the
- * value the query is matching on, for each of the five redemption flows.
+ * value the query is matching on, for each of the redemption flows below.
  *
  * `app.token_retire_user` gets the same treatment for the one write that has no
  * single credential to name: retiring a user's outstanding tokens (#3075).
+ *
+ * #3225 and #3231 extended the same recorder to the two OAuth endpoints, which had no
+ * context of any kind: `/token`'s client read, code exchange and refresh rotation, and
+ * `/revoke`'s client read and its two-hint retirement.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
@@ -361,6 +365,84 @@ describe('oauth token route names the authorization code', () => {
     const claim = contexts().find((c) => c.helper === 'setTokenIssueContext');
     expect(claim, 'the rotation DELETE had no token_issue context at all before #3225').toMatchObject({ credential: RT });
     expect(claim!.retireUser).toBeUndefined();
+  });
+});
+
+// #3231: `/revoke` is the sibling endpoint, and until this issue it set neither
+// privilege — the client read answered zero rows (401 on a correct secret) and the
+// deletes were silent zero-row writes. The two contexts below are what the route now
+// has to open, in that order, and the credential has to be the string the caller
+// presented rather than anything the route derived from it.
+describe('oauth revoke route names the client and the token it is retiring', () => {
+  const ACCESS = 'access-token-value';
+  const REFRESH = 'refresh-token-value';
+
+  function revokePost(fields: Record<string, string>) {
+    return new Request('http://localhost/api/auth/oauth/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: 'c-1', client_secret: 's-1', ...fields }).toString(),
+    }) as unknown as NextRequest;
+  }
+
+  beforeEach(() => {
+    H.state.rows.oauth_clients = [{ id: 'client-uuid', clientSecret: 's-1' }];
+  });
+
+  it('the client read runs first and is named by the client id, never as a credential', async () => {
+    const { POST } = await import('../../app/api/auth/oauth/revoke/route');
+    expect((await POST(revokePost({ token: ACCESS, token_type_hint: 'access_token' }))).status).toBe(200);
+
+    const clientRead = contexts().filter((c) => c.helper === 'withOAuthClientLookupContext');
+    expect(clientRead, 'the read that authenticates the client had no context before #3231').toHaveLength(1);
+    expect(clientRead[0]!.clientId).toBe('c-1');
+    expect(contexts().indexOf(clientRead[0]!)).toBe(0);
+    for (const c of contexts()) {
+      expect(c.credential, 'a client id is not a bearer value').not.toBe('c-1');
+    }
+  });
+
+  it.each([
+    ['access_token', ACCESS],
+    ['refresh_token', REFRESH],
+  ])('token_type_hint=%s retires inside a context naming the presented token', async (hint, value) => {
+    const { POST } = await import('../../app/api/auth/oauth/revoke/route');
+    await POST(revokePost({ token: value, token_type_hint: hint }));
+
+    const issue = contexts().filter((c) => c.helper === 'withTokenIssueContext');
+    expect(issue).toHaveLength(1);
+    expect(issue[0]!.credential).toBe(value);
+    // A revocation is one row, not a user's whole grant history: the wider by-user
+    // slot stays closed here, as it does for the token endpoint's rotation.
+    expect(issue[0]!.retireUser).toBeUndefined();
+
+    const deletes = opsFor('oauth_tokens', 'delete');
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.params).toContain(value);
+  });
+
+  it('with no hint, one context covers both deletes and each binds the same presented value', async () => {
+    // 0137's whole argument in call-site form: the route cannot know which column the
+    // string lives in, so it opens exactly one credential context and lets the two arms
+    // compete. Two contexts, or a second GUC, would mean the branch stopped being one
+    // claim about one value.
+    const { POST } = await import('../../app/api/auth/oauth/revoke/route');
+    await POST(revokePost({ token: ACCESS }));
+
+    expect(contexts().filter((c) => c.helper === 'withTokenIssueContext')).toHaveLength(1);
+    const deletes = opsFor('oauth_tokens', 'delete');
+    expect(deletes, 'both halves of the no-hint branch ran').toHaveLength(2);
+    for (const d of deletes) expect(d.params).toContain(ACCESS);
+    expect(new Set(deletes.map((d) => d.sql))).toHaveLength(2);
+  });
+
+  it('a bad secret answers 401 without ever opening the write privilege', async () => {
+    const { POST } = await import('../../app/api/auth/oauth/revoke/route');
+    const res = await POST(revokePost({ client_secret: 'wrong', token: ACCESS }));
+    expect(res.status).toBe(401);
+
+    expect(contexts().some((c) => c.helper.includes('TokenIssue')), 'a refusal must not reach the write context').toBe(false);
+    expect(opsFor('oauth_tokens', 'delete')).toHaveLength(0);
   });
 });
 
