@@ -49,8 +49,9 @@ carried one policy (`*_user_own`, requiring `app.current_user = user_id`), so an
 `INSERT` raised 42501, a `SELECT` returned zero rows, and the tombstone `UPDATE`
 that consumes a token matched nothing **silently**. That is migrations
 `0134_pre_auth_token_rls.sql` (#3102), `0135_pre_auth_token_rls_narrow.sql`
-(#3218/#3102) and `0136_pre_auth_oauth_rls.sql` (#3225/#3230), and across the
-three they added **five** GUCs to the vocabulary: `app.auth_lookup`,
+(#3218/#3102), `0136_pre_auth_oauth_rls.sql` (#3225/#3230) and
+`0137_pre_auth_oauth_revoke.sql` (#3231/#3236), and across the four they added
+**five** GUCs to the vocabulary: `app.auth_lookup`,
 `app.token_issue`, `app.token_credential`, `app.token_retire_user` and
 `app.oauth_client_id`. All five are in the checkout reset list — see the
 `RESET_TENANT_GUCS_SQL` bullet above, which is what makes them safe to hold.
@@ -138,10 +139,49 @@ rotation path. Four details a rebuild will get wrong:
   forever, rotation never happened, and #3075's replay defence was simply not
   being enforced on this path.
 
+**0137 is that same pair pointed at the other column** — `POST /api/auth/oauth/revoke`
+(`app/api/auth/oauth/revoke/route.ts`, the RFC 7009 sibling of `/token`). It installs
+`oauth_tokens_access_claim` (DELETE) and `oauth_tokens_access_claim_read` (SELECT),
+each `app.token_issue` + `access_token = current_setting('app.token_credential', true)`
++ `expires_at > now()` — 0136's refresh arms with one name changed. Four things it
+settles for a rebuild:
+
+- **It adds no GUC, and that is a decision, not an oversight.** The rule from #3225
+  was "a second credential *kind* gets its own slot". An access token is bearer
+  material in exactly the way a refresh token is, so it shares `app.token_credential`
+  and the two arms differ only in the column they compare. The client id got its own
+  GUC because it is *not* bearer material. Key the slot off what the value is used
+  for, not off which table it is stored in.
+- **One presented value can feed two claim arms at the same time.** With no
+  `token_type_hint`, `/revoke` takes one opaque string and tries both columns
+  (`route.ts:98` and `:105`, inside a single `withTokenIssueContext` at `:111`).
+  Whichever column actually holds the string admits the row; the other arm is a
+  `DELETE 0`, not an error — a DELETE has no `WITH CHECK`, only the `USING` filter
+  that decides which rows are visible to be deleted. Both arms can therefore stay
+  open at once and neither widens the other, because each still names exactly one
+  value.
+- **The read arm is there for the same reason 0136 needed one.** A DELETE is gated
+  by the table's SELECT policies and its `RETURNING` is filtered by them too, so
+  `oauth_tokens_access_claim` alone would match nothing (`0135`'s header carries the
+  measurement).
+- **Before 0137, `/revoke` had never revoked an access token under FORCE RLS.** Its
+  client read answered `401 invalid_client` for a correct id and secret — the #3225
+  failure again — and once that read was bound, the delete still matched zero rows.
+  The handler reports `deletedCount > 0`, so it returned
+  `{"ok":true,"revoked":false}` over a token that was still live and still minting
+  access tokens. No context the route could set would have fixed that: there was no
+  arm to set *into*, which is why this one needed a migration and not a helper.
+  `expires_at` was the only thing retiring access
+  tokens. An **expired** row is still deliberately not revocable, mirroring 0136's
+  live-only rotation claim: an expired token is already unusable, and an arm that
+  admitted dead rows would let one presented string reach the whole grant history of
+  a client.
+
 `tests/integration/pre-auth-route-redemption-rls-3222.test.ts` and
 `tests/unit/pre-auth-token-rls-credential-3218.test.ts` pin the 0134/0135
-halves; 0136's own assertions ship with it (`0136_pre_auth_oauth_rls.sql`,
-#3225/#3230).
+halves; 0136's and 0137's own assertions ship with them
+(`0136_pre_auth_oauth_rls.sql`, #3225/#3230, and
+`0137_pre_auth_oauth_revoke.sql`, #3231/#3236).
 
 ### Super-admin scope — the deliberate asymmetry
 

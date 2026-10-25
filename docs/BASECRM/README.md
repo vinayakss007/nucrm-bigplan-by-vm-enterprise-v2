@@ -87,7 +87,12 @@ A "base CRM" that violates any of them is not this app:
   no-liveness `*_token_claim_read` arms. 0136 extends both to the OAuth
   (`oauth_clients`, `oauth_tokens`) and adds a **separate** credential slot for
   the client id (`app.oauth_client_id`) — never reuse `app.token_credential` for
-  it, or a client assertion satisfies a bearer predicate. See 03 § 1a.
+  it, or a client assertion satisfies a bearer predicate. 0137 is the mirror
+  lesson: an access token *is* bearer material, so it reuses
+  `app.token_credential` and the arms differ only in the column named
+  (`refresh_token` vs `access_token`) — which is how one presented string can
+  serve two claim arms at once, since a non-matching `DELETE` is zero rows and not
+  an error. See 03 § 1a.
 
 ## Provenance
 
@@ -98,8 +103,10 @@ register drift), #2654/#2655 (settings fetch + CI enforcement), and the live
 acceptance run 40/40 (nonce `AGLXXJ`). Line numbers are `main`-head era and
 will drift; the file references and the invariants are the durable content.
 
-**Re-drilled 2026-10-25 against `main = 868681d91`, then re-pinned against
-`main = 854424749` (#3232).** All 215 backticked file references were resolved
+**Re-drilled 2026-10-25 against `main = 868681d91`, re-pinned against
+`main = 854424749` (#3230 merged), then extended against `main = 7330f2105`
+(#3236 merged, which installs 0137).** All 215 backticked file references were
+resolved
 against the tree: the 14 migration citations (`0037:238`, `0039:12`,
 `0054:13/147/263`, `0088:74/413/485/493`, `0127:50/59`) are exact, and the set was
 corrected on five that had moved —
@@ -111,12 +118,17 @@ auth-context helpers that left `lib/db/rls.ts` for
 `lib/.../resolve-stage.ts`. Two invariants that landed *after* the first edition
 were absent from it and are now stated above: the two-sided soft delete (#3224,
 fixed by #3227 — merged; #3228, fixed by #3229 — open) and pre-auth credential
-naming (0134, 0135, #3102, #3218).
+naming (0134/0135 → #3102/#3218, 0136 → #3225/#3230, 0137 → #3231/#3236).
 
 The re-drill ran *while* #3230 was landing, so it also proved the workaround:
 that PR shifted the `RESET_TENANT_GUCS_SQL` constant three lines further down
 `request-connection.ts` (and its call site four), grew `rls.ts` 337→339 lines,
-added two helpers, and added one new GUC.
+added two helpers, and added one new GUC. #3236 then moved **nothing** that this
+set cites: it rewrote a doc comment in `lib/db/token-credential-context.ts`
+(18 lines, all inside the comment above `setTokenIssueContext`) and every helper
+number in 03 § 1a survived, while the *route* it rewrote moved the register's
+OAuth pointers by 14 and 8 lines. That is the symbol rule paying for itself
+twice in one day.
 **Cite the symbol** (`RESET_TENANT_GUCS_SQL`, `dealQuerySchema`,
 `withAuthLookupContext`) in preference to a bare number when you re-pin — the
 register had the same lesson as #3201. Where a number is unavoidable this set

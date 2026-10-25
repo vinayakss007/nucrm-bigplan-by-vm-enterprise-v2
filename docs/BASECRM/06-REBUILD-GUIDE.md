@@ -77,7 +77,7 @@ handler trusts "the app filters by tenant".
    checkout into an unrelated request (#2446).
 5. Pre-auth credential redemption (03 § 1a): `password_resets`,
    `email_verifications`, `oauth_codes`, `oauth_clients` and `oauth_tokens` need
-   INSERT/SELECT/UPDATE policies that do
+   INSERT/SELECT/UPDATE/DELETE policies that do
    not depend on an authenticated user, and **each arm must name the credential**
    (`app.token_credential` compared to the table's token column) — a boolean
    `app.auth_lookup` alone is a cross-tenant token read, which is 0134's bug that
@@ -87,11 +87,17 @@ handler trusts "the app filters by tenant".
    cannot see its own row updates zero rows and the route reports "invalid token".
    A second credential *kind* in the same request gets its own GUC: 0136's
    `oauth_clients_client_lookup` keys on `app.oauth_client_id` rather than
-   reusing the bearer slot. And the read arm's liveness condition follows the
+   reusing the bearer slot. A second **column** holding the same kind does not:
+   0137's access-token arms are 0136's refresh arms with `access_token` named,
+   still on `app.token_credential`, which is what lets one presented string serve
+   both halves of a no-hint `DELETE … WHERE refresh_token = $1` / `… WHERE
+   access_token = $1` pair — a non-matching DELETE claims zero rows and is not an
+   error, so neither arm widens the other. And the read arm's liveness condition
+   follows the
    claim: a tombstone `UPDATE` needs the no-liveness arm, a `DELETE` rotation can
    keep `expires_at > now()`.
    Model: `0134_pre_auth_token_rls.sql`, `0135_pre_auth_token_rls_narrow.sql`,
-   `0136_pre_auth_oauth_rls.sql`.
+   `0136_pre_auth_oauth_rls.sql`, `0137_pre_auth_oauth_revoke.sql`.
 6. **Named platform policies** only where genuinely needed (users, tenants,
    product_templates, login_blocks — 03 § asymmetry). Do **not** add
    super-admin bypass to deals/leads/contacts/companies/tasks/members/roles.
