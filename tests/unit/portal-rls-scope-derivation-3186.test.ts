@@ -21,7 +21,8 @@
  * question — cron iterates tenants deliberately (#2539), webhooks authenticate
  * by signing secret and must resolve a tenant from a provider payload, and
  * `sso` acts on a credential that grants no row-level privilege in the shipped
- * policy set (#3102). Calling those #2446 breaks would
+ * policy set (#3102, whose three still-deferred surfaces are tracked by #3246). Calling
+ * those #2446 breaks would
  * be a false alarm; hiding them would re-open the hole. So each is deferred BY
  * DIRECTORY and pinned by a COUNT that may only go down.
  *
@@ -142,6 +143,22 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
       );
     }
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
+  });
+
+  it('names a LIVE tracker for every deferred class (#3246)', () => {
+    // `verifyDeferral` checks the SHAPE of a pointer (`/^#\d+$/`) and nothing checks
+    // that the issue behind it is still open. That is how three entries went on
+    // citing #3102 after it closed COMPLETED on 2026-10-24: the count ratchet stayed
+    // honest while the pointer stopped describing live work — a 44/44 exemption can
+    // sit at its ceiling forever behind a citation nobody is holding. The census is
+    // pinned so a silent re-point is a failing assertion, not a two-word diff.
+    expect(SCOPE_DEFERRALS.map((d) => [d.dir, d.deferredTo, d.maxFindings])).toEqual([
+      ['app/api/cron', '#2539', 59],
+      ['app/api/webhooks', '#3246', 44],
+      ['app/api/auth/sso', '#3246', 2],
+      ['app/api/tenant/plugins/webhook', '#3246', 1],
+    ]);
+    expect(SCOPE_DEFERRALS.map((d) => d.deferredTo)).not.toContain('#3102');
   });
 
   it('rejects a reason too short to argue with, a non-issue, a rooted dir, and a zero pin', () => {
