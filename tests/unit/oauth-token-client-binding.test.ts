@@ -24,6 +24,12 @@ const harness = vi.hoisted(() => {
     // conditional claims with RETURNING; tests set this to [] to simulate a
     // concurrent redemption that won the claim first.
     claimRows: [{ id: 'code-1', userId: 'user-1', scope: 'crm:read' }] as Record<string, unknown>[],
+    // Every `insert(...).values(v)` the route ran, with the values it was handed.
+    // #3225 removed the INSERT's `.returning()` (RETURNING is filtered by the table's
+    // SELECT policies, so the route returns what it generated rather than reading it
+    // back), which means the only way to check the response names the stored row is to
+    // look at the row.
+    inserts: [] as Record<string, unknown>[],
   };
   const inject = { render: null as null | ((f: SQL) => { sql: string; params: unknown[] }) };
 
@@ -60,9 +66,12 @@ const harness = vi.hoisted(() => {
   };
 
   const insertChain = () => ({
-    values: () => ({
-      returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }]),
-    }),
+    values: (v: Record<string, unknown>) => {
+      state.inserts.push(v);
+      return {
+        returning: () => Promise.resolve([{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }]),
+      };
+    },
   });
 
   const tx = () => ({
@@ -112,6 +121,7 @@ function whereFor(table: string) {
 describe('POST /api/auth/oauth/token — client binding (RFC 6749 §4.1.3)', () => {
   beforeEach(() => {
     harness.state.whereQueries = [];
+    harness.state.inserts = [];
     harness.state.claimRows = [{ id: 'code-1', userId: 'user-1', scope: 'crm:read' }];
     harness.state.rows = {
       oauth_clients: [{ id: CLIENT_A_INTERNAL, clientSecret: CLIENT_SECRET }],
@@ -173,12 +183,16 @@ describe('POST /api/auth/oauth/token — client binding (RFC 6749 §4.1.3)', () 
     const res = await post({ ...CREDENTIALS, grant_type: 'authorization_code', code: 'c-1' });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      access_token: 'at-new',
-      refresh_token: 'rt-new',
-      scope: 'crm:read',
-      token_type: 'Bearer',
-    });
+    const body = await res.json() as Record<string, unknown>;
+    // #3225: the minted pair is generated before the INSERT and never read back, so
+    // the assertion that matters is that the response and the stored row are the same
+    // token — not that either equals a fixture string.
+    expect(body.token_type).toBe('Bearer');
+    expect(body.scope).toBe('crm:read');
+    expect(body.access_token).toBe(harness.state.inserts[0]?.accessToken);
+    expect(body.refresh_token).toBe(harness.state.inserts[0]?.refreshToken);
+    expect(typeof body.access_token).toBe('string');
+    expect(body.access_token).not.toBe(body.refresh_token);
   });
 
   it('still rejects a mismatched client secret before any grant lookup', async () => {

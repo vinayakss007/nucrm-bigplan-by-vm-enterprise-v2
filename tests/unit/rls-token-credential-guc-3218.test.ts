@@ -26,6 +26,13 @@
  * The fake `db` records the rendered SQL of every `execute`, so the assertions
  * are about what Postgres is asked to do. Drizzle renders `set_config($1, $2,
  * $3)` with the values as parameters, hence reading `sqlToQuery().params`.
+ *
+ * #3225 extends the same three properties to the OAuth client lookup: 0136's
+ * `oauth_clients_client_lookup` arm compares `client_id` against a new
+ * `app.oauth_client_id`, and it is a separate GUC from `app.token_credential`
+ * precisely because one names a public identifier and the other carries bearer
+ * material — so the client-lookup setter is pinned for clearing the credential
+ * slot, not just for setting its own.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -77,6 +84,8 @@ import {
   setAuthLookupContext,
   withAuthLookupContext,
   setAuthResolutionContext,
+  setOAuthClientLookupContext,
+  withOAuthClientLookupContext,
   setTokenIssueContext,
   withTokenIssueContext,
 } from '@/lib/db/rls';
@@ -220,11 +229,60 @@ describe('setTokenIssueContext — a claim names its credential, a retirement na
   });
 });
 
+describe('the OAuth client lookup names the client it is about (#3225)', () => {
+  it('sets auth_lookup + oauth_client_id and clears token_credential in one statement', async () => {
+    await setOAuthClientLookupContext(fakeTx(), 'cli-1');
+    expect(H.calls).toHaveLength(1);
+    expect(gucMap()).toMatchObject({
+      'app.auth_lookup': 'true',
+      'app.oauth_client_id': 'cli-1',
+      'app.token_credential': '',
+    });
+  });
+
+  it('does not put the client id in the bearer-credential slot', async () => {
+    // 0136 keeps the two apart on purpose: app.token_credential holds a reset-token
+    // hash, a verification hash, a code or a refresh token, and the credential-table
+    // arms all compare against it. A client id is public, and a context opened to
+    // authenticate one client must not also be able to name a row in
+    // password_resets / email_verifications / oauth_codes.
+    await setOAuthClientLookupContext(fakeTx(), 'cli-2');
+    expect(gucMap()['app.token_credential']).toBe('');
+    expect(gucMap()['app.token_credential']).not.toBe('cli-2');
+  });
+
+  it('scopes both settings to the transaction (is_local = true)', async () => {
+    await setOAuthClientLookupContext(fakeTx(), 'cli-3');
+    for (const c of setConfigs(last())) expect(c.local).toBe(true);
+  });
+
+  it('refuses an empty clientId rather than opening a context that names no client', async () => {
+    await expect(setOAuthClientLookupContext(fakeTx(), '')).rejects.toThrow(/empty clientId/);
+    expect(H.calls).toHaveLength(0);
+  });
+
+  it('withOAuthClientLookupContext sets the context before running the read', async () => {
+    let seen = false;
+    const out = await withOAuthClientLookupContext('cli-4', async () => {
+      seen = true;
+      expect(gucMap()).toMatchObject({ 'app.oauth_client_id': 'cli-4', 'app.auth_lookup': 'true' });
+      return 'row';
+    });
+    expect(seen).toBe(true);
+    expect(out).toBe('row');
+    expect(H.calls).toHaveLength(1);
+  });
+});
+
 describe('the new GUCs are on both connection-reset lists', () => {
   // #2446's failure mode is a privilege GUC surviving a pool checkout. These two
   // lists are the only thing between that and a leak, and neither is derived
   // from the setters, so they are read from source here.
-  const NEW_GUCS = ['app.token_credential', 'app.token_retire_user'];
+  //
+  // #3225 adds app.oauth_client_id: the client id is not a secret, but the row it
+  // selects carries a client_secret, so a stale value would pick which client's
+  // secret the next request on that connection is comparing against.
+  const NEW_GUCS = ['app.token_credential', 'app.token_retire_user', 'app.oauth_client_id'];
 
   it.each(NEW_GUCS)('%s is reset by lib/db/pool.ts', (guc) => {
     expect(readFileSync(join(ROOT, 'lib/db/pool.ts'), 'utf8')).toContain(guc);
@@ -232,5 +290,75 @@ describe('the new GUCs are on both connection-reset lists', () => {
 
   it.each(NEW_GUCS)('%s is reset by lib/db/request-connection.ts', (guc) => {
     expect(readFileSync(join(ROOT, 'lib/db/request-connection.ts'), 'utf8')).toContain(guc);
+  });
+});
+
+describe('0136 spends the GUCs the helpers above set (#3225)', () => {
+  // The helpers are worthless if no policy reads them, and the other half of that —
+  // a policy that reads a GUC no helper writes — is what #3218's file-level guard is
+  // for. These four arms are read from the migration rather than restated, so the
+  // assertions are about the shipped SQL.
+  const up = readFileSync(join(ROOT, 'drizzle/migrations/0136_pre_auth_oauth_rls.sql'), 'utf8');
+  const down = readFileSync(join(ROOT, 'drizzle/migrations/0136_pre_auth_oauth_rls.down.sql'), 'utf8');
+
+  function arm(name: string): string {
+    const m = new RegExp(`CREATE POLICY "${name}" ON "[a-z_]+"([\\s\\S]*?);`, 'g').exec(up);
+    if (!m) throw new Error(`policy ${name} not found in 0136`);
+    return m[1]!;
+  }
+
+  const CLIENT = `current_setting('app.oauth_client_id', true)`;
+  const CRED = `current_setting('app.token_credential', true)`;
+
+  it('is registered in the drizzle journal', () => {
+    // `scripts/check-migration-chain.mjs` compares the up-files against the journal
+    // entries, so a migration that exists only as a .sql file is a chain defect — and
+    // the repo's own convention (#3218 registers 0135 here) is what makes the file
+    // discoverable to a reader looking for the next security migration.
+    const journal = JSON.parse(
+      readFileSync(join(ROOT, 'drizzle/migrations/meta/_journal.json'), 'utf8'),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const entry = journal.entries.find((e) => e.tag === '0136_pre_auth_oauth_rls');
+    expect(entry).toBeDefined();
+    expect(entry!.idx).toBe(136);
+  });
+
+  it('the client lookup is a SELECT arm keyed on the client id, not on a credential', () => {
+    const using = arm('oauth_clients_client_lookup');
+    expect(using).toContain(`app.auth_lookup`);
+    expect(using).toContain(`"client_id" = ${CLIENT}`);
+    // The distinction the helper exists to keep: a client identifier must not be
+    // compared against the bearer slot, where 0135 expects a token hash.
+    expect(using).not.toContain(CRED);
+  });
+
+  it.each(['oauth_tokens_refresh_claim_read', 'oauth_tokens_refresh_claim'])('%s claims the presented row only while it is live', (name) => {
+    const body = arm(name);
+    expect(body).toContain(`app.token_issue`);
+    expect(body).toContain(`"refresh_token" = ${CRED}`);
+    expect(body).toMatch(/expires_at > now\(\)/i);
+  });
+
+  it('the insert arm refuses a token that names no user', () => {
+    // Measured on the force-RLS dev database: a row with `user_id IS NULL` raises
+    // 42501 under this WITH CHECK, which is the point — an access token that belongs
+    // to nobody is a row every later read of this table has to reject.
+    const check = arm('oauth_tokens_token_issue');
+    expect(check).toContain('FOR INSERT');
+    expect(check).toContain('WITH CHECK');
+    expect(check).toMatch(/user_id IS NOT NULL/i);
+    expect(check).toMatch(/expires_at > now\(\)/i);
+  });
+
+  it('the down migration drops all four arms and creates none', () => {
+    for (const name of [
+      'oauth_clients_client_lookup',
+      'oauth_tokens_token_issue',
+      'oauth_tokens_refresh_claim_read',
+      'oauth_tokens_refresh_claim',
+    ]) {
+      expect(down, `${name} must be retired on the way down`).toContain(`DROP POLICY IF EXISTS "${name}"`);
+    }
+    expect(down).not.toMatch(/CREATE POLICY/);
   });
 });

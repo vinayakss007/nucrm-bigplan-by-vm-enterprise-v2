@@ -94,8 +94,12 @@ export function getPinnedClient(): PoolClient | undefined {
 // the pre-auth redemption policies match (it carries credential material, so it is
 // cleared to '' — no hash equals the empty string) and app.token_retire_user names
 // the user whose outstanding tokens a retire write may tombstone.
+// #3225 adds app.oauth_client_id, which names the OAuth client whose row
+// oauth_clients_client_lookup admits — the client id is public but the row it selects
+// carries the client_secret, so a value left on the connection picks a victim's
+// client for whatever request inherits the checkout.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false), set_config('app.token_credential', '', false), set_config('app.token_retire_user', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false), set_config('app.form_lookup_id', '', false), set_config('app.token_issue', '', false), set_config('app.token_credential', '', false), set_config('app.token_retire_user', '', false), set_config('app.oauth_client_id', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).

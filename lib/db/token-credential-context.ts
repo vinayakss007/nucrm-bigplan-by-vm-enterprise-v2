@@ -99,6 +99,61 @@ export async function withAuthLookupContext<T>(
 }
 
 /**
+ * Name an OAuth client to the pre-auth read that authenticates it (#3225).
+ *
+ * `POST /api/auth/oauth/token` starts by reading `oauth_clients` for the presented
+ * `client_id` to verify the `client_secret` against it. That read is authenticated by
+ * a client secret, not by a session or a workspace, so nothing sets
+ * `app.current_tenant` — and `oauth_clients`' only arm was 0088's `tenant_isolation`.
+ * Measured on the local force-RLS dev database as `nucrm_app`: the read returns 0 rows
+ * with no context and 0 rows with `app.auth_lookup` alone, and 1 row once
+ * `app.current_tenant` names the client's own tenant — i.e. the policy, not an absent
+ * row. Every grant the endpoint serves died at that first statement with
+ * `401 invalid_client`, for a correct client id and a correct secret.
+ *
+ * `app.oauth_client_id` is 0136's `oauth_clients_client_lookup` predicate, and it is
+ * deliberately NOT a share of `app.token_credential`: that slot holds bearer material —
+ * a token hash, an authorization code, a refresh token — and is cleared under the rules
+ * written for secrets, while a client id is a public identifier the caller just typed
+ * into a form field. Keeping them apart also means a context opened to authenticate one
+ * client cannot satisfy a credential table's arm, or vice versa.
+ *
+ * `app.auth_lookup` is reused as the privilege flag because that is what it already
+ * means — "this request is doing a pre-auth identity read", SELECT-only, never a write.
+ * `app.token_credential` is cleared in the same statement: this context is about a
+ * client, not about a presented credential, and a value left on the connection by an
+ * earlier request must not authorise it (#2446).
+ */
+export async function setOAuthClientLookupContext(tx: RlsTransaction, clientId: string): Promise<void> {
+  if (!clientId) {
+    throw new Error('[RLS] setOAuthClientLookupContext called with an empty clientId — refusing to open a lookup context that can name no client');
+  }
+  if (isMockClient(tx)) return;
+  await tx.execute(
+    sql`SELECT set_config('app.auth_lookup', 'true', true),
+               set_config('app.token_credential', '', true),
+               set_config('app.oauth_client_id', ${clientId}, true)`
+  );
+}
+
+/**
+ * Look up one `oauth_clients` row by the `client_id` its caller authenticated with.
+ * Keep the callback to the lookup itself, as with the other contexts here: this can
+ * SELECT a row that carries a `client_secret`, and only `id` and that secret have a
+ * reader in the route that calls it.
+ */
+export async function withOAuthClientLookupContext<T>(
+  clientId: string,
+  fn: (tx: RlsTransaction) => Promise<T>
+): Promise<T> {
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
+  return await db.transaction(async (tx) => {
+    await setOAuthClientLookupContext(tx, clientId);
+    return fn(tx);
+  });
+}
+
+/**
  * Mark the transaction as issuing a pre-auth credential token.
  *
  * `password_resets`, `email_verifications` and `oauth_codes` each carry only

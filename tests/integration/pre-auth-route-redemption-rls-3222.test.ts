@@ -39,20 +39,22 @@
  *  - `clearResetToken(userId)` — the by-user retire the #3075 one-live-token rule
  *    depends on: every live reset token of THAT user tombstoned, another user's rows
  *    left live.
- *  - `POST /api/auth/oauth/token`: the code is consumed and an `oauth_tokens` row
- *    exists, and replaying the code is refused. These two cases are in the file but
- *    SKIPPED: running them turned up a separate, larger defect, measured and filed as
- *    #3225 — the endpoint's very first statement, a contextless read of
- *    `oauth_clients` under 0088's `tenant_isolation`, returns zero rows for the
- *    application role, so a correct client secret answers `401 invalid_client`, and
- *    the refresh-rotation `DELETE` is the same silent zero-row write this issue is
- *    about. Un-skipping them is that issue's acceptance criterion.
+ *  - `POST /api/auth/oauth/token`: the code is consumed and the `oauth_tokens` row the
+ *    response names exists, and replaying the code is refused and mints nothing. A
+ *    refresh rotates: the presented row is gone, exactly one live replacement carries
+ *    the response's tokens and the consumed row's scope, and replaying the spent
+ *    refresh token is refused while the replacement stays usable. #3225: these cases
+ *    were written skipped, because the endpoint's very first statement — a contextless
+ *    read of `oauth_clients` under 0088's `tenant_isolation` — returned zero rows for
+ *    the application role, so a correct client secret answered `401 invalid_client` and
+ *    the refresh-rotation `DELETE` was the same silent zero-row write this issue is
+ *    about. 0136 gives both statements a policy that can admit their row.
  *
  * IT READS THE SHIPPED POLICY SET, IT DOES NOT INSTALL ONE
  * --------------------------------------------------------
  * CI provisions its database with `db:sync` + `node scripts/apply-rls-ci.mjs`
- * (`.github/workflows/ci.yml`:176), whose discovery does include `0134` and `0135` —
- * verified against the real corpus, not assumed. So this file probes for `0135`'s arms
+ * (`.github/workflows/ci.yml`:176), whose discovery does include `0134`, `0135` and
+ * `0136` — verified against the real corpus, not assumed. So this file probes for those
  * at load time and, if they are not there, skips with a message naming that command
  * rather than creating the policies itself. #2474's rule in
  * `tests/helpers/rls-probe-role.ts` is the reason: a suite that installs shared,
@@ -63,12 +65,14 @@
  * teardown pulled 0135 out from under the first — seven red tests that had nothing to
  * do with the code under test.
  *
- * `PRE_AUTH_ROUTE_3222_APPLY_MISSING=1` opts into applying `0134` then `0135` (that
- * order, because `0134`'s text re-creates the arms `0135` narrows) and leaves them in
- * place, which is the state CI's provisioning produces anyway. That is the switch for
- * demonstrating the red side: against a database without the arms the suite fails seven
- * tests with `Invalid or expired reset link` / `Invalid or expired verification link`
- * on genuinely valid tokens — the exact silent zero-row write this issue is about.
+ * `PRE_AUTH_ROUTE_3222_APPLY_MISSING=1` opts into applying `0134`, then `0135`, then
+ * `0136` (that order, because `0134`'s text re-creates the arms `0135` narrows) and
+ * leaves them in place, which is the state CI's provisioning produces anyway. That is
+ * the switch for demonstrating the red side: against a database without the arms the
+ * suite fails seven tests with `Invalid or expired reset link` / `Invalid or expired
+ * verification link` on genuinely valid tokens — the exact silent zero-row write this
+ * issue is about — and the OAuth block fails at its first statement, `401
+ * invalid_client` for a correct secret (#3225).
  *
  * Self-skips when no database is reachable or the login role cannot `CREATE ROLE`.
  * Teardown throws rather than swallowing a failed restore (#2455).
@@ -85,12 +89,14 @@ import * as appSchema from '../../drizzle/schema';
 const MIGRATIONS_DIR = join(import.meta.dirname!, '..', '..', 'drizzle', 'migrations');
 const NARROW_FILE = '0135_pre_auth_token_rls_narrow.sql';
 const ISSUE_FILE = '0134_pre_auth_token_rls.sql';
+const OAUTH_FILE = '0136_pre_auth_oauth_rls.sql';
 
 /**
- * The privilege set the three flows depend on, by name — `0135`'s eleven arms. Each is
- * looked up through `pg_policies` by name only, so the suite asserts that the shipped
- * objects are installed without restating what they say (#2455's other half: a test that
- * re-types a policy proves a copy of it, not the migration).
+ * The privilege set the four flows depend on, by name — `0135`'s eleven arms plus
+ * `0136`'s four. Each is looked up through `pg_policies` by name only, so the suite
+ * asserts that the shipped objects are installed without restating what they say
+ * (#2455's other half: a test that re-types a policy proves a copy of it, not the
+ * migration).
  */
 const REQUIRED_ARMS = [
   'password_resets_auth_lookup',
@@ -104,6 +110,12 @@ const REQUIRED_ARMS = [
   'oauth_codes_auth_lookup',
   'oauth_codes_token_claim_read',
   'oauth_codes_token_claim',
+  // #3225 — without these four the token endpoint never reaches a grant: the client
+  // read answers zero rows and the refresh DELETE matches nothing.
+  'oauth_clients_client_lookup',
+  'oauth_tokens_token_issue',
+  'oauth_tokens_refresh_claim_read',
+  'oauth_tokens_refresh_claim',
 ];
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: {} as Record<string, string> }));
@@ -167,21 +179,20 @@ if (probe.reachable && !probe.canMintRole) {
   );
 } else if (!probe.armsApplied && selfApplied) {
   console.warn(
-    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134 then 0135, and leaving them ' +
-    'installed — that is the state `node scripts/apply-rls-ci.mjs` produces, and dropping them ' +
-    'again at teardown is what races a parallel worker (#2474).',
+    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134, 0135 and 0136, and leaving ' +
+    'them installed — that is the state `node scripts/apply-rls-ci.mjs` produces, and dropping ' +
+    'them again at teardown is what races a parallel worker (#2474).',
   );
 } else if (probe.reachable && !probe.armsApplied) {
   console.warn(
-    '[#3222] skipping the route-level RLS suite: this database does not carry 0135\'s arms. ' +
+    '[#3222] skipping the route-level RLS suite: this database does not carry 0135\'s or ' +
+    '0136\'s arms. ' +
     'CI provisions them with `node scripts/apply-rls-ci.mjs` after `db:sync` ' +
     '(.github/workflows/ci.yml:176) — run the same here, or set ' +
     'PRE_AUTH_ROUTE_3222_APPLY_MISSING=1 to let this suite apply them itself.',
   );
 }
 const d = runnable ? describe : describe.skip;
-/** Always-skipped variant, for the cases this file cannot assert yet (#3225). */
-const dBlocked = describe.skip;
 
 const RUN = randomBytes(4).toString('hex');
 /** RLS-bound: no superuser, no BYPASSRLS, owns nothing; run-unique name (#2466). */
@@ -213,6 +224,9 @@ const CLIENT_ID = `3222-client-${RUN}`;
 const CLIENT_SECRET = randomBytes(24).toString('hex');
 const CODE_A = randomBytes(32).toString('hex');
 const CODE_SPENT = randomBytes(32).toString('hex');
+/** The refresh pair: one live row to rotate, one expired row that must only ever be refused. */
+const REFRESH_LIVE = randomBytes(32).toString('hex');
+const REFRESH_EXPIRED = randomBytes(32).toString('hex');
 const OAUTH_TENANT = randomUUID();
 
 const FUTURE = new Date(Date.now() + 3_600_000);
@@ -319,6 +333,7 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     if (selfApplied) {
       await admin.query(readFileSync(join(MIGRATIONS_DIR, ISSUE_FILE), 'utf8'));
       await admin.query(readFileSync(join(MIGRATIONS_DIR, NARROW_FILE), 'utf8'));
+      await admin.query(readFileSync(join(MIGRATIONS_DIR, OAUTH_FILE), 'utf8'));
     }
 
     const oldHash = await (await import('../../lib/auth/session')).hashPassword(OLD_PASSWORD);
@@ -362,6 +377,14 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     await adminDb.insert(appSchema.oauthCodes).values([
       { clientId: CLIENT_UUID, userId: USER_A, code: CODE_A, redirectUri: 'https://client.example.test/cb', scope: 'read', expiresAt: FUTURE },
       { clientId: CLIENT_UUID, userId: USER_A, code: CODE_SPENT, redirectUri: 'https://client.example.test/cb', scope: 'read', expiresAt: FUTURE, usedAt: PAST },
+    ]);
+    // #3225's refresh pair, seeded rather than taken from the code exchange below: the
+    // rotation tests need a row whose scope differs from the one every other fixture
+    // carries, so that a response echoing it proves the DELETE read the row back instead
+    // of the route inventing it.
+    await adminDb.insert(appSchema.oauthTokens).values([
+      { clientId: CLIENT_UUID, userId: USER_A, accessToken: `3222-live-access-${RUN}`, refreshToken: REFRESH_LIVE, scope: 'read write', expiresAt: FUTURE },
+      { clientId: CLIENT_UUID, userId: USER_A, accessToken: `3222-exp-access-${RUN}`, refreshToken: REFRESH_EXPIRED, scope: 'read', expiresAt: PAST },
     ]);
 
     await admin.query(
@@ -564,22 +587,76 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
   });
 
   // ── OAuth: the acceptance criteria for #3225 ───────────────────────────────
-  // These two cases are written and deliberately skipped (`dBlocked`), because the endpoint
-  // they target does not work for the role RLS binds — and that is a separate fix
-  // with its own migration design, not something this suite should pin as correct.
-  // Measured (#3225, on this database as a NOSUPERUSER / NOBYPASSRLS probe role):
+  // Measured before 0136, on this database as a NOSUPERUSER / NOBYPASSRLS probe role:
   //
   //   route-as-written (no context)     SELECT … FROM oauth_clients WHERE client_id = …  -> 0 rows
   //   app.auth_lookup = 'true'          same                                            -> 0 rows
-  //   app.current_tenant = own tenant   same                                            -> 1 row
-  //   app.token_issue + app.token_credential  INSERT INTO oauth_tokens … RETURNING      -> 42501
+  //   app.token_issue + app.token_credential  INSERT INTO oauth_tokens …                 -> 42501
   //   no context                        DELETE FROM oauth_tokens WHERE refresh_token=…   -> 0 rows,
   //                                                                                        row still live
   //
-  // So `POST /api/auth/oauth/token` answers 401 invalid_client for a *correct* secret,
-  // and its refresh rotation is the same silent zero-row write that #3102 shipped for
-  // reset tokens. Un-skip by swapping `dBlocked` for `d` once #3225 lands.
-  dBlocked('POST /api/auth/oauth/token redeems a code under enforced RLS (blocked by #3225)', () => {
+  // So `POST /api/auth/oauth/token` answered 401 invalid_client for a *correct* secret and
+  // its refresh rotation was the same silent zero-row write #3102 shipped for reset tokens.
+  // 0136 gives each of those three statements an arm that can admit its row, and the rest of
+  // this block runs the endpoint over the real pool for the first time.
+  describe('POST /api/auth/oauth/token redeems and rotates under enforced RLS (#3225)', () => {
+    it('the client read names its client, and nothing else', async () => {
+      // The statement the whole endpoint hangs on. 0088's tenant_isolation is the only
+      // arm `oauth_clients` had, and a token exchange has no tenant to name — so
+      // `app.auth_lookup` alone, the flag every other pre-auth lookup uses, still reads
+      // zero rows. 0136's arm compares client_id against app.oauth_client_id, which is
+      // why the helper sets that GUC and not a boolean.
+      const lookupAlone = await asRole(
+        'SELECT id FROM oauth_clients WHERE client_id = $1',
+        { 'app.auth_lookup': 'true' },
+        [CLIENT_ID]);
+      expect(lookupAlone.error).toBeUndefined();
+      expect(lookupAlone.rowCount, 'auth_lookup without a client id must admit no client').toBe(0);
+
+      const named = await asRole(
+        'SELECT id FROM oauth_clients WHERE client_id = $1',
+        { 'app.auth_lookup': 'true', 'app.oauth_client_id': CLIENT_ID },
+        [CLIENT_ID]);
+      expect(named.rowCount, 'the named client is readable').toBe(1);
+
+      const other = await asRole(
+        'SELECT id FROM oauth_clients WHERE client_id = $1',
+        { 'app.auth_lookup': 'true', 'app.oauth_client_id': 'a-client-that-does-not-exist' },
+        ['a-client-that-does-not-exist']);
+      expect(other.rowCount, 'naming a different client admits that row only').toBe(0);
+
+      const flagOff = await asRole(
+        'SELECT id FROM oauth_clients WHERE client_id = $1',
+        { 'app.oauth_client_id': CLIENT_ID },
+        [CLIENT_ID]);
+      expect(flagOff.rowCount, 'the credential alone is not a grant — auth_lookup is').toBe(0);
+    });
+
+    it('the before-state: a refresh claim that names no token deletes nothing', async () => {
+      // Both directions of the miss, on the row the rotation below consumes. Postgres
+      // reports a zero-match DELETE as success with rowCount 0, which the handler read as
+      // `invalid_grant` while the refresh token stayed valid forever. `RETURNING` is the
+      // DELETE's own write count here — rows the SELECT policies cannot see are not
+      // deleted at all — so 0 is the proof nothing moved, and the read-back as the owner
+      // is the proof that 0 came from RLS rather than from an absent row.
+      const noCredential = await asRole(
+        'DELETE FROM oauth_tokens WHERE refresh_token = $1 RETURNING id',
+        { 'app.token_issue': 'true' },
+        [REFRESH_LIVE]);
+      expect(noCredential.error).toBeUndefined();
+      expect(noCredential.rowCount, 'app.token_issue alone names no row').toBe(0);
+
+      const noFlag = await asRole(
+        'DELETE FROM oauth_tokens WHERE refresh_token = $1 RETURNING id',
+        { 'app.token_credential': REFRESH_LIVE },
+        [REFRESH_LIVE]);
+      expect(noFlag.rowCount, 'the token alone is not a grant — app.token_issue is').toBe(0);
+
+      const live = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REFRESH_LIVE]);
+      expect(countOf(live.rows), 'the row is still there for both misses').toBe(1);
+    });
+
     it('exchanges a live code for a stored token', async () => {
       const res = await H.token.POST(formReq({
         grant_type: 'authorization_code', code: CODE_A, client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
@@ -609,6 +686,65 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       const after = await admin.query(
         'SELECT count(*)::int AS n FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID]);
       expect(countOf(after.rows)).toBe(countOf(before.rows));
+    });
+
+    it('rotating a refresh token retires the presented row and stores exactly one replacement', async () => {
+      const before = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID]);
+      const res = await H.token.POST(formReq({
+        grant_type: 'refresh_token', refresh_token: REFRESH_LIVE, client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+      }, nextIp()));
+      const { status, body } = await statusAndBody(res);
+      expect(status, `refresh answered ${JSON.stringify(body)}`).toBe(200);
+      expect(body.refresh_token, 'rotation hands out a new refresh token').not.toBe(REFRESH_LIVE);
+      // 'read write', which only the consumed row carries: the replacement's scope comes
+      // back through the DELETE's RETURNING, and that is filtered by the table's SELECT
+      // policies. A response that read `read` would mean the route had fallen back to
+      // something other than the row it claimed.
+      expect(body.scope, 'the scope is the one the consumed row carried').toBe('read write');
+
+      const gone = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REFRESH_LIVE]);
+      expect(countOf(gone.rows), 'the presented row is retired, not left live').toBe(0);
+      const replacement = await admin.query(
+        'SELECT user_id, scope FROM oauth_tokens WHERE refresh_token = $1',
+        [body.refresh_token as string]);
+      expect(replacement.rows.length, 'the response\'s refresh token is a row, not just a string').toBe(1);
+      expect(String(replacement.rows[0].user_id), 'the replacement is the same user\'s').toBe(USER_A);
+
+      const after = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID]);
+      expect(countOf(after.rows) - countOf(before.rows), 'one row retired, one minted — no doubling').toBe(0);
+    });
+
+    it('refuses a replayed or expired refresh token and touches nothing', async () => {
+      const before = await admin.query(
+        'SELECT id FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID]);
+      for (const [label, token] of [
+        ['already rotated', REFRESH_LIVE],
+        ['expired', REFRESH_EXPIRED],
+      ] as const) {
+        const res = await H.token.POST(formReq({
+          grant_type: 'refresh_token', refresh_token: token, client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+        }, nextIp()));
+        const { status, body } = await statusAndBody(res);
+        expect(status, `${label} refresh token must be refused, answered ${JSON.stringify(body)}`).toBe(400);
+        expect(body.error).toBe('invalid_grant');
+      }
+
+      // A refusal is a refusal both ways: nothing deleted and nothing minted, and in
+      // particular the live replacement the rotation above stored is still the row that
+      // will authenticate the next refresh. #3075's replay defence depends on the spent
+      // row being gone, not on the response being a 400.
+      const after = await admin.query(
+        'SELECT id FROM oauth_tokens WHERE client_id = $1', [CLIENT_UUID]);
+      expect(after.rowCount, 'a refused rotation writes nothing to oauth_tokens').toBe(before.rowCount);
+      const expired = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REFRESH_EXPIRED]);
+      expect(countOf(expired.rows), 'the expired row is refused, not deleted').toBe(1);
+      const spent = await admin.query(
+        'SELECT count(*)::int AS n FROM oauth_tokens WHERE refresh_token = $1', [REFRESH_LIVE]);
+      expect(countOf(spent.rows), 'the rotated row stays retired').toBe(0);
     });
   });
 });

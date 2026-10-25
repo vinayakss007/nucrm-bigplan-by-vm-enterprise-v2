@@ -39,6 +39,8 @@ interface ContextCall {
   helper: string;
   credential?: string;
   retireUser?: string;
+  /** #3225: `oauth_clients` is keyed by the presented client id, not by a bearer value. */
+  clientId?: string;
 }
 
 const H = vi.hoisted(() => {
@@ -96,8 +98,9 @@ const H = vi.hoisted(() => {
       values: (v: unknown) => {
         const name = table[Symbol.for('drizzle:Name')] ?? table._?.name ?? 'unknown';
         state.ops.push({ kind: 'insert', table: name, values: v });
-        // The OAuth token endpoint builds its response from the inserted row, so
-        // an insert has to hand something back.
+        // A row is handed back so a caller that reads its insert still works; since
+        // #3225 the token endpoint does not — RETURNING output is filtered by the
+        // table's SELECT policies, so it returns the values it generated instead.
         const rows = [{ accessToken: 'at-new', refreshToken: 'rt-new', scope: 'crm:read' }];
         return Object.assign(Promise.resolve(rows), { returning: () => Promise.resolve(rows) });
       },
@@ -125,11 +128,12 @@ vi.mock('@/drizzle/db', () => ({ db: H.db }));
 // captured directly, so a call site that drops the argument shows up as an
 // unnamed context rather than as SQL a mock cannot feel.
 vi.mock('@/lib/db/rls', () => {
-  const rec = (helper: string, scope?: { credential?: string; retireUser?: string }) =>
+  const rec = (helper: string, scope?: { credential?: string; retireUser?: string; clientId?: string }) =>
     (H.state.contexts as ContextCall[]).push({
       helper,
       credential: scope?.credential,
       retireUser: scope?.retireUser,
+      clientId: scope?.clientId,
     });
   return {
     withAuthLookupContext: async (fn: (tx: unknown) => Promise<unknown>, credential?: string) => {
@@ -148,6 +152,13 @@ vi.mock('@/lib/db/rls', () => {
     },
     setUserContext: async () => undefined,
     setTenantContext: async () => undefined,
+    // #3225: the client read names a client id, which is not a credential. Recorded in
+    // its own slot so a call site that passed it as `credential` fails the assertion
+    // below rather than looking like a correctly-named lookup.
+    withOAuthClientLookupContext: async (clientId: string, fn: (tx: unknown) => Promise<unknown>) => {
+      rec('withOAuthClientLookupContext', { clientId });
+      return fn(H.tx);
+    },
     withTenantContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
     withSecurityContext: async (fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
     withUserContext: async (_uid: string, fn: (tx: unknown) => Promise<unknown>) => fn(H.tx),
@@ -297,6 +308,7 @@ describe('verify-email route names the verification hash on both halves', () => 
 
 describe('oauth token route names the authorization code', () => {
   const CODE = 'auth-code-value';
+  const RT = 'refresh-token-value';
 
   function tokenPost(fields: Record<string, string>) {
     return new Request('http://localhost/api/auth/oauth/token', {
@@ -317,6 +329,37 @@ describe('oauth token route names the authorization code', () => {
     expect(lookups[0]!.credential).toBe(CODE);
     const claim = contexts().find((c) => c.helper === 'setTokenIssueContext');
     expect(claim).toMatchObject({ credential: CODE });
+    expect(claim!.retireUser).toBeUndefined();
+  });
+
+  // #3225: `oauth_clients` is not a credential table, and the read that authenticates
+  // the client has to be named by the client id it presents. Passing `c-1` through the
+  // credential slot would put a client identifier where 0135's arms expect a bearer
+  // value, and match nothing.
+  it('names the client id on the client read, and never as a credential', async () => {
+    H.state.rows.oauth_clients = [{ id: 'c-1', clientSecret: 's-1' }];
+    H.state.rows.oauth_codes = [{ id: 'code-1', userId: 'user-1', redirectUri: null, scope: 'crm:read', usedAt: null }];
+    const { POST } = await import('../../app/api/auth/oauth/token/route');
+    expect((await POST(tokenPost({ grant_type: 'authorization_code', code: CODE }))).status).toBe(200);
+
+    const clientRead = contexts().filter((c) => c.helper === 'withOAuthClientLookupContext');
+    expect(clientRead).toHaveLength(1);
+    expect(clientRead[0]!.clientId).toBe('c-1');
+    // It runs before anything that could read a grant: with no client row there is no
+    // `client.id` for the code lookup to bind to.
+    expect(contexts().indexOf(clientRead[0]!)).toBe(0);
+    for (const c of contexts()) {
+      expect(c.credential, 'a client id is not a bearer value').not.toBe('c-1');
+    }
+  });
+
+  it('a refresh rotation names the presented refresh token as the credential', async () => {
+    H.state.rows.oauth_clients = [{ id: 'c-1', clientSecret: 's-1' }];
+    const { POST } = await import('../../app/api/auth/oauth/token/route');
+    expect((await POST(tokenPost({ grant_type: 'refresh_token', refresh_token: RT }))).status).toBe(200);
+
+    const claim = contexts().find((c) => c.helper === 'setTokenIssueContext');
+    expect(claim, 'the rotation DELETE had no token_issue context at all before #3225').toMatchObject({ credential: RT });
     expect(claim!.retireUser).toBeUndefined();
   });
 });
