@@ -62,13 +62,33 @@ handler trusts "the app filters by tenant".
 1. **FORCE RLS** on every tenant table; app role is owner-but-not-superuser, no
    `BYPASSRLS` (model: 0054/0068/0088).
 2. Baseline **`tenant_isolation`** policy FOR ALL, auto-applied to every public
-   table with a uuid `tenant_id` (model: 0037:238-252).
-3. **Fail-closed** USING/WITH CHECK via
-   `NULLIF(current_setting('app.current_tenant'),'')::uuid` (model: 0039:12-22).
-   Prove it: a query with no GUC returns 0 rows, not an error, not the world.
-4. GUC helpers in `lib/db/rls.ts`: `withTenantContext`, `withUserContext`,
-   `withAuthLookupContext`, `withSecurityContext` (SET LOCAL, narrow scope, 03).
-   Clear GUCs on pool return + `DISCARD ALL` (PgBouncer).
+   table with a uuid `tenant_id` (model: 0037:238-252 — and note it ships *two*
+   USING shapes, strict at `0037:239` and global-row-permitting at `0037:241`).
+3. **Fail-closed** USING via
+   `NULLIF(current_setting('app.current_tenant', true),'')::uuid` (model: the
+   reason is `0039:12-22`, the emitted statement is `0039:64-75`). 0039 is
+   **USING-only**: a `FOR ALL` policy with no WITH CHECK reuses its USING as the
+   write check, so 0037's strict `WITH CHECK` is gone from every table 0039
+   rewrote — keep it on purpose or re-add it, but do not assume the model you
+   copied from `0037` is what `0039` leaves behind (03 § 1).
+   Prove it: for a table whose `tenant_id` is NOT NULL, a query with no GUC
+   returns 0 rows, not an error and not the world; for a nullable one, it returns
+   the global rows, which is the design — so run the assertion against both and
+   read which is which (03 § 1 is where the split is recorded).
+4. GUC helpers. `lib/db/rls.ts` is the canonical **import** path — it re-exports the
+   credential helpers (`lib/db/rls.ts:32-41`) — but the **definitions** are spread
+   over three files, and a rebuilder who greps `rls.ts` for a symbol and does not
+   find it will conclude the helper is missing:
+   - defined in `rls.ts`: `withTenantContext` (`:120`), `withSecurityContext`
+     (`:183`), `withTrackingLookupContext` (`:267`), `withUserContext` (`:282`).
+   - `lib/db/token-credential-context.ts:90` — `withAuthLookupContext`, plus
+     `withOAuthClientLookupContext` (`:145`), `withTokenIssueContext` (`:225`) and
+     `withAuthResolutionContext` (`:257`). These four are the re-exported ones.
+   - `lib/db/unsubscribe-contact-context.ts:120` — `withUnsubscribeContactContext`,
+     together with `portal-lookup-context.ts` and `form-capture-context.ts` the
+     modules that are **not** re-exported and are imported from their own file.
+   All SET LOCAL, narrow scope (03). Clear GUCs on pool return + `DISCARD ALL`
+   (PgBouncer).
 5. **Named platform policies** only where genuinely needed (users, tenants,
    product_templates, login_blocks — 03 § asymmetry). Do **not** add
    super-admin bypass to deals/leads/contacts/companies/tasks/members/roles.

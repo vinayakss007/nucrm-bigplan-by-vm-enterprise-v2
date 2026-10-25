@@ -153,8 +153,13 @@ contact/deal/company/lead/ticket), `activities` (`activity.ts:11`,
 `entityType!+entityId!` polymorphic), `notes` (`crm.ts:618`), `products`
 (`crm.ts:420`), `quotes`/`quote_line_items` (`crm.ts:441/484`),
 `tags`/`entity_tags` (`crm.ts:569/584`), `forms`/`form_submissions`
-(`crm.ts:392/654`), `sessions`/`refresh_tokens`/`invitations` (`core.ts:217…`),
-`field_permissions` (`core.ts:217`), `record_permissions` (`core.ts:231`),
+(`crm.ts:392/654`), `sessions`/`refresh_tokens`/`invitations` (`core.ts:185`,
+`core.ts:120`, `core.ts:379` — three different ends of the file, which is why the
+`(core.ts:217…)` this list carried until 2026-10-25 @ `5760c2538` was worse than
+a wrong number: `core.ts:217` is `field_permissions`, the very next entry, so the
+ellipsis read as "close enough" while pointing a rebuilder at the table named on
+the following line), `field_permissions` (`core.ts:217`),
+`record_permissions` (`core.ts:231`),
 `audit_logs` (`core.ts:324`, `userId` deliberately **not** an FK so audit
 survives user deletion).
 
