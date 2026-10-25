@@ -160,7 +160,7 @@ entries PP-040, PP-041, PP-042.
 
 ```sh
 npm run guard:chain                                  # detects all 5 chain defects, baselines all 5
-grep -n 'run: npm run guard' .github/workflows/ci.yml   # the 7 guards CI enforces
+node -e 'const b=require("fs").readFileSync(".github/workflows/ci.yml","utf8").split("\n").filter(l=>!/^\s*#/.test(l)).join("\n");const g=new Set([...b.matchAll(/npm run (guard:[a-z-]+)/g)].map(m=>m[1]));console.log(g.size+"/"+Object.keys(require("./package.json").scripts).filter(k=>k.startsWith("guard:")).length+" guard aliases ci.yml runs")'   # THIS is the census check: the A/B it prints must equal the count the "current by definition" paragraph carries. Counting grep lines is not a check — `grep -c "run: npm run guard" .github/workflows/ci.yml` counts LINES, `ci.yml:81` chains three aliases behind `&&` and `:85` chains two, and a guard invoked inside a `run: |` block is invisible to it as well, because the pattern sits on the `run: |` line and not on the command line. Run both commands: they disagree, and the smaller one is the wrong answer. Re-measure the paragraph from this line and never from the grep — under-counting lines is how it came to name fewer aliases than `ci.yml` runs.
 command -v pm2 || echo "pm2 not installed"           # on this host: not installed
 docker ps --format '{{.Names}}'                      # nucrm-app, nucrm-nginx, nucrm-pgbouncer + monitoring
 ```
