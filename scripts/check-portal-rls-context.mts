@@ -86,11 +86,12 @@ export const MIN_TABLE_READS = 200;
 /**
  * Every call that binds a handle with RLS GUCs set: six from `lib/db/rls.ts`,
  * `withPortalLookupContext` from `lib/db/portal-lookup-context.ts` (where
- * #2472 moved it to stay under the #1843 line ratchet), and
+ * #2472 moved it to stay under the #1843 line ratchet),
  * `withFormLookupContext` from `lib/db/form-capture-context.ts` (#3163's
- * anonymous form-render/capture lookup). The guard matches on the *call name* at
- * each site, so the split changes nothing it can see — this list is only where
- * the names come from.
+ * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
+ * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim). The
+ * guard matches on the *call name* at each site, so the split changes nothing it
+ * can see — this list is only where the names come from.
  */
 export const CONTEXT_HELPERS = [
   'withTenantContext',
@@ -101,6 +102,7 @@ export const CONTEXT_HELPERS = [
   'withTrackingLookupContext',
   'withPortalLookupContext',
   'withFormLookupContext',
+  'withUnsubscribeContactContext',
 ];
 
 /**
@@ -663,8 +665,8 @@ export function buildTargets(root: string): string[] {
  * is the #2446 bug — most of the 114 measured here are a different question:
  * `app/api/cron/*` iterates tenants deliberately (#2539's lock work, #2540's
  * backup role), `app/api/webhooks/*` authenticates by signing secret and must
- * resolve a tenant from a provider payload, and `auth/sso` and `unsubscribe`
- * redeem a credential before a tenant is known — which is
+ * resolve a tenant from a provider payload, and `auth/sso` redeems a credential
+ * before a tenant is known — which is
  * #3102's open decision about the privilege shape for pre-auth reads, not a
  * missing `withTenantContext()` call. Claiming them as #2446 breaks would be a
  * false alarm; pretending the guard cannot see them would re-open the hole
@@ -700,6 +702,15 @@ export function buildTargets(root: string): string[] {
  * the entry said had to exist first. The entry's own rule — an exemption that excuses
  * nothing is itself a finding — is what turned it red, and deleting it is the honest
  * green.
+ *
+ * `app/api/unsubscribe` left the same way, in #3237. Its entry named #3102's privilege
+ * decision as the reason three writes could not be bound, and the decision turned out
+ * not to be outstanding after all: the credential is an HMAC over the contact uuid that
+ * the route already verifies in code, so the grant keys on what that token certifies —
+ * migration 0138's SELECT + UPDATE arm pair on `contacts` behind `app.unsubscribe_contact`,
+ * opened by `withUnsubscribeContactContext` and closed by the statement that hands the
+ * claimed row's tenant to the enrollment and activity writes. Those are the 3 findings,
+ * and they are bound now.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -740,14 +751,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'plugin installation belongs to; that is #3102\'s pre-auth privilege shape, and the route is '
       + 'under app/api/tenant only by naming.',
     maxFindings: 1,
-  },
-  {
-    dir: 'app/api/unsubscribe',
-    deferredTo: '#3102',
-    why: 'RFC 8058 one-click unsubscribe arrives with an HMAC token and no session, and the write that '
-      + 'would honour it is on a FORCE-RLS table with no tenant to set first — #3102 exactly: a '
-      + 'credential that grants a row-level privilege does not exist in the shipped policy set.',
-    maxFindings: 3,
   },
 ];
 

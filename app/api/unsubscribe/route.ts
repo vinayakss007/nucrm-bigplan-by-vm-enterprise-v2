@@ -11,23 +11,34 @@
  * #1169: the HMAC `token` is REQUIRED and verified (constant-time) before any
  * mutation, so a contact UUID alone cannot be used to unsubscribe someone.
  * GET serves an HTML confirmation page; POST implements RFC 8058 one-click.
+ *
+ * #3237: verifying the token was never the problem — the write it authorised was
+ * invisible to RLS. `contacts` is FORCE-RLS and its only arm keys on
+ * `app.current_tenant`, which an anonymous mail client does not have, so the
+ * handler's `UPDATE … RETURNING` matched zero rows and a valid link answered 404
+ * for a contact that exists while leaving it subscribed. The claim now runs inside
+ * `withUnsubscribeContactContext` (migration 0138), which names the verified
+ * contact id to a SELECT + UPDATE arm pair whose WITH CHECK admits only the
+ * opt-out flags; the tenant comes back on the claimed row and the enrollment and
+ * activity writes run under `tenant_isolation` from there.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { verifyUnsubscribeToken } from '@/lib/email/unsubscribe-token';
+import { withUnsubscribeContactContext, setUnsubscribeTenantContext } from '@/lib/db/unsubscribe-contact-context';
 
 /**
  * Perform the unsubscribe side effects for a contact: set the do-not-contact /
  * unsubscribed flags, cancel active sequence enrollments, and log an activity.
- * Returns the updated contact tuple (empty when the contact does not exist).
+ * Returns the updated contact, or null when the contact does not exist.
  *
- * The HMAC token MUST already be verified by the caller before this runs.
+ * The HMAC token MUST already be verified by the caller before this runs — it is
+ * what earns the row-level claim this opens, and nothing here re-checks it.
  */
 async function unsubscribeContact(contactId: string) {
-  return db.transaction(async (tx) => {
+  return withUnsubscribeContactContext(contactId, async (tx) => {
     const [c] = await tx.update(contacts)
       .set({
         doNotContact: true,
@@ -42,15 +53,15 @@ async function unsubscribeContact(contactId: string) {
       ))
       .returning({
         id: contacts.id,
-        firstName: contacts.firstName,
         tenantId: contacts.tenantId
       });
 
-    // Return an empty tuple, not null: the caller destructures this value
-    // with `const [contact] = ...`, and destructuring null throws a
-    // TypeError that the outer catch turns into a 500 — making the intended
-    // 404 "Contact not found" response below unreachable.
-    if (!c) return [];
+    if (!c) return null;
+    // The claim above is the only pre-auth privilege in this request, and it ends
+    // here: this statement names the workspace the claimed row belongs to and
+    // clears the claim GUC in the same round trip, so the two writes below are
+    // admitted by the tenant policy they have always been under (#3237).
+    await setUnsubscribeTenantContext(tx, c.tenantId);
 
     await tx.update(sequenceEnrollments)
       .set({ status: 'cancelled', updatedAt: new Date() })
@@ -73,7 +84,7 @@ async function unsubscribeContact(contactId: string) {
       action: 'unsubscribe'
     });
 
-    return [c];
+    return c;
   });
 }
 
@@ -103,7 +114,7 @@ async function handleUnsubscribe(req: NextRequest, htmlResponse: boolean) {
   }
 
   try {
-    const [contact] = await unsubscribeContact(contactId);
+    const contact = await unsubscribeContact(contactId);
 
     if (!contact) {
       return new NextResponse('Contact not found', { status: 404 });

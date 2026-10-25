@@ -1105,7 +1105,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   (GET + DELETE), `backups/[id]/download/route.ts` and `restore/route.ts` (GET + POST).
   Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
   statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
-  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:101 (re-pinned 2026-10-24: **#3163** extended the list; same day **#3102** appended its tenth reset, app.token_issue; 2026-10-25: **#3218** appended an eleventh and twelfth — which moved the definition off :94 — and **#3225** a thirteenth, app.oauth_client_id)`, one statement of thirteen `set_config`s) clears `app.is_super_admin` on
+  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:103 (re-pinned 2026-10-24: **#3163** extended the list; same day **#3102** appended its tenth reset, app.token_issue; 2026-10-25: **#3218** appended an eleventh and twelfth — which moved the definition off :94 — and **#3225** a thirteenth, app.oauth_client_id; again 2026-10-25: **#3237** appended a fourteenth, app.unsubscribe_contact, and its rationale block moved the definition `:101` → `:103`)`, one statement of fourteen `set_config`s) clears `app.is_super_admin` on
   release — and since **#2446**, the three `app.portal_lookup_*` GUCs too, same statement — which is what makes the wider scope safe. It also reaches helpers that take `db`
   itself (`concurrencyGuard` in PATCH), which a `tx` would not.
 - **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
@@ -1493,7 +1493,7 @@ inferred.
     existing rule touched. Ten more auth routes copy `request.url` the same way.
   - `lib/email/service.ts:316-320` → `metadata: { subject, recipients }`, i.e. the outbound subject
     (customer free text) and a partially-masked recipient list (`j***@domain`, which `EMAIL_RE` does
-    not match). Plus `lib/automation/engine.ts:106` (re-pinned 2026-10-17 from `:100` for **#2761**, again 2026-10-18 from `:102` for **#2813**'s import, again 2026-10-23 from `:103` for **#3131**'s three lines in `evaluateAutomations`) / `workflow-executor.ts:183` (re-pinned 2026-10-23 from `:159` for **#3139**'s outcome collector ahead of the walk) → `tags.context` =
+    not match). Plus `lib/automation/engine.ts:106` (re-pinned 2026-10-17 from `:100` for **#2761**, again 2026-10-18 from `:102` for **#2813**'s import, again 2026-10-23 from `:103` for **#3131**'s three lines in `evaluateAutomations`) / `workflow-executor.ts:185` (re-pinned 2026-10-23 from `:159` for **#3139**'s outcome collector ahead of the walk; again 2026-10-25 from `:183` for **#3228**'s two send-sink tombstone lines above it) → `tags.context` =
     `` `automation:${name}` `` where `name` is typed by the customer.
     `scrubPii` now walks all three bags (depth-capped at 3 against a caller-supplied cycle), replaces
     values under identity keys (`email`, `ip`, `subject`, `recipients`, `to`, `from`, plus the existing
@@ -2226,7 +2226,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   the literals `'true'`/`'false'` (`lib/db/rls.ts:171` `setSuperAdminContext`, `:219` `setImpersonationContext` — both re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above them, `:169`/`:217` → `:171`/`:219`. tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
   proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
-  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth, and **#3225** its thirteenth, `app.oauth_client_id` — the line itself did not move)`, `lib/db/request-connection.ts:101 (2026-10-24: **#3102** extended this list the same way, the line did not move; 2026-10-25: **#3218** and **#3225** extended it again, and **#3218**'s doc block landed above the definition, `:94` → `:101)` — both
+  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth, and **#3225** its thirteenth, `app.oauth_client_id`; again 2026-10-25 **#3237** its fourteenth, `app.unsubscribe_contact` — the line itself did not move in any of them)`, `lib/db/request-connection.ts:103 (2026-10-24: **#3102** extended this list the same way, the line did not move; 2026-10-25: **#3218** and **#3225** extended it again, and **#3218**'s doc block landed above the definition, `:94` → `:101`; **#3237** extended it a fourteenth time and its own block moved the definition `:101` → `:103)` — both
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
@@ -2264,7 +2264,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   minted, no HTTP write of any kind, no row values read — counts and catalog metadata only.
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
-- **Files (all read-only):** `lib/db/rls.ts:140,167-191,208-223` (re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above all three ranges; were `:138,165-189,206-221`), `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** two more and **#3225** a thirteenth)` (the same thirteen-`set_config` reset),
+- **Files (all read-only):** `lib/db/rls.ts:140,167-191,208-223` (re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above all three ranges; were `:138,165-189,206-221`), `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** two more and **#3225** a thirteenth, and **#3237** a fourteenth, `app.unsubscribe_contact`, the line unmoved)` (the same fourteen-`set_config` reset),
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
@@ -2428,7 +2428,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
   `lib/cron/sequence-steps.ts:171`, re-pinned 2026-10-17 from `:145`: **#2796**'s `stepDelayMs` helper was added above it and shifted every later line down by 26) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:109`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:171`) — both re-pinned 2026-10-25 by **#3225**, `:107`/`:169` → `:109`/`:171` — + the tenants `SELECT`
-  (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:249`, re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved it from `:241`). **Count = 7 per tenant**; the 8th
+  (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:251`, re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved it from `:241`; again 2026-10-25: **#3237**'s reset rationale moved it `:249` → `:251`). **Count = 7 per tenant**; the 8th
   (the re-set at `:161`) does not fire on this data — and the log discriminates: 8/tenant predicts 85.9 s, i.e. _every_ sweep
   would report a second tick, but only 6 of 288 do.
 - **Predicted ≈ observed.** Calibrating on the one inherited figure (a hand-triggered run at 39 tenants, wall **56.10 s**,
@@ -2457,7 +2457,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   fires — measuring it needs 2 statements × 53 tenants and `tenant_members` is RLS-closed to the platform context (the probe
   returned 0 policies referencing `app.is_super_admin` on that table, and `tenant_members_visible = 0`).
 - **Would a real leak surface today? No — two independent reasons.** (1) Registration is single-site: `trackClient` has exactly
-  **one** call site, `lib/db/request-connection.ts:225` (re-pinned 2026-10-25: **#3218**'s doc block landed above the module, `:217` → `:225`), while **six** other checkout sites never register and are therefore
+  **one** call site, `lib/db/request-connection.ts:227` (re-pinned 2026-10-25: **#3218**'s doc block landed above the module, `:217` → `:225`; again 2026-10-25: **#3237**'s block above the reset, `:225` → `:227`), while **six** other checkout sites never register and are therefore
   invisible to the detector — `lib/db/client.ts:78`, `lib/db/safe-connection.ts:207`, `lib/db/query-timeout.ts:65`
   (re-pinned on 2026-10-11: `main` had `:58` and this branch `:86`; the **#2528** clamp comment and import sit
   above the checkout, and neither pass changed the checkout itself), `lib/db/migration-safety.ts:214`,
@@ -2507,7 +2507,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   now ~1 s) and it does not fix login, which needs each row in JS. Presented, not recommended.
 - **Detached queries do serialize onto the pin — but not on today's path.** `lib/email/tracking.ts:39-41` fires
   `analyzeSentimentForContact(...)` un-awaited inside `createEmailTracking`, which `route.ts:295` awaits inside the pinned
-  sweep scope, so its writes queue onto the same client via `serializeClientQueries` (`request-connection.ts:144-168`, re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved both ranges, `:136-160` → `:144-168` and `:167-181` → below) and
+  sweep scope, so its writes queue onto the same client via `serializeClientQueries` (`request-connection.ts:146-170`, re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved both ranges, `:136-160` → `:144-168` and `:167-181` → below; again 2026-10-25: **#3237**'s block above `RESET_TENANT_GUCS_SQL` shifted both by two more, to `:146-170` and `:169-183`) and
   `drainClientQueries` (`:175-189`) holds the release until they finish — extending the hold instead of running in parallel.
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
   `lib/errors-server.ts:231` (re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
@@ -2536,7 +2536,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   citation re-opened with `sed`/`grep` before it was written down (`trackClient`'s single call site and the six untracked
   checkout sites confirmed by grep).
 - **Files (all read-only):** `lib/cron/tenant-scope.ts:81,122-127,139,145-178`, `lib/db/rls.ts:7-16,72-107,165-169,181-189`,
-  `lib/db/request-connection.ts:31-42,136-181,202-249`, `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
+  `lib/db/request-connection.ts:31-42,138-183,204-251` (re-pinned 2026-10-25: **#3237**'s rationale block above `RESET_TENANT_GUCS_SQL` shifted the second and third ranges by two; were `:136-181,202-249`), `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
   `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:36-67,73-119,129,326`
   (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1; again 2026-10-18 from `:35-66,72-118,128,297` — **#2795**/**#2810** added one more line above `POST` *and* 28 lines between `:129` and `:326`, so the far coordinate moved 29, not 1),
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:231` (same #3016 shift),
@@ -3462,7 +3462,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
 - **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
-  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth and **#3225** its thirteenth)` (text extended by **#2446**'s
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth and **#3225** its thirteenth and **#3237** its fourteenth)` (text extended by **#2446**'s
   `app.portal_lookup_*` reset names, construct unchanged), `pg_class`, `pg_policy`, `pg_roles`.
   <!-- coordinate corrections for #2456 (2026-10-08): seven sentences in this register — four in PP-058
        (this section's three, plus its row in the Summary table above), two in PP-057, one in PP-041 — cited
@@ -3618,7 +3618,7 @@ database`, and exactly two FAILs:
   (`lib/api/schemas/billing.ts:42-52`) lists 9 statuses including `'void'`;
   `app/api/tenant/invoices/[id]/route.ts:141` (re-pinned 2026-10-22 from `:139`: `d78d7698` (#2973) added 2 lines above the mutable list) includes `status` in its mutable field list and `:166`
   validates the incoming value _against that same constant_, so `{"status":"void"}` clears validation and
-  reaches the UPDATE. On the enrollment side the writes are literal: `app/api/unsubscribe/route.ts:56` and
+  reaches the UPDATE. On the enrollment side the writes are literal: `app/api/unsubscribe/route.ts:67` (re-pinned 2026-10-25 from `:56`: **#3237**'s claim transaction re-flowed the function above it) and
   `app/api/webhooks/resend/route.ts:261` and `:435` each set `status: 'cancelled'` — both re-pinned on
   2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
   and since **#2392** the
@@ -3715,7 +3715,7 @@ database`, and exactly two FAILs:
   `invoices = 0` and `sequence_enrollments = 0`, with `leads = 25` and `contacts = 162` in the same query
   to show the census is real. The drift is **armed, not fired**: an unsubscribe for a contact holding an
   active enrollment aborts its transaction — the UPDATE is inside `tx`, and the route's own
-  `catch` (`app/api/unsubscribe/route.ts:121-123`) answers `500` with an HTML "Something went wrong. Please
+  `catch` (`app/api/unsubscribe/route.ts:132-134`, re-pinned 2026-10-25 from `:121-123` — **#3237**'s claim helper call replaced the bare `db.transaction` above it) answers `500` with an HTML "Something went wrong. Please
   contact support." page, rolling back the do-not-contact flag and the activity row with it — but there is
   no enrollment to cancel yet. Note that the 500 is _this route's_ shape, not the class's:
   `lib/api/db-client-error.ts:105-111` maps `23514` to **400** "Invalid value for a constrained field", and
@@ -3753,7 +3753,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   `drizzle/migrations/0120_sequence_enrollments_cancelled_status.sql`. Evidence read: `pg_constraint`
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:141,166` (the first re-pinned 2026-10-22 from `:139`, same #2973 shift),
-  `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:261,435`,
+  `app/api/unsubscribe/route.ts:42-67,132-134` (the first range re-pinned 2026-10-25 from `:42-56` and the second from `:121-123`, both for **#3237**'s claim transaction), `app/api/webhooks/resend/route.ts:261,435`,
   `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:145` (re-pinned 2026-10-24 from `:123` for **#3193**'s 22-line grow above the call; `:123` from `:126` 2026-10-18 for **#2740**/**#2813**),
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,

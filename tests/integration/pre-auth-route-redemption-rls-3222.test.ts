@@ -56,13 +56,24 @@
  *    #3075's zero-row write. These cases revoke by each hint and by none, refuse a
  *    token belonging to a different client, refuse an expired row, and read the table
  *    back so `revoked` is checked against rows actually claimed.
+ *  - `GET|POST /api/unsubscribe` (#3237): the HMAC is verified in application code, so
+ *    this flow's credential is a signature over the contact uuid rather than a stored
+ *    token — and the write it authorises was, before 0138, unreachable. `contacts` is
+ *    force-RLS with one arm, `tenant_isolation` keyed on `app.current_tenant`, and an
+ *    anonymous mail client has no tenant to name: the route's `UPDATE … RETURNING`
+ *    matched zero rows and answered 404 "Contact not found" for a contact that exists.
+ *    These cases pin the claim (its row and only its row, the flags its WITH CHECK
+ *    permits, the soft-deleted contact it must not reach), then drive the handler and
+ *    read `contacts`, `sequence_enrollments` and `activities` back through the owner's
+ *    connection — including that a link for tenant A's contact leaves tenant B's row,
+ *    enrollment and history alone.
  *
  * IT READS THE SHIPPED POLICY SET, IT DOES NOT INSTALL ONE
  * --------------------------------------------------------
  * CI provisions its database with `db:sync` + `node scripts/apply-rls-ci.mjs`
- * (`.github/workflows/ci.yml`:176), whose discovery does include `0134`, `0135`, `0136`
- * and `0137` — verified against the real corpus, not assumed. So this file probes for
- * those at load time and, if they are not there, skips with a message naming that
+ * (`.github/workflows/ci.yml`:176), whose discovery does include `0134`, `0135`, `0136`,
+ * `0137` and `0138` — verified against the real corpus, not assumed. So this file probes
+ * for those at load time and, if they are not there, skips with a message naming that
  * command rather than creating the policies itself. #2474's rule in
  * `tests/helpers/rls-probe-role.ts` is the reason: a suite that installs shared,
  * fixed-name catalog objects has to un-install them at teardown, and two suites
@@ -73,14 +84,15 @@
  * do with the code under test.
  *
  * `PRE_AUTH_ROUTE_3222_APPLY_MISSING=1` opts into applying `0134`, then `0135`, then
- * `0136`, then `0137` (that order, because `0134`'s text re-creates the arms `0135`
- * narrows) and leaves them in place, which is the state CI's provisioning produces
+ * `0136`, then `0137`, then `0138` (that order, because `0134`'s text re-creates the arms
+ * `0135` narrows) and leaves them in place, which is the state CI's provisioning produces
  * anyway. That is
  * the switch for demonstrating the red side: against a database without the arms the
  * suite fails seven tests with `Invalid or expired reset link` / `Invalid or expired
  * verification link` on genuinely valid tokens — the exact silent zero-row write this
- * issue is about — and the OAuth block fails at its first statement, `401
- * invalid_client` for a correct secret (#3225).
+ * issue is about — the OAuth blocks fail at their first statement, `401 invalid_client`
+ * for a correct secret (#3225), and `/api/unsubscribe` reports 404 for a contact that is
+ * present and subscribed (#3237).
  *
  * Self-skips when no database is reachable or the login role cannot `CREATE ROLE`.
  * Teardown throws rather than swallowing a failed restore (#2455).
@@ -99,10 +111,11 @@ const NARROW_FILE = '0135_pre_auth_token_rls_narrow.sql';
 const ISSUE_FILE = '0134_pre_auth_token_rls.sql';
 const OAUTH_FILE = '0136_pre_auth_oauth_rls.sql';
 const REVOKE_FILE = '0137_pre_auth_oauth_revoke.sql';
+const UNSUBSCRIBE_FILE = '0138_pre_auth_unsubscribe_contact_rls.sql';
 
 /**
  * The privilege set the four flows depend on, by name — `0135`'s eleven arms,
- * `0136`'s four and `0137`'s two. Each is looked up through `pg_policies` by name
+ * `0136`'s four, `0137`'s two and `0138`'s two. Each is looked up through `pg_policies` by name
  * only, so the suite asserts that the shipped objects are installed without
  * restating what they say (#2455's other half: a test that re-types a policy proves
  * a copy of it, not the migration).
@@ -129,6 +142,11 @@ const REQUIRED_ARMS = [
   // refresh row and nothing else, in any branch, however it sets its context.
   'oauth_tokens_access_claim_read',
   'oauth_tokens_access_claim',
+  // #3237 — /api/unsubscribe's contact claim. Without the pair the route reaches zero
+  // rows on `contacts` and reports 404 for a contact that exists, so nothing after it
+  // (enrollment cancellation, activity) ever runs.
+  'contacts_unsubscribe_claim_read',
+  'contacts_unsubscribe_claim',
 ];
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: {} as Record<string, string> }));
@@ -192,14 +210,14 @@ if (probe.reachable && !probe.canMintRole) {
   );
 } else if (!probe.armsApplied && selfApplied) {
   console.warn(
-    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134, 0135, 0136 and 0137, and ' +
+    '[#3222] PRE_AUTH_ROUTE_3222_APPLY_MISSING=1: applying 0134, 0135, 0136, 0137 and 0138, and ' +
     'leaving them installed — that is the state `node scripts/apply-rls-ci.mjs` produces, and ' +
     'dropping them again at teardown is what races a parallel worker (#2474).',
   );
 } else if (probe.reachable && !probe.armsApplied) {
   console.warn(
-    '[#3222] skipping the route-level RLS suite: this database does not carry 0135\'s, ' +
-    '0136\'s or 0137\'s arms. ' +
+    '[#3222] skipping the route-level RLS suite: this database does not carry the arms of ' +
+    '0135, 0136, 0137 or 0138. ' +
     'CI provisions them with `node scripts/apply-rls-ci.mjs` after `db:sync` ' +
     '(.github/workflows/ci.yml:176) — run the same here, or set ' +
     'PRE_AUTH_ROUTE_3222_APPLY_MISSING=1 to let this suite apply them itself.',
@@ -255,6 +273,21 @@ const REVOKE_RFR_2 = `3222-rev-rfr-2-${RUN}`;
 const REVOKE_ACC_3 = `3222-rev-acc-3-${RUN}`;
 const REVOKE_RFR_3 = `3222-rev-rfr-3-${RUN}`;
 
+// #3237 — /api/unsubscribe's fixtures. Two tenants, because the only thing that
+// distinguishes 0138's claim from a grant that admits the whole table is a second
+// tenant's row sitting next to the claimed one, unreachable. A soft-deleted contact is
+// the other half: `deleted_at IS NULL` is in both arms, so a trashed row must stay
+// invisible to a link that names its id.
+const UNSUB_TENANT_A = randomUUID();
+const UNSUB_TENANT_B = randomUUID();
+const CONTACT_A = randomUUID();
+const CONTACT_B = randomUUID();
+const CONTACT_GONE = randomUUID();
+const SEQ_A = randomUUID();
+const SEQ_B = randomUUID();
+const ENROLL_A = randomUUID();
+const ENROLL_B = randomUUID();
+
 const FUTURE = new Date(Date.now() + 3_600_000);
 const PAST = new Date(Date.now() - 3_600_000);
 
@@ -264,6 +297,7 @@ let rolePool: Pool;
 let originalUrl = '';
 let originalTrustProxy: string | undefined;
 let originalRedisUrl: string | undefined;
+let originalUnsubscribeSecret: string | undefined;
 const restoreFailures: string[] = [];
 
 type Handlers = {
@@ -271,6 +305,7 @@ type Handlers = {
   verify: { POST: (r: NextRequest) => Promise<Response> };
   token: { POST: (r: NextRequest) => Promise<Response> };
   revoke: { POST: (r: NextRequest) => Promise<Response> };
+  unsubscribe: { GET: (r: NextRequest) => Promise<Response>; POST: (r: NextRequest) => Promise<Response> };
   passwordReset: { clearResetToken: (userId: string) => Promise<void> };
 };
 let H: Handlers;
@@ -302,6 +337,16 @@ function formReq(fields: Record<string, string>, ip: string, path = '/api/auth/o
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': ip },
     body: new URLSearchParams(fields).toString(),
   });
+}
+
+/**
+ * #3237 — `/api/unsubscribe` carries its credential in the query string and runs no rate
+ * limiter (the caller is a mail client, and the HMAC is the check), so this is the only
+ * request shape here that needs no `x-forwarded-for`. Passing `null` as the token is the
+ * "link without a signature" case #1169 closed.
+ */
+function unsubReq(query: string, method: 'GET' | 'POST' = 'GET'): NextRequest {
+  return new NextRequest(`http://localhost:3000/api/unsubscribe?${query}`, { method });
 }
 
 const jsonOf = async (res: Response) => (await res.json()) as Record<string, unknown>;
@@ -363,6 +408,7 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       await admin.query(readFileSync(join(MIGRATIONS_DIR, NARROW_FILE), 'utf8'));
       await admin.query(readFileSync(join(MIGRATIONS_DIR, OAUTH_FILE), 'utf8'));
       await admin.query(readFileSync(join(MIGRATIONS_DIR, REVOKE_FILE), 'utf8'));
+      await admin.query(readFileSync(join(MIGRATIONS_DIR, UNSUBSCRIBE_FILE), 'utf8'));
     }
 
     const oldHash = await (await import('../../lib/auth/session')).hashPassword(OLD_PASSWORD);
@@ -431,6 +477,29 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       { clientId: CLIENT_UUID, userId: USER_A, accessToken: REVOKE_ACC_3, refreshToken: REVOKE_RFR_3, scope: 'read', expiresAt: FUTURE },
     ]);
 
+    // #3237 — the seeded rows are what the unsubscribe claim is measured against, and
+    // each exists to answer one question the route cannot answer about itself: is a
+    // zero-row write RLS or absence? CONTACT_B is a second tenant's contact sitting next
+    // to the claimed one; CONTACT_GONE is a trashed row in the claimant's own tenant.
+    // Both start subscribed with a live enrollment, so a cancellation is observable.
+    await adminDb.insert(appSchema.tenants).values([
+      { id: UNSUB_TENANT_A, name: `3222 Unsub A ${RUN}`, slug: `3222-unsub-a-${RUN}` },
+      { id: UNSUB_TENANT_B, name: `3222 Unsub B ${RUN}`, slug: `3222-unsub-b-${RUN}` },
+    ]);
+    await adminDb.insert(appSchema.contacts).values([
+      { id: CONTACT_A, tenantId: UNSUB_TENANT_A, firstName: 'Unsub', lastName: 'Target', email: `3222-unsub-a-${RUN}@example.test`, doNotContact: false, unsubscribed: false },
+      { id: CONTACT_B, tenantId: UNSUB_TENANT_B, firstName: 'Neighbour', lastName: 'Contact', email: `3222-unsub-b-${RUN}@example.test`, doNotContact: false, unsubscribed: false },
+      { id: CONTACT_GONE, tenantId: UNSUB_TENANT_A, firstName: 'Trashed', lastName: 'Contact', email: `3222-unsub-gone-${RUN}@example.test`, doNotContact: false, unsubscribed: false, deletedAt: PAST },
+    ]);
+    await adminDb.insert(appSchema.sequences).values([
+      { id: SEQ_A, tenantId: UNSUB_TENANT_A, name: `3222 seq a ${RUN}`, status: 'active' },
+      { id: SEQ_B, tenantId: UNSUB_TENANT_B, name: `3222 seq b ${RUN}`, status: 'active' },
+    ]);
+    await adminDb.insert(appSchema.sequenceEnrollments).values([
+      { id: ENROLL_A, tenantId: UNSUB_TENANT_A, sequenceId: SEQ_A, contactId: CONTACT_A, status: 'active' },
+      { id: ENROLL_B, tenantId: UNSUB_TENANT_B, sequenceId: SEQ_B, contactId: CONTACT_B, status: 'active' },
+    ]);
+
     await admin.query(
       `DO $$ BEGIN
          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}') THEN
@@ -455,12 +524,20 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     // Swap the URL before importing the handler graph, and reset the module registry
     // so nothing carries over a superuser pool from an earlier file in this worker.
     process.env.DATABASE_URL = restricted.toString();
+    // /api/unsubscribe's credential is a signature, not a stored row, and
+    // `verifyUnsubscribeToken` fails closed when no secret is configured — with none set
+    // every link here would answer 403 and the suite would prove nothing about RLS. A
+    // fixed test secret is fine because the HMAC is only ever compared inside this
+    // process; the fixture tokens below are minted with the same one.
+    originalUnsubscribeSecret = process.env.UNSUBSCRIBE_SECRET;
+    process.env.UNSUBSCRIBE_SECRET = `3222-unsubscribe-secret-${RUN}`;
     vi.resetModules();
     H = {
       reset: (await import('../../app/api/auth/reset-password/route')) as Handlers['reset'],
       verify: (await import('../../app/api/auth/verify-email/route')) as Handlers['verify'],
       token: (await import('../../app/api/auth/oauth/token/route')) as Handlers['token'],
       revoke: (await import('../../app/api/auth/oauth/revoke/route')) as Handlers['revoke'],
+      unsubscribe: (await import('../../app/api/unsubscribe/route')) as Handlers['unsubscribe'],
       passwordReset: (await import('../../lib/auth/password-reset')) as Handlers['passwordReset'],
     };
   });
@@ -471,6 +548,8 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
     else process.env.TRUST_PROXY = originalTrustProxy;
     if (originalRedisUrl === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = originalRedisUrl;
+    if (originalUnsubscribeSecret === undefined) delete process.env.UNSUBSCRIBE_SECRET;
+    else process.env.UNSUBSCRIBE_SECRET = originalUnsubscribeSecret;
     const mark = (label: string, err: unknown) =>
       restoreFailures.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
 
@@ -484,7 +563,13 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       ['email_verifications', 'DELETE FROM email_verifications WHERE user_id = ANY($1::uuid[])', [[USER_A, USER_B]]],
       ['sessions', 'DELETE FROM sessions WHERE user_id = ANY($1::uuid[])', [[USER_A, USER_B]]],
       ['users', 'DELETE FROM users WHERE id = ANY($1::uuid[])', [[USER_A, USER_B]]],
-      ['tenants', 'DELETE FROM tenants WHERE id = $1', [OAUTH_TENANT]],
+      // #3237's rows, deepest first: the activity the route logged references the
+      // contact, and the enrollment references both.
+      ['activities', 'DELETE FROM activities WHERE contact_id = ANY($1::uuid[])', [[CONTACT_A, CONTACT_B, CONTACT_GONE]]],
+      ['sequence_enrollments', 'DELETE FROM sequence_enrollments WHERE contact_id = ANY($1::uuid[])', [[CONTACT_A, CONTACT_B, CONTACT_GONE]]],
+      ['sequences', 'DELETE FROM sequences WHERE id = ANY($1::uuid[])', [[SEQ_A, SEQ_B]]],
+      ['contacts', 'DELETE FROM contacts WHERE id = ANY($1::uuid[])', [[CONTACT_A, CONTACT_B, CONTACT_GONE]]],
+      ['tenants', 'DELETE FROM tenants WHERE id = ANY($1::uuid[])', [[OAUTH_TENANT, UNSUB_TENANT_A, UNSUB_TENANT_B]]],
       // Interpolated, not $1: a role name cannot be a bound parameter. Safe because
       // ROLE is generated from randomBytes(4) above, never from input.
       ['role', `DROP ROLE IF EXISTS "${ROLE}"`, []],
@@ -950,6 +1035,204 @@ d('pre-auth credentials are redeemed by the real routes under enforced RLS (#322
       // is also why the token endpoint refuses it as invalid_grant rather than minting
       // from it.
       expect(countOf(expired.rows), 'a live-only predicate must not delete the expired row').toBe(1);
+    });
+  });
+
+  // ── The unsubscribe claim: the acceptance criteria for #3237 ───────────────
+  // Measured on this database as the same probe role, before 0138 existed:
+  //
+  //   no context      UPDATE contacts SET do_not_contact=true … RETURNING  -> 0 rows
+  //   owner read-back                                              -> false|false, live
+  //   app.current_tenant named from outside the query               -> 1 row,
+  //
+  // which is the shape the issue describes: the route's own `WHERE id = <link's uuid>`
+  // is satisfied, RLS then filters the row away, and the empty `RETURNING` was read as
+  // "Contact not found". No context in the vocabulary names a contact row without also
+  // naming a tenant the anonymous caller cannot know, so 0138 adds one — and unlike the
+  // flows above, the credential here is never stored: it is an HMAC over the id, so the
+  // suite has to show the claim is only ever opened *after* that comparison passes.
+  describe('GET|POST /api/unsubscribe reaches the contact it names under enforced RLS (#3237)', () => {
+    const tokenFor = async (contactId: string) =>
+      (await import('../../lib/email/unsubscribe-token')).generateUnsubscribeToken(contactId);
+
+    /** The route's own statement, verbatim in shape: both flags + `updated_at`, keyed on
+     *  whichever id the caller binds as `$1`. */
+    const OPT_OUT = `UPDATE contacts SET do_not_contact = true, unsubscribed = true, updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL RETURNING id, tenant_id`;
+
+    const contactRow = async (id: string) => (await admin.query<{
+      do_not_contact: boolean; unsubscribed: boolean; deleted_at: Date | null;
+    }>('SELECT do_not_contact, unsubscribed, deleted_at FROM contacts WHERE id = $1', [id])).rows[0];
+
+    it('the before-state: the route\'s UPDATE with no context matches nothing, and the row is there', async () => {
+      const bare = await asRole(OPT_OUT, {}, [CONTACT_A]);
+      expect(bare.error, 'a zero-row claim must not raise — that is why nothing noticed it').toBeUndefined();
+      expect(bare.rowCount).toBe(0);
+
+      const seeded = await contactRow(CONTACT_A);
+      expect(seeded, 'the contact exists').toBeTruthy();
+      expect(seeded!.do_not_contact, 'and is still subscribed: the miss is RLS, not absence').toBe(false);
+    });
+
+    it('0138\'s companion SELECT arm is what lets the route read the row back at all', async () => {
+      // An RLS UPDATE is gated by the table's SELECT policies and its RETURNING is
+      // filtered by them too, which is the trap #3102 fell into. The claim's UPDATE arm
+      // alone would let the write land and the `RETURNING` come back empty, turning a
+      // successful unsubscribe into a 404.
+      const without = await asRole('SELECT id FROM contacts WHERE id = $1', {}, [CONTACT_A]);
+      expect(without.rowCount).toBe(0);
+      const withClaim = await asRole(
+        'SELECT id, tenant_id FROM contacts WHERE id = $1',
+        { 'app.unsubscribe_contact': CONTACT_A },
+        [CONTACT_A],
+      );
+      expect(withClaim.error).toBeUndefined();
+      expect(withClaim.rowCount, 'the named row is visible to the transaction that names it').toBe(1);
+      expect(withClaim.rows[0]!.tenant_id, 'including the tenant the rest of the request runs under').toBe(UNSUB_TENANT_A);
+    });
+
+    it('the claim admits its own row and exactly its own row', async () => {
+      const claimed = await asRole(OPT_OUT, { 'app.unsubscribe_contact': CONTACT_A }, [CONTACT_A]);
+      expect(claimed.error).toBeUndefined();
+      expect(claimed.rowCount, 'the write this issue is about').toBe(1);
+
+      // …and a claim for A does not reach B, which is the difference between a row-level
+      // grant and a table-level one: B's predicate would be satisfied by tenant_isolation
+      // if the GUC named a tenant, so the only thing between them is `id = <claim>`.
+      const neighbour = await asRole(OPT_OUT, { 'app.unsubscribe_contact': CONTACT_A }, [CONTACT_B]);
+      expect(neighbour.rowCount).toBe(0);
+      const untouched = await contactRow(CONTACT_B);
+      expect(untouched!.do_not_contact, 'asRole rolls the probes back, so B was never written').toBe(false);
+
+      // An empty or foreign claim value selects nothing either: the arm is
+      // `NULLIF(current_setting(…), '')::uuid`, fail-closed with no GUC and 22P02 on
+      // garbage the route validates away before it can reach Postgres.
+      const noValue = await asRole(OPT_OUT, { 'app.unsubscribe_contact': '' }, [CONTACT_A]);
+      expect(noValue.rowCount, 'the empty spelling is not a grant').toBe(0);
+    });
+
+    it('the claim cannot be used to edit the contact for anything but the opt-out', async () => {
+      // WITH CHECK (do_not_contact = true AND unsubscribed = true): the privilege is
+      // "this link may take this contact out of the mailing", not "this link may write
+      // this row". Without the check clause a leaked link is a field-level editor.
+      // Measured against B, which no case here ever opts out, so the new row genuinely
+      // fails the check rather than inheriting flags a previous test left set.
+      const rename = await asRole(
+        `UPDATE contacts SET first_name = 'Renamed' WHERE id = $1 RETURNING id`,
+        { 'app.unsubscribe_contact': CONTACT_B },
+        [CONTACT_B],
+      );
+      expect(rename.error, 'the write is refused, not silently dropped').toMatch(/row-level security|42501/);
+
+      const still = await contactRow(CONTACT_B);
+      expect(still!.do_not_contact, 'and the row keeps its values').toBe(false);
+    });
+
+    it('a soft-deleted contact is invisible to a link that names it', async () => {
+      // `deleted_at IS NULL` is in both arms, matching the route's own predicate, so
+      // trashing a contact retires every unsubscribe link ever mailed to it rather than
+      // leaving a live write path into the tombstone.
+      const gone = await asRole(OPT_OUT, { 'app.unsubscribe_contact': CONTACT_GONE }, [CONTACT_GONE]);
+      expect(gone.error).toBeUndefined();
+      expect(gone.rowCount).toBe(0);
+
+      const res = await H.unsubscribe.GET(unsubReq(`contact=${CONTACT_GONE}&token=${await tokenFor(CONTACT_GONE)}`));
+      expect(res.status, 'the handler reports the same thing the statement does').toBe(404);
+    });
+
+    it('a verified link unsubscribes the contact, cancels the enrollment and logs it', async () => {
+      const token = await tokenFor(CONTACT_A);
+      const res = await H.unsubscribe.GET(unsubReq(`contact=${CONTACT_A}&token=${token}`));
+      expect(res.status, 'the link the mail client opens').toBe(200);
+      expect(await res.text()).toContain('Unsubscribed');
+
+      const row = await contactRow(CONTACT_A);
+      expect(row!.do_not_contact, 'the compliance flag this whole endpoint exists to set').toBe(true);
+      expect(row!.unsubscribed, '#1120\'s dedicated flag, the one sequence sends gate on').toBe(true);
+
+      const enrollment = await admin.query<{ status: string }>(
+        'SELECT status FROM sequence_enrollments WHERE id = $1', [ENROLL_A]);
+      expect(enrollment.rows[0]!.status, 'the enrollment write ran under the tenant the claim discovered').toBe('cancelled');
+
+      const logged = await admin.query<{ n: number; tenant_id: string }>(
+        `SELECT count(*)::int AS n, min(tenant_id::text) AS tenant_id FROM activities
+          WHERE contact_id = $1 AND action = 'unsubscribe'`, [CONTACT_A]);
+      expect(countOf(logged.rows), 'one activity, for the claimed row').toBe(1);
+      expect(logged.rows[0]!.tenant_id).toBe(UNSUB_TENANT_A);
+    });
+
+    it('an unverified link is refused before it opens any context, and writes nothing', async () => {
+      const ours = await tokenFor(CONTACT_A);
+      for (const [label, query] of [
+        ['no token at all', `contact=${CONTACT_B}`],
+        ['a token of the wrong length', `contact=${CONTACT_B}&token=deadbeef`],
+        ['a signature over a different contact', `contact=${CONTACT_B}&token=${ours}`],
+      ] as const) {
+        const res = await H.unsubscribe.GET(unsubReq(query));
+        expect(res.status, label).toBe(403);
+      }
+      const row = await contactRow(CONTACT_B);
+      expect(row!.do_not_contact, 'a refusal must not consume the contact it refused').toBe(false);
+      const enrollment = await admin.query<{ status: string }>(
+        'SELECT status FROM sequence_enrollments WHERE id = $1', [ENROLL_B]);
+      expect(enrollment.rows[0]!.status, 'and must not touch its enrollment either').toBe('active');
+    });
+
+    it('RFC 8058 one-click POST takes the same path and is safe to replay', async () => {
+      const token = await tokenFor(CONTACT_A);
+      const res = await H.unsubscribe.POST(unsubReq(`contact=${CONTACT_A}&token=${token}`, 'POST'));
+      expect(res.status, 'a mail client may retry the POST, and a link stays in a forwarded mail').toBe(200);
+      expect(await res.text()).toBe('');
+
+      const row = await contactRow(CONTACT_A);
+      expect(row!.do_not_contact, 'the second click is a no-op, not an error').toBe(true);
+      const enrollment = await admin.query<{ status: string }>(
+        'SELECT status FROM sequence_enrollments WHERE id = $1', [ENROLL_A]);
+      expect(enrollment.rows[0]!.status).toBe('cancelled');
+    });
+
+    it('a link for one tenant\'s contact leaves the other tenant entirely alone', async () => {
+      // Both halves at once: B's contact is still subscribed, B's enrollment is still
+      // active, and nothing in B's workspace was logged — the claim never names a tenant,
+      // so the only way any of these could have moved is a grant wider than the row.
+      const row = await contactRow(CONTACT_B);
+      expect(row!.do_not_contact).toBe(false);
+      expect(row!.unsubscribed).toBe(false);
+      const enrollment = await admin.query<{ status: string }>(
+        'SELECT status FROM sequence_enrollments WHERE id = $1', [ENROLL_B]);
+      expect(enrollment.rows[0]!.status).toBe('active');
+      const logged = await admin.query<{ n: number }>(
+        'SELECT count(*)::int AS n FROM activities WHERE tenant_id = $1', [UNSUB_TENANT_B]);
+      expect(countOf(logged.rows), 'the handover named A\'s tenant, and only A\'s').toBe(0);
+    });
+
+    it('the claim does not outlive the transaction that opened it', async () => {
+      // `set_config(…, true)` is transaction-local, and the GUCs are opened inside the
+      // route's single transaction, so the claim cannot be handed to whatever the pooled
+      // connection serves next — the class #2446 pins every privilege GUC against, here
+      // shown against the database rather than against the reset strings (which
+      // tests/unit/rls-unsubscribe-contact-guc-3237.test.ts checks by name).
+      const client = await rolePool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.unsubscribe_contact', $1, true)", [CONTACT_A]);
+        const inside = await client.query(
+          'UPDATE contacts SET do_not_contact = true WHERE id = $1 RETURNING id', [CONTACT_A]);
+        expect(inside.rowCount, 'live inside the transaction').toBe(1);
+        await client.query('ROLLBACK');
+
+        const after = await client.query(
+          "SELECT current_setting('app.unsubscribe_contact', true) AS v");
+        expect(after.rows[0]!.v ?? '', 'gone once it ends, on the same connection').toBe('');
+        const reused = await client.query(
+          'UPDATE contacts SET do_not_contact = true WHERE id = $1 RETURNING id', [CONTACT_A]);
+        expect(reused.rowCount, 'so the next borrower of this connection claims nothing').toBe(0);
+      } finally {
+        client.release();
+      }
+
+      const row = await contactRow(CONTACT_A);
+      expect(row!.do_not_contact, 'the probe rolled back; A is opted out only from the route').toBe(true);
     });
   });
 });
