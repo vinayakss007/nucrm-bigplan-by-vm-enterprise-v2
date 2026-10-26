@@ -130,7 +130,15 @@ form-capture / unsubscribe-contact) instead of pretending everything lives in
 `rls.ts`, and 03's pre-auth walk extended to 0134–0138 with `rls.ts:118`→`:120`.
 Two assertions from the `docs/basecrm-citation-drill` branch are deliberately **not**
 ported because they contradict the code: that the reset clears *twelve* GUCs, and
-that `app.oauth_client_id` is absent from the reset lists.
+that `app.oauth_client_id` is absent from the reset lists. **That sentence is now
+itself behind the branch it describes**: `#3234` has been re-pushed since
+(head `206a35b64`, 2026-10-25 15:47Z) and its head now names `app.oauth_client_id`
+where it belongs, but still says **thirteen** GUCs cleared where the code clears
+fourteen — one short of `#3242`'s `app.unsubscribe_contact`. The count is therefore
+not remembered in prose by anyone any more:
+`tests/unit/basecrm-citation-drill-3244.test.ts` counts the `set_config(` calls on
+`pool.ts:241` and `request-connection.ts:104` and fails if the docs say anything
+other than what they hold.
 
 **Re-checked 2026-10-25 against `main = 33f0b7306` (#3241's CI job).** One merge moved
 a number and no coordinate: the sizing census is **919** `*.test.*` files — **867** unit
@@ -140,3 +148,66 @@ a number and no coordinate: the sizing census is **919** `*.test.*` files — **
 `request-connection.ts:103` issued at `:251`, and the reset still clears the same
 **fourteen** `app.*` GUCs — `#3241` wired an existing guard into CI and added no GUC,
 no migration and no schema table, so 01/02/03's pins are untouched by it.
+
+**Re-drilled a third time the same day, against `main = 5760c2538` and landed on
+`main = 54be92020` (#3244's follow-up).** The `:N` set was re-derived with a scanner over
+every `file.ext:NNN` in this directory and each hit checked by hand, which found four
+wrong pointers, one stale census figure and one wrong *claim* among the things the
+previous two passes had left. The scan counts **155** coordinates: **57** carry a path
+long enough for the tripwire to resolve them on its own, and the other **98** are bare
+`file.ext:NNN` — the test only resolves those where its `PINNED` pairs name the file, so
+the remainder were checked by hand this pass and are what the next hand pass inherits.
+Both figures are of the text *after* this pass edited it, which is the only honest way
+to count the citations in a document a change is rewriting.
+
+- `03` § 2 cited `requireAuth` at `middleware.ts:341`. `:341` is the
+  `COALESCE(roles.permissions, …)` select line — a line `01:51` cites correctly for
+  exactly that — while `01`'s own heading and `06` step 5 both said `:200`. The file
+  disagreed with itself for a whole audit cycle because a wrong number in a 500-line
+  file still lands on something plausible.
+- `02`'s "name + file only" list sent `sessions`/`refresh_tokens`/`invitations` to
+  `core.ts:217…`, which is `field_permissions` — the next entry in the same list.
+- `05` cited `resolveDealStage` at `resolve-stage.ts:117`: that is the last line of the
+  function's body (`return { ok: false, reason: 'missing' }`), not the function
+  (`:82`). Where a bullet says "the create path *calls* X", the pointer is to X.
+- `06` step 4 introduced its helper list as "GUC helpers in `lib/db/rls.ts`" and named
+  `withAuthLookupContext` in that list. Only four of the helpers are *defined* there;
+  `withAuthLookupContext` is defined at `lib/db/token-credential-context.ts:90` and
+  reaches `rls.ts` through the re-export at `lib/db/rls.ts:32-41`, and
+  `withUnsubscribeContactContext` (`lib/db/unsubscribe-contact-context.ts:120`) is not
+  re-exported at all. `01:88-96` had this right the whole time — the step was a summary
+  that had drifted from the section it summarised, so it now says which file defines
+  what, because a rebuilder who greps `rls.ts` and finds nothing will conclude the
+  helper is missing rather than re-exported.
+- The sizing census moved again, and by the arithmetic this doc keeps failing to do
+  itself: **921** `*.test.*` files — **869** unit / 39 integration / 12 dashboard / 1
+  api. The `919`/`867` the previous paragraph recorded is exactly `#3248`'s and
+  `#3250`'s two new test files, both merged after it was written. The journal is still
+  **139** entries (highest `idx` 138) over **277** `.sql` files. This follow-up's own
+  `tests/unit/basecrm-citation-drill-3244.test.ts` is the next `+1`: on the branch that
+  adds it the census reads **922** / **870** unit, and a reader who measures a tree
+  containing it and finds `921` is looking at `5760c2538`, not at a defect.
+- The claim: `03` § 1 and `06` step 3 described the shipped `tenant_isolation` policy as
+  0037's — strict WITH CHECK, and "a query with no GUC returns 0 rows". `0039:64-75`
+  replaced that policy on every table that had it with a **USING-only** statement whose
+  expression is `tenant_id IS NULL OR tenant_id = …`, unconditionally (0039 does not
+  branch on nullability the way `0037:239`/`:241` do). A `FOR ALL` policy with no WITH
+  CHECK reuses its USING for writes — the rule `0136:45` states — so the write check for
+  a NULL `tenant_id` is gone, and a no-GUC query returns the *global* rows on any table
+  whose `tenant_id` is nullable. Both bullets now say which of 0037/0039 is being
+  described, because a rebuild that followed the old wording would have written a
+  checkpoint that fails on a table that is behaving correctly.
+
+Nothing here is guarded by CI: no workflow screen reads a `docs/BASECRM/**` citation,
+which is why three audits in one day each found a new set. `tests/unit/` grew a
+resolution test for the pinned subset instead — see `#3244`'s follow-up PR — so the
+next merge that moves a line under a cited symbol fails a test rather than a reader.
+What that test can and cannot promise is worth stating, because the difference is the
+whole reason this directory keeps rotting: it asserts *pairs* (the doc still carries the
+pointer **and** the cited line still carries what the pointer promises) for the
+hand-resolved coordinates, range-checks the 57 path-bearing citations against their
+files, and re-derives the 0037/0039 policy shape and the fourteen-GUC reset list from
+migration and connection text. It cannot check a *sentence*: `05`'s `bulk/route.ts:29`
+matches nine tracked routes, so an abbreviated citation only fails when it is past EOF
+in every one of them, and no test notices if the prose next to a still-correct line
+number stops describing it. That residue is what the hand pass is for.

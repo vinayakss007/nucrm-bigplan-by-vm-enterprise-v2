@@ -24,6 +24,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import { createHash } from 'crypto';
 import { createReadStream } from 'fs';
+import { pgLibpqEnv } from '../lib/backups/backup-service';
 
 interface BackupRow {
   id: string;
@@ -109,7 +110,7 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
   return dest;
 }
 
-async function main() {
+export async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error('ERROR: DATABASE_URL is required');
@@ -212,13 +213,25 @@ async function main() {
     await pool.query(`CREATE DATABASE "${scratchDb}"`);
 
     const restoreStart = Date.now();
+    // Credentials reach psql/pg_restore through the libpq PG* environment
+    // variables, never as a positional connection string: argv is world-
+    // readable via `ps aux` and /proc/<pid>/cmdline, and this job runs with a
+    // BYPASSRLS role on a host shared by several containers (#3260). The helper
+    // is the one `pg_dump` uses in lib/backups/backup-service.ts.
+    // The scratch database name itself is still passed to the child — it is a
+    // generated, already-logged identifier, not a secret, and both tools need
+    // it explicitly: `pg_restore` aborts with "one of -d/--dbname and -f/--file
+    // must be specified" rather than reading PGDATABASE (verified against the
+    // installed pg_restore 16 man page and by running it), and naming the target
+    // removes any dependence on psql's default-database rules.
+    const restoreEnv = pgLibpqEnv(scratchUrl.toString());
     try {
       if (backup.backup_type === 'selective') {
         // Plain-SQL dump
-        await run('psql', [scratchUrl.toString(), '-v', 'ON_ERROR_STOP=1', '-f', localFile]);
+        await run('psql', [scratchDb, '-v', 'ON_ERROR_STOP=1', '-f', localFile], restoreEnv);
       } else {
         // Custom-format dump
-        await run('pg_restore', ['--no-owner', '--no-acl', '-d', scratchUrl.toString(), localFile]);
+        await run('pg_restore', ['--no-owner', '--no-acl', '-d', scratchDb, localFile], restoreEnv);
       }
       const restoreMs = Date.now() - restoreStart;
       console.log(`  ok restore: completed in ${(restoreMs / 1000).toFixed(1)}s`);
@@ -280,4 +293,12 @@ async function main() {
   }
 }
 
-main();
+// Guarded so `tests/unit/verify-backup-argv-3260.test.ts` can import `main()`
+// without the module opening a database connection on load — the same shape as
+// `scripts/drift-check.ts:476` and `scripts/migrate-fresh.ts:632`.
+if (/[/\\]scripts[/\\]verify-backup\.ts$/.test(process.argv[1] ?? '')) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  });
+}

@@ -44,10 +44,14 @@ Every handler runs `requireAuth` → `withApiRoute` (01) then the checks below.
 ### Deals create — the stage trap (#658-adjacent)
 
 `deals.stage_id → deal_stages.id` is **NOT NULL** (02). The create path calls
-`resolveDealStage` (`lib/deals/resolve-stage.ts:117` — path re-pinned 2026-10-25
-@ `2d8aed836`: it was written `lib/.../resolve-stage.ts`, an unresolvable ellipsis;
-real dir is `lib/deals/`, line `:117` = `return { ok: false, reason: 'missing' }`
-unchanged); if it resolves to `'missing'`
+`resolveDealStage` (`lib/deals/resolve-stage.ts:82` — re-pinned 2026-10-25 @
+`5760c2538`: the slot held `:117`, which is not the function but the last line of
+its body, `return { ok: false, reason: 'missing' }` (`:117`, still true and the
+line the sentence below is about). A pointer that lands one line past a `}` reads
+as correct to a skimmer and sends a careful one to the wrong symbol, so the
+**definition** is what a call-path bullet should cite; the
+earlier form was `lib/.../resolve-stage.ts`, an unresolvable ellipsis, fixed by
+the same bullet to `lib/deals/`, which was right); if it resolves to `'missing'`
 the route returns **400** (`deals/route.ts:160-162`, message `resolve-stage.ts:127`).
 This is true **for admin and rep alike** — a stageless POST 400s for everyone. It
 is a *pre-existing contract*, **not** a field-permission artifact (verified: admin

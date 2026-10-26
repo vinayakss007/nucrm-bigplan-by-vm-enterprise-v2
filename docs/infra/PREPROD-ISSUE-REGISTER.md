@@ -1026,13 +1026,13 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 - **It was not Redis.** `nucrm-redis` reports `StartedAt=2026-09-14T15:01:51Z`,
   `RestartCount=0`, `Status=running`, and `redis-cli PING → PONG` throughout: the server was
   up for three weeks. The gap is entirely inside our own lazily-constructed client.
-- **Mechanism.** `lib/cache/index.ts:315` —
+- **Mechanism.** `lib/cache/index.ts:324` —
   `if (!redis || redis.status !== 'ready') return { acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }`.
   Fail-closed is the right call for `getOrSet` (#M3: it prevents a cache stampede across
   replicas), but the return value carries no reason, so a caller cannot tell _"another holder
   owns this"_ from _"the lock backend is not reachable"_. Three separate states land on that one
   branch: the client is still connecting, `isCircuitOpen()` has tripped, or
-  `redisPermanentlyDisconnected` is set after `retryStrategy` gives up (line 115) — the last of
+  `redisPermanentlyDisconnected` is set after `retryStrategy` gives up (line 116) — the last of
   these survives until `startReconnectTimer()` succeeds, so a long Redis blip can quietly park
   all 20 jobs for hours.
 - **Blast radius.** 20 of 22 `app/api/cron/**` routes turn `!lock.acquired` into
@@ -1053,9 +1053,9 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   `{ acquired: false, backendUnavailable: true }` — and have cron routes answer **503** (or at
   least `reason: 'lock-backend-unavailable'`) in that case, so `curl -f`/the crond mail and any
   future schedule monitor treat it as the failure it is. Keep fail-closed for `getOrSet`.
-  Separately: `getRedisClient()` (`lib/cache/index.ts:101`) builds the client lazily on first
-  call, so the very first `acquireLock` after boot necessarily sees `status = 'connect'` — warm
-  it in `instrumentation.ts` instead, or gate `/api/cron/*` on cache readiness.
+  Separately: `getRedisClient()` (`lib/cache/index.ts:102`) builds the client lazily on first
+  call, so the very first `acquireLock` after boot necessarily sees `status = 'connecting'` — warm it in
+  `instrumentation.ts` instead, or gate `/api/cron/*` on cache readiness. **#3259 took the second option (2026-10-25): `acquireLock` spends one bounded grace window on that handshake before it fails closed, so the first cron call of a process runs instead of answering 423 `lock-held`.**
 
 ## PP-031 — 🚨 The super-admin Backups console returns nothing: a swallowed `uuid = text` join, two RLS-blind writes, and an empty Schedules tab _(S2 · RLS + query bug)_
 
@@ -2285,14 +2285,15 @@ unavailable from held) is **not** done by this PR; (b) the **5** routes with no 
 destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still has **zero callers** (measured below), so
 `/api/system/cron-health` remains empty whatever this PR does to the response codes.
 
-- **Mechanism, re-verified line by line.** `lib/cache/index.ts:309` returns a two-state `{ acquired, value }`, and **two**
+- **Mechanism, re-verified line by line.** `lib/cache/index.ts:310` returns a two-state `{ acquired, value }`, and **two**
   separate sites collapse "backend unavailable" into "held":
-  1. `lib/cache/index.ts:315-316` — client missing or not `ready` (still connecting, `isCircuitOpen()` at :93, or
-     `redisPermanentlyDisconnected` at :97) → `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }`, carrying
-     no reason. Exactly what PP-030 describes.
-  2. `lib/cache/index.ts:323-327` — **the correction PP-030 missed**: if the client is `ready` but the `SET` itself throws,
-     the catch returns `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }` (:326), so a Redis _error_
-     also masquerades as a held lock. The asymmetry this entry used to record here — the flag read at :316 only, so
+  1. `lib/cache/index.ts:324-325` — client missing or not `ready` (still connecting, `isCircuitOpen()` at :94, or
+     `redisPermanentlyDisconnected` at :98) → `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }`, carrying
+     no reason. Exactly what PP-030 describes. #3259 (2026-10-25) put a bounded handshake grace in front of this branch, so
+     a first-call `connecting` client is no longer reported as held; the branch and its reason-less return still stand.
+  2. `lib/cache/index.ts:332-336` — **the correction PP-030 missed**: if the client is `ready` but the `SET` itself throws,
+     the catch returns `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }` (:335), so a Redis _error_
+     also masquerades as a held lock. The asymmetry this entry used to record here — the flag read at :325 only, so
      "not ready" ran and "SET errors" skipped — was **closed by #2373** (`355d1326`, 2026-10-06, whose message cites PP-049).
 - **Blast radius, measured not inherited.** `app/api/cron/` holds **22** route dirs and **22 of 22** took their
   dedup lock with `acquireLock('cron:<name>', …)` and hand-rolled the skip. What each answered when the lock was
@@ -2346,7 +2347,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
 - **Verified (on the tree this entry left, which is the tree it found — zero files changed):**
   `npx eslint --max-warnings=0 lib/cache/index.ts app/api/cron/*/route.ts` → exit 0; `tsc --noEmit` → `TSC_EXIT=0`;
   `npx vitest run tests/unit` → 6429 passed / 0 failed (426 files); `npm run -s guard:filesize` → OK.
-- **Files:** none changed. Evidence read: `lib/cache/index.ts:93,97,309-327,368,418,458`; all 22 `app/api/cron/*/route.ts`
+- **Files:** none changed. Evidence read: `lib/cache/index.ts:94,98,310-336,377,427,467`; all 22 `app/api/cron/*/route.ts`
   skip sites; `lib/cron/distributed-lock.ts:65`; `lib/auth/cron.ts`; `deploy/cron/run-cron.sh`; `deploy/cron/crontab`
   (read-only); `tests/unit/cron-lock.test.ts`; `tests/unit/scan7-system-resilience.test.ts`.
 - **What shipped instead of the 23-file batch, and why it is not the shape specified above (#2539, 2026-10-10).** A guard
