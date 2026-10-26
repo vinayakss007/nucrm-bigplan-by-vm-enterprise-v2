@@ -521,10 +521,15 @@ jobs:
           cat > "$FIX/drizzle/migrations/0001_b_second.down.sql" <<'SQL'
           SELECT 1;
           SQL
-          npm run guard:rollback-coverage -- \
-            --migrations-dir "$FIX/drizzle/migrations" --baseline "$FIX/none.json" \
-            2>&1 | tee "$RUNNER_TEMP/rollback-negative.log"
-          if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+          # The `if` form, not `cmd | tee` followed by a PIPESTATUS read: GitHub runs
+          # this block as `bash -e`, and under `-e` a failing pipeline in a bare
+          # statement aborts the step at the pipeline itself. The step then reports
+          # the guard's own exit 1 as a step failure and never reaches the checks
+          # below — which is what the first run of this job did (#3284's CI red).
+          # `if` exempts the pipeline from `-e`, the way the #3241 job already does.
+          if npm run guard:rollback-coverage -- \
+              --migrations-dir "$FIX/drizzle/migrations" --baseline "$FIX/none.json" \
+              2>&1 | tee "$RUNNER_TEMP/rollback-negative.log"; then
             echo "::error::#3284 the guard PASSED a rollback that deletes a later migration's constraint, drops a function a live CHECK calls, and names a relation the later up dropped. It is not reading the SQL — this job proves nothing until this step fails."
             exit 1
           fi

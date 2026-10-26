@@ -415,11 +415,22 @@ describe('#3284 the rollback-coverage job is wired into CI', () => {
   });
 
   it('demands a FAILURE from the negative control, and the right reason', () => {
-    expect(job).toMatch(/if \[ "\$\{PIPESTATUS\[0\]}" -eq 0 \]; then/);
+    // The `if cmd | tee; then exit 1; fi` shape, NOT `cmd | tee` followed by a
+    // PIPESTATUS read. GitHub runs a `run:` block as `bash -e`, and under `-e` a
+    // failing pipeline in a bare statement ends the step AT the pipeline: the first
+    // real run of this job did exactly that, so the step reported the guard's own
+    // exit 1 as a step failure and never reached the reason checks below. A green
+    // CI then meant "the guard went red", not "the guard went red FOR THE RIGHT
+    // REASONS" — and a red CI meant nothing at all. `if` exempts the pipeline from
+    // `-e`, which is the idiom the #3241 job already uses.
+    expect(job).toMatch(/if npm run guard:rollback-coverage -- \\/);
     expect(job).toContain('#3284 the guard PASSED a rollback');
     // the reasons are required by name, and a pass is a failure
     expect(job).toContain('for want in FOREIGN_OBJECT DEAD_RELATION HELPER_HELD; do');
     expect(job).toContain('grep -q "^$want"');
+    // no bare failing pipeline may survive anywhere in the step
+    expect(job).not.toMatch(/^\s*npm run guard:rollback-coverage.*\|\s*tee/m);
+    expect(job).not.toContain('${PIPESTATUS[0]}');
   });
 
   it('is the first guard step in the local pre-merge screen, and says why', () => {
