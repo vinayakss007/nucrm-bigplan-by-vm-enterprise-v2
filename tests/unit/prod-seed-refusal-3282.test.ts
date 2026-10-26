@@ -334,6 +334,11 @@ describe('#3282 the rest of the destructive surface named in ask #4 is gated too
     expect(DROP_OPT_IN_ENV).toBe('NUCRM_ALLOW_DROP');
     expect(src).toMatch(/describeTarget\(process\.env\.DATABASE_URL\)/);
     expect(src).toMatch(/confirmationMatches\(/);
+    // ask 3 wants a backup before the wipe. The script names the dump an operator can actually
+    // trust instead of taking one itself — a pg_dump run as the app role is incomplete under
+    // PP-014, and an auto-taken incomplete backup is the thing that makes the wipe permanent.
+    expect(src).toMatch(/bash scripts\/backup-db\.sh/);
+    expect(src).toMatch(/npm run backup:verify/);
   });
 
   it('keeps the schema-rebuild grants it always had, and says why they are still there', () => {

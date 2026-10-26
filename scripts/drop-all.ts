@@ -46,6 +46,11 @@ async function main() {
     // wipe is confirmed with --yes / --confirm, and `--dry-run` only previews it. That is also
     // what `guard:destructive-gate` reads here, so the gate cannot rot by moving into a helper.
     console.error('[drop-all] usage: npm run db:drop -- --dry-run | --yes (also -y, --confirm); NUCRM_ALLOW_DROP=1 for a non-interactive run');
+    // #3282 ask 3 asks for a backup before the wipe. This script cannot take it: under PP-014
+    // the app role has no BYPASSRLS, so a dump it runs is silently incomplete, and an
+    // incomplete "backup" taken automatically is worse than none. The runbook's dump is the
+    // one that registers a `backup_records` row, and `backup:verify` is the one that proves it.
+    console.error('[drop-all] back it up first: bash scripts/backup-db.sh (docs/DISASTER-RECOVERY.md), then npm run backup:verify');
     process.exit(1);
   }
 
