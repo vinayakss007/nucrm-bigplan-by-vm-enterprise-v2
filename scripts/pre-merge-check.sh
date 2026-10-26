@@ -7,25 +7,25 @@ echo "════════════════════════�
 
 # 1. TypeScript check
 echo ""
-echo "▶ 1/6 TypeScript check..."
+echo "▶ 1/7 TypeScript check..."
 npx tsc --noEmit --pretty 2>&1 | head -20
 echo "   ✅ No TS errors"
 
 # 2. Build check
 echo ""
-echo "▶ 2/6 Build check..."
+echo "▶ 2/7 Build check..."
 npm run build 2>&1 | tail -5
 echo "   ✅ Build succeeded"
 
 # 3. Unit tests
 echo ""
-echo "▶ 3/6 Unit tests..."
+echo "▶ 3/7 Unit tests..."
 npm run test:unit 2>&1 | tail -5
 echo "   ✅ All tests pass"
 
 # 4. Check for new imports from @/lib — verify they exist
 echo ""
-echo "▶ 4/6 Import sanity check..."
+echo "▶ 4/7 Import sanity check..."
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" != "main" ]; then
   NEW_IMPORTS=$(git diff origin/main...HEAD -- '*.ts' '*.tsx' 2>/dev/null | grep "^+import" | grep "from '@/lib" | sed 's/.*from '\''@\/lib\/\(.*\)'\''.*/\1/' | sort -u)
@@ -52,7 +52,7 @@ fi
 # rollback that cannot run is exactly the thing a local screen should refuse.
 # Static only: no database, no credentials.
 echo ""
-echo "▶ 5/6 Rollback coverage (#3284)..."
+echo "▶ 5/7 Rollback coverage (#3284)..."
 npm run guard:rollback-coverage 2>&1 | tail -3
 echo "   ✅ Every .down.sql runs, and owns only its own objects"
 
@@ -63,9 +63,20 @@ echo "   ✅ Every .down.sql runs, and owns only its own objects"
 # purge that has to happen for the one already published). Static only, and it owns
 # the same exit codes ci.yml greps for.
 echo ""
-echo "▶ 6/6 No committed password literal (#3281)..."
+echo "▶ 6/7 No committed password literal (#3281)..."
 npm run guard:seed-credential 2>&1 | tail -3
 echo "   ✅ No password literal survives in scripts, app source or workflows"
+
+# 7. Destructive scripts (#3282). The third guard in this file, and the one whose
+# absence is the actual bug: `prod:seed` was not dangerous because nobody wrote a
+# gate — it was dangerous because a gate could rot in silence, and #3282 is the
+# second issue in a week to find a guard that was green while the thing it guards
+# was off. Static only, no database: the screen reads the package.json-reachable
+# scripts and asks whether each destructive one names its own confirmation.
+echo ""
+echo "▶ 7/7 Destructive script gates (#3282)..."
+npm run guard:destructive-gate 2>&1 | tail -3
+echo "   ✅ Every reachable destructive statement names an opt-in, or is tolerated with a reason"
 
 echo ""
 echo "═══════════════════════════════════════════"

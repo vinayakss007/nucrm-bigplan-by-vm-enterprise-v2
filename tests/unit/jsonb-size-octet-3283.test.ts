@@ -428,12 +428,13 @@ describe('#3283 the screen is wired, with both controls', () => {
 
   it('is enforced by CI, not by a local screen that #3284 already renumbered', () => {
     // pre-merge-check.sh numbered its steps 1/5 as of #3305, which added its rollback
-    // guard as the fifth; #3281 appended guard:seed-credential as the sixth. Appending
-    // a step here buys nothing: the CI job above runs the same alias with both
-    // controls, and docs/README.md's census counts workflow steps, not local ones.
+    // guard as the fifth; #3281 appended guard:seed-credential as the sixth and #3282
+    // guard:destructive-gate as the seventh. Appending a step here buys nothing: the CI
+    // job above runs the same alias with both controls, and docs/README.md's census
+    // counts workflow steps, not local ones.
     const pre = readFileSync(join(ROOT, 'scripts/pre-merge-check.sh'), 'utf8');
     expect(pre).not.toContain('guard:jsonb-size');
-    expect([...pre.matchAll(/▶ (\d+)\/6/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(pre).toContain('guard:rollback-coverage');
   });
 });

@@ -101,6 +101,8 @@
     "seed:dev": "tsx scripts/seed-dev.ts",
     "seed:e2e": "tsx scripts/seed-e2e-user.ts",
     "db:seed": "npx tsx scripts/seed-dev.ts",
+    "db:seed:from-empty": "npx tsx scripts/seed-fresh.ts",
+    "db:state": "npx tsx scripts/db-state.ts",
     "db:demo": "npx tsx scripts/seed-dev.ts",
     "db:studio": "node -e \"console.log('Use DBeaver or pgAdmin to connect: ' + process.env.DATABASE_URL)\"",
     "db:drop": "npx tsx scripts/drop-all.ts",
@@ -125,7 +127,6 @@
     "prod:preflight": "npx tsx scripts/diagnose-production.ts",
     "prod:start": "bash scripts/start-production.sh",
     "prod:start:custom": "node --max-old-space-size=2048 node_modules/next/dist/bin/next start -H 127.0.0.1",
-    "prod:seed": "npx tsx scripts/seed-fresh.ts",
     "telegram:setup-webhook": "npx tsx scripts/telegram-setup-webhook.ts",
     "demo:setup": "npx tsx scripts/seed-dev.ts",
     "worker": "tsx worker.ts",
@@ -160,7 +161,8 @@
     "guard:env-coverage": "node scripts/check-env-coverage.mjs",
     "guard:catch-empty": "node scripts/check-catch-empty.mjs",
     "guard:panel-error-state": "node scripts/check-panel-error-state.mjs",
-    "guard:seed-credential": "node scripts/check-seed-credentials.mjs"
+    "guard:seed-credential": "node scripts/check-seed-credentials.mjs",
+    "guard:destructive-gate": "node scripts/check-destructive-gate.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

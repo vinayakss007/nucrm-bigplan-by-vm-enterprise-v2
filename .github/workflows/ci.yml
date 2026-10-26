@@ -677,6 +677,116 @@ jobs:
           done
           echo "OK: five planted credentials turn this screen red, one named rule each, exactly as #3281 requires."
 
+  # #3282 — nothing in this repository could tell that a script was about to destroy a
+  # database. `npm run prod:seed` deleted every user, tenant, role, session, pipeline and
+  # deal stage in whatever `DATABASE_URL` pointed at, and its documentation table also
+  # reaches `db:drop`, `db:reset`, `db:rollback`, `backup:restore` and `db:bootstrap-test`.
+  # `guard:seed-credential` (#3281) reads password literals and never looks at what a script
+  # does; `guard:raw-sql` reads interpolation, so an interpolated `DROP SCHEMA` was still an
+  # un-gated wipe; `guard:rollback-coverage` asserts a `.down.sql` exists, not that running
+  # it was confirmed; and every other database screen needs a database CI does not have.
+  # `grep -rn "DROP SCHEMA" scripts/check-*.mjs` was empty before this screen existed.
+  #
+  # So this job reads EFFECTS, derived from the package.json aliases an operator can actually
+  # reach — never a hardcoded list, because a list is the thing that rots — and fails when a
+  # destructive script's own source names no confirmation for what it does. A green run here
+  # is what keeps `prod:seed` from coming back as somebody's copy of a script that kept the
+  # `DROP SCHEMA` and dropped the flag handling.
+  #
+  # Inserted below `ci.yml:447` (a cited coordinate) and above the last job, which is the
+  # placement discipline #3283 and #3281 follow: an insert above any cited line moves the
+  # register pointers out from under `npm run guard:coords`.
+  destructive-gate:
+    name: Destructive scripts name their own opt-in (#3282)
+    if: vars.DESTRUCTIVE_GATE_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Positive control — every reachable destructive script gates itself or is tolerated
+        run: npm run guard:destructive-gate
+
+      # Planted defects, one per rule: a `DROP SCHEMA` whose only offered opt-in is
+      # `--dry-run` (a full wipe must be CONFIRMED, so a dry run alone is a finding), an
+      # unlisted `TRUNCATE`, a whole-table `db.delete()` with no `.where()`, a reasonless
+      # allowance, and an allowance whose site is gone. Built here rather than committed as
+      # a fixture directory: the screen derives its own scan set from `package.json`, so a
+      # committed fixture would need a second `package.json` in the tree.
+      - name: Negative control — planted un-gated wipes MUST be red
+        run: |
+          set -uo pipefail
+          FIX="$RUNNER_TEMP/destructive-gate-fixture"
+          mkdir -p "$FIX/scripts"
+          cat > "$FIX/package.json" <<'JSON'
+          {"name":"planted","scripts":{
+            "wipe:schema":"npx tsx scripts/wipe-schema.ts",
+            "wipe:tables":"npx tsx scripts/wipe-truncate.ts",
+            "wipe:rows":"npx tsx scripts/wipe-delete.ts"}}
+          JSON
+          cat > "$FIX/scripts/wipe-schema.ts" <<'TS'
+          const argv = process.argv.slice(2);
+          if (argv.includes('--dry-run')) { console.log('would drop'); process.exit(0); }
+          await pool.query('DROP SCHEMA public CASCADE');
+          TS
+          cat > "$FIX/scripts/wipe-truncate.ts" <<'TS'
+          await pool.query('TRUNCATE TABLE audit_log');
+          TS
+          cat > "$FIX/scripts/wipe-delete.ts" <<'TS'
+          import { db } from '@/drizzle/db';
+          import { users } from '@/drizzle/schema';
+          await db.delete(users);
+          TS
+          cat > "$FIX/unreasoned.json" <<'JSON'
+          {"_comment":"planted: an allowance with no reason in _reasons",
+           "scripts/wipe-truncate.ts|TABLE_WIPE_UNGATED": 1}
+          JSON
+          cat > "$FIX/stale.json" <<'JSON'
+          {"_comment":"planted: an allowance whose site no longer exists",
+           "_reasons":{"scripts/gone.ts|SCHEMA_WIPE_UNGATED":"planted, and gone"},
+           "scripts/gone.ts|SCHEMA_WIPE_UNGATED": 2}
+          JSON
+          # The `if` form, not `cmd | tee` plus a PIPESTATUS read: GitHub runs this block as
+          # `bash -e`, under which a failing pipeline in a bare statement ends the step at the
+          # pipeline — before the reason checks below could run. That is exactly how #3284's
+          # first CI run went red.
+          if npm run guard:destructive-gate -- \
+              --root "$FIX" --baseline "$FIX/none.json" 2>&1 | tee "$RUNNER_TEMP/destructive-gate-negative.log"; then
+            echo "::error::#3282 the guard PASSED a tree holding a dry-run-only DROP SCHEMA, an unlisted TRUNCATE and a whole-table db.delete(). It is not reading the scripts — this job proves nothing until this step fails."
+            exit 1
+          fi
+          for want in SCHEMA_WIPE_UNGATED TABLE_WIPE_UNGATED UNSCOPED_DELETE_UNGATED; do
+            grep -q "^$want" "$RUNNER_TEMP/destructive-gate-negative.log" || {
+              echo "::error::#3282 the guard failed, but never reported $want. The negative control did not exercise the check it exists to prove. Inspect destructive-gate-negative.log."
+              exit 1
+            }
+          done
+          # The ratchet itself, both ways: an exemption nobody owned is a finding, and an
+          # exemption that outlived its code is a finding. A baseline that only ever grows is
+          # not a ratchet, which is the half of #3281's discipline this screen has to inherit.
+          if npm run guard:destructive-gate -- \
+              --root "$FIX" --baseline "$FIX/unreasoned.json" 2>&1 | tee "$RUNNER_TEMP/destructive-gate-unreasoned.log"; then
+            echo "::error::#3282 the guard PASSED an allowance with no recorded reason. Reviewers cannot be asked to trust a number nobody owned."
+            exit 1
+          fi
+          grep -q "^BASELINE_UNREASONED" "$RUNNER_TEMP/destructive-gate-unreasoned.log" || {
+            echo "::error::#3282 the reasonless-allowance run failed, but never reported BASELINE_UNREASONED."
+            exit 1
+          }
+          if npm run guard:destructive-gate -- \
+              --root "$FIX" --baseline "$FIX/stale.json" 2>&1 | tee "$RUNNER_TEMP/destructive-gate-stale.log"; then
+            echo "::error::#3282 the guard ACCEPTED a baseline entry whose site no longer exists. The ratchet is shrink-only and nothing enforces that."
+            exit 1
+          fi
+          grep -q "^BASELINE_STALE" "$RUNNER_TEMP/destructive-gate-stale.log" || {
+            echo "::error::#3282 the stale-allowance run failed, but never reported BASELINE_STALE."
+            exit 1
+          }
+          echo "OK: five planted defects turn this screen red, one named rule each, and a stale allowance is a finding — exactly as #3282 requires."
+
   # PP-059 / #3241 — `npm run guard:vocab` is the only command in this repository
   # that asks a REAL database what its `CHECK` constraints will actually reject, and
   # until now nothing invoked it: `grep -rn -E 'run:.*(guard:vocab|check-constraint-vocab)' .github/workflows/`

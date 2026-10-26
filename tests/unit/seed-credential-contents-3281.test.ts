@@ -352,21 +352,21 @@ describe('#3281 the guard turns red for every shape a committed password takes',
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-describe('#3281 the real tree is clean under exactly the baseline #3282 owns', () => {
+describe('#3281 the real tree is clean, and #3282 emptied the baseline it left', () => {
   const baseline = readBaseline(BASELINE);
 
   it('has no un-baselined password literal in scripts/app/lib/components/workflows', () => {
     const { findings, allowed } = analyse({ root: ROOT, baseline });
     expect(findings).toEqual([]);
-    expect(allowed).toBe(2);
+    expect(allowed).toBe(0);
   });
 
-  it('excuses only the two #3282 sites, by name, and says so', () => {
+  it('excuses nothing now that #3282 removed both sites', () => {
     const keys = Object.keys(baseline).filter((k) => k !== '_comment');
-    expect(keys.sort()).toEqual([
-      'scripts/billing-lifecycle-test.ts|PASSWORD_LITERAL_ASSIGNMENT',
-      'scripts/seed-fresh.ts|HASH_LITERAL_PASSWORD',
-    ]);
+    expect(keys).toEqual([]);
+    // The file stays as the empty ratchet, which is what says "nothing may be added here".
+    // #3282's own PR asserts the same emptiness from its side, so re-widening it takes two
+    // failing tests, not one edited line.
     expect(baseline._comment).toContain('#3282');
   });
 
@@ -518,7 +518,13 @@ describe('#3281 the screen is wired where a regression cannot slip past', () => 
     }
     const jobKeys = [...ci.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map((m) => m[1]);
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
-    expect(jobKeys.indexOf('seed-credential')).toBe(jobKeys.length - 2);
+    // The invariant is the anchor, not the rank. This job was second-to-last only while
+    // it was the newest append; #3282 later inserted `destructive-gate` at exactly the
+    // place this one did — below the cited `:447`, above `constraint-vocab` — which is the
+    // discipline both issues follow. Pin the order, so the next append does not have to
+    // come edit a predecessor's assertion.
+    expect(jobKeys.indexOf('seed-credential')).toBeGreaterThan(jobKeys.indexOf('jsonb-size-unit'));
+    expect(jobKeys.indexOf('seed-credential')).toBeLessThan(jobKeys.indexOf('constraint-vocab'));
     expect(lines.findIndex((l) => l.startsWith('  seed-credential:')) + 1).toBeGreaterThan(447);
   });
 
