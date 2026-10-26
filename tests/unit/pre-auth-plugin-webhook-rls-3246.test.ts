@@ -6,7 +6,7 @@
  * because the URL and the HMAC are the authentication), so `app.current_tenant` is '' on the
  * read that fetches the row carrying the secret. `NULLIF('', …)` is NULL and
  * `custom_plugins.tenant_id` is NOT NULL, so both disjuncts fail and the lookup returned no
- * row for any plugin: 404 "Plugin", before `route.ts:104` could check a signature.
+ * row for any plugin: 404 "Plugin", before the route's HMAC check could run.
  *
  * Migration 0139 adds the narrow SELECT arm and `lib/db/plugin-webhook-context.ts` names its
  * GUC. These tests pin the three ways that can quietly stop being true: the arm wider than the
