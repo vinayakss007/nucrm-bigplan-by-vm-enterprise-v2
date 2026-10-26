@@ -142,7 +142,7 @@ Large repo. Re-measured at `33f0b7306`:
   enforced-RLS database, so treat them as environment-dependent — run `npm test`
   for the authoritative rate on the box you are on.
 - **140 migration steps** (`drizzle/migrations/meta/_journal.json`, highest
-  `idx` 139) spread over **279 `.sql` files** — 140 forward + 139 `.down.sql`.
+  `idx` 139) spread over **280 `.sql` files** — 140 forward + 140 `.down.sql`.
 
 `AGENTS.md:124-127` still carries the 2026-10-04 census (462 files, 425 unit /
 25 integration / 11 dashboard / 1 elsewhere), i.e. roughly half of what is

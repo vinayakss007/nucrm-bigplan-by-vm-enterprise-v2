@@ -225,8 +225,8 @@ against the *writers* above, so a GUC that is set but never reset still passes.
 ## Migrations
 
 - **Convention**: 4-digit zero-padded `NNNN_name.sql` + sibling
-  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 279 `.sql` files,
-  139 `.down.sql` (`0036` is the only forward step still without one).
+  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 280 `.sql` files,
+  140 `.down.sql` — every forward step has one since #3284 closed the last gap.
 - **Journal**: `drizzle/migrations/meta/_journal.json` — 140 entries, idx 0..139.
   **Snapshots**: only `0000/0001/0002/0018_snapshot.json` exist → the chain is
   largely **hand-written SQL**, not `drizzle-kit`-generated. `drizzle.config.ts`

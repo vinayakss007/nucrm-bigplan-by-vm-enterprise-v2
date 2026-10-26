@@ -214,9 +214,9 @@ number stops describing it. That residue is what the hand pass is for.
 
 **Re-counted 2026-10-26 against `main = 32e673a1b` plus #3246's plugin-webhook arm.**
 One branch moved three of these numbers at once and 02/03's reset-list claims with
-them: 0139 is the `idx`-139 step (**140** journal entries over **279** `.sql` files —
-140 forward, 139 `.down.sql`, `0036` still the only one without), `app.plugin_webhook_id`
-is the **fifteenth** name on both reset lists, and the tree now holds **925**
+them: 0139 is the `idx`-139 step (**140** journal entries over **280** `.sql` files —
+140 forward, 140 `.down.sql`, the last gap closed by #3284), `app.plugin_webhook_id`
+is the **fifteenth** name on both reset lists, and the tree now holds **926**
 `*.test.*` files. Nothing here remembers those counts by hand:
 `tests/unit/basecrm-citation-drill-3244.test.ts` counts the `set_config(` calls itself,
 so 02, 03 and that test moved together in #3246 instead of one of them drifting. `03`
