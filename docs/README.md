@@ -43,17 +43,17 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **24** of the `guard:*` aliases by name —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **25** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
-`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:override-ranges`,
+`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:override-ranges`,
 `guard:panel-error-state`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **3** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **31** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **32** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
-and the six additions since those measurements are #2832, #2828, #3167, #3241, #3284 and #3281.
+and the seven additions since those measurements are #2832, #2828, #3167, #3241, #3284, #3283 and #3281.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -123,22 +123,22 @@ statement that nobody has checked, not a verdict that they are wrong.
 
 ## How current is "current"?
 
-Every count above came from these commands. Run them before quoting a number, including these.
-The comments below were re-run 2026-10-25 against `33f0b7306`; the ones that had not moved
-(`app/tenant` pages, `app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts`
-count) keep their numbers, and the ones that had are corrected — the file was quoting a 2026-10-04 tree.
+Every count came from these commands. Run them before quoting a number, including these.
+Re-run 2026-10-26 against `main = f054c6e95` plus #3246 step 2. Unchanged: `app/tenant` and
+`app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts` count.
+Each number that moved is corrected below and says what the file had been quoting.
 
 ```sh
 cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 514 API routes (was 507)
 find app/tenant -name page.tsx | wc -l                    # 149 tenant pages
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 919 (was 462; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 926 (#3246 adds one, the two merges four; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 277 total .sql (was 213)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 139 up-migrations (was 107)
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 139 journal entries (was 105)
-node -pe "Object.keys(require('./package.json').scripts).length"               # 121 scripts (was 96)
+ls drizzle/migrations/*.sql | wc -l                       # 280 total .sql (was 277; #3284 added 0036's down)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 140 up-migrations (was 139), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 140 journal entries (was 139)
+node -pe "Object.keys(require('./package.json').scripts).length"               # 122 scripts (was 96; #3284 added guard:rollback-coverage)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13
 # distinct declared table names; plain grep -o misses one multi-line declaration:

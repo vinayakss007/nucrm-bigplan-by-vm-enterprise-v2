@@ -13,8 +13,8 @@
  */
 
 import { createHmac, timingSafeEqual } from 'crypto';
-import { db } from '@/drizzle/db';
 import { pluginExecutionLogs } from '@/drizzle/schema';
+import type { RlsTransaction } from '@/lib/db/rls';
 import type { WebhookPayload } from './types';
 import { logger } from '@/lib/logger';
 
@@ -77,14 +77,19 @@ export function isWebhookTimestampValid(timestampHeader: string | null): boolean
 
 /**
  * Process an inbound webhook and log it.
+ *
+ * Takes the caller's transaction: `plugin_execution_logs` is FORCE-RLS, so this
+ * insert only lands on a connection whose `app.current_tenant` the route has
+ * already named from the verified plugin row (#3246).
  */
 export async function handleInboundWebhook(
+  tx: RlsTransaction,
   pluginId: string,
   tenantId: string,
   payload: WebhookPayload
 ): Promise<{ acknowledged: boolean; id?: string }> {
   try {
-    const [logEntry] = await db.insert(pluginExecutionLogs).values({
+    const [logEntry] = await tx.insert(pluginExecutionLogs).values({
       tenantId,
       pluginId,
       actionName: 'webhook_inbound',

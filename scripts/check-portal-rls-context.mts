@@ -89,7 +89,9 @@ export const MIN_TABLE_READS = 200;
  * #2472 moved it to stay under the #1843 line ratchet),
  * `withFormLookupContext` from `lib/db/form-capture-context.ts` (#3163's
  * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
- * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim). The
+ * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim), plus
+ * `withPluginWebhookLookupContext` from `lib/db/plugin-webhook-context.ts` (#3246's
+ * pre-auth plugin webhook lookup). The
  * guard matches on the *call name* at each site, so the split changes nothing it
  * can see — this list is only where the names come from.
  */
@@ -103,6 +105,7 @@ export const CONTEXT_HELPERS = [
   'withPortalLookupContext',
   'withFormLookupContext',
   'withUnsubscribeContactContext',
+  'withPluginWebhookLookupContext',
 ];
 
 /**
@@ -725,8 +728,15 @@ export function buildTargets(root: string): string[] {
  * here, and the answer is that a ratchet nobody is watching still has to be pointed at
  * someone. Making the screen refuse a closed issue needs the GitHub API at guard time,
  * which is out of scope for a pointer fix and is what #3246's remaining steps are for:
- * bind each of these three reads and delete the entry, the way #3225, #3231 and #3237
+ * bind each of these reads and delete the entry, the way #3225, #3231 and #3237
  * each deleted one.
+ *
+ * Step 2 did that for `app/api/tenant/plugins/webhook` on 2026-10-25, so the three
+ * became two. Its one finding was the lookup the entry named as needing an arm first:
+ * migration 0139's SELECT-only arm on `custom_plugins` behind `app.plugin_webhook_id`,
+ * opened by `withPluginWebhookLookupContext`, closed by the statement that hands the
+ * claimed row's tenant to the `plugin_execution_logs` write once the HMAC has passed.
+ * `webhooks` (44) and `auth/sso` (2) stay deferred to #3246.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -759,14 +769,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'that read is #3246\'s lookup arm, not a missing transaction context, and inventing a GUC '
       + 'for it is not this guard\'s call.',
     maxFindings: 2,
-  },
-  {
-    dir: 'app/api/tenant/plugins/webhook',
-    deferredTo: '#3246',
-    why: 'A plugin callback URL that `proxy.ts` keeps anonymous still has to look up which tenant a '
-      + 'plugin installation belongs to, which is the arm #3246 tracks; the route is under '
-      + 'app/api/tenant only by naming.',
-    maxFindings: 1,
   },
 ];
 
