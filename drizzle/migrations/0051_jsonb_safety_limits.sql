@@ -12,7 +12,7 @@
 -- multi-byte they diverge by the encoding factor — a 60,000-glyph emoji payload
 -- measures 60,009 here and 240,009 bytes on disk. #3283 records that as shipped
 -- behaviour instead of re-labelling it, and the body correction is a separate
--- forward migration (`0139_jsonb_size_octet_length`) rather than an edit here.
+-- forward migration (`0140_jsonb_size_octet_length`) rather than an edit here.
 -- Measured, not assumed: the ledger stamps sha256(file bytes) but `db:migrate`
 -- skips on `hash OR created_at`, so after this header edit a migrated database
 -- still reports 0 to replay — it falls through to "created_at (journal when)

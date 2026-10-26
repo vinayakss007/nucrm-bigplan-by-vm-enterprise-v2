@@ -135,10 +135,11 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     // tests/unit/metrics-tenant-count-3195.test.ts. `app/api/auth/oauth` and
     // `app/api/unsubscribe` came off the same regex when #3225/#3231 and #3237
     // invented their privileges and bound the reads; a route that has been fixed
-    // must not be able to take its exemption back.
+    // must not be able to take its exemption back. #3246 step 2 did the same for
+    // `app/api/tenant/plugins/webhook`, whose arm is migration 0139.
     for (const entry of SCOPE_DEFERRALS) {
       expect(entry.dir, entry.deferredTo).toMatch(
-        /^app\/api\/(cron|webhooks|auth\/sso|tenant\/plugins\/webhook)$/,
+        /^app\/api\/(cron|webhooks|auth\/sso)$/,
       );
     }
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
@@ -183,10 +184,25 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     // inside `app/api/tenant`, which is in scope unconditionally, so a finding there has
     // to land on exactly one count and not be claimed twice. (#3186 wrote this against
     // `app/api/auth/oauth`, which #3225 and #3231 bounded out of the ledger — see the
-    // note above SCOPE_DEFERRALS.)
-    const { kept, deferred } = applyDeferrals([v('app/api/tenant/plugins/webhook/callback/route.ts')], SCOPE_DEFERRALS);
+    // note above SCOPE_DEFERRALS. #3246 step 2 bounded this nested dir out too, so the
+    // overlap property is exercised on the live ledger plus the entry it removed.)
+    const nested: ScopeDeferral[] = [...SCOPE_DEFERRALS, {
+      dir: 'app/api/tenant/plugins/webhook',
+      deferredTo: '#3246',
+      why: 'x'.repeat(41),
+      maxFindings: 1,
+    }];
+    const { kept, deferred } = applyDeferrals([v('app/api/tenant/plugins/webhook/callback/route.ts')], nested);
     expect(kept.filter((k) => k.file === 'app/api/tenant/plugins/webhook/callback/route.ts')).toEqual([]);
     expect(deferred.filter((d) => d.dir === 'app/api/tenant/plugins/webhook').map((d) => d.count)).toEqual([1]);
+  });
+
+  it('and a finding in the dir #3246 step 2 bounded out is reported, not excused', () => {
+    // The other way the same assertion can rot: re-adding the entry. Nothing in the live
+    // ledger covers `app/api/tenant/plugins/webhook` now, so its read has to be bound.
+    const { kept, deferred } = applyDeferrals([v('app/api/tenant/plugins/webhook/callback/route.ts')], SCOPE_DEFERRALS);
+    expect(deferred.filter((d) => d.dir === 'app/api/tenant/plugins/webhook')).toEqual([]);
+    expect(kept.map((k) => k.file)).toContain('app/api/tenant/plugins/webhook/callback/route.ts');
   });
 
   it('each live deferral sits EXACTLY on its pin — growth and rot both fail', async () => {

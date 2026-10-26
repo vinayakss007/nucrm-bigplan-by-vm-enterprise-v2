@@ -205,7 +205,7 @@ export function analyse({ dir, baseline = {} }) {
         file: def.file,
         detail: `${name}(${def.args}) claims a byte measure in its name but its effective body uses a bare length() — a CHARACTER count. `
           + 'Use octet_length(val::text). (A later CREATE OR REPLACE would clear this: '
-          + '0051 defines the body, 0139 replaces it, and the replacement is what lands.)',
+          + '0051 defines the body, 0140 replaces it, and the replacement is what lands.)',
       });
     }
     const doc = readFileSync(join(dir, def.file), 'utf8');

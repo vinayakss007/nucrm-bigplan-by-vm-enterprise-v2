@@ -4,7 +4,7 @@
  * The defect lived in one function body, and every screen in this repository reads
  * the constraint NAME or the migration PROSE — both of which said bytes. So these
  * tests do two things the existing screens structurally cannot: they read the body
- * (`0051`'s `length(val::text)::int` is the bug, `0139`'s `octet_length(val::text)`
+ * (`0051`'s `length(val::text)::int` is the bug, `0140`'s `octet_length(val::text)`
  * is the fix), and they pin the numbers that were measured against a database built
  * from the full journal rather than quoted from the issue.
  *
@@ -57,7 +57,7 @@ const DIR = join(ROOT, 'drizzle/migrations');
 const up = (tag) => readFileSync(join(DIR, `${tag}.sql`), 'utf8');
 const down = (tag) => readFileSync(join(DIR, `${tag}.down.sql`), 'utf8');
 
-const TAG = '0139_jsonb_size_octet_length';
+const TAG = '0140_jsonb_size_octet_length';
 
 /**
  * `ci.yml` lines the register and `docs/README.md` cite by number. Each pair is the
@@ -88,8 +88,8 @@ function cleanup(dir: string) {
 
 const CHAR_HELPER = 'CREATE OR REPLACE FUNCTION jsonb_size_bytes(val jsonb)\nRETURNS integer\nLANGUAGE sql IMMUTABLE\nAS $$ SELECT length(val::text)::int; $$;\n';
 
-describe('#3283 the shipped helper measured characters, and 0139 measures bytes', () => {
-  it('0051 defines the body that was the defect, and 0139 replaces it in place', () => {
+describe('#3283 the shipped helper measured characters, and 0140 measures bytes', () => {
+  it('0051 defines the body that was the defect, and 0140 replaces it in place', () => {
     expect(up('0051_jsonb_safety_limits')).toMatch(/AS \$\$ SELECT length\(val::text\)::int; \$\$;/);
     expect(up(TAG)).toMatch(/CREATE OR REPLACE FUNCTION jsonb_size_bytes\(val jsonb\)/);
     expect(up(TAG)).toMatch(/AS \$\$ SELECT octet_length\(val::text\); \$\$;/);
@@ -299,7 +299,7 @@ describe('#3283 the unit screen reads bodies, not names', () => {
     expect(text).toMatch(/65,536 characters/);
     const dir = fixture({
       '0051_jsonb_safety_limits.sql': text,
-      '0139_jsonb_size_octet_length.sql': up(TAG),
+      '0140_jsonb_size_octet_length.sql': up(TAG),
     });
     expect(analyse({ dir, baseline: {} }).findings).toEqual([]);
     cleanup(dir);

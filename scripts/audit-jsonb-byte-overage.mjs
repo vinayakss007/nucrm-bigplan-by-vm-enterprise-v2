@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * #3283 — the backfill check. `0139_jsonb_size_octet_length` makes the 186
+ * #3283 — the backfill check. `0140_jsonb_size_octet_length` makes the 186
  * `chk_*_size` ceilings measure bytes, and a CHECK constraint is only evaluated on
  * write: Postgres never re-validates what is already in the table. So the moment
  * that ceiling becomes true, every multi-byte payload the character ceiling
@@ -157,7 +157,7 @@ export function formatReport(result) {
     + ` against ${result.catalogRows} size CHECK constraint(s).`);
   const findings = result.targets.filter((t) => t.overCeiling > 0);
   if (!findings.length) {
-    out.push('OK: no stored row exceeds the ceiling it will be held to once 0139 is applied.');
+    out.push('OK: no stored row exceeds the ceiling it will be held to once 0140 is applied.');
   } else {
     out.push(`${findings.length} column(s) hold ${result.summary.totalRowsOverCeiling} row(s)`
       + ` that the character ceiling accepted and the byte ceiling would refuse:`);
@@ -165,7 +165,7 @@ export function formatReport(result) {
       out.push(`  ${f.schema}.${f.table}.${f.column}  ceiling ${f.ceiling} bytes`
         + `  →  ${f.overCeiling} row(s) over   (${f.conname})`);
     }
-    out.push('0139 does NOT touch these rows: a CHECK is only evaluated on write.');
+    out.push('0140 does NOT touch these rows: a CHECK is only evaluated on write.');
     out.push('Trim or re-write them before relying on the ceiling as a storage bound.');
   }
   if (result.skipped.length) {
