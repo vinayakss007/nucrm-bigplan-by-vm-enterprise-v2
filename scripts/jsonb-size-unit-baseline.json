@@ -1,0 +1,3 @@
+{
+  "_comment": "#3283 shrink-only ratchet: findings the jsonb/byte unit screen tolerates per migration file. Lower it as they are fixed; raising it is a regression."
+}

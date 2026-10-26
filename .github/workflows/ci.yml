@@ -541,6 +541,83 @@ jobs:
           done
           echo "OK: a rollback reaching outside its own migration turns this screen red, exactly as #3284 requires."
 
+  # #3283 — `jsonb_size_bytes` counted CHARACTERS for its whole history while 186
+  # `chk_*_size` CHECK constraints and 0051's "64KB serialized size" header both said
+  # bytes. Measured on a database built from the shipped journal 0000..0138 (139
+  # migrations, 3,185 statements), not inferred: the helper is called by exactly 186
+  # constraints across 126 tables, every one ceilinged
+  # at the literal 65536, and 100% of its pg_depend edges are pg_constraint — zero
+  # indexes, zero views, zero generated columns, zero app-side SQL. A 60,000-glyph
+  # payload measured 60,009 against a 65,536 ceiling and was ACCEPTED at 240,009 bytes.
+  #
+  # This screen reads the function BODY, which is the only place the lie lived. Every
+  # existing guard reads the constraint name or the migration prose, and both said
+  # bytes.
+  #
+  # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopted and
+  # #3241 followed: a green run is evidence only once a synthetic migration that
+  # re-introduces the defect turns it red, naming all three rules.
+  #
+  # Appended above the #3241 job, not at the end of the file: `constraint-vocab` is
+  # pinned as the LAST job by tests/unit/ci-constraint-vocab-job-3241.test.ts, and
+  # `ci.yml:221`, `:254`, `:401` and `:447` are register coordinates that no insert
+  # above them may move. This job is insert-only below `:447`, and sits after #3284's
+  # `rollback-coverage` because that job merged first — both are appends at the same
+  # anchor, so the earlier one keeps the line.
+  jsonb-size-unit:
+    name: Byte-unit truth of the jsonb size ceilings (#3283)
+    if: vars.JSONB_SIZE_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Positive control — every byte-claiming helper actually measures bytes
+        run: npm run guard:jsonb-size
+
+      # Three defects, one file: a `*_size_bytes` helper built on a bare length(), a
+      # `*_size` ceiling measuring with length() inline, and no unit stated in the
+      # header. If the guard passes this it is reading names, not bodies.
+      - name: Negative control — a character-counting byte ceiling MUST be red
+        run: |
+          set -uo pipefail
+          FIX="$RUNNER_TEMP/jsonb-size-fixture"
+          mkdir -p "$FIX/drizzle/migrations/meta"
+          cat > "$FIX/drizzle/migrations/meta/_journal.json" <<'JSON'
+          {"version":"7","dialect":"postgresql","entries":[
+            {"idx":0,"when":1,"tag":"0000_unit_fixture"}]}
+          JSON
+          cat > "$FIX/drizzle/migrations/0000_unit_fixture.sql" <<'SQL'
+          CREATE OR REPLACE FUNCTION jsonb_size_bytes(val jsonb)
+          RETURNS integer
+          LANGUAGE sql IMMUTABLE PARALLEL SAFE
+          AS $fn$ SELECT length(val::text)::int; $fn$;
+
+          CREATE TABLE gizmos (meta jsonb);
+          ALTER TABLE gizmos ADD CONSTRAINT chk_gizmos_meta_size
+            CHECK (meta IS NULL OR length(meta::text) <= 65536);
+          SQL
+          # The `if` form, not `cmd | tee` plus a PIPESTATUS read: GitHub runs this
+          # block as `bash -e`, under which a failing pipeline in a bare statement
+          # ends the step at the pipeline — before the reason checks below could run.
+          if npm run guard:jsonb-size -- \
+              --migrations-dir "$FIX/drizzle/migrations" --baseline "$FIX/none.json" \
+              2>&1 | tee "$RUNNER_TEMP/jsonb-size-negative.log"; then
+            echo "::error::#3283 the guard PASSED a helper named _size_bytes that counts characters, a _size ceiling measuring with length(), and a file that never states its unit. It is not reading the SQL — this job proves nothing until this step fails."
+            exit 1
+          fi
+          for want in CHAR_COUNT_HELPER UNIT_UNDOCUMENTED CEILING_NOT_HELPER; do
+            grep -q "^$want" "$RUNNER_TEMP/jsonb-size-negative.log" || {
+              echo "::error::#3283 the guard failed, but never reported $want. The negative control did not exercise the check it exists to prove. Inspect jsonb-size-negative.log."
+              exit 1
+            }
+          done
+          echo "OK: a character-counting byte ceiling turns this screen red naming all three rules, exactly as #3283 requires."
+
+
   # PP-059 / #3241 — `npm run guard:vocab` is the only command in this repository
   # that asks a REAL database what its `CHECK` constraints will actually reject, and
   # until now nothing invoked it: `grep -rn -E 'run:.*(guard:vocab|check-constraint-vocab)' .github/workflows/`
