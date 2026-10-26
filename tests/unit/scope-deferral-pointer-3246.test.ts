@@ -13,6 +13,10 @@
  * still point at the closed credential work — so this file pins the shape of the ledger as of #3246 and
  * fails the moment a pointer drifts back.
  *
+ * Step 2 (2026-10-25) bound `app/api/tenant/plugins/webhook`'s 1 read behind migration 0139's arm and
+ * deleted its entry, the way #3225, #3231 and #3237 each deleted one. The four-directory ledger this
+ * file was cut against is now three, and the equality assertions below are what says so.
+ *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
 import { describe, it, expect } from 'vitest';
@@ -26,14 +30,13 @@ const GUARD_SRC = readFileSync(
 );
 
 describe('#3246 the deferral ledger points at live work', () => {
-  it('has exactly the four directories, at the ceilings they were measured with', () => {
+  it('has exactly the three directories, at the ceilings they were measured with', () => {
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
       'app/api/webhooks',
       'app/api/auth/sso',
-      'app/api/tenant/plugins/webhook',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44, 2, 1]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44, 2]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
@@ -59,7 +62,6 @@ describe('#3246 the deferral ledger points at live work', () => {
     expect(SCOPE_DEFERRALS.filter((d) => d.deferredTo === '#3246').map((d) => d.dir)).toEqual([
       'app/api/webhooks',
       'app/api/auth/sso',
-      'app/api/tenant/plugins/webhook',
     ]);
   });
 
