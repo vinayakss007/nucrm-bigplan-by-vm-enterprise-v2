@@ -124,7 +124,7 @@ statement that nobody has checked, not a verdict that they are wrong.
 ## How current is "current"?
 
 Every count came from these commands. Run them before quoting a number, including these.
-Re-run 2026-10-26 against `main = f054c6e95` plus #3246 step 2. Unchanged: `app/tenant` and
+Re-run 2026-10-26 against `main = f054c6e95` plus #3246 steps 2 and 3. Unchanged: `app/tenant` and
 `app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts` count.
 Each number that moved is corrected below and says what the file had been quoting.
 
@@ -133,11 +133,11 @@ cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 514 API routes (was 507)
 find app/tenant -name page.tsx | wc -l                    # 149 tenant pages
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 926 (#3246 adds one, the two merges four; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 927 (#3246 adds two, the two merges four; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 280 total .sql (was 277; #3284 added 0036's down)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 140 up-migrations (was 139), each with a `.down.sql` since #3284
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 140 journal entries (was 139)
+ls drizzle/migrations/*.sql | wc -l                       # 282 total .sql (was 277; #3284 added 0036's down, #3246 0139 and 0140)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 141 up-migrations (was 139), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 141 journal entries (was 139)
 node -pe "Object.keys(require('./package.json').scripts).length"               # 122 scripts (was 96; #3284 added guard:rollback-coverage)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13

@@ -14,9 +14,9 @@
  * back to password login.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { ssoProviders } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
+import { withSsoDomainLookupContext } from '@/lib/db/sso-lookup-context';
 import {
   domainsFor,
   getAuthorizeUrl,
@@ -49,7 +49,11 @@ export async function GET(request: NextRequest) {
   // Pull every active OIDC provider whose config.email_domains contains the
   // domain. The `?` JSONB operator checks for an array element when the
   // value at that path is a JSON array.
-  const candidates = await db
+  //
+  // 0140's domain arm is what makes this read possible: nothing is authenticated
+  // here, and `sso_providers.tenant_isolation` alone matches zero rows with
+  // `app.current_tenant` at '' — so without it every caller took the 404 below.
+  const candidates = await withSsoDomainLookupContext(domain, (tx) => tx
     .select({
       id: ssoProviders.id,
       tenantId: ssoProviders.tenantId,
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
         sql`${ssoProviders.config}->'email_domains' ? ${domain}`,
       ),
     )
-    .limit(1);
+    .limit(1));
 
   const row = candidates[0];
   if (!row) {

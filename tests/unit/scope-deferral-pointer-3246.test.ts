@@ -17,16 +17,8 @@
  * deleted its entry, the way #3225, #3231 and #3237 each deleted one. The four-directory ledger this
  * file was cut against is now three, and the equality assertions below are what says so.
  *
- * Step 4a (2026-10-26) did not delete an entry; it moved `app/api/webhooks` off its 44 ceiling to 42 by
- * binding the inbound `apiKeys` lookup and its trail write in `lib/webhooks/inbound-auth.ts`, which is a
- * pinned target rather than a deferred directory. The ceiling is a count that may only go down, so the
- * number below is the measured run, not the number the entry was invented with.
- *
- * Step 4c (2026-10-27) took 6 more off the same ceiling: `app/api/webhooks/payu` resolves its
- * quote through migration 0141's arm and writes under `withTenantContext`, so it left the
- * deferred directory's count without leaving the directory. `resend`'s 12 are still here because
- * step 4b binds them on its own branch — whichever of the two lands second re-measures this line,
- * and a pin that goes UP is the signal to look.
+ * Step 3 (2026-10-26) did the same to `app/api/auth/sso`'s 2 reads behind migration 0140's two arms, so
+ * the ledger is two and only #3246's webhook surface is left counting against it.
  *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
@@ -41,13 +33,12 @@ const GUARD_SRC = readFileSync(
 );
 
 describe('#3246 the deferral ledger points at live work', () => {
-  it('has exactly the three directories, at the ceilings they were measured with', () => {
+  it('has exactly the two directories, at the ceilings they were measured with', () => {
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
       'app/api/webhooks',
-      'app/api/auth/sso',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 36, 2]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
@@ -72,7 +63,6 @@ describe('#3246 the deferral ledger points at live work', () => {
     }
     expect(SCOPE_DEFERRALS.filter((d) => d.deferredTo === '#3246').map((d) => d.dir)).toEqual([
       'app/api/webhooks',
-      'app/api/auth/sso',
     ]);
   });
 
