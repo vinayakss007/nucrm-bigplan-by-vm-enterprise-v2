@@ -437,6 +437,10 @@ describe('#3284 the rollback-coverage job is wired into CI', () => {
     const pre = readFileSync(join(ROOT, 'scripts/pre-merge-check.sh'), 'utf8');
     expect(pre).toContain('npm run guard:rollback-coverage');
     expect(pre).toContain('guard:migration-redecl has no step in pre-merge-check.sh');
-    expect([...pre.matchAll(/▶ (\d+)\/5/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5]);
+    // #3281 appended a second guard step (guard:seed-credential) as 6/6, so the
+    // numbering this issue minted at 1..5 is now 1..6. Pin it closed: a step added or
+    // dropped without renumbering fails here rather than printing a stale count.
+    expect([...pre.matchAll(/▶ (\d+)\/6/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(pre).toContain('npm run guard:seed-credential');
   });
 });
