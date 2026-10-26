@@ -32,6 +32,13 @@ const h = vi.hoisted(() => ({
   pipelineId: '66666666-6666-4666-8666-666666666666',
 }));
 
+// POST now runs inside withTenantScope, which pins a real pool client —
+// unit tests have no database, so pass the handler straight through.
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 vi.mock('@/drizzle/db', async () => {
   // handleDeal resolves a real `deals.stage_id` before writing (see
   // tests/unit/inbound-deal-mapping.test.ts), so the route now issues selects

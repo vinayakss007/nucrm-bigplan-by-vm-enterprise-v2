@@ -17,6 +17,11 @@
  * deleted its entry, the way #3225, #3231 and #3237 each deleted one. The four-directory ledger this
  * file was cut against is now three, and the equality assertions below are what says so.
  *
+ * Step 4a (2026-10-26) did not delete an entry; it moved `app/api/webhooks` off its 44 ceiling to 42 by
+ * binding the inbound `apiKeys` lookup and its trail write in `lib/webhooks/inbound-auth.ts`, which is a
+ * pinned target rather than a deferred directory. The ceiling is a count that may only go down, so the
+ * number below is the measured run, not the number the entry was invented with.
+ *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
 import { describe, it, expect } from 'vitest';
@@ -36,7 +41,7 @@ describe('#3246 the deferral ledger points at live work', () => {
       'app/api/webhooks',
       'app/api/auth/sso',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44, 2]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 42, 2]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
