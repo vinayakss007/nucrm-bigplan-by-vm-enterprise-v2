@@ -1,0 +1,10 @@
+{
+  "_comment": "Shrink-only ratchet for scripts/check-down-migration-coverage.mjs: per-migration count of constraints an up adds that its own down never removes. Lower a number when you fix one; deleting this file sets every allowance to 0.",
+  "0001_perpetual_the_stranger": 15,
+  "0002_flat_sir_ram": 136,
+  "0003_billing_migration": 23,
+  "0020_add_fk_references": 52,
+  "0030_add_fk_constraints_billing_documents": 10,
+  "0056_text_length_limits_phase0": 4,
+  "0076_ondelete_rules": 2
+}
