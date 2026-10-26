@@ -5,12 +5,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
-import { createHash } from 'crypto';
 import { db } from '@/drizzle/db';
-import { apiKeys, webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, or, isNull, gt, sql, ilike, asc, desc } from 'drizzle-orm';
+import { withTenantScope } from '@/lib/api/with-api-route';
+import { webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
+import { eq, and, isNull, ilike, asc, desc } from 'drizzle-orm';
 import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
+import { resolveApiKey } from '@/lib/webhooks/inbound-auth';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
@@ -71,43 +72,6 @@ function logRequest(keyPrefix: string, status: number, path: string) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
-
-/**
- * Resolve an API key to a tenant. Accepts either a raw key (from header/query)
- * or a key hash. Returns null if the key is invalid, expired, or inactive.
- */
-async function resolveApiKey(rawKey: string) {
-  const keyHash = createHash('sha256').update(rawKey).digest('hex');
-
-  const row = await db.query.apiKeys.findFirst({
-    // #2459: `api_keys` is 16 columns (drizzle/schema/core.ts:281) and one is
-    // `key_hash` — the credential this route exists to check, read here on a
-    // proxy.ts public path with no session. These five are what both callers
-    // touch; `key_hash` stays a WHERE predicate. tsc proves five is enough.
-    columns: { id: true, tenantId: true, userId: true, name: true, prefix: true },
-    where: and(
-      eq(apiKeys.keyHash, keyHash),
-      eq(apiKeys.isActive, true),
-      or(
-        isNull(apiKeys.expiresAt),
-        gt(apiKeys.expiresAt, new Date())
-      )
-    )
-  });
-
-  if (!row) return null;
-
-  // Update last_used_at and call_count
-  await db.update(apiKeys)
-    .set({ 
-      lastUsedAt: new Date(),
-      callCount: sql`${apiKeys.callCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(apiKeys.id, row.id));
-
-  return row;
-}
 
 /**
  * Sanitize a string value — trim, limit length, strip control characters.
@@ -894,6 +858,15 @@ type InboundRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
+  // The tenant adopted in resolveApiKey is a SESSION-scoped GUC on the checkout
+  // that statement happened to use, and the pool clears it on release
+  // (lib/db/pool.ts:241). This path is anonymous, so nothing wraps it the way
+  // withApiRoute wraps an authenticated route — pin one client for the request
+  // or every statement below the auth still reads an empty app.current_tenant.
+  return withTenantScope(() => handleInbound(request));
+}
+
+async function handleInbound(request: NextRequest) {
   const startTime = Date.now();
   let apiKeyRow: Awaited<ReturnType<typeof resolveApiKey>> = null;
   let keyPrefix = 'unknown';
@@ -1159,6 +1132,10 @@ export async function POST(request: NextRequest) {
 // ── GET endpoint for health check / stats ──────────────────────────────
 
 export async function GET(request: NextRequest) {
+  return withTenantScope(() => handleInboundStats(request));
+}
+
+async function handleInboundStats(request: NextRequest) {
   try {
     // Header ONLY — ?api_key= query params leak into logs/history.
     const rawKey = request.headers.get('x-api-key');

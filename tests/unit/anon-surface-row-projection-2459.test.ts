@@ -186,8 +186,8 @@ describe('the anonymous surface keeps its one measured exception', () => {
 });
 
 describe('the anonymous API-key lookup (#2459)', () => {
-  const hook = readFileSync(join(ROOT, 'app/api/webhooks/inbound/route.ts'), 'utf8');
-  const read = /const row = await db\.query\.apiKeys\.findFirst\(\{[\s\S]*?\n\s*\}\);/.exec(hook);
+  const hook = readFileSync(join(ROOT, 'lib/webhooks/inbound-auth.ts'), 'utf8');
+  const read = /const row = await withAuthLookupContext\(\(tx\) => tx\.query\.apiKeys\.findFirst\(\{[\s\S]*?\n\s*\}\)\);/.exec(hook);
 
   it('names five of api_keys 16 columns', () => {
     // resolveApiKey hands the whole row to both callers, so the row type is the

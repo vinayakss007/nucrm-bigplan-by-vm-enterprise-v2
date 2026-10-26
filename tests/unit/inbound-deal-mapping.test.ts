@@ -37,6 +37,13 @@ const h = vi.hoisted(() => ({
 
 type OpRec = { op: string; table?: unknown; payload?: unknown; where?: unknown };
 
+// POST/GET now run inside withTenantScope, which pins a real pool client —
+// unit tests have no database, so pass the handler straight through.
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 vi.mock('@/drizzle/db', () => {
   const reader = () => {
     const rec: OpRec = { op: 'select' };
