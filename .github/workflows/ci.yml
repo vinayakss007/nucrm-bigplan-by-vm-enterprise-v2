@@ -446,6 +446,101 @@ jobs:
       - name: Every environment variable is documented or allowlisted
         run: node scripts/check-env-coverage.mjs
 
+  # #3284 — the rollback path. `db:rollback:coverage` counts whether a `.down.sql`
+  # file EXISTS; nothing asked whether it can RUN, or whether it deletes the right
+  # things, and `guard:chain` / `guard:migration-redecl` / `guard:migration-rls`
+  # all read the forward direction only. The result was a rollback chain that
+  # aborts below 0051: `0055`'s down names constraints on tables `0078`/`0080`
+  # dropped, `0051`'s drops a function 0055's constraints still call (2BP01), and
+  # `0050`'s loop matched `conname LIKE 'chk_%'`, which reaches 440 constraints
+  # belonging to LATER migrations. This guard measures that statically — no
+  # database and no credentials, so it can gate the commit that adds the migration.
+  #
+  # Appended as a NEW JOB immediately after `ci.yml:447` (`check-env-coverage`),
+  # the last cited coordinate in the file — `:221`, `:254`, `:401` and `:447` all sit
+  # above it, so nothing moves out from under `npm run guard:coords`. It goes BEFORE
+  # #3241's job rather than at the end because
+  # `tests/unit/ci-constraint-vocab-job-3241.test.ts:63` asserts `constraint-vocab` is
+  # the last job in the file: that is the invariant #3241 minted, and a later append
+  # respects it instead of editing it. Nothing here needs `npm ci` — the script imports
+  # only `node:fs`, `node:path` and `node:url` — so the job is one checkout, two runs.
+  #
+  # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopts:
+  # a green run is only evidence once a deliberately broken rollback turns it red.
+  rollback-coverage:
+    name: Down-migration coverage (#3284)
+    if: vars.ROLLBACK_COVERAGE_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Positive control — every rollback script runs, and owns only its own objects
+        run: npm run guard:rollback-coverage
+
+      # A synthetic two-migration tree carrying three of the #3284 defect shapes:
+      # a `LIKE 'chk_%'` loop that reaches the later migration's constraint, an
+      # `ALTER TABLE gadgets DROP CONSTRAINT` on a relation the later up dropped,
+      # and an unconditional `DROP FUNCTION` a later CHECK still calls. If the
+      # guard passes this it is reading the baseline file rather than the SQL, and
+      # the step above is an assertion that a green screen means something.
+      - name: Negative control — a rollback reaching outside its own migration MUST be red
+        run: |
+          set -uo pipefail
+          FIX="$RUNNER_TEMP/rollback-fixture"
+          mkdir -p "$FIX/drizzle/migrations/meta"
+          cat > "$FIX/drizzle/migrations/meta/_journal.json" <<'JSON'
+          {"version":"7","dialect":"postgresql","entries":[
+            {"idx":0,"when":1,"tag":"0000_a_first"},
+            {"idx":1,"when":2,"tag":"0001_b_second"}]}
+          JSON
+          cat > "$FIX/drizzle/migrations/0000_a_first.sql" <<'SQL'
+          CREATE TABLE gadgets (id int);
+          CREATE TABLE widgets (meta jsonb);
+          ALTER TABLE widgets ADD CONSTRAINT chk_widgets_size CHECK (jsonb_size_bytes(meta) < 1000);
+          ALTER TABLE widgets ADD CONSTRAINT chk_widgets_name CHECK (length(meta::text) > 0);
+          SQL
+          cat > "$FIX/drizzle/migrations/0000_a_first.down.sql" <<'SQL'
+          DO $$ DECLARE r RECORD;
+          BEGIN
+            FOR r IN SELECT conname FROM pg_constraint
+                      WHERE contype = 'c' AND conname LIKE 'chk_%' LOOP
+              EXECUTE format('ALTER TABLE widgets DROP CONSTRAINT %I', r.conname);
+            END LOOP;
+          END $$;
+          ALTER TABLE gadgets DROP CONSTRAINT IF EXISTS gadgets_self_fk;
+          DROP FUNCTION jsonb_size_bytes(jsonb);
+          SQL
+          cat > "$FIX/drizzle/migrations/0001_b_second.sql" <<'SQL'
+          ALTER TABLE widgets ADD CONSTRAINT chk_widgets_late CHECK (jsonb_size_bytes(meta) < 10);
+          DROP TABLE gadgets;
+          SQL
+          cat > "$FIX/drizzle/migrations/0001_b_second.down.sql" <<'SQL'
+          SELECT 1;
+          SQL
+          # The `if` form, not `cmd | tee` followed by a PIPESTATUS read: GitHub runs
+          # this block as `bash -e`, and under `-e` a failing pipeline in a bare
+          # statement aborts the step at the pipeline itself. The step then reports
+          # the guard's own exit 1 as a step failure and never reaches the checks
+          # below — which is what the first run of this job did (#3284's CI red).
+          # `if` exempts the pipeline from `-e`, the way the #3241 job already does.
+          if npm run guard:rollback-coverage -- \
+              --migrations-dir "$FIX/drizzle/migrations" --baseline "$FIX/none.json" \
+              2>&1 | tee "$RUNNER_TEMP/rollback-negative.log"; then
+            echo "::error::#3284 the guard PASSED a rollback that deletes a later migration's constraint, drops a function a live CHECK calls, and names a relation the later up dropped. It is not reading the SQL — this job proves nothing until this step fails."
+            exit 1
+          fi
+          for want in FOREIGN_OBJECT DEAD_RELATION HELPER_HELD; do
+            grep -q "^$want" "$RUNNER_TEMP/rollback-negative.log" || {
+              echo "::error::#3284 the guard failed, but never reported $want. The negative control did not exercise the check it exists to prove. Inspect rollback-negative.log."
+              exit 1
+            }
+          done
+          echo "OK: a rollback reaching outside its own migration turns this screen red, exactly as #3284 requires."
+
   # PP-059 / #3241 — `npm run guard:vocab` is the only command in this repository
   # that asks a REAL database what its `CHECK` constraints will actually reject, and
   # until now nothing invoked it: `grep -rn -E 'run:.*(guard:vocab|check-constraint-vocab)' .github/workflows/`
