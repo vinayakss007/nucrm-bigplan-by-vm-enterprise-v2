@@ -9,7 +9,7 @@ import { eq, count } from 'drizzle-orm';
 async function main() {
   // Get existing admin and tenant
   const [admin] = await db.select().from(users).where(eq(users.isSuperAdmin, true)).limit(1);
-  if (!admin) { console.error('No super admin found. Run seed-fresh first.'); process.exit(1); }
+  if (!admin) { console.error('No super admin found. Provision one with `npm run db:seed:from-empty` (it refuses a database that is not empty — check with `npm run db:state`).'); process.exit(1); }
   const [tenant] = await db.select().from(tenants).where(eq(tenants.ownerId, admin.id)).limit(1);
   if (!tenant) { console.error('No tenant found.'); process.exit(1); }
 

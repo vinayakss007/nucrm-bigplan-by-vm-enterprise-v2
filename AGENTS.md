@@ -125,7 +125,17 @@ Handles high/medium priority feature work, frontend, and UX issues:
   under `tests/integration`, 11 under `tests/dashboard`, 1 elsewhere. Playwright e2e specs are `.spec.ts`
   and are not in that count. Re-measured 2026-10-04; the "160/160 across 6 files" this line used to carry
   predates the suite by weeks and is not a current pass rate — run `npm test` for that.
-- **Seed**: `npm run seed:dev` or `npm run start-clean` (auto-seeds)
+- **Seed**: `npm run seed:dev` or `npm run start-clean` (auto-seeds). Both need `SEED_PASSWORD` (#3281) —
+  there is no committed default, and the seeded account is a platform super admin, so treat that
+  password as a production credential wherever the seed has run.
+- **Destructive database commands are gated (#3282)**: `npm run db:state` first — it reads the target's
+  contents and says `EMPTY` / `SEEDED` / `POPULATED`, and never prints the credential in `DATABASE_URL`.
+  `npm run db:drop` / `db:reset` (drop `public` CASCADE) and `npm run db:seed:from-empty` (the old
+  `prod:seed`, renamed because that name invited a wipe of a live database) refuse to run unless you pass
+  `--yes` / `--confirm`, or set `NUCRM_ALLOW_PROD_SEED=1` / `NUCRM_ALLOW_DROP=1`; they also refuse a
+  `POPULATED` target and a non-interactive run without the flag. The gate is `scripts/seed/destructive.ts`,
+  and counting rows is not evidence for it — under FORCE RLS an unprivileged count answers 0 on a full
+  database (#3280), which is why the counts are read inside `set_config('app.is_super_admin','true',true)`.
 - **Migrations**: `npm run db:migrate` (proper Drizzle migrations, not `drizzle-kit push`)
 
 ### Deploy (IMPORTANT — read before touching deploy)
