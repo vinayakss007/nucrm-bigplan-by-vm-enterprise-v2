@@ -157,7 +157,8 @@
     "lint-staged": "lint-staged",
     "guard:env-coverage": "node scripts/check-env-coverage.mjs",
     "guard:catch-empty": "node scripts/check-catch-empty.mjs",
-    "guard:panel-error-state": "node scripts/check-panel-error-state.mjs"
+    "guard:panel-error-state": "node scripts/check-panel-error-state.mjs",
+    "guard:seed-credential": "node scripts/check-seed-credentials.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

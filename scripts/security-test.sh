@@ -10,6 +10,22 @@ COOKIE_FILE="/tmp/nucrm_security_test_cookies.txt"
 RESULTS_DIR="/tmp/nucrm-security-results"
 mkdir -p "$RESULTS_DIR"
 
+# ═══════════════════════════════════════════════════════════════
+# Credentials (#3281)
+# ═══════════════════════════════════════════════════════════════
+# This script used to send admin@test.com / "password123" six times, and
+# scripts/seed-dev.ts used to hash that literal into the platform bypass role.
+# The seed's password now comes from $SEED_PASSWORD and is never committed, so
+# neither name can have a default here either. Same convention as
+# scripts/smoke-test.sh: refuse before touching a running server.
+if [ -z "${SEC_TEST_EMAIL:-}" ] || [ -z "${SEC_TEST_PASSWORD:-}" ]; then
+    echo "❌ SEC_TEST_EMAIL and SEC_TEST_PASSWORD are both required (#3281)." >&2
+    echo "   They are the seeded super admin: SEC_TEST_EMAIL=admin@test.com, and" >&2
+    echo "   SEC_TEST_PASSWORD is the \$SEED_PASSWORD that 'npm run seed:dev' was given." >&2
+    exit 2
+fi
+LOGIN_PAYLOAD=$(printf '{"email":"%s","password":"%s"}' "$SEC_TEST_EMAIL" "$SEC_TEST_PASSWORD")
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,7 +55,7 @@ test_authentication() {
     RESPONSE=$(curl -s -c "$COOKIE_FILE" -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}')
+        -d "$LOGIN_PAYLOAD")
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)
@@ -72,7 +88,7 @@ test_authentication() {
     RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"wrongpassword"}')
+        -d "{\"email\":\"$SEC_TEST_EMAIL\",\"password\":\"wrongpassword\"}")
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "401" ] && pass "Invalid login → 401" || fail "Invalid login → Expected 401, got $HTTP_CODE"
     
@@ -92,7 +108,7 @@ test_api_keys() {
     # Re-login for API key tests
     curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}' > /dev/null
+        -d "$LOGIN_PAYLOAD" > /dev/null
     
     CSRF_TOKEN=$(grep -oP 'nucrm_csrf_token\s+\K\S+' "$COOKIE_FILE" 2>/dev/null)
     
@@ -186,7 +202,7 @@ test_crud_operations() {
     # Re-login
     curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}' > /dev/null
+        -d "$LOGIN_PAYLOAD" > /dev/null
     CSRF_TOKEN=$(grep -oP 'nucrm_csrf_token\s+\K\S+' "$COOKIE_FILE" 2>/dev/null)
     
     # Test 3.1: List contacts
@@ -274,7 +290,7 @@ test_security() {
     log "4.2 Testing CSRF protection..."
     curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}' > /dev/null
+        -d "$LOGIN_PAYLOAD" > /dev/null
     
     RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/contacts" \
         -H "Content-Type: application/json" \
@@ -344,7 +360,7 @@ test_data_transmission() {
     log "5.2 Checking response content-type..."
     curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}' > /dev/null
+        -d "$LOGIN_PAYLOAD" > /dev/null
     
     RESPONSE=$(curl -s -I -b "$COOKIE_FILE" "$BASE_URL/api/tenant/contacts?limit=1")
     echo "$RESPONSE" | grep -qi "content-type: application/json" && pass "JSON content-type" || fail "Invalid content-type"
@@ -417,7 +433,7 @@ test_super_admin() {
     # Re-login
     curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@test.com","password":"password123"}' > /dev/null
+        -d "$LOGIN_PAYLOAD" > /dev/null
     
     # Test 7.1: List tenants
     log "7.1 Listing tenants..."

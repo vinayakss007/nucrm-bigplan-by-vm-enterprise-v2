@@ -7,12 +7,22 @@ set -e
 # seed script (scripts/seed-dev.ts, seed-e2e-user.ts, seed-fresh.ts), so the
 # account only exists where someone made it by hand. That made the strict gate
 # red on a fresh database for a reason unrelated to the code under release.
-# The legacy pair stays as the default so manual runs against pre-prod behave
-# exactly as before; a CI job sets its own from the seed it just ran.
+# The legacy default pair is gone (#3281): `SuperAdmin123!` was a credential committed
+# to a public repository, and a "gate" that silently logs in as whoever-the-repo-knows
+# is a guess, not a check. Both names are required now. `.github/workflows/release.yml`
+# generates one, hands it to the seed and exports the same value here; a manual run
+# passes an identity that exists on the target.
 SERVER_URL="${LAUNCH_GATE_SERVER_URL:-http://localhost:3000}"
-SMOKE_EMAIL="${SMOKE_LOGIN_EMAIL:-super@admin.com}"
-SMOKE_PASSWORD="${SMOKE_LOGIN_PASSWORD:-SuperAdmin123!}"
 COOKIE_JAR="${SMOKE_COOKIE_JAR:-/tmp/smoke-cookies.txt}"
+if [ -z "${SMOKE_LOGIN_EMAIL:-}" ] || [ -z "${SMOKE_LOGIN_PASSWORD:-}" ]; then
+  echo "❌ SMOKE_LOGIN_EMAIL and SMOKE_LOGIN_PASSWORD are both required (#3281)." >&2
+  echo "   The release gate exports them from the seed it just ran; a manual run sets" >&2
+  echo "   them to an account that actually exists on ${LAUNCH_GATE_SERVER_URL:-localhost:3000}." >&2
+  echo "   Nothing in this script supplies a default credential any more." >&2
+  exit 2
+fi
+SMOKE_EMAIL="$SMOKE_LOGIN_EMAIL"
+SMOKE_PASSWORD="$SMOKE_LOGIN_PASSWORD"
 
 echo "═══════════════════════════════════════════"
 echo "  SMOKE TEST"

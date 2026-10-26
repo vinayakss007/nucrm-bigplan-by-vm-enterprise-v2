@@ -91,7 +91,19 @@ run_migrations() {
 }
 
 # ─── Step 3: Run Seed ───
+# #3281 — this used to seed unconditionally, so "start the app" wrote a platform
+# super admin whose password was committed to a public repository into whatever
+# database DATABASE_URL named, and the two guards inside the seed checked the
+# caller's NODE_ENV and the database host — both of which a production VM satisfies.
+# The seed now needs SEED_PASSWORD and refuses a database it does not own. Here a
+# missing credential is a skip, not a failed startup: starting the app must not
+# depend on writing rows.
 run_seed() {
+  if [ -z "${SEED_PASSWORD:-}" ]; then
+    warn "SEED_PASSWORD is not set — skipping the development seed (#3281)."
+    warn "The app still starts; export SEED_PASSWORD and run 'npm run db:seed' for demo data."
+    return 0
+  fi
   info "Running development seed..."
   npx tsx scripts/seed-dev.ts
   ok "Seed complete"
