@@ -59,6 +59,18 @@ const down = (tag) => readFileSync(join(DIR, `${tag}.down.sql`), 'utf8');
 
 const TAG = '0139_jsonb_size_octet_length';
 
+/**
+ * `ci.yml` lines the register and `docs/README.md` cite by number. Each pair is the
+ * coordinate and the command that must still be sitting on it: an insert above any
+ * of these moves the citation and breaks `npm run guard:coords`.
+ */
+const COORDINATES: Array<[number, string]> = [
+  [221, 'check-audit-baseline.mjs'],
+  [254, 'check-semgrep-baseline.mjs'],
+  [401, 'Schema drift check (column-level)'],
+  [447, 'check-env-coverage.mjs'],
+];
+
 /** A throwaway migration tree so a rule can be fired deliberately. */
 function fixture(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), 'jsonb-size-'));
@@ -376,14 +388,16 @@ describe('#3283 the screen is wired, with both controls', () => {
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
     expect(jobKeys.indexOf('jsonb-size-unit')).toBe(jobKeys.length - 2);
     expect(ci.slice(0, jobStart).split('\n').length).toBeGreaterThan(447);
-    // insert-only against main is what keeps :221, :254, :401 and :447 in place
-    const diff = spawnSync('git', ['diff', '--numstat', 'origin/main', '--', '.github/workflows/ci.yml'],
-      { cwd: ROOT, encoding: 'utf8' });
-    if (diff.status === 0 && diff.stdout.trim()) {
-      const [added, removed] = diff.stdout.trim().split('\t');
-      expect(Number(removed)).toBe(0);
-      expect(Number(added)).toBeGreaterThan(0);
+    // The coordinates the register cites by line number must still hold the command
+    // it names. Pinned against the file's own content, not against a branch ref: a
+    // `git … origin/main` assertion goes false the moment this slice merges, which is
+    // the trap tests/unit/logger-graph-schema-edge-3010.test.ts:135 screens for.
+    const lines = ci.split('\n');
+    for (const [line, mustContain] of COORDINATES) {
+      expect(lines[line - 1], `ci.yml:${line}`).toContain(mustContain);
     }
+    // an insert above any of them would have moved it; below :447 nothing can
+    expect(lines.findIndex((l) => l.startsWith('  jsonb-size-unit:')) + 1).toBeGreaterThan(447);
   });
 
   it('runs the package.json alias in both steps rather than a hand-copied command', () => {
