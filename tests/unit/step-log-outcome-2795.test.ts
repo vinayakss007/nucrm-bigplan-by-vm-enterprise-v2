@@ -12,7 +12,7 @@
  *
  * `delay` is that fall-through's everyday case — the sequence builder mints one
  * per click (`components/tenant/sequence-builder.tsx:122`) and
- * `scripts/seed-dev.ts:841,845` puts two in every dev tenant's sequences — so
+ * `scripts/seed-dev.ts:880,884` puts two in every dev tenant's sequences — so
  * `sequence_step_logs` fills with sends that never happened, while the `skipped`
  * status the do-not-contact branch carefully records (`route.ts:241-256`) went
  * unused. An `email` step for a contact with no address took the same

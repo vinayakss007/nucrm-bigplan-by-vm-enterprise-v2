@@ -1,0 +1,6 @@
+# #3281 negative-control fixture: a workflow env key with a scalar value.
+jobs:
+  gate:
+    env:
+      SMOKE_LOGIN_PASSWORD: WorkflowLiteral3!
+      OTHER: ${{ secrets.X }}

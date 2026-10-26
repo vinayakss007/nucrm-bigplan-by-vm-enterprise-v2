@@ -248,7 +248,7 @@ describe('the gate does not move the rules that already work (#2722)', () => {
 
   // The `ak_` path maps a key's scopes straight onto ctx.permissions
   // (lib/auth/api-key.ts:89-97), and `all` is what a `*` / `all` scope becomes,
-  // so the seeded dev key (scripts/seed-dev.ts:1088) keeps working through the
+  // so the seeded dev key (scripts/seed-dev.ts:1117-1126) keeps working through the
   // new gate exactly as it does through the companies/meetings ones.
   it('an API-key context with the `all` wildcard is let through', async () => {
     setup({ all: true });

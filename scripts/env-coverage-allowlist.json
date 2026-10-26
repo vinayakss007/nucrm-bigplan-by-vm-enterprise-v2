@@ -84,6 +84,10 @@
       "reason": "Deliberate opt-in that lets scripts/seed-dev.ts write fixture data to a non-local database. Keeping it out of .env.example is part of its safety: it should never be present-and-forgotten, only typed once when you mean it."
     },
     {
+      "name": "SEED_ALLOW_POPULATED",
+      "reason": "#3281's other opt-in: scripts/seed-dev.ts classifies the target database from its own contents (scripts/seed/contents.ts) and throws when the rows are not its fixtures. This name is the operator saying 'I mean it anyway'. Listing it in .env.example would put a 'delete the real tenant's data' switch in front of everyone who copies the template, which is the opposite of the point."
+    },
+    {
       "name": "SKIP_VERIFY",
       "reason": "Skips the post-provision verification pass in scripts/provision-app-role.mjs, for hosts where the verifying connection cannot be opened. Recovery flag for the person running the script."
     },
@@ -93,11 +97,11 @@
     },
     {
       "name": "WEBHOOK_SECRET_1",
-      "reason": "Per-endpoint fixture secret in scripts/seed-dev.ts:925. Falls back to a generated whsec_dev_<uuid>, so seeding works with nothing set; it is not a value a deployment configures."
+      "reason": "Per-endpoint fixture secret in scripts/seed-dev.ts:1158. Falls back to a generated whsec_dev_<uuid>, so seeding works with nothing set; it is not a value a deployment configures."
     },
     {
       "name": "WEBHOOK_SECRET_2",
-      "reason": "Second fixture of the same kind (scripts/seed-dev.ts:934), for the two-endpoint seed scenario. Same generated-default reasoning as WEBHOOK_SECRET_1."
+      "reason": "Second fixture of the same kind (scripts/seed-dev.ts:1167), for the two-endpoint seed scenario. Same generated-default reasoning as WEBHOOK_SECRET_1."
     },
     {
       "name": "ANALYZE",
