@@ -65,13 +65,14 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   GUCs are cleared, not the statement; re-pinned 2026-10-25 @ `2ff3e88b5` from
   `:97-98,245`, which was itself a re-pin of `:93-94,241`) and by PgBouncer
   `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). Each of those reset
-  statements clears **fourteen** `set_config`s in the tree measured here:
+  statements clears **fifteen** `set_config`s in the tree measured here:
   tenant/user/super-admin, the `app.auth_lookup` + `app.tracking_lookup` lookups,
   the three `app.portal_lookup_*` GUCs plus `app.form_lookup_id`, and the five
   credential GUCs — `app.token_issue`, `app.token_credential`,
   `app.token_retire_user` (#3218/#3102), `app.oauth_client_id` (#3225) and
-  `app.unsubscribe_contact` (#3237). See § 1 pre-auth redemption below for what
-  those guard.
+  `app.unsubscribe_contact` (#3237) — plus `app.plugin_webhook_id`, the plugin
+  receiver's row-narrowing claim (#3246, 0139). See § 1 pre-auth redemption below
+  for what those guard.
 
 ### Super-admin scope — the deliberate asymmetry
 
@@ -124,7 +125,7 @@ for the pre-tenant email→user lookup) and `withAuthResolutionContext`
 `setAuthResolutionContext` (`:68`), `setTokenIssueContext` (`:197`) and
 `withTokenIssueContext` (`:225`) documented under § 1 pre-auth redemption below.
 
-### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0138)
+### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0139)
 Three user-scoped, secret-bearing tables — **`password_resets`**,
 **`email_verifications`**, **`oauth_codes`** — carry only a `*_user_own` policy
 that needs `app.current_user`, which pre-auth flows (forgot-password, verify-email,
@@ -166,10 +167,10 @@ no freshness clause, so it admits the row before *and* after the tombstone —
 `*_token_retire_read` pair keyed on `app.token_retire_user` (`0135:138-159`). **A
 claim that cannot see its own row silently updates zero rows.**
 
-**The same two traps, re-run one layer up (0136–0138).** The OAuth endpoints and
-`/api/unsubscribe` each hit the *identical* failure and each got the *identical*
-fix, so treat these as three worked examples of the rule rather than new
-vocabulary:
+**The same two traps, re-run one layer up (0136–0139).** The OAuth endpoints,
+`/api/unsubscribe` and the plugin webhook receiver each hit the *identical* failure
+and each got the *identical* fix, so treat these as four worked examples of the rule
+rather than new vocabulary:
 
 - **0136 `pre_auth_oauth_rls`** (#3225) gave `oauth_clients` a SELECT arm
   `app.auth_lookup = 'true' AND client_id = current_setting('app.oauth_client_id')`
@@ -201,6 +202,16 @@ vocabulary:
   for the tenant-scoped writes that follow. Note this one module is **not**
   re-exported through `rls.ts` — it is imported directly
   (`app/api/unsubscribe/route.ts:30`).
+- **0139 `pre_auth_plugin_webhook_lookup`** (#3246) is the same dead endpoint on a
+  table whose `tenant_id` is `NOT NULL`: `custom_plugins`' only arm is
+  `tenant_isolation`, so the anonymous `POST /api/tenant/plugins/webhook/[id]` read
+  of the row carrying `webhook_secret` matched zero rows and answered 404 *before*
+  the HMAC could run. Fix: `custom_plugins_webhook_lookup_read` (SELECT only) keyed
+  on `id = NULLIF(current_setting('app.plugin_webhook_id', true), '')::uuid` with
+  `deleted_at IS NULL` frozen in. It grants no write: the route hands the tenant over
+  after verification, so `plugin_execution_logs` still writes under
+  `tenant_isolation`. *A policy that admits no read is not a hardening gap — it is an
+  unreachable endpoint.*
 
 **The arm inventory, per table** (`password_resets` / `email_verifications` /
 `oauth_codes`), as 0135 leaves them — 11 `CREATE POLICY` statements, four per table

@@ -102,6 +102,7 @@ Plugins are user-created custom connectors. Any tenant can create a plugin to co
    - Logs execution result to `plugin_execution_logs`
 4. For inbound webhooks:
    - External service POSTs to `/api/tenant/plugins/webhook/[id]/`
+   - The installation row is read before the caller is known, under a SELECT-only RLS arm scoped to that one id (migration `0139`)
    - Signature is verified using HMAC-SHA256 (if secret configured)
    - Rate limited to 60 requests/minute per plugin
    - Payload is logged and can trigger downstream actions

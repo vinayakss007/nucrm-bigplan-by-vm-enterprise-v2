@@ -206,8 +206,21 @@ What that test can and cannot promise is worth stating, because the difference i
 whole reason this directory keeps rotting: it asserts *pairs* (the doc still carries the
 pointer **and** the cited line still carries what the pointer promises) for the
 hand-resolved coordinates, range-checks the 57 path-bearing citations against their
-files, and re-derives the 0037/0039 policy shape and the fourteen-GUC reset list from
+files, and re-derives the 0037/0039 policy shape and the reset list's GUC count from
 migration and connection text. It cannot check a *sentence*: `05`'s `bulk/route.ts:29`
 matches nine tracked routes, so an abbreviated citation only fails when it is past EOF
 in every one of them, and no test notices if the prose next to a still-correct line
 number stops describing it. That residue is what the hand pass is for.
+
+**Re-counted 2026-10-26 against `main = 32e673a1b` plus #3246's plugin-webhook arm.**
+One branch moved three of these numbers at once and 02/03's reset-list claims with
+them: 0139 is the `idx`-139 step (**140** journal entries over **280** `.sql` files —
+140 forward, 140 `.down.sql`, the last gap closed by #3284), `app.plugin_webhook_id`
+is the **fifteenth** name on both reset lists, and the tree now holds **926**
+`*.test.*` files. Nothing here remembers those counts by hand:
+`tests/unit/basecrm-citation-drill-3244.test.ts` counts the `set_config(` calls itself,
+so 02, 03 and that test moved together in #3246 instead of one of them drifting. `03`
+§ 1 gained 0139 as the fourth worked example, because it is the same dead endpoint on a
+table whose `tenant_id` is NOT NULL — and, unlike 0136–0138, the dead half was the
+*read*: one SELECT-only arm, no write granted, and the migration lands UNAPPLIED with
+the rest of the backlog.
