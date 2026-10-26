@@ -209,22 +209,25 @@ The **GUCs**, and the file that actually writes each one (re-measured at
 - `lib/db/unsubscribe-contact-context.ts` — `app.unsubscribe_contact`
   (constant `:52`, written `:87`; `setUnsubscribeTenantContext` `:100` also sets
   `app.current_tenant`/`app.current_user` at `:107-108`; migration 0138).
+- `lib/db/plugin-webhook-context.ts` — `app.plugin_webhook_id` (constant `:30`,
+  written `:52`; `setPluginWebhookTenantContext` `:62` clears it and also sets
+  `app.current_tenant`/`app.current_user` at `:69-70`; migration 0139).
 - `app.allow_audit_purge` is not a `set_config` at all — it is `SET LOCAL` in
   `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
 
 Cleared on checkout/return as noted in 01: the two reset lists
-(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **fourteen** GUCs,
+(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **fifteen** GUCs,
 and `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts:192-206` pins them equal
 to each other *and* to that literal count. A new context GUC therefore means
-editing both lists **and** bumping the `toBe(14)`. Nothing checks the lists
+editing both lists **and** bumping the `toBe(15)`. Nothing checks the lists
 against the *writers* above, so a GUC that is set but never reset still passes.
 
 ## Migrations
 
 - **Convention**: 4-digit zero-padded `NNNN_name.sql` + sibling
-  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 277 `.sql` files,
-  138 `.down.sql` (the down set is partial — early migrations predate rollbacks).
-- **Journal**: `drizzle/migrations/meta/_journal.json` — 139 entries, idx 0..138.
+  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 279 `.sql` files,
+  139 `.down.sql` (`0036` is the only forward step still without one).
+- **Journal**: `drizzle/migrations/meta/_journal.json` — 140 entries, idx 0..139.
   **Snapshots**: only `0000/0001/0002/0018_snapshot.json` exist → the chain is
   largely **hand-written SQL**, not `drizzle-kit`-generated. `drizzle.config.ts`
   points `out: './drizzle/migrations'`, `schema: ./drizzle/schema/index.ts`.

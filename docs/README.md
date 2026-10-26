@@ -124,7 +124,7 @@ statement that nobody has checked, not a verdict that they are wrong.
 ## How current is "current"?
 
 Every count came from these commands. Run them before quoting a number, including these.
-Re-run 2026-10-25 against `54be92020` plus #3246 step 2. Unchanged: `app/tenant` and
+Re-run 2026-10-26 against `main = 32e673a1b` plus #3246 step 2. Unchanged: `app/tenant` and
 `app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts` count.
 Each number that moved is corrected below and says what the file had been quoting.
 
@@ -133,7 +133,7 @@ cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 514 API routes (was 507)
 find app/tenant -name page.tsx | wc -l                    # 149 tenant pages
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 922 (#3246 step 2 adds one; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 925 (#3246 adds one, the merge three; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
 ls drizzle/migrations/*.sql | wc -l                       # 279 total .sql (was 277)
 ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 140 up-migrations (was 139; all but `0036` ship a `.down.sql`)
