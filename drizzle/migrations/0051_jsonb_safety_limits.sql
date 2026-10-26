@@ -4,7 +4,22 @@
 -- data in custom_fields and metadata columns. Protects against memory
 -- exhaustion and stack overflow from deeply nested integration payloads.
 --
--- Limits: 64KB serialized size, 10 nesting levels, 200 total keys.
+-- Limits: 10 nesting levels, 200 total keys, and a serialized-size ceiling of
+-- 65536. THE UNIT OF THAT LAST ONE WAS NEVER TRUE TO ITS NAME: `jsonb_size_bytes`
+-- below measures `length(val::text)`, which counts CHARACTERS, so the ceiling is
+-- 65,536 characters, not 64 KB. For the ASCII payloads this was written for the
+-- two are the same number, which is why the name went unchallenged; for anything
+-- multi-byte they diverge by the encoding factor — a 60,000-glyph emoji payload
+-- measures 60,009 here and 240,009 bytes on disk. #3283 records that as shipped
+-- behaviour instead of re-labelling it, and the body correction is a separate
+-- forward migration (`0139_jsonb_size_octet_length`) rather than an edit here.
+-- Measured, not assumed: the ledger stamps sha256(file bytes) but `db:migrate`
+-- skips on `hash OR created_at`, so after this header edit a migrated database
+-- still reports 0 to replay — it falls through to "created_at (journal when)
+-- present in ledger". What that leaves behind is a stale ledger hash, i.e. an
+-- applied database whose recorded hash no longer matches any file. That is the
+-- cost of editing an applied migration, and it is why the ceiling fix ships
+-- forward.
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- FUNCTIONS

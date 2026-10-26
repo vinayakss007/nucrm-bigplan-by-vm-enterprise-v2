@@ -71,6 +71,8 @@
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
+    "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
+    "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
     "probe:write-contexts": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/probe-write-contexts.ts",
