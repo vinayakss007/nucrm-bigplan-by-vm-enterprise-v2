@@ -149,8 +149,8 @@ const notificationWorker = new Worker(
         tenantId,
         title,
         body: message,
-        type: (type ?? 'system') as NotificationType,
-        metadata: data ?? {},
+        type: (type || 'system') as NotificationType,
+        metadata: data || {},
       });
       if (!stored) {
         throw new Error(`[Notification Worker] notification for user ${userId} was not persisted (tenant ${tenantId})`);
