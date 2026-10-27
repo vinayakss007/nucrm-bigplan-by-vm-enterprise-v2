@@ -213,6 +213,34 @@ rather than new vocabulary:
   `tenant_isolation`. *A policy that admits no read is not a hardening gap — it is an
   unreachable endpoint.*
 
+**The same endpoint, still unreachable, for want of a writer (#3328).** 0136 and 0137
+made the OAuth *readers* work, and the flow still went nowhere, because nothing in the
+app ever wrote an `oauth_clients` row: a fresh workspace's every token exchange answered
+`401 invalid_client`, and "unknown client" is indistinguishable from "wrong secret" to
+the caller. `app/api/tenant/oauth-clients/route.ts:89` is that writer, gated on
+`can(ctx, 'settings.manage')` (`:33`) like every other settings surface. It needed **no
+migration**, and that is the rule to take from it — *before adding an arm, check what the
+existing ones already reach*: 0088's `tenant_isolation` FOR ALL (`0088:93`) admits the
+INSERT under the tenant GUC `requireAuth` already sets, because this write is made by a
+logged-in workspace admin rather than by an anonymous bearer of a credential.
+
+Two contracts the writer owns, both of them shape-of-column problems:
+
+- `client_secret` is minted server-side (`lib/auth/oauth-client.ts:31`) and revealed
+  **once**, in the create and rotate responses. No read path selects the column — not the
+  list, not the detail, not the `.returning()` of the write — so the panel cannot leak it
+  and a rebuilt one must not "helpfully" return it either. Rotation exists because a
+  secret you cannot read back is a secret you can only replace.
+- `redirect_uris` is written by `serializeRedirectUris` (`:60`) as a bare comma join with
+  no padding, and the validator refuses any URI containing a comma
+  (`lib/api/schemas/oauth-clients.ts:24`), because #3324's matcher parses that one column
+  by splitting on `,`. A registration form that accepted a comma would store a URI the
+  server could never re-admit — the client would be bricked at its own authorize step.
+
+`tests/integration/oauth-client-registration-3328.test.ts` drives register → authorize →
+token as the RLS-bound probe role, because every layer of that chain has been the broken
+one at some point and only the whole flow proves all of them at once.
+
 **The arm inventory, per table** (`password_resets` / `email_verifications` /
 `oauth_codes`), as 0135 leaves them — 11 `CREATE POLICY` statements, four per table
 plus two for `password_resets`:

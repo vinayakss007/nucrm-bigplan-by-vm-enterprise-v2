@@ -114,6 +114,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       statuses['/tenant/settings/rbac']         = { status: 'unknown' };
       statuses['/tenant/settings/sso']          = { status: 'unknown' };
       statuses['/tenant/settings/api-keys']     = { status: 'unknown' };
+      statuses['/tenant/settings/oauth-clients'] = { status: 'unknown' };
       statuses['/tenant/settings/bulk-transfer'] = { status: 'default' };
       statuses['/tenant/settings/import-export'] = { status: 'unknown' };
       statuses['/tenant/settings/backup']       = { status: 'unknown' };

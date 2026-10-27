@@ -596,6 +596,12 @@ export {
   createLeadScoringRuleSchema,
   updateLeadScoringRuleSchema,
 } from './schemas/admin';
+export {
+  registerOAuthClientSchema,
+  updateOAuthClientSchema,
+  type RegisterOAuthClientInput,
+  type UpdateOAuthClientInput,
+} from './schemas/oauth-clients';
 
 export {
   createHierarchySchema,
