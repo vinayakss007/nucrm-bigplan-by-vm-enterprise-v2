@@ -5253,7 +5253,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   in-handler check is what closes it per route, which is what #2561 asked for.
 - **What this does.** `POST` / `PATCH` / `DELETE` in
   `app/api/tenant/plugin-engine/route.ts` now call `requireCsrf(request)` immediately after
-  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:74` (#1835)
+  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:76` — was `:74`, shifted by the #3292 config gate — (#1835)
   established for the same table. The exemption is keyed on `ctx.authMethod`, the credential
   `requireAuth()` actually verified and stamped at `lib/auth/middleware.ts:252`, rather than on
   `requireCsrf()`'s own signal, because that signal is the **client-settable** `x-auth-method`

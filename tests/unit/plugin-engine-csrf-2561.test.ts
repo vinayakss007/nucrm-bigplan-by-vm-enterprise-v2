@@ -11,7 +11,7 @@
  * Two things are pinned here, and both were red before the change:
  *
  * 1. the route. POST/PATCH/DELETE now call `requireCsrf(request)` after auth, the
- *    placement `app/api/tenant/integrations/route.ts:74` (#1835) uses. `requireCsrf`
+ *    placement `app/api/tenant/integrations/route.ts:76` (#1835) uses. `requireCsrf`
  *    is the REAL one (only `requireAuth` is stubbed), so these assertions travel
  *    through the actual double-submit comparison — a stub would pass whether or not
  *    the handler ever called it. The exemption keys on `ctx.authMethod`, the

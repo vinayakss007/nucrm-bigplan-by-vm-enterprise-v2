@@ -387,6 +387,13 @@ function main() {
     const { offenders } = scanEgress({ roots });
     const byFile = {};
     for (const o of offenders) byFile[o.file] ??= `TODO justify (#3292): ${o.target}`;
+    if (Object.keys(byFile).length === 0) {
+      // Rewriting the block is how the reasons get lost: `--update` regenerates it
+      // with JSON, which keeps the entries but drops the comment groups that say
+      // why each class of site is acceptable. Nothing to add means nothing to do.
+      console.log('nothing to allowlist — the tree is clean, and the written reasons are left alone');
+      return;
+    }
     const path = join(ROOT, 'scripts', 'check-tenant-egress.mjs');
     writeFileSync(
       path,

@@ -81,7 +81,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    // #2561: in-handler CSRF, the placement `app/api/tenant/integrations/route.ts:74`
+    // #2561: in-handler CSRF, the placement `app/api/tenant/integrations/route.ts:76`
     // (#1835) uses. The proxy does check this surface (`proxy.ts:530-532`), but a
     // `Bearer ak_*` request on an allowed path is passed through before that block
     // (`proxy.ts:466`) and `requireAuth` then falls back to the ambient session cookie
