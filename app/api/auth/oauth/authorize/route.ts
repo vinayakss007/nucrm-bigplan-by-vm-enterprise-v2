@@ -13,6 +13,23 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
+/**
+ * #3324: `oauth_clients.redirect_uris` is one `text` column, so the comparison this route used to
+ * be — `stored.includes(requested)` — was `String.prototype.includes` with the registered value as
+ * the haystack: it admitted any URL contained inside a registration and redirected there with the
+ * authorization code attached. RFC 6749 §3.1.2 requires an exact match.
+ *
+ * Entries are split on `,` rather than compared against the column whole because a tenant registers
+ * more than one URI by writing them into this one field; whole-string equality would lock such a
+ * client out of every entry but its first. A URI that genuinely contains a comma loses its own
+ * entry under that reading — accepted before this change too, since no parser existed — and the
+ * trim is only for the `, `-joined form.
+ */
+function isRegisteredRedirectUri(stored: string, requested: string): boolean {
+  if (!requested) return false;
+  return stored.split(',').some((entry) => entry.trim() === requested);
+}
+
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action: 'oauth-authorize', max: 20, windowMinutes: 1 });
@@ -63,7 +80,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       );
     }
 
-    if (!client.redirectUris.includes(redirectUri)) {
+    if (!isRegisteredRedirectUri(client.redirectUris, redirectUri)) {
       return NextResponse.json(
         { error: 'invalid_request', error_description: 'Invalid redirect_uri' },
         { status: 400 }
