@@ -21,7 +21,7 @@
  *     proxy.ts:466 — before the CSRF block — and requireAuth() then falls back
  *     to the ambient session cookie (lib/auth/middleware.ts:262). New state-
  *     changing routes that write tenant data should call it, as
- *     app/api/tenant/integrations/route.ts:74 (#1835) and now plugin-engine do.
+ *     app/api/tenant/integrations/route.ts:76 (#1835) and now plugin-engine do.
  *   - requireAuth()'s own backstop (lib/auth/middleware.ts:220-227) is behind
  *     `CSRF_ENFORCE_CENTRAL`, which no file in this repo sets, so it never runs.
  *     It is not the reason a requireAuth-only route is safe — the proxy is.

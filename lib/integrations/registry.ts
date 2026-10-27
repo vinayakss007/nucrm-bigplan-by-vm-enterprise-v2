@@ -9,6 +9,7 @@ import { slackProvider } from './providers/slack';
 import { mailgunProvider } from './providers/mailgun';
 import { openaiProvider } from './providers/openai';
 import { aiConnector } from './ai-connector';
+import { safeFetch } from '@/lib/security/ssrf';
 
 const builtInProviders: ProviderDefinition[] = [
   sendgridProvider,
@@ -128,12 +129,33 @@ async function handleSlack(instance: IntegrationInstance, action: string, params
   return { success: false, error: `Unknown action: ${action}` };
 }
 
+/**
+ * #3292: the region selector is a choice between the two origins Mailgun
+ * actually serves on, written out here — never a host read out of the tenant's
+ * `config` bag. An absent selection keeps the documented US default; anything
+ * else, including a value that merely looks like a Mailgun host, is refused
+ * rather than normalised (#3325: suffix matching in an allowlist accepts
+ * `https://api.mailgun.net.evil.test/v3`).
+ */
+const MAILGUN_US = 'https://api.mailgun.net/v3';
+const MAILGUN_EU = 'https://api.eu.mailgun.net/v3';
+
+function mailgunRegion(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return MAILGUN_US;
+  if (raw === MAILGUN_US) return MAILGUN_US;
+  if (raw === MAILGUN_EU) return MAILGUN_EU;
+  return null;
+}
+
 async function handleMailgun(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
   const apiKey = instance.config['api_key'];
   const domain = instance.config['domain'];
-  const baseUrl = instance.config['base_url'] || 'https://api.mailgun.net/v3';
+  const region = mailgunRegion(instance.config['base_url']);
 
   if (action === 'send_email') {
+    if (region === null) {
+      return { success: false, error: 'Mailgun base_url must be one of the two declared API regions (#3292)' };
+    }
     const formData = new URLSearchParams();
     const fromEmail = instance.config['from_email'] || 'noreply@domain.com';
     formData.append('from', instance.config['from_name']
@@ -143,7 +165,9 @@ async function handleMailgun(instance: IntegrationInstance, action: string, para
     formData.append('subject', String(params['subject']));
     formData.append('html', String(params['body']));
 
-    const res = await fetch(`${baseUrl}/${domain}/messages`, {
+    // `domain` is tenant data too, and it lands in a path segment: encoded so it
+    // cannot climb out of `/v3/<domain>/` into a different Mailgun route.
+    const res = await safeFetch(`${region}/${encodeURIComponent(String(domain))}/messages`, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${btoa(`api:${apiKey}`)}` },
       body: formData,

@@ -227,12 +227,14 @@ describe('plugin-engine PATCH merges config instead of replacing the credential 
     expect(lastWrittenConfig()['url']).toBe('https://customer.example/recv');
   });
 
-  it('reads only the config column, tenant-scoped', async () => {
+  it('reads only the columns the merge needs, tenant-scoped', async () => {
     const PATCH = await patch();
     await PATCH(patchRequest({ id: ROW_ID, config: { url: 'https://customer.example/third' } }));
 
     // #2563's discipline applies to the new read too: a projection, not the whole row.
-    expect(harness.state.projections[0]).toEqual({ config: expect.anything() });
+    // #3292 widens it by `type`, which is the discriminator the config policy needs to
+    // find the provider's declared `configFields` — a column name, never a credential.
+    expect(harness.state.projections[0]).toEqual({ config: expect.anything(), type: expect.anything() });
     // The merge read and the UPDATE both carry predicates, both tenant-scoped.
     expect(harness.state.whereArgs).toHaveLength(2);
     for (const predicate of harness.state.whereArgs) {
