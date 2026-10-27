@@ -1,9 +1,9 @@
 /**
- * GET /api/auth/oauth/authorize must send the code only where the client was registered.
+ * #3324 — GET /api/auth/oauth/authorize must send the code only where the client was registered.
  *
  * WHY THIS RUNS THROUGH THE REAL HANDLER, ON A REAL DATABASE
  * ----------------------------------------------------------
- * The comparison under test is one expression — `client.redirectUris.includes(redirectUri)`
+ * The comparison the issue was filed against is one expression — `client.redirectUris.includes(…)`
  * — and it reads correctly until you know the column it runs on. `oauth_clients.redirect_uris`
  * is `text` (`drizzle/schema/tokens.ts`), not a `text[]`: the fixtures every OAuth suite
  * writes prove the shape (`redirectUris: 'https://client.example.test/cb'`). So `includes`
