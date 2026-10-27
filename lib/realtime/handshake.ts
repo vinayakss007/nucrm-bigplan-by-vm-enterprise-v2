@@ -106,13 +106,17 @@ export async function resolveHandshakeIdentity(cookieHeader: string | undefined)
       .orderBy(asc(tenantMembers.tenantId))
   );
 
-  if (memberships.length === 0) return refuse('no_membership', verified.id);
+  // Destructuring rather than `length === 0` + `memberships[0]` — the indexed read is `T |
+  // undefined` under `noUncheckedIndexedAccess`, so the emptiness test and the fall-back value are
+  // the same statement.
+  const [first] = memberships;
+  if (!first) return refuse('no_membership', verified.id);
 
   const lastTenantId = verified.lastTenantId ?? null;
   const tenantId =
     lastTenantId && memberships.some((m) => m.tenantId === lastTenantId)
       ? lastTenantId
-      : memberships[0].tenantId;
+      : first.tenantId;
 
   return { userId: verified.id, tenantId };
 }
