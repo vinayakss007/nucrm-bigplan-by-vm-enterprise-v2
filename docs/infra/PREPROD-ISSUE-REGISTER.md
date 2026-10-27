@@ -974,7 +974,7 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
 - **Fix (applied, deployed).** `exitProcess: false` **and** `endPool: false` at the one
   instrumentation call site, plus `stop_grace_period: 120s` on the `app` service. `endPool` is a
   new option, defaulting to `true` so the polite close survives for any caller that owns its whole
-  process (today `worker.ts:716` (re-pinned 2026-10-27 from `:676`: #3290 gave every job handler its own `withTenantContext`, which is 40 lines of comment and claim-probing above the shutdown block) and `realtime.ts:198` (re-pinned 2026-10-27 from `:224`: #3289 lifted the handshake resolution out of `realtime.ts` into `lib/realtime/handshake.ts`, which removed the `db`/`tenantMembers`/`eq`/`and` imports and the cookie helper above the handler block) install their own handlers and never call
+  process (today `worker.ts:739` (re-pinned 2026-10-27 from `:716`: #3299 wrapped the two tenant-URL POSTs in `postToTenantUrl`, which is 12 lines of import and helper above the shutdown block; the earlier re-pin from `:676` was #3290 giving every job handler its own `withTenantContext`) and `realtime.ts:198` (re-pinned 2026-10-27 from `:224`: #3289 lifted the handshake resolution out of `realtime.ts` into `lib/realtime/handshake.ts`, which removed the `db`/`tenantMembers`/`eq`/`and` imports and the cookie helper above the handler block) install their own handlers and never call
   this module, so nothing depends on that default). It also skips the drain wait: with the exit
   handed to Next.js, waiting on a counter this process provably cannot see is latency for no
   safety.
