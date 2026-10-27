@@ -6,7 +6,7 @@
 // Background Worker for NuCRM SaaS
 // Handles scheduled jobs, email sending, webhook delivery, etc.
 
-import { Worker, QueueEvents } from 'bullmq';
+import { Worker, QueueEvents, UnrecoverableError } from 'bullmq';
 import IORedis from 'ioredis';
 import { and, desc, eq } from 'drizzle-orm';
 import { integrations, leadWarmingMessages } from '@/drizzle/schema';
@@ -18,6 +18,7 @@ import { escapeHtml } from '@/lib/email/escape-html';
 import { logError } from '@/lib/errors-server';
 import { materializeFileSecrets } from '@/lib/secrets-file';
 import { errorText } from '@/lib/error-redaction';
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 
 // #2123: read bind-mounted secret files into process.env before any config is
 // captured below, so the worker can run without secrets in container metadata.
@@ -76,6 +77,27 @@ function createRedisConnection(): IORedis {
 
   redisConnections.push(conn);
   return conn;
+}
+
+/**
+ * #3299: a URL a tenant typed is not a URL we may simply open. `safeFetch` resolves the name and
+ * refuses any private/reserved answer before a socket is opened, then re-validates every redirect
+ * hop — which is the check the save-time gate cannot be, because a hostname that resolves publicly
+ * when the hook is created can resolve to 169.254.169.254 by delivery time. The other five webhook
+ * delivery sites already go through it; these two consumers were the remaining raw `fetch`es.
+ *
+ * A block is permanent for this job — the address will still be private on the next attempt — so it
+ * leaves as `UnrecoverableError`, which is how BullMQ is told not to burn the remaining retries.
+ */
+async function postToTenantUrl(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await safeFetch(url, init);
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      throw new UnrecoverableError(`Blocked by SSRF protection: ${err.reason}`);
+    }
+    throw err;
+  }
 }
 
 // Separate non-blocking connection for the health-check heartbeat writes
@@ -501,7 +523,7 @@ const webhookWorker = new Worker(
       }
       
       // Direct send fallback
-      const response = await fetch(url, {
+      const response = await postToTenantUrl(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -560,8 +582,9 @@ const exportWorker = new Worker(
 
     if (callbackUrl) {
       // #H1: deliver the finished export to the requester's callback. redactUrl
-      // keeps any token in the callback query string out of the logs.
-      const res = await fetch(callbackUrl, {
+      // keeps any token in the callback query string out of the logs. #3299: the callback is
+      // tenant-supplied too, so it goes through the same gate as a webhook target.
+      const res = await postToTenantUrl(callbackUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/csv; charset=utf-8' },
         body: csv,
