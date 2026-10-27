@@ -64,6 +64,13 @@ function makeChain(kind: string, table: unknown): Record<string, unknown> {
   return self;
 }
 
+// POST runs inside withTenantScope, which pins a real pool client — unit tests
+// have no database, so pass the handler straight through.
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: () => makeChain('select', undefined),
@@ -74,6 +81,10 @@ vi.mock('@/drizzle/db', () => ({
         select: () => makeChain('select', undefined),
         update: (t: unknown) => makeChain('update', t),
         insert: (t: unknown) => makeChain('insert', t),
+        // #3246: withTenantContext names the workspace on this handle before the
+        // statements run; the set_config itself is asserted in
+        // resend-webhook-tenant-adoption-3246.test.ts.
+        execute: () => Promise.resolve([]),
       }),
   },
 }));
@@ -88,6 +99,13 @@ vi.mock('@/lib/rate-limit', () => ({
 const mockResolveScope = vi.fn();
 vi.mock('@/lib/email/webhook-scope', () => ({
   resolveRecipientScope: (...args: unknown[]) => {
+    h.order.push('resolve');
+    return mockResolveScope(...args);
+  },
+  // #3246: POST calls the adopting wrapper, which resolves and then names the
+  // workspace. Both point at the same planted verdict so the write scope stays
+  // pinned independently of the attribution policy.
+  attributeResendEvent: (...args: unknown[]) => {
     h.order.push('resolve');
     return mockResolveScope(...args);
   },

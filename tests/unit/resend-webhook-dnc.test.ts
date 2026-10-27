@@ -6,8 +6,16 @@ const mockReturning = vi.fn().mockResolvedValue([]);
 const mockUpdateSet = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: mockReturning }) });
 const mockTxUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
 const mockTxInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+// #3246: withTenantContext names the workspace on the same handle the writes use,
+// and reads go through tx now, so the fake transaction carries all three.
+const mockTxExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransaction = vi.fn(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
-  const tx = { update: mockTxUpdate, insert: mockTxInsert };
+  const tx = {
+    update: mockTxUpdate,
+    insert: mockTxInsert,
+    select: () => ({ from: mockSelectFrom }),
+    execute: mockTxExecute,
+  };
   return cb(tx);
 });
 const mockSelectLimit = vi.fn().mockResolvedValue([]);
@@ -17,6 +25,13 @@ const mockDbUpdateReturning = vi.fn().mockResolvedValue([]);
 const mockDbUpdateWhere = vi.fn().mockReturnValue({ returning: mockDbUpdateReturning });
 const mockDbUpdateSet = vi.fn().mockReturnValue({ where: mockDbUpdateWhere });
 const mockInsertValues = vi.fn().mockResolvedValue(undefined);
+
+// POST runs inside withTenantScope, which pins a real pool client — unit tests
+// have no database, so pass the handler straight through.
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -74,6 +89,9 @@ vi.mock('@/lib/rate-limit', () => ({
 const mockResolveScope = vi.fn();
 vi.mock('@/lib/email/webhook-scope', () => ({
   resolveRecipientScope: (...args: unknown[]) => mockResolveScope(...args),
+  // #3246: POST now asks the adopting wrapper, which resolves and then names the
+  // workspace; the verdict is planted either way.
+  attributeResendEvent: (...args: unknown[]) => mockResolveScope(...args),
 }));
 
 function makeRequest(body: Record<string, unknown>, headers?: Record<string, string>): NextRequest {
@@ -246,7 +264,7 @@ describe('resend webhook DNC', () => {
 
     it('cancels active sequence enrollments when a contact replies', async () => {
       mockSelectLimit.mockResolvedValue([{ id: 'c3', tenantId: 't3' }]);
-      mockDbUpdateReturning.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }]);
+      mockReturning.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }]);
 
       const { POST } = await import('@/app/api/webhooks/resend/route');
       const req = makeRequest({
@@ -257,13 +275,15 @@ describe('resend webhook DNC', () => {
       const res = await POST(req);
       expect(res.status).toBe(200);
       expect(mockSelectFrom).toHaveBeenCalled();
-      expect(mockDbUpdateSet).toHaveBeenCalled();
-      expect(mockDbUpdateReturning).toHaveBeenCalled();
+      // #3246: the reply's read and its cancellation run on the tenant-context
+      // handle, not on the bare pool — same statements, bound to a workspace.
+      expect(mockTxUpdate).toHaveBeenCalled();
+      expect(mockReturning).toHaveBeenCalled();
     });
 
     it('does NOT mark a replier as doNotContact', async () => {
       mockSelectLimit.mockResolvedValue([{ id: 'c4', tenantId: 't4' }]);
-      mockDbUpdateReturning.mockResolvedValue([]);
+      mockReturning.mockResolvedValue([]);
 
       const { POST } = await import('@/app/api/webhooks/resend/route');
       const req = makeRequest({
@@ -271,9 +291,14 @@ describe('resend webhook DNC', () => {
         data: { to: ['engaged@test.com'], created_at: new Date().toISOString() },
       });
 
+      const { contacts } = await import('@/drizzle/schema');
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockTransaction).not.toHaveBeenCalled();
+      // The invariant is "a reply does not suppress the contact". It used to be
+      // provable from the absence of a transaction; #3246 put every write in one
+      // to carry the tenant, so it is now proven from what each update targeted.
+      const contactWrites = mockTxUpdate.mock.calls.filter((c) => c[0] === contacts);
+      expect(contactWrites).toHaveLength(0);
     });
   });
 
@@ -285,9 +310,14 @@ describe('resend webhook DNC', () => {
         data: { to: ['a@b.com'], created_at: new Date().toISOString() },
       });
 
+      const { contacts } = await import('@/drizzle/schema');
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockTransaction).not.toHaveBeenCalled();
+      // The invariant is "a reply does not suppress the contact". It used to be
+      // provable from the absence of a transaction; #3246 put every write in one
+      // to carry the tenant, so it is now proven from what each update targeted.
+      const contactWrites = mockTxUpdate.mock.calls.filter((c) => c[0] === contacts);
+      expect(contactWrites).toHaveLength(0);
     });
   });
 });

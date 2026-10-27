@@ -4,8 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { eq, sql } from 'drizzle-orm';
-import { db } from '@/drizzle/db';
 import { emailTracking } from '@/drizzle/schema';
+import { NO_USER_SENTINEL, setTenantContext, withTrackingLookupContext } from '@/lib/db/rls';
 
 /**
  * #2406 — which workspace does an inbound provider event belong to?
@@ -79,23 +79,34 @@ export function chooseScope(
   return { kind: 'unattributed', reason: 'ambiguous', candidates: tenants.sort() };
 }
 
-/** The message-id lookup: exact send, exact contact. */
+/**
+ * The message-id lookup: exact send, exact contact.
+ *
+ * #3246: `email_tracking` is FORCE-RLS and its only tenant arm compares
+ * `tenant_id` to a value this request does not have yet — finding it is the
+ * point of the read. Measured 2026-10-26 as `nucrm_app`, both lookups below
+ * returned 0 rows with no GUC set, so every bounce, complaint and reply was
+ * counted `unattributed` and dropped. 0105 ships the SELECT-only
+ * `email_tracking_pixel_lookup` arm behind `app.tracking_lookup` for exactly
+ * this; opening it returns 1.
+ */
 async function findByMessageId(emailId: string): Promise<{ tenantId: string; contactId: string | null } | null> {
-  const [row] = await db
-    .select({ tenantId: emailTracking.tenantId, contactId: emailTracking.contactId })
-    .from(emailTracking)
-    .where(eq(emailTracking.messageId, emailId))
-    .limit(1);
+  const row = await withTrackingLookupContext((tx) =>
+    tx.query.emailTracking.findFirst({
+      columns: { tenantId: true, contactId: true },
+      where: eq(emailTracking.messageId, emailId),
+    }));
   return row ?? null;
 }
 
 /** Every workspace we have ever mailed this address to. */
 async function tenantsThatMailed(recipient: string): Promise<string[]> {
-  const rows = await db
-    .select({ tenantId: emailTracking.tenantId })
-    .from(emailTracking)
-    .where(sql`LOWER(${emailTracking.recipient}) = ${recipient.toLowerCase()}`)
-    .groupBy(emailTracking.tenantId);
+  const rows = await withTrackingLookupContext((tx) =>
+    tx
+      .select({ tenantId: emailTracking.tenantId })
+      .from(emailTracking)
+      .where(sql`LOWER(${emailTracking.recipient}) = ${recipient.toLowerCase()}`)
+      .groupBy(emailTracking.tenantId));
   return rows.map((r) => r.tenantId);
 }
 
@@ -104,4 +115,21 @@ export async function resolveRecipientScope(ev: EventIdentity): Promise<Recipien
   if (exact) return chooseScope(exact, []);
   const mailers = await tenantsThatMailed(ev.recipient);
   return chooseScope(null, mailers);
+}
+
+/**
+ * Resolve the workspace and then adopt it, so the writes the caller goes on to
+ * make are visible to RLS. Naming the tenant is what the #2406 predicates have
+ * always assumed was true: measured in the same probe, the hard-bounce
+ * `UPDATE`, the enrollment cancel and the activity insert all touched 0 rows
+ * while `app.current_tenant` was `''` — even though every one of them carried
+ * `tenant_id = <the workspace>` in its WHERE — and 1 row each after it was set.
+ * Nothing is adopted for an unattributed event, so the drop path stays exactly
+ * as narrow as it was.
+ */
+export async function attributeResendEvent(ev: EventIdentity): Promise<RecipientScope> {
+  const scope = await resolveRecipientScope(ev);
+  if (scope.kind === 'unattributed') return scope;
+  await setTenantContext(scope.tenantId, NO_USER_SENTINEL);
+  return scope;
 }

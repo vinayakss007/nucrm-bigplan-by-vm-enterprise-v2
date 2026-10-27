@@ -17,6 +17,14 @@
  * deleted its entry, the way #3225, #3231 and #3237 each deleted one. The four-directory ledger this
  * file was cut against is now three, and the equality assertions below are what says so.
  *
+ * Step 4b (2026-10-26) took `app/api/webhooks` off 44 to 32 by binding the 12 Resend
+ * reads rather than excusing them: the attribution opens 0105's `app.tracking_lookup`
+ * arm and adopts the workspace it resolves, and the writes run inside
+ * `withTenantContext`. They live in `lib/email/` now (the route had no room under the
+ * #1843 cap) and are pinned targets, so they left the deferred directory instead of
+ * becoming a bigger exemption. Step 4a moved the same ceiling to 42 on its own base by
+ * binding the 2 inbound `apiKeys` reads; both merged measures 30.
+ *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
 import { describe, it, expect } from 'vitest';
@@ -36,7 +44,7 @@ describe('#3246 the deferral ledger points at live work', () => {
       'app/api/webhooks',
       'app/api/auth/sso',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44, 2]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 32, 2]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }

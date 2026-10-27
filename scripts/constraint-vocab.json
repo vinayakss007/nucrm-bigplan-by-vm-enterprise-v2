@@ -154,7 +154,7 @@
         ],
         "cancelled": [
           "app/api/unsubscribe/route.ts",
-          "app/api/webhooks/resend/route.ts",
+          "lib/email/resend-event-handlers.ts",
           "lib/cron/sequence-steps.ts"
         ]
       },

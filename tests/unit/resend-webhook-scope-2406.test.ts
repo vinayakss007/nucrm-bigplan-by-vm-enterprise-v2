@@ -55,6 +55,16 @@ vi.mock('@/drizzle/db', () => ({
     select: () => makeChain('select', undefined),
     update: (t: unknown) => makeChain('update', t),
     insert: (t: unknown) => makeChain('insert', t),
+    query: {
+      emailTracking: {
+        // #3246: the message-id lookup is a relational read now, so the same
+        // WHERE it always carried has to be recorded for the assertions below.
+        findFirst: (opts: { where?: unknown }) => {
+          h.nodes.push({ kind: 'select', table: emailTracking, where: opts.where });
+          return Promise.resolve(h.selectRows[0]);
+        },
+      },
+    },
   },
 }));
 
