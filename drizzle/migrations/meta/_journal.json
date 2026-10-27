@@ -988,6 +988,13 @@
       "when": 1793140000000,
       "tag": "0140_jsonb_size_octet_length",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 141,
+      "when": 1793200000000,
+      "tag": "0141_ai_providers_force_rls",
+      "breakpoints": true
     }
   ]
 }
