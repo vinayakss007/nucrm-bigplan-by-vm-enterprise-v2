@@ -17,7 +17,7 @@ import { logError } from '@/lib/errors-server';
  * #3324: `oauth_clients.redirect_uris` is one `text` column, so the comparison this route used to
  * be — `stored.includes(requested)` — was `String.prototype.includes` with the registered value as
  * the haystack: it admitted any URL contained inside a registration and redirected there with the
- * authorization code attached. RFC 6749 §3.1.2.3 requires an exact match.
+ * authorization code attached. RFC 6749 §3.1.2 requires an exact match.
  *
  * Entries are split on `,` rather than compared against the column whole because a tenant registers
  * more than one URI by writing them into this one field; whole-string equality would lock such a
