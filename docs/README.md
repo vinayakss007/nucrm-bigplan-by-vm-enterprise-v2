@@ -77,7 +77,7 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5425` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule), re-pinned by **PP-076**, after
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5498` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, and from `:5425` by **PP-079** for the same three additions), re-pinned by **PP-076**, after
 **PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
 The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
 inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the

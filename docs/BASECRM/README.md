@@ -94,6 +94,13 @@ A "base CRM" that violates any of them is not this app:
   `app.unsubscribe_contact`). Any new one of these has to be appended to *both*
   connection-reset lists — `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts`
   pins the two lists equal and pinned to the literal count.
+- **A guarded table is not a usable table: a policy is not a writer.** `oauth_clients` has carried
+  `tenant_isolation` `FOR ALL` since 0088 and had **no `INSERT` anywhere in the app**, so
+  `POST /api/auth/oauth/token` answered `invalid_client` — byte-identical to a wrong secret, since
+  `app/api/auth/oauth/token/route.ts:69` and `:79` return the same 401 — for every caller on a fresh
+  database. The writer is `app/api/tenant/oauth-clients/route.ts:89`, and it needed no migration.
+  Two rules: **check what the existing arms already reach before adding one**, and when an auth
+  route rejects *everyone*, ask whether the row it reads can exist at all. See 03 § #3328.
 
 ## Provenance
 

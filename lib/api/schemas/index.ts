@@ -19,3 +19,4 @@ export * from './import-export';
 export * from './projects';
 export * from './public';
 export * from './ai';
+export * from './oauth-clients';
