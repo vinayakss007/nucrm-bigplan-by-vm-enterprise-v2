@@ -67,7 +67,13 @@ describe('#2529 no console line interpolates a raw email address', () => {
   );
 
   it('the three sites #2529 names are all domain-only or id-only now', () => {
-    const resend = readFileSync(join(ROOT, 'app/api/webhooks/resend/route.ts'), 'utf8');
+    // #3246 moved the Resend write handlers to lib/email/resend-event-handlers.ts,
+    // so the two sites this test names live there now; the route is still read so
+    // a log line creeping back into it is caught either way.
+    const resend = [
+      join(ROOT, 'app/api/webhooks/resend/route.ts'),
+      join(ROOT, 'lib/email/resend-event-handlers.ts'),
+    ].map((f) => readFileSync(f, 'utf8')).join('\n');
     const restore = readFileSync(join(ROOT, 'app/api/superadmin/user-data/route.ts'), 'utf8');
 
     expect(resend).toContain("marked DNC for ${email.split('@')[1] ?? 'no-domain'}");

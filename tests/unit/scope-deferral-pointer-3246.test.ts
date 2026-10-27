@@ -19,8 +19,12 @@
  *
  * Step 4a (2026-10-26) did not delete an entry; it moved `app/api/webhooks` off its 44 ceiling to 42 by
  * binding the inbound `apiKeys` lookup and its trail write in `lib/webhooks/inbound-auth.ts`, which is a
- * pinned target rather than a deferred directory. The ceiling is a count that may only go down, so the
- * number below is the measured run, not the number the entry was invented with.
+ * pinned target rather than a deferred directory. Step 4b took it to 30 by binding the 12 Resend reads
+ * rather than excusing them: the attribution opens 0105's `app.tracking_lookup` arm and adopts the
+ * workspace it resolves, and the write handlers run each statement inside `withTenantContext`. Both
+ * halves live in `lib/email/` because the route's 500-line cap had no room left, so they left the
+ * deferred directory instead of becoming a bigger exemption. The ceiling is a count that may only go
+ * down, so the number below is the measured run, not the number the entry was invented with.
  *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
@@ -41,7 +45,7 @@ describe('#3246 the deferral ledger points at live work', () => {
       'app/api/webhooks',
       'app/api/auth/sso',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 42, 2]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 30, 2]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }

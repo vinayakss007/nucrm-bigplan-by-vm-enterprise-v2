@@ -3620,8 +3620,10 @@ database`, and exactly two FAILs:
   `app/api/tenant/invoices/[id]/route.ts:141` (re-pinned 2026-10-22 from `:139`: `d78d7698` (#2973) added 2 lines above the mutable list) includes `status` in its mutable field list and `:166`
   validates the incoming value _against that same constant_, so `{"status":"void"}` clears validation and
   reaches the UPDATE. On the enrollment side the writes are literal: `app/api/unsubscribe/route.ts:67` (re-pinned 2026-10-25 from `:56`: **#3237**'s claim transaction re-flowed the function above it) and
-  `app/api/webhooks/resend/route.ts:261` and `:435` each set `status: 'cancelled'` — both re-pinned on
-  2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
+  `lib/email/resend-event-handlers.ts:91` and `:272` each set `status: 'cancelled'` — both re-pinned on
+  2026-10-27 from `:261`/`:435` in the route, which **#3246 step 4b** moved when it extracted the write
+  paths out of it; those were re-pinned on 2026-10-08 from `:212`/`:368`,
+  which **#2425**'s tenant attribution moved out from under this entry —
   and since **#2392** the
   shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:100`, writing at `:114`, `:377`, `:386` — re-pinned
   2026-10-17 from 74/88/340/349, which **#2796**'s `stepDelayMs` helper pushed down by 26; those were the 2026-10-09 re-pin of 64/78/330/339, moved by **#2473**'s `SequenceStepRow` block)
@@ -3754,7 +3756,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   `drizzle/migrations/0120_sequence_enrollments_cancelled_status.sql`. Evidence read: `pg_constraint`
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:141,166` (the first re-pinned 2026-10-22 from `:139`, same #2973 shift),
-  `app/api/unsubscribe/route.ts:42-67,132-134` (the first range re-pinned 2026-10-25 from `:42-56` and the second from `:121-123`, both for **#3237**'s claim transaction), `app/api/webhooks/resend/route.ts:261,435`,
+  `app/api/unsubscribe/route.ts:42-67,132-134` (the first range re-pinned 2026-10-25 from `:42-56` and the second from `:121-123`, both for **#3237**'s claim transaction), `lib/email/resend-event-handlers.ts:91,272` (re-pinned 2026-10-27 from the route's `:261,435`, which **#3246 step 4b**'s extraction moved out of the route),
   `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:145` (re-pinned 2026-10-24 from `:123` for **#3193**'s 22-line grow above the call; `:123` from `:126` 2026-10-18 for **#2740**/**#2813**),
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,

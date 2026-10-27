@@ -40,7 +40,8 @@
  * WHY THE STATIC HALF EXISTS
  * --------------------------
  * The live-route proof covers `app/api/unsubscribe`. The other three writers
- * (`app/api/webhooks/resend/route.ts` twice,
+ * (`lib/email/resend-event-handlers.ts` twice — #3246 step 4b moved the Resend
+ * writes there, under the route's 500-line cap,
  * `app/api/tenant/contacts/[id]/enroll/route.ts` DELETE) are not reachable here
  * without inventing Resend signatures and auth mocks, so the fifth test instead
  * enumerates every status literal any source file writes into
@@ -314,7 +315,7 @@ d('#2402 sequence_enrollments.status admits every value the code writes', () => 
     // unregistered.
     expect(cancelledBy).toEqual([
       'app/api/unsubscribe/route.ts',
-      'app/api/webhooks/resend/route.ts',
+      'lib/email/resend-event-handlers.ts',
       'lib/cron/sequence-steps.ts',
     ].sort());
 
