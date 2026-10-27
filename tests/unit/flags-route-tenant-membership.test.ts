@@ -11,6 +11,14 @@
  * The route now rejects X-Tenant-ID values the caller is not an active member
  * of with 403. Client-IP handling goes through the central TRUST_PROXY-gated
  * helper inside checkRateLimit (mocked here), so no new IP surface exists.
+ *
+ * #3288 rewrote the cookie branch of this route: it used to `verifyToken` the
+ * JWT and then read `sessions` on the bare pool to recover the user id, which
+ * under FORCE RLS matched zero rows, so the branch could never authenticate
+ * anybody. Both branches now redeem the credential through
+ * getCurrentUserForToken, which is why the cookie cases below mock that helper
+ * instead of a sessions SELECT. The #2221 guarantee being tested here —
+ * membership, not the header, authorizes a tenant — is unchanged.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -18,12 +26,10 @@ import { NextRequest } from 'next/server';
 const TENANT_A = '11111111-1111-1111-1111-111111111111';
 const TENANT_B = '22222222-2222-2222-2222-222222222222';
 
-const { mockGetAllFlags, mockCheckRateLimit, mockVerifyToken, mockHashToken, mockGetCurrentUserForToken, dbSelect } =
+const { mockGetAllFlags, mockCheckRateLimit, mockGetCurrentUserForToken, dbSelect } =
   vi.hoisted(() => ({
     mockGetAllFlags: vi.fn(),
     mockCheckRateLimit: vi.fn(),
-    mockVerifyToken: vi.fn(),
-    mockHashToken: vi.fn(),
     mockGetCurrentUserForToken: vi.fn(),
     dbSelect: vi.fn(),
   }));
@@ -39,7 +45,7 @@ function makeChain(rows: unknown[]) {
   return chain;
 }
 
-/** Queue the rows returned by successive db.select() calls (sessions, then members). */
+/** Queue the rows the tenant_members probe returns. */
 function queueSelects(...rowSets: unknown[][]) {
   let i = 0;
   dbSelect.mockImplementation(() => makeChain(rowSets[Math.min(i++, rowSets.length - 1)] ?? []));
@@ -50,11 +56,10 @@ vi.mock('@/drizzle/db', () => ({ db: { select: (...args: unknown[]) => dbSelect(
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
-// Session mock exports BOTH verifyToken (cookie path) and
-// getCurrentUserForToken (#2216 bearer path) per repo test convention.
+// Both credential branches of the route redeem through this one helper (#2216 for
+// the bearer path, #3288 for the cookie path), so it is the only session export
+// the route reaches any more.
 vi.mock('@/lib/auth/session', () => ({
-  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
-  hashToken: (...args: unknown[]) => mockHashToken(...args),
   getCurrentUserForToken: (...args: unknown[]) => mockGetCurrentUserForToken(...args),
 }));
 
@@ -68,7 +73,6 @@ describe('GET /api/flags — X-Tenant-ID membership gate (#2221)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue(null);
-    mockHashToken.mockResolvedValue('token-hash');
     mockGetAllFlags.mockResolvedValue([{ key: 'dashboard-v2', enabled: true }]);
   });
 
@@ -80,9 +84,10 @@ describe('GET /api/flags — X-Tenant-ID membership gate (#2221)', () => {
     // TRUST_PROXY on: the header is client-supplied either way — membership
     // (not IP provenance) is what authorizes tenant context.
     vi.stubEnv('TRUST_PROXY', 'true');
-    mockVerifyToken.mockResolvedValue({ userId: 'user-1' });
-    // sessions lookup finds the row; tenant_members lookup finds nothing.
-    queueSelects([{ userId: 'user-1' }], []);
+    mockGetCurrentUserForToken.mockResolvedValue({ id: 'user-1' });
+    // The only select left on the cookie path is the tenant_members probe, and it
+    // finds nothing for a foreign tenant.
+    queueSelects([]);
 
     const res = await GET(flagsRequest({ cookie: 'nucrm_session=abc', 'x-tenant-id': TENANT_B }));
     expect(res.status).toBe(403);
@@ -91,8 +96,8 @@ describe('GET /api/flags — X-Tenant-ID membership gate (#2221)', () => {
 
   it('serves tenant overrides when the caller IS an active member of the claimed tenant', async () => {
     vi.stubEnv('TRUST_PROXY', 'true');
-    mockVerifyToken.mockResolvedValue({ userId: 'user-1' });
-    queueSelects([{ userId: 'user-1' }], [{ id: 'member-row' }]);
+    mockGetCurrentUserForToken.mockResolvedValue({ id: 'user-1' });
+    queueSelects([{ id: 'member-row' }]);
 
     const res = await GET(flagsRequest({ cookie: 'nucrm_session=abc', 'x-tenant-id': TENANT_A }));
     expect(res.status).toBe(200);
@@ -113,10 +118,8 @@ describe('GET /api/flags — X-Tenant-ID membership gate (#2221)', () => {
 
   it('bearer path: foreign X-Tenant-ID is 403 too (membership checked for both auth styles)', async () => {
     mockGetCurrentUserForToken.mockResolvedValue({ id: 'user-1' });
-    queueSelects([{ id: 'member-row-not-used' }], []);
-    // First select IS the membership query here (bearer path has no sessions
-    // lookup) — empty rows must reject.
-    dbSelect.mockImplementationOnce(() => makeChain([]));
+    // The membership query is the only select on this path — empty rows must reject.
+    queueSelects([]);
 
     const res = await GET(flagsRequest({ authorization: 'Bearer jwt-token', 'x-tenant-id': TENANT_B }));
     expect(res.status).toBe(403);
