@@ -79,6 +79,9 @@ const WIDGET_JS = `
       // #2287: key the input by the field identity (key ?? id ?? name) so the
       // submitted payload lines up with the server-side required check in
       // lib/forms/field-shape (API-created forms store id, legacy key).
+      // #3296: that identity is tenant-authored and lands in id=/for= below, so it goes through
+      // escapeHtml at every site — a quote there ends the attribute, and the html is handed to
+      // innerHTML and delivered to whatever site embedded this script.
       var name = f.key || f.id || f.name || f.label || ('field_' + i);
       var label = f.label || f.name || '';
       var type = f.type || 'text';
@@ -87,13 +90,13 @@ const WIDGET_JS = `
 
       html += '<div style="margin-bottom:14px;">';
       if (label) {
-        html += '<label for="nucrm-' + name + '" style="display:block;margin-bottom:4px;font-size:13px;font-weight:500;color:#333;">' + escapeHtml(label) + (f.required ? ' <span style="color:#e53e3e;">*</span>' : '') + '</label>';
+        html += '<label for="nucrm-' + escapeHtml(name) + '" style="display:block;margin-bottom:4px;font-size:13px;font-weight:500;color:#333;">' + escapeHtml(label) + (f.required ? ' <span style="color:#e53e3e;">*</span>' : '') + '</label>';
       }
 
       if (type === 'textarea') {
-        html += '<textarea id="nucrm-' + name + '" name="' + escapeHtml(name) + '"' + required + ' placeholder="' + escapeHtml(placeholder) + '" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;min-height:80px;resize:vertical;"></textarea>';
+        html += '<textarea id="nucrm-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '"' + required + ' placeholder="' + escapeHtml(placeholder) + '" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;min-height:80px;resize:vertical;"></textarea>';
       } else if (type === 'select' && f.options) {
-        html += '<select id="nucrm-' + name + '" name="' + escapeHtml(name) + '"' + required + ' style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff;">';
+        html += '<select id="nucrm-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '"' + required + ' style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff;">';
         html += '<option value="">' + escapeHtml(placeholder || 'Select...') + '</option>';
         for (var j = 0; j < f.options.length; j++) {
           var opt = typeof f.options[j] === 'string' ? f.options[j] : (f.options[j].value || f.options[j].label || '');
@@ -103,10 +106,10 @@ const WIDGET_JS = `
         html += '</select>';
       } else if (type === 'checkbox') {
         html += '<label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">';
-        html += '<input type="checkbox" id="nucrm-' + name + '" name="' + escapeHtml(name) + '"' + required + ' style="width:16px;height:16px;">';
+        html += '<input type="checkbox" id="nucrm-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '"' + required + ' style="width:16px;height:16px;">';
         html += '<span>' + escapeHtml(label || placeholder) + '</span></label>';
       } else {
-        html += '<input type="' + escapeHtml(type) + '" id="nucrm-' + name + '" name="' + escapeHtml(name) + '"' + required + ' placeholder="' + escapeHtml(placeholder) + '" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">';
+        html += '<input type="' + escapeHtml(type) + '" id="nucrm-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '"' + required + ' placeholder="' + escapeHtml(placeholder) + '" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">';
       }
       html += '</div>';
     }
@@ -167,6 +170,8 @@ const WIDGET_JS = `
     });
   }
 
+  // Attribute-safe: quote and ampersand are the two that let a value out of its own attribute,
+  // and angle brackets keep it from opening a tag if it is ever emitted unquoted.
   function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
