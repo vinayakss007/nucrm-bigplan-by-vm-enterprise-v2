@@ -6,8 +6,9 @@
  * `scripts/seed-fresh.ts` deleted the identity layer as its first act, so the answer arrived after
  * the damage.
  *
- * It is a verifier, so it writes nothing: one transaction, `SET TRANSACTION READ ONLY`, one SELECT
- * (`STATE_SQL`), and a `ROLLBACK` that undoes nothing but guarantees the bypass GUC set with
+ * It is a verifier, so it writes nothing: one transaction, `SET TRANSACTION READ ONLY`,
+ * two SELECTs (`STATE_SQL` and, since #3302, the whole-population FORCE RLS census), and
+ * a `ROLLBACK` that undoes nothing but guarantees the bypass GUC set with
  * `SET LOCAL` dies with the transaction instead of leaking to the next checkout of this pooled
  * connection.
  *
@@ -25,6 +26,11 @@ import { Pool } from 'pg';
 import { classify, formatVerdict } from './seed/contents';
 import { describeTarget, formatTarget } from './seed/destructive';
 import { STATE_SQL, readStateCounts, nextStep } from './seed/state';
+import {
+  FULL_FORCE_RLS_CENSUS_SQL,
+  evaluateForceRlsCensus,
+  formatForceRlsCensus,
+} from '../lib/db/least-privilege';
 
 async function main() {
   const target = describeTarget(process.env.DATABASE_URL);
@@ -40,12 +46,19 @@ async function main() {
     await client.query('SET TRANSACTION READ ONLY');
     await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
     const { rows } = await client.query(STATE_SQL);
+    // #3302: the counts above answer "is there data in here", and nothing on this
+    // screen answered "is every table's RLS actually binding" — the two existing RLS
+    // reports select tables by a uuid `tenant_id` column, so `ai_providers` was outside
+    // their denominator. Reported, not gated: this is a verifier, and its exit code is
+    // about whether a seed is safe here, which a missing FORCE does not change.
+    const census = evaluateForceRlsCensus((await client.query(FULL_FORCE_RLS_CENSUS_SQL)).rows);
     await client.query('ROLLBACK');
 
     const verdict = classify(readStateCounts(rows));
     console.log(`[db:state] target  ${formatTarget(target)}`);
     console.log(`[db:state] ${formatVerdict(verdict)}`);
     for (const reason of verdict.reasons) console.log(`[db:state]   - ${reason}`);
+    console.log(`[db:state] rls     ${formatForceRlsCensus(census)}`);
     console.log(`[db:state] next    ${nextStep(verdict)}`);
   } finally {
     client.release();

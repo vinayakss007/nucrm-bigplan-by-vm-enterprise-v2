@@ -86,6 +86,151 @@ export const TENANT_TABLE_OWNERSHIP_SQL = `
 `;
 
 /**
+ * #3302 — the same property, measured over the WHOLE population.
+ *
+ * The probe above answers a different question well. It `JOIN`s `pg_attribute …
+ * attname = 'tenant_id'`, so its denominator is "tables with a uuid tenant column"
+ * and it is structurally incapable of reporting a hole in a table without one.
+ * `ai_providers` is enabled, un-FORCED, and absent from every count that screen
+ * produces: the guard does not describe it wrongly, it never sees it.
+ *
+ * So this query deliberately has no column criterion. `relkind = 'r'` in `public` is
+ * the whole schema and `relrowsecurity` decides what counts. Ownership and policy
+ * presence come back too, because FORCE is only an exemption against the owner, and a
+ * table with RLS on and zero policies is a third kind of finding.
+ */
+export const FULL_FORCE_RLS_CENSUS_SQL = `
+  SELECT c.relname                        AS table_name,
+         c.relrowsecurity                 AS rls_enabled,
+         c.relforcerowsecurity            AS rls_forced,
+         (c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)) AS is_owner,
+         EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid)            AS has_policy
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relkind = 'r'
+   ORDER BY c.relname
+`;
+
+/** Row shape as `pg` returns it; `drizzle` camel-cases the same five aliases. */
+export interface ForceRlsCensusRow {
+  readonly table_name?: string | null;
+  readonly tableName?: string | null;
+  readonly rls_enabled?: boolean | string | null;
+  readonly rlsEnabled?: boolean | string | null;
+  readonly rls_forced?: boolean | string | null;
+  readonly rlsForced?: boolean | string | null;
+  readonly is_owner?: boolean | string | null;
+  readonly isOwner?: boolean | string | null;
+  readonly has_policy?: boolean | string | null;
+  readonly hasPolicy?: boolean | string | null;
+}
+
+export interface ForceRlsCensus {
+  /** Ordinary tables in `public`, forced or not. */
+  readonly total: number;
+  /** The denominator every ratio here uses: tables with RLS switched on. */
+  readonly rlsEnabled: number;
+  readonly rlsForced: number;
+  readonly rlsDisabled: readonly string[];
+  /** Enabled but not FORCE'd — the tables the tenant-column screen cannot see. */
+  readonly unforced: readonly string[];
+  /** …of those, the ones this role owns, which is where the exemption is live today. */
+  readonly unforcedOwned: readonly string[];
+  /** Enabled with no policy: RLS on an empty rule set denies everything and forces nothing. */
+  readonly noPolicy: readonly string[];
+  /** False when the census found a hole OR read nothing worth reporting. */
+  readonly ok: boolean;
+}
+
+/**
+ * Catalog flags arrive as booleans through `pg` and as `'t'`/`'f'` when a driver or a
+ * fixture hands back the text form. Anything else is false — which is why `ok` also
+ * requires a non-zero denominator rather than merely an empty `unforced`.
+ */
+const catalogBool = (value: unknown): boolean =>
+  value === true || value === 't' || value === 'true' || value === 1 || value === '1';
+
+const censusField = (row: Record<string, unknown>, snake: string, camel: string) =>
+  row[snake] ?? row[camel];
+
+/** Census rows into counts and name-lists. Pure: no `pg`, no I/O. */
+export function evaluateForceRlsCensus(rows: readonly ForceRlsCensusRow[]): ForceRlsCensus {
+  const unforced: string[] = [];
+  const unforcedOwned: string[] = [];
+  const rlsDisabled: string[] = [];
+  const noPolicy: string[] = [];
+  let rlsEnabled = 0;
+  let rlsForced = 0;
+
+  for (const raw of rows) {
+    const r = raw as Record<string, unknown>;
+    const name = String(censusField(r, 'table_name', 'tableName') ?? '(unnamed)');
+    const enabled = catalogBool(censusField(r, 'rls_enabled', 'rlsEnabled'));
+    const forced = catalogBool(censusField(r, 'rls_forced', 'rlsForced'));
+    const owned = catalogBool(censusField(r, 'is_owner', 'isOwner'));
+    const policy = catalogBool(censusField(r, 'has_policy', 'hasPolicy'));
+
+    if (!enabled) {
+      rlsDisabled.push(name);
+      continue;
+    }
+    rlsEnabled += 1;
+    if (forced) rlsForced += 1;
+    else {
+      unforced.push(name);
+      if (owned) unforcedOwned.push(name);
+    }
+    if (!policy) noPolicy.push(name);
+  }
+
+  const sorted = (names: string[]) => names.slice().sort((a, b) => a.localeCompare(b));
+
+  return {
+    total: rows.length,
+    rlsEnabled,
+    rlsForced,
+    rlsDisabled: sorted(rlsDisabled),
+    unforced: sorted(unforced),
+    unforcedOwned: sorted(unforcedOwned),
+    noPolicy: sorted(noPolicy),
+    // "0 of 0" is not a pass. An unmigrated database, a wrong search_path, or a role
+    // that cannot read pg_class all answer with an empty or RLS-less catalog — and a
+    // destructive script is exactly what waits on this screen's verdict (#3282).
+    ok: rlsEnabled > 0 && unforced.length === 0 && noPolicy.length === 0,
+  };
+}
+
+/** Name up to five offenders; a 226-table schema is not served by a hundred-line detail. */
+const NAME_CAP = 5;
+const named = (names: readonly string[]): string =>
+  names.length <= NAME_CAP
+    ? names.join(', ')
+    : `${names.slice(0, NAME_CAP).join(', ')} (+ ${names.length - NAME_CAP} more)`;
+
+/**
+ * The one line an operator reads. Phrased as "not forced", never as "exposed": the
+ * exemption binds the table owner, so where the owner is a superuser with BYPASSRLS
+ * the finding is latent until ownership moves — and #3302 says exactly that rather
+ * than claiming a live leak this ALTER does not remove today.
+ */
+export function formatForceRlsCensus(census: ForceRlsCensus): string {
+  if (census.rlsEnabled === 0) {
+    return `no RLS-enabled tables found in "public" across ${census.total} table(s) — refusing to read an empty catalogue as a pass`;
+  }
+
+  const score = `${census.rlsForced}/${census.rlsEnabled} RLS-enabled tables FORCE ROW LEVEL SECURITY`;
+  if (census.ok) return score;
+
+  const parts = [score];
+  if (census.unforced.length) parts.push(`not forced: ${named(census.unforced)}`);
+  if (census.unforcedOwned.length) {
+    parts.push(`owned by this role, so its policies are inert there today: ${named(census.unforcedOwned)}`);
+  }
+  if (census.noPolicy.length) parts.push(`no policy at all: ${named(census.noPolicy)}`);
+  return parts.join(' · ');
+}
+
+/**
  * The minimal query surface the probes need. Both the `pg` Pool used by the
  * operational scripts and the app's `query()` from `lib/db/client` satisfy it,
  * and a unit test can supply a plain stub — which is why this module still does
