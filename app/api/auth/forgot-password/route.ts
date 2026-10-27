@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
-import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
@@ -14,7 +13,7 @@ import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit, limiters, getRateLimitHeaders } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { logError } from '@/lib/errors-server';
-import { withTokenIssueContext } from '@/lib/db/rls';
+import { withAuthLookupContext, withTokenIssueContext } from '@/lib/db/rls';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -54,11 +53,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Always return success — never reveal if email exists
-    const user = await db.query.users.findFirst({
-      where: eq(sql`lower(${users.email})`, email.toLowerCase().trim()),
-      columns: { id: true, fullName: true }
-    });
-    
+    //
+    // #3288: this read is the reason the route was silently dead. `users` carries
+    // no SELECT policy an unprivileged connection can satisfy — users_read_self
+    // needs app.current_user, users_super_admin_read needs app.is_super_admin, and
+    // neither exists before anyone has logged in — so on the bare pool
+    // (`lib/db/pool.ts` clears every app.* GUC on acquire and release) the
+    // statement matched zero rows for *every* address, including a real one. The
+    // `if (!user)` branch below is the correct answer for an unknown address, and
+    // was the only answer the route ever gave: same 200 {"ok":true}, no token, no
+    // email, nothing logged.
+    //
+    // users_auth_lookup (0088) is the shipped arm for exactly this lookup, and
+    // withAuthLookupContext is what the sibling lib/auth/password-reset.ts:68 —
+    // which performs the identical read — had already been moved behind (#3218,
+    // PP-026). The transaction-locals cannot leak: the privilege ends at COMMIT.
+    const [user] = await withAuthLookupContext(async (tx) =>
+      await tx
+        .select({ id: users.id, fullName: users.fullName })
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, email.toLowerCase().trim()))
+        .limit(1)
+    );
+
     if (!user) {
       await normalizeTiming(startedAt);
       return NextResponse.json({ ok: true });
