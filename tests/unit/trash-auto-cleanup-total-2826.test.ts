@@ -47,24 +47,41 @@ const h = vi.hoisted(() => ({
   rowCount: 2,
 }));
 
+// One select builder, handed out by the pool *and* by a transaction. Since #3300 the route reads its
+// counts through `withTenantContext`, so they arrive on `tx` rather than on `db`; what the builder
+// returns is unchanged, and #2826's guarantee is still about the shape of those rows.
+function selectBuilder() {
+  let table = '';
+  const b: Record<string, unknown> = {};
+  b['from'] = (t: object) => {
+    table = getTableName(t as never);
+    return b;
+  };
+  for (const m of ['where', 'limit', 'orderBy', 'groupBy', 'leftJoin', 'innerJoin']) {
+    b[m] = () => b;
+  }
+  b['then'] = (done: (v: unknown) => unknown) =>
+    Promise.resolve(h.rows[table] ?? []).then(done);
+  return b;
+}
+
 vi.mock('@/drizzle/db', () => ({
   db: {
-    select: () => {
-      let table = '';
-      const b: Record<string, unknown> = {};
-      b['from'] = (t: object) => {
-        table = getTableName(t as never);
-        return b;
-      };
-      for (const m of ['where', 'limit', 'orderBy', 'groupBy', 'leftJoin', 'innerJoin']) {
-        b[m] = () => b;
-      }
-      b['then'] = (done: (v: unknown) => unknown) =>
-        Promise.resolve(h.rows[table] ?? []).then(done);
-      return b;
-    },
-    transaction: (fn: (tx: { delete: () => { where: () => Promise<{ rowCount: number }> } }) => Promise<unknown>) =>
-      fn({ delete: () => ({ where: () => Promise.resolve({ rowCount: h.rowCount }) }) }),
+    select: selectBuilder,
+    transaction: (
+      fn: (tx: {
+        select: () => unknown;
+        delete: () => { where: () => Promise<{ rowCount: number }> };
+        execute: () => Promise<unknown[]>;
+      }) => Promise<unknown>,
+    ) =>
+      // `execute` is the `set_config` of the tenant context the route now opens (#3300); this spec is
+      // about the driver's number types, so the grant is acknowledged and not asserted.
+      fn({
+        select: selectBuilder,
+        delete: () => ({ where: () => Promise.resolve({ rowCount: h.rowCount }) }),
+        execute: () => Promise.resolve([]),
+      }),
   },
 }));
 vi.mock('@/lib/auth/middleware', async () => {
