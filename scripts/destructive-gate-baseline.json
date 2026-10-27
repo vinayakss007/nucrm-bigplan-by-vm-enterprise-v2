@@ -1,0 +1,7 @@
+{
+  "_comment": "#3282 shrink-only ratchet for scripts/check-destructive-gate.mjs: per-file, per-check count of destructive statements that are known, reviewed and NOT yet gated. Lower a number when you add a --yes/--confirm gate or remove the statement; raising it is a regression. Deleting this file sets every allowance to 0. Every entry needs a reason in _reasons (BASELINE_UNREASONED).",
+  "_reasons": {
+    "scripts/verify-backup.ts|SCHEMA_WIPE_UNGATED": "#3282 reviewed, and not a wipe of the target: `backup:verify` drops only the scratch database `nucrm_verify_<timestamp>` it created a few lines earlier, whose generated name it shape-asserts before interpolating. It never touches the connected database. If a DROP DATABASE/SCHEMA of the connected target is ever added here this entry must fall to 0 and the script must name --yes/--confirm."
+  },
+  "scripts/verify-backup.ts|SCHEMA_WIPE_UNGATED": 2
+}

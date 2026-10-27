@@ -42,11 +42,12 @@
 #       LAUNCH_GATE_STRICT=1 npm run launch-gate
 #
 #   Stage 5 authenticates, so it needs an identity that exists in the database it
-#   is pointed at. Pass one explicitly with SMOKE_LOGIN_EMAIL / SMOKE_LOGIN_PASSWORD
-#   (read by scripts/smoke-test.sh). Leaving them unset probes the fallback
-#   account, which no migration and no seed script creates — so on a fresh database
-#   that stage can only answer "invalid credentials", which says nothing about the
-#   build under test.
+#   is pointed at. SMOKE_LOGIN_EMAIL / SMOKE_LOGIN_PASSWORD (read by
+#   scripts/smoke-test.sh) are BOTH REQUIRED as of #3281: the script used to fall
+#   back to an account no migration and no seed creates, which could only answer
+#   "invalid credentials" and therefore proved nothing about the build under test.
+#   The password half is now the value the seed was given, never a literal —
+#   `scripts/seed-dev.ts` takes it from SEED_PASSWORD and does not print it.
 #
 # CI WIRING (optional — not wired into .github/workflows/ci.yml by default):
 #   ci.yml already runs lint/typecheck/unit/integration/build as separate
@@ -167,7 +168,14 @@ if [ "$SERVER_UP" -ne 1 ]; then
 else
   # Server is up, so smoke-test.sh's own "not running" guard won't trip;
   # any non-zero exit here is a genuine assertion failure => hard fail.
-  if bash scripts/smoke-test.sh; then
+  if [ -z "${SMOKE_LOGIN_EMAIL:-}" ] || [ -z "${SMOKE_LOGIN_PASSWORD:-}" ]; then
+    # Name the missing input rather than letting stage 5 fail with a curl-shaped
+    # error: exit 2 from smoke-test.sh means "you did not say who to log in as".
+    echo "   ❌ SMOKE_LOGIN_EMAIL and SMOKE_LOGIN_PASSWORD are required (#3281)."
+    echo "      They are the seeded super admin: the email is fixed, the password is"
+    echo "      the \$SEED_PASSWORD that 'npm run seed:dev' was given."
+    record_fail "Smoke test"
+  elif bash scripts/smoke-test.sh; then
     echo "   ✅ Smoke test passed"
     record_pass "Smoke test"
   else

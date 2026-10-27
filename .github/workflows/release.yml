@@ -189,12 +189,13 @@ jobs:
       ALLOWED_ORIGINS: http://localhost:3000
       LAUNCH_GATE_SERVER_URL: http://localhost:3000
       # Stage 5 signs in, so it needs an identity that exists in the database it is
-      # pointed at. admin@test.com is the account scripts/seed-dev.ts creates. The
-      # account scripts/smoke-test.sh defaulted to before #2541 is created by nothing
-      # in this repository, so a strict gate could never have passed on a fresh
-      # database — and the credential here is already committed in seed-dev.ts.
+      # pointed at. admin@test.com is the account scripts/seed-dev.ts creates, on a
+      # database that dies with the runner. The PASSWORD is deliberately not here:
+      # #3281 removes the committed `password123`, because a credential in this file
+      # is a credential in a public repository, and because the seed script now
+      # refuses to run without SEED_PASSWORD. The step that seeds generates one and
+      # exports both names, so the gate logs in with the value it just wrote.
       SMOKE_LOGIN_EMAIL: admin@test.com
-      SMOKE_LOGIN_PASSWORD: password123
       LAUNCH_GATE_STRICT: "1"
     services:
       postgres:
@@ -235,6 +236,17 @@ jobs:
       - name: Build the schema from the migration chain, then seed it
         run: |
           set -euo pipefail
+          # #3281 — the seeded super admin is a platform bypass role, so the
+          # password is generated for this runner and never written into the
+          # repository or into a log line. The suffix carries the uppercase, digit
+          # and special that lib/auth/session.ts:38-46 requires; the hex alone
+          # could miss one of them.
+          CHAIN_PASSWORD="Release!$(od -An -tx1 -N10 /dev/urandom | tr -d ' \n')7Q"
+          echo "SEED_PASSWORD=$CHAIN_PASSWORD" >> "$GITHUB_ENV"
+          echo "SMOKE_LOGIN_PASSWORD=$CHAIN_PASSWORD" >> "$GITHUB_ENV"
+          unset CHAIN_PASSWORD
+          # The gate's own database is created empty by the postgres service, so the
+          # contents probe in scripts/seed/contents.ts classifies it EMPTY and seeds.
           npm run db:bootstrap -- --yes
           npm run db:seed
           # Loud evidence for #2537: a release database is, by construction, at the

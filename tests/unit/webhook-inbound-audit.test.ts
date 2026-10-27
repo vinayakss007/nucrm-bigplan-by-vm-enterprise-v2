@@ -37,6 +37,13 @@ const h = vi.hoisted(() => ({
   contactRow: undefined as unknown,
 }));
 
+// POST now runs inside withTenantScope, which pins a real pool client —
+// unit tests have no database, so pass the handler straight through.
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 vi.mock('@/drizzle/db', () => {
   const db: Record<string, unknown> = {
     insert: (table: unknown) => {

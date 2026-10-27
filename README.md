@@ -766,7 +766,8 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 | `npm run seed:e2e`  | Seed e2e test user               |
 | `npm run db:seed`   | Seed with advanced demo data     |
 | `npm run db:demo`   | Seed massive dataset for testing |
-| `npm run prod:seed` | Production data seeding          |
+| `npm run db:state`  | What the target database holds (read-only) |
+| `npm run db:seed:from-empty` | Provision the first admin into an EMPTY database — refuses otherwise (#3282) |
 
 ### Development
 

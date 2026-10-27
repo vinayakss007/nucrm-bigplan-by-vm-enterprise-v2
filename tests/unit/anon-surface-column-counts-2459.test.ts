@@ -43,7 +43,7 @@ const CLAIMS: [string, string, string][] = [
   ['app/api/setup/create-admin/route.ts', 'roles', '`roles` is 11 columns'],
   ['app/api/setup/create-admin/route.ts', 'pipelines', '`pipelines` is 9 columns'],
   ['app/api/setup/create-admin/route.ts', 'plans', '`plans` is 22 columns'],
-  ['app/api/webhooks/inbound/route.ts', 'api_keys', '`api_keys` is 16 columns'],
+  ['lib/webhooks/inbound-auth.ts', 'api_keys', '`api_keys` is 16 columns'],
   ['app/api/forms/submit/route.ts', 'contacts', 'the 55 columns'],
   ['app/api/tenant/portal/login/route.ts', 'portal_clients', 'the whole 10-column row'],
 ];

@@ -75,13 +75,15 @@ interface EnvResult {
 }
 
 const DEFAULT_ADMIN_EMAIL = 't@t.com';
-const DEFAULT_ADMIN_PASSWORD = 'password123';
 
 /**
  * Read and validate configuration from the environment. REQUIRED vars are
- * STRIPE_TEST_SECRET_KEY, STRIPE_WEBHOOK_SECRET and APP_URL; admin creds fall
- * back to documented test defaults. Returns the missing var names so the
- * caller can print a clear, actionable message and exit nonzero.
+ * STRIPE_TEST_SECRET_KEY, STRIPE_WEBHOOK_SECRET, APP_URL and TEST_ADMIN_PASSWORD
+ * (#3282 — the password used to fall back to a literal committed here, which is a
+ * login to a real tenant's admin account on any box this harness has been pointed
+ * at); TEST_ADMIN_EMAIL still defaults to the local test address, which is a label
+ * rather than a credential. Returns the missing var names so the caller can print
+ * a clear, actionable message and exit nonzero.
  */
 function readConfig(env: NodeJS.ProcessEnv): EnvResult {
   const missing: string[] = [];
@@ -92,6 +94,7 @@ function readConfig(env: NodeJS.ProcessEnv): EnvResult {
   if (!stripeTestSecretKey) missing.push('STRIPE_TEST_SECRET_KEY');
   if (!stripeWebhookSecret) missing.push('STRIPE_WEBHOOK_SECRET');
   if (!appUrl) missing.push('APP_URL');
+  if (!env['TEST_ADMIN_PASSWORD']) missing.push('TEST_ADMIN_PASSWORD');
 
   if (missing.length > 0) {
     return {
@@ -100,8 +103,10 @@ function readConfig(env: NodeJS.ProcessEnv): EnvResult {
       message:
         `Missing required env: ${missing.join(', ')}.\n` +
         'Set STRIPE_TEST_SECRET_KEY (sk_test_...), STRIPE_WEBHOOK_SECRET (whsec_...), APP_URL ' +
-        '(base URL of the running app), and TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD ' +
-        '(defaults t@t.com / password123). See docs/billing-lifecycle-test.md.',
+        '(base URL of the running app), and TEST_ADMIN_PASSWORD — which is required (#3282), ' +
+        'because this harness logs in as a real tenant admin and the literal it used to default ' +
+        'to is published in this repository. TEST_ADMIN_EMAIL defaults to t@t.com. ' +
+        'See docs/billing-lifecycle-test.md.',
     };
   }
 
@@ -122,7 +127,7 @@ function readConfig(env: NodeJS.ProcessEnv): EnvResult {
     stripeWebhookSecret,
     appUrl: appUrl.replace(/\/$/, ''),
     adminEmail: env['TEST_ADMIN_EMAIL'] ?? DEFAULT_ADMIN_EMAIL,
-    adminPassword: env['TEST_ADMIN_PASSWORD'] ?? DEFAULT_ADMIN_PASSWORD,
+    adminPassword: env['TEST_ADMIN_PASSWORD'] as string,
     priceStarterMonthly: env['STRIPE_PRICE_STARTER_MONTHLY'],
     priceProMonthly: env['STRIPE_PRICE_PRO_MONTHLY'],
     priceEnterpriseMonthly: env['STRIPE_PRICE_ENTERPRISE_MONTHLY'],

@@ -26,10 +26,17 @@
  *   npx tsx scripts/seed-dev.ts
  *   npm run seed:dev
  *
- * Requirements:
+ * Requirements (#3281 — read this, the old list was the wrong two signals):
  *   - .env.local with DATABASE_URL set
  *   - PostgreSQL running with migrations applied
- *   - NODE_ENV must NOT be 'production'
+ *   - SEED_PASSWORD set to a password you own, that satisfies the app's own policy
+ *     (lib/auth/session.ts:38-46). There is no committed default and the value is
+ *     never echoed.
+ *   - the TARGET DATABASE must be empty or carry only this script's own fixtures.
+ *     That is decided from the data (scripts/seed/contents.ts), not from NODE_ENV or
+ *     the hostname, because a production VM satisfies both of those: `.env.example`
+ *     ships NODE_ENV=development and the launch runbook puts the data tier on
+ *     127.0.0.1. SEED_ALLOW_POPULATED=true overrides it, on purpose.
  */
 
 import dotenv from 'dotenv';
@@ -56,6 +63,21 @@ if (dbUrl && !isLocalDb) {
   }
 }
 
+// Both guards above are kept, and neither is the answer (#3281): `.env.example`
+// ships NODE_ENV=development and the host install copies that template, while
+// deploy/LAUNCH_RUNBOOK.md §1 puts the production data tier on 127.0.0.1 — so on a
+// real VM they both pass. What actually decides whether this run is safe is the
+// CONTENTS of the target database, read below inside the RLS context, and the
+// credential, resolved now: a missing or policy-violating password must fail before
+// a connection is opened, because the account this script writes is the platform
+// bypass role (`is_super_admin` → the `app.is_super_admin` GUC → RLS does not apply).
+const credential = resolveSeedPassword(process.env);
+if (credential.error) {
+  console.error(`\x1b[31m[ERROR] ${credential.error}\x1b[0m`);
+  process.exit(1);
+}
+const seedPassword = credential.password as string;
+
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { sql } from 'drizzle-orm';
@@ -63,6 +85,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import * as schema from '../drizzle/schema';
 import { seedCompanies, seedContacts, seedDeals } from './seed';
+import { resolveSeedPassword, probeCounts, classify, refusal, formatVerdict } from './seed';
 
 // ============================================================================
 // FIXED UUIDs (for deterministic relationships)
@@ -268,6 +291,16 @@ async function main() {
       [IDS.tenant, IDS.users.admin],
     );
 
+    // #3281 — the guard that actually works: ask the database what is in it, and do
+    // it with the bypass context already set. Counting as the bare app role under
+    // FORCE RLS answers 0 for every table (#3280), which would report a populated
+    // production database as EMPTY. Nothing has been written at this point, so a
+    // refusal rolls back an empty transaction and changes no row.
+    const verdict = classify(await probeCounts(client, IDS.tenant, Object.values(IDS.users)));
+    log('🔎', formatVerdict(verdict));
+    const blocked = refusal(verdict, process.env.SEED_ALLOW_POPULATED === 'true');
+    if (blocked) throw new Error(blocked);
+
     // ========================================================================
     // PLANS — first, because tenants.plan_id references them
     // ========================================================================
@@ -323,7 +356,13 @@ async function main() {
     // ========================================================================
     logSection('Seeding Users');
 
-    const passwordHash = await bcrypt.hash('password123', 12);
+    // #3281 — `password123` used to live here, in a public repository, hashed into a
+    // platform super admin; `release.yml` then logged in with it as the release gate.
+    // It is also 11 characters with no uppercase and no special, which
+    // lib/auth/session.ts:38-46 rejects for any password change — the seeded account
+    // could sign in but never be re-created with the same credential. The password now
+    // comes from $SEED_PASSWORD and was validated before the connection opened.
+    const passwordHash = await bcrypt.hash(seedPassword, 12);
 
     // #2628 — upsert, not delete+insert: users are the FK target of api_keys,
     // sessions, notifications and more, so deleting them was always the step
@@ -1281,6 +1320,10 @@ async function main() {
     console.log('║  Admin:        manager@test.com                  ║');
     console.log('║  Sales Rep 1:  rep1@test.com                     ║');
     console.log('║  Sales Rep 2:  rep2@test.com                     ║');
+    // #3281 — the password is the one you supplied, and it is not printed. Echoing
+    // it here would put a live credential in the terminal scrollback, the CI log and
+    // any `script`/`tee` capture of the seed run.
+    console.log('║  Password:     $SEED_PASSWORD (not printed)      ║');
     console.log('║                                                  ║');
     console.log('║  Tenant: NuCRM Demo Workspace (slug: demo)      ║');
     console.log('║                                                  ║');

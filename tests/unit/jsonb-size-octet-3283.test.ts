@@ -386,7 +386,14 @@ describe('#3283 the screen is wired, with both controls', () => {
   it('sits below every cited coordinate and leaves #3241 as the last job', () => {
     const jobKeys = [...ci.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map((m) => m[1]);
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
-    expect(jobKeys.indexOf('jsonb-size-unit')).toBe(jobKeys.length - 2);
+    // The invariant is the anchor, not the rank: this job was second-to-last only
+    // while it was the newest append. #3281 later inserted `seed-credential` at the
+    // same place it did — above `constraint-vocab`, below `:447` — which is the
+    // discipline both issues follow, so pin the order rather than the offset.
+    expect(jobKeys.indexOf('jsonb-size-unit'))
+      .toBeGreaterThan(jobKeys.indexOf('rollback-coverage'));
+    expect(jobKeys.indexOf('jsonb-size-unit'))
+      .toBeLessThan(jobKeys.indexOf('constraint-vocab'));
     expect(ci.slice(0, jobStart).split('\n').length).toBeGreaterThan(447);
     // The coordinates the register cites by line number must still hold the command
     // it names. Pinned against the file's own content, not against a branch ref: a
@@ -420,13 +427,14 @@ describe('#3283 the screen is wired, with both controls', () => {
   });
 
   it('is enforced by CI, not by a local screen that #3284 already renumbered', () => {
-    // pre-merge-check.sh numbers its steps 1/5 as of #3305, which added its rollback
-    // guard as the fifth. Appending a sixth here would renumber nothing but would also
-    // buy nothing: the CI job above runs the same alias with both controls, and
-    // docs/README.md's census counts workflow steps, not local ones.
+    // pre-merge-check.sh numbered its steps 1/5 as of #3305, which added its rollback
+    // guard as the fifth; #3281 appended guard:seed-credential as the sixth and #3282
+    // guard:destructive-gate as the seventh. Appending a step here buys nothing: the CI
+    // job above runs the same alias with both controls, and docs/README.md's census
+    // counts workflow steps, not local ones.
     const pre = readFileSync(join(ROOT, 'scripts/pre-merge-check.sh'), 'utf8');
     expect(pre).not.toContain('guard:jsonb-size');
-    expect([...pre.matchAll(/▶ (\d+)\/5/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5]);
+    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(pre).toContain('guard:rollback-coverage');
   });
 });

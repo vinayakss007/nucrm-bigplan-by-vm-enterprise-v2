@@ -376,8 +376,8 @@ describe('the route holds no statement, and the ledger counts what is left', () 
     expect(guard.PINNED_TARGETS).toContain('lib/email/webhook-scope.ts');
     expect(guard.PINNED_TARGETS).toContain('lib/email/resend-event-handlers.ts');
     expect(guard.CONTEXT_HELPERS).toContain('withTrackingLookupContext');
-    expect(guard.MIN_SCANNED_FILES).toBe(105);
+    expect(guard.MIN_SCANNED_FILES).toBe(106);
     const webhooks = guard.SCOPE_DEFERRALS.find((d: { dir: string }) => d.dir === 'app/api/webhooks')!;
-    expect(webhooks.maxFindings, '42 left the two api_keys reads, 32 leaves the twelve Resend ones').toBe(32);
+    expect(webhooks.maxFindings, '42 left the two api_keys reads, 30 leaves inbound and payu').toBe(30);
   });
 });
