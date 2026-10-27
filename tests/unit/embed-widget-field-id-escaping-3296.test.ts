@@ -108,7 +108,8 @@ describe('#3296: the embed widget escapes the field identity in id= and for=', (
     const container = await render(form('q" autofocus="autofocus" onfocus=pwned()'));
     const allowed = new Set(['FORM', 'H2', 'P', 'DIV', 'LABEL', 'SPAN', 'INPUT', 'TEXTAREA',
       'SELECT', 'OPTION', 'BUTTON', 'SVG', 'PATH']);
-    const rogue = [...container.querySelectorAll('*')].filter((el) => !allowed.has(el.tagName));
+    // jsdom keeps an SVG element's tagName in its qualified (lowercase) form, hence the fold.
+    const rogue = [...container.querySelectorAll('*')].filter((el) => !allowed.has(el.tagName.toUpperCase()));
     expect(rogue.map((el) => el.outerHTML)).toEqual([]);
     for (const el of container.querySelectorAll('*')) {
       for (const attr of [...el.attributes]) {

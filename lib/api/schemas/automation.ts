@@ -107,7 +107,11 @@ export const createFormSchema = z.object({
   name: requiredString.max(200),
   description: z.string().trim().max(1000).nullable().optional(),
   fields: z.array(z.object({
-    id: z.string(),
+    // #3296: the embed widget puts this into `id="…"`/`for="…"` on a page that is not ours. Escaping
+    // it there is necessary, and not sufficient on its own — legacy `key`-shaped rows were written
+    // before any schema existed and still stream out of the public form endpoint verbatim, so an
+    // id that cannot carry markup is checked at the boundary as well.
+    id: z.string().regex(/^[a-z0-9_-]{1,64}$/i, 'Field IDs must be 1-64 characters of letters, digits, "-" or "_"'),
     label: z.string(),
     type: z.string(),
     required: z.boolean().optional().default(false),
