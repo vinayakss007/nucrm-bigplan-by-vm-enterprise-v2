@@ -221,14 +221,16 @@ The **GUCs**, and the file that actually writes each one (re-measured at
 - `lib/db/plugin-webhook-context.ts` — `app.plugin_webhook_id` (constant `:30`,
   written `:52`; `setPluginWebhookTenantContext` `:62` clears it and also sets
   `app.current_tenant`/`app.current_user` at `:69-70`; migration 0139).
+- `lib/db/whatsapp-integration-context.ts` — `app.whatsapp_phone_number_id`
+  (constant `:29`, written `:54`; migration 0142).
 - `app.allow_audit_purge` is not a `set_config` at all — it is `SET LOCAL` in
   `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
 
 Cleared on checkout/return as noted in 01: the two reset lists
-(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **fifteen** GUCs,
+(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **sixteen** GUCs,
 and `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts:192-206` pins them equal
 to each other *and* to that literal count. A new context GUC therefore means
-editing both lists **and** bumping the `toBe(15)`. Nothing checks the lists
+editing both lists **and** bumping the `toBe(16)`. Nothing checks the lists
 against the *writers* above, so a GUC that is set but never reset still passes.
 
 ## Migrations
