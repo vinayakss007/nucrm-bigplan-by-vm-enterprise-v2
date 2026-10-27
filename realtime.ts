@@ -35,11 +35,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import IORedis from 'ioredis';
-import { eq, and } from 'drizzle-orm';
-import { db } from '@/drizzle/db';
-import { tenantMembers } from '@/drizzle/schema';
-import { getCurrentUserForToken } from '@/lib/auth/session';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
+import { resolveHandshakeIdentity } from '@/lib/realtime/handshake';
 import {
   REALTIME_CHANNEL,
   REALTIME_PATH,
@@ -62,22 +59,8 @@ const PORT = Number(process.env['REALTIME_PORT'] ?? 4001);
 // port (never publishes it), so it stays private to nucrm-net there.
 const HOST = process.env['REALTIME_HOST'] || '127.0.0.1';
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
-const SESSION_COOKIE = 'nucrm_session';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-/** Minimal cookie-header parser — avoids a dependency for one header. */
-function readCookie(header: string | undefined, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const idx = part.indexOf('=');
-    if (idx === -1) continue;
-    if (part.slice(0, idx).trim() === name) {
-      return decodeURIComponent(part.slice(idx + 1).trim());
-    }
-  }
-  return null;
-}
 
 function makeRedis(label: string): IORedis {
   const client = new IORedis(REDIS_URL, {
@@ -133,32 +116,16 @@ async function main() {
   io.adapter(createAdapter(pubClient, subClient));
 
   // ── handshake auth ────────────────────────────────────────────────────────
+  // The cookie -> session -> tenant resolution lives in lib/realtime/handshake.ts (#3289):
+  // this file is a process entry point, and logic that only runs here cannot be reached by a
+  // test — which is how every connection being rejected looked like a working server.
   io.use(async (socket, next) => {
     try {
-      const token = readCookie(socket.handshake.headers.cookie, SESSION_COOKIE);
-      if (!token) return next(new Error('unauthorized'));
+      const outcome = await resolveHandshakeIdentity(socket.handshake.headers.cookie);
+      if (!outcome.ok) return next(new Error(outcome.rejection));
 
-      // #2216: handshake must fail once the session row is gone, even while
-      // the JWT itself is still cryptographically valid.
-      const verified = await getCurrentUserForToken(token);
-      if (!verified?.id) return next(new Error('unauthorized'));
-
-      // Resolve the tenant from the membership table, not from the client.
-      const [membership] = await db
-        .select({ tenantId: tenantMembers.tenantId })
-        .from(tenantMembers)
-        .where(
-          and(
-            eq(tenantMembers.userId, verified.id),
-            eq(tenantMembers.status, 'active'),
-          ),
-        )
-        .limit(1);
-
-      if (!membership?.tenantId) return next(new Error('forbidden'));
-
-      socket.data.userId = verified.id;
-      socket.data.tenantId = membership.tenantId;
+      socket.data.userId = outcome.userId;
+      socket.data.tenantId = outcome.tenantId;
       return next();
     } catch (err) {
       console.error('[Realtime] handshake failed:', err instanceof Error ? err.message : err);
