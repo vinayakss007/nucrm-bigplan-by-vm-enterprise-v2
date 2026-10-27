@@ -24,6 +24,10 @@
  *      owner without FORCE ROW LEVEL SECURITY has policies that are inert, so
  *      tenant isolation silently degrades to app-level filtering only. In
  *      production this is a hard failure.
+ *     9b. FORCE ROW LEVEL SECURITY holds over EVERY table in `public`, not only the
+ *      uuid-`tenant_id` ones (#3302). The two screens above select tables by that
+ *      column, so a table without one can be enabled, un-FORCED and entirely absent
+ *      from the reported score — which is how `ai_providers` stayed hidden.
  *
  * Severity model:
  *   - FAIL  → hard blocker. Process exits non-zero; do not start the app.
@@ -39,6 +43,12 @@
  */
 
 import { Pool } from 'pg';
+
+import {
+  FULL_FORCE_RLS_CENSUS_SQL,
+  evaluateForceRlsCensus,
+  formatForceRlsCensus,
+} from '../lib/db/least-privilege';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const STRICT = process.env.STRICT === 'true';
@@ -295,6 +305,24 @@ async function checkRlsEnforced(): Promise<void> {
       prodFail('db:rls', `${noRls.length} table(s) without RLS, ${noPolicy.length} without a tenant_isolation policy (e.g. ${[...noRls, ...noPolicy].slice(0, 3).join(', ')}).`);
     } else {
       ok('db:rls', `enforced for role "${role.current_role}" across ${rows.length} table(s)`);
+    }
+
+    // #3302 — the check above is scoped by `JOIN pg_attribute … attname =
+    // 'tenant_id'`, so its denominator excludes every table without a uuid tenant
+    // column, and `ai_providers` (RLS enabled, no FORCE, two policies, no tenant_id)
+    // sat outside it while this step printed a pass for the whole schema. The census
+    // has no column criterion, so a table cannot fall between its rows and the report.
+    // It is its own check name rather than another branch of `db:rls`: an operator
+    // reading `role … enforced across 194 table(s)` must not be able to mistake that
+    // for "all 226".
+    const censusRows = await pool.query<{
+      table_name: string; rls_enabled: boolean; rls_forced: boolean; is_owner: boolean; has_policy: boolean;
+    }>(FULL_FORCE_RLS_CENSUS_SQL);
+    const census = evaluateForceRlsCensus(censusRows.rows);
+    if (census.ok) {
+      ok('db:force-rls', formatForceRlsCensus(census));
+    } else {
+      prodFail('db:force-rls', `${formatForceRlsCensus(census)} — FORCE is what makes a table's policies bind its owner, and 0068's loop cannot cover a table enabled after it ran. Add ALTER TABLE … FORCE ROW LEVEL SECURITY in a new migration (see 0141).`);
     }
   } catch (err) {
     prodFail('db:rls', `could not verify RLS enforcement: ${err instanceof Error ? err.message : String(err)}`);
