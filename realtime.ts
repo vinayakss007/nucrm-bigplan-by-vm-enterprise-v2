@@ -36,7 +36,7 @@ import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import IORedis from 'ioredis';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
-import { resolveHandshakeIdentity } from '@/lib/realtime/handshake';
+import { getHandshakeRejectionCounts, resolveHandshakeIdentity } from '@/lib/realtime/handshake';
 import {
   REALTIME_CHANNEL,
   REALTIME_PATH,
@@ -88,8 +88,15 @@ async function main() {
   const httpServer = createServer((req, res) => {
     // Liveness probe for the orchestrator; everything else belongs to socket.io.
     if (req.url === '/healthz') {
+      // #3289: `sockets: 0` on its own cannot tell "nobody is connected right now" apart from
+      // "every handshake is being refused" — which is exactly the state this process was in,
+      // reporting `online`, for its whole life. The rejection counts answer that question.
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', sockets: ioRef?.engine?.clientsCount ?? 0 }));
+      res.end(JSON.stringify({
+        status: 'ok',
+        sockets: ioRef?.engine?.clientsCount ?? 0,
+        handshakeRejections: getHandshakeRejectionCounts(),
+      }));
       return;
     }
     res.writeHead(404);
@@ -122,7 +129,7 @@ async function main() {
   io.use(async (socket, next) => {
     try {
       const outcome = await resolveHandshakeIdentity(socket.handshake.headers.cookie);
-      if (!outcome.ok) return next(new Error(outcome.rejection));
+      if (outcome.rejection) return next(new Error(outcome.rejection));
 
       socket.data.userId = outcome.userId;
       socket.data.tenantId = outcome.tenantId;

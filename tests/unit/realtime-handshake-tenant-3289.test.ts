@@ -54,8 +54,6 @@ interface Call { sql: string; params: unknown[] }
 const H = vi.hoisted(() => ({
   calls: [] as unknown[],
   ops: [] as string[],
-  rejected: [] as { name: string; labels?: Record<string, string> }[],
-  logged: [] as string[],
   // Whose session the JWT redeems to, per test. `null` is a revoked/expired session.
   sessionUser: 'existing' as 'existing' | 'no-member' | 'none',
 }));
@@ -120,10 +118,11 @@ function txFor(conn: Conn) {
     execute: (f: SQL) => {
       const call = render(f);
       H.calls.push(call);
-      if (call.sql.includes("set_config('app.current_user', $")) {
-        const ordinal = (call.sql.slice(0, call.sql.indexOf("set_config('app.current_user', $")).match(/\$\d+/g) ?? []).length;
-        conn.currentUser = String(call.params[ordinal - 1] ?? '');
-      }
+      // The GUC value is a bind, so read the placeholder's own ordinal out of the statement text:
+      // `set_config('app.current_user', $3, true)` is params[2]. Counting `$n` occurrences before
+      // the marker instead would give 0 for the first parameter and silently set nobody.
+      const asUser = call.sql.match(/set_config\('app\.current_user', \$(\d+)/);
+      if (asUser) conn.currentUser = String(call.params[Number(asUser[1]) - 1] ?? '');
       if (call.sql.includes("set_config('app.auth_lookup', 'true'")) conn.authLookup = true;
       return Promise.resolve([]);
     },
@@ -163,23 +162,6 @@ vi.mock('@/lib/auth/session', () => ({
   },
 }));
 
-vi.mock('@/lib/metrics', () => ({
-  metrics: {
-    increment: (name: string, _value: number, labels?: Record<string, string>) => {
-      H.rejected.push({ name, labels });
-    },
-    gauge: () => undefined,
-    timing: () => undefined,
-    getMetrics: () => [],
-    reset: () => undefined,
-  },
-  trackAuthEvent: () => undefined,
-  trackRequest: () => undefined,
-  trackDatabaseQuery: () => undefined,
-  trackBusinessMetric: () => undefined,
-  exportPrometheusMetrics: () => '',
-}));
-
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 const setConfigs = () => (H.calls as Call[]).filter((c) => c.sql.startsWith('SELECT set_config'));
 
@@ -191,8 +173,6 @@ async function handshake(cookieHeader?: string) {
 beforeEach(() => {
   H.calls = [];
   H.ops = [];
-  H.rejected = [];
-  H.logged = [];
   H.sessionUser = 'existing';
   vi.resetModules();
 });
@@ -254,18 +234,36 @@ describe('what must stay refused', () => {
 });
 
 describe('ask 3 — a rejection has to be visible from the server side', () => {
-  it('counts the reason, because 0 sockets and "nobody connected" look identical otherwise', async () => {
+  it('counts per reason, because 0 sockets and "nobody connected" look identical otherwise', async () => {
     H.sessionUser = 'no-member';
     await handshake('nucrm_session=jwt-token');
-    const counted = H.rejected.filter((m) => /handshake/i.test(m.name));
-    expect(counted.length).toBeGreaterThan(0);
-    expect(counted[0].labels?.reason).toBe('no_membership');
+    await handshake(undefined);
+    H.sessionUser = 'none';
+    await handshake('nucrm_session=revoked');
+    const { getHandshakeRejectionCounts } = await import('@/lib/realtime/handshake');
+    expect(getHandshakeRejectionCounts()).toMatchObject({
+      no_membership: 1,
+      no_cookie: 1,
+      no_session: 1,
+      total: 3,
+    });
   });
 
-  it('counts an unauthenticated rejection too, and names the reason differently', async () => {
-    await handshake(undefined);
-    const counted = H.rejected.filter((m) => /handshake/i.test(m.name));
-    expect(counted.map((m) => m.labels?.reason)).toEqual(['no_cookie']);
+  it('does not count a handshake that succeeded', async () => {
+    await handshake('nucrm_session=jwt-token');
+    const { getHandshakeRejectionCounts } = await import('@/lib/realtime/handshake');
+    expect(getHandshakeRejectionCounts().total).toBe(0);
+  });
+
+  it('writes a line to the process log, which is what an operator of this process actually sees', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    H.sessionUser = 'no-member';
+    await handshake('nucrm_session=jwt-token');
+    const line = warn.mock.calls.map((c) => c.join(' ')).find((l) => /handshake/i.test(l));
+    expect(line).toContain('no_membership');
+    // Never the credential itself — the cookie value is a bearer token.
+    expect(line).not.toContain('jwt-token');
+    warn.mockRestore();
   });
 });
 
