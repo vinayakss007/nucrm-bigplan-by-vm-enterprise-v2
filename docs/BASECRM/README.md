@@ -241,7 +241,8 @@ the rest of the backlog.
 **Re-counted 2026-10-27 for #3246 step 4c.** The same three numbers moved again: 0141 is
 the `idx`-141 step (**142** journal entries over **284** `.sql` files — 142 forward, 142
 `.down.sql`), `app.quote_webhook_id` is the **sixteenth** name on both reset lists, and
-the tree holds **932** `*.test.*` files. `03` § 1 gained 0141 as the fifth worked example,
+the tree holds **936** `*.test.*` files (932 at the base this step was written on; #3317 and
+#3319 landed four more before the rebase). `03` § 1 gained 0141 as the fifth worked example,
 for the reason step 4c measured: a claim whose value comes from a request body must guard
 its own cast, because a bare `::uuid` on a malformed claim is a `22P02` and an error
 aborts the transaction that a deny would simply have refused.
