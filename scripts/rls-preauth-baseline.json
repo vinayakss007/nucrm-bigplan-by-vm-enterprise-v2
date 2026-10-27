@@ -3,11 +3,9 @@
   "_reasons": {
     "app/api/cron/contract-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": "#3315. The recipient read (`users` joined to a tenant's active members) answers zero rows for every workspace, so the cron reports `checked/endingSoon` and mails nobody. Not folded into #3288 because the fix is a per-tenant decision, not a lookup privilege: this route holds a list of `tenantId`s and has to open one context per workspace (`withTenantContext(tid, tx => …)`), which is a design change to the cron rather than a wrapper around one statement.",
     "app/api/cron/sla-check/route.ts|PREAUTH_UNCONTEXTED_READ": "#3315. The level-2+ escalation lookup reads the assigned user's email on the pool, gets nothing, and skips the send behind `if (user?.email)` — the breach is recorded and the rep is never told. Same class, same per-tenant answer, filed with the other two cron sites so one PR decides how cron establishes context at all (see also #3298, which is these routes' authentication gap rather than their RLS gap).",
-    "app/api/cron/subscription-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": "#3315. The twin of contract-renewal-check's read, one workspace at a time, with the same zero-row answer and the same success-shaped log line.",
-    "app/api/webhooks/telegram/bot/route.ts|PREAUTH_UNCONTEXTED_READ": "#3316. Both branches resolve the sender from Telegram's `chat.id` on the pool and match nothing: an ordinary linked user is told to link their account forever, and the operator branch falls through to a fabricated `{ id: 'cli-admin', isSuperAdmin: true }` literal, so admin commands are answered by an identity that exists in no row and is attributed to nobody. Counted twice (lines 103 and 122). Not fixed here because ask 2 of that issue — refuse instead of synthesising an admin — is a behaviour change on a live webhook, not a wrapper."
+    "app/api/cron/subscription-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": "#3315. The twin of contract-renewal-check's read, one workspace at a time, with the same zero-row answer and the same success-shaped log line."
   },
   "app/api/cron/contract-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": 1,
   "app/api/cron/sla-check/route.ts|PREAUTH_UNCONTEXTED_READ": 1,
-  "app/api/cron/subscription-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": 1,
-  "app/api/webhooks/telegram/bot/route.ts|PREAUTH_UNCONTEXTED_READ": 2
+  "app/api/cron/subscription-renewal-check/route.ts|PREAUTH_UNCONTEXTED_READ": 1
 }
