@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { withAuthLookupContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 import { redactEmail } from '@/lib/logger/pii';
 
@@ -99,36 +100,52 @@ export async function POST(req: NextRequest) {
 
   let user: { id: string; email: string; fullName: string | null; isSuperAdmin: boolean | null; telegramEnabled: boolean | null } | undefined;
 
-  if (isAdmin) {
-    const [adminUser] = await db.select({
-      id: users.id,
-      email: users.email,
-      fullName: users.fullName,
-      isSuperAdmin: users.isSuperAdmin,
-      telegramEnabled: users.telegramEnabled,
-    })
-      .from(users)
-      .where(eq(users.isSuperAdmin, true))
-      .limit(1);
+  // #3316: the sender is resolved from Telegram's `chat.id`, which is a claim until a row answers to
+  // it — and on the pool it never did. `lib/db/pool.ts` clears every `app.*` GUC on acquire and on
+  // release, and all three of `users`' SELECT arms (0088) key on one of them, so both reads below
+  // matched zero rows for every chat id, forever. `withAuthLookupContext` is the SELECT-only privilege
+  // that exists for exactly this pre-auth identity read — the same one `app/api/auth/forgot-password`
+  // (#3288) and `lib/auth/password-reset.ts` use for the email lookup.
+  const lookupColumns = {
+    id: users.id,
+    email: users.email,
+    fullName: users.fullName,
+    isSuperAdmin: users.isSuperAdmin,
+    telegramEnabled: users.telegramEnabled,
+  };
 
-    user = adminUser || {
-      id: 'cli-admin',
-      email: 'admin@nucrm.local',
-      fullName: 'Super Admin',
-      isSuperAdmin: true,
-      telegramEnabled: true,
-    };
+  if (isAdmin) {
+    const [adminUser] = await withAuthLookupContext((tx) =>
+      tx
+        .select(lookupColumns)
+        .from(users)
+        .where(eq(users.isSuperAdmin, true))
+        .limit(1),
+    );
+
+    if (!adminUser) {
+      // Ask 2: this read is what is supposed to *prove* the sender is the platform operator. Proving
+      // nothing is a refusal, not a licence to answer from a synthetic identity — the placeholder this
+      // branch used to fall back through ran `/tenants`, `/pending`, `/recent` and `/stats` as a user
+      // who exists in no table and can therefore be attributed to nobody in the audit trail.
+      void logError({
+        error: 'Telegram webhook: no super-admin row resolved for the configured operator chat; admin commands refused',
+        context: 'webhooks/telegram/bot operator lookup',
+        level: 'warning',
+      });
+      await sendReply(chatId, 'Operator identity could not be verified — this chat is not linked to a super-admin account.');
+      return NextResponse.json({ ok: true });
+    }
+
+    user = adminUser;
   } else {
-    const [matched] = await db.select({
-      id: users.id,
-      email: users.email,
-      fullName: users.fullName,
-      isSuperAdmin: users.isSuperAdmin,
-      telegramEnabled: users.telegramEnabled,
-    })
-      .from(users)
-      .where(eq(users.telegramChatId, String(chatId)))
-      .limit(1);
+    const [matched] = await withAuthLookupContext((tx) =>
+      tx
+        .select(lookupColumns)
+        .from(users)
+        .where(eq(users.telegramChatId, String(chatId)))
+        .limit(1),
+    );
 
     user = matched;
   }

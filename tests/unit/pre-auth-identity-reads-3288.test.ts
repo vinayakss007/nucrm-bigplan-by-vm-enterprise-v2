@@ -21,9 +21,10 @@
  *    branch is the same bug the #3186 comment a few lines below describes having fixed for
  *    `tenant_members`. One branch fixed, one left — exactly the #3288 failure mode.
  *
- * The other sites (`app/api/cron/*`, `app/api/webhooks/telegram/bot`) need a *tenant* decision
- * per row, not a lookup privilege, and are recorded in `scripts/rls-preauth-baseline.json` with
- * reasons and follow-up issues rather than half-fixed here.
+ * The other sites then on the list (`app/api/cron/*`) need a *tenant* decision per row, not a lookup
+ * privilege, and were recorded in `scripts/rls-preauth-baseline.json` with reasons and follow-up issues
+ * rather than half-fixed here. The bot webhook that shared that allowance was a lookup privilege after
+ * all and closed as #3316.
  *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */

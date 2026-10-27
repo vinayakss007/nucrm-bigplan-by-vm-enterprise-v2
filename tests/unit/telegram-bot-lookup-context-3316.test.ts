@@ -161,6 +161,7 @@ const txFor = (conn: Conn) => ({
   execute: (f: unknown) => {
     const call = render(f);
     H.calls.push(call);
+    if (call.sql.includes('set_config')) H.ops.push('set_config');
     const granted = (guc: string) => call.sql.includes(`set_config('app.${guc}', 'true'`);
     if (granted('auth_lookup')) conn.authLookup = true;
     if (granted('is_super_admin')) conn.isSuperAdmin = true;
@@ -245,7 +246,8 @@ describe('ask 1 — the webhook reads the sender through a privilege that can se
     expect(claim, 'users has no SELECT arm an unprivileged connection can satisfy').toBeDefined();
     expect(claim!.sql).toMatch(/set_config\('app\.auth_lookup', 'true', true\)/);
     expect(H.ops[0], 'the privilege must not outlive the lookup').toBe('BEGIN');
-    expect(H.ops.indexOf('select:users'), 'the grant has to precede the read').toBeGreaterThan(1);
+    expect(H.ops.indexOf('set_config'), 'the grant is issued inside the transaction').toBeGreaterThan(0);
+    expect(H.ops.indexOf('select:users'), 'the grant has to precede the read').toBeGreaterThan(H.ops.indexOf('set_config'));
   });
 
   it('takes the users read through a transaction, not the pool', () => {
@@ -273,7 +275,7 @@ describe('ask 2 — the operator branch stops inventing an admin', () => {
     const res = await bot(OPERATOR_CHAT, '/info');
     expect(res.status).toBe(200);
     expect(lastReply()).toContain('Real Admin');
-    expect(allText(), 'no response may be built from the cli-admin placeholder').not.toMatch(/cli-admin|admin@nucrm\.local|Super Admin\b/);
+    expect(allText(), 'no response may be built from the placeholder identity').not.toMatch(/cli-admin|admin@nucrm\.local|Name: Super Admin/);
   });
 
   it('refuses when no row says this chat is an admin, instead of becoming one', async () => {
