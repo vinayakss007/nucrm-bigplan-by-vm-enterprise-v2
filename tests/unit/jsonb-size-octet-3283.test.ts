@@ -158,11 +158,27 @@ describe('#3283 the shipped helper measured characters, and 0140 measures bytes'
     expect(text).toContain('2BP01');
   });
 
-  it('is journaled last, so the reverse-order rollback meets it first', () => {
+  it('is journaled after everything that could depend on its helper, so a reverse-order rollback meets none', () => {
+    // What the property was FOR. It was written as `entries.at(-1) === TAG`, which is
+    // true only while 0140 is the newest migration in the repository — so the first
+    // subsequent change to append a file (0141 for #3302, an ALTER TABLE FORCE that
+    // touches no function at all) failed a test about a defect that had not regressed.
+    // The real invariant is the one this loop checks: 0140's down drops
+    // `jsonb_size_octet_length` WITHOUT CASCADE on purpose, so that a later CHECK
+    // holding it makes the rollback fail with 2BP01 rather than silently dropping that
+    // constraint. That guarantee is about what depends on the helper, not about
+    // journal position, and stating it this way survives every migration added after.
     const journal = JSON.parse(readFileSync(join(DIR, 'meta', '_journal.json'), 'utf8'));
-    const last = journal.entries.at(-1);
-    expect(last.tag).toBe(TAG);
-    expect(last.idx).toBe(journal.entries.length - 1);
+    const at = journal.entries.findIndex((e) => e.tag === TAG);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(journal.entries[at].idx).toBe(at);
+    for (const later of journal.entries.slice(at + 1)) {
+      // Executed SQL only. A header that merely names the helper is documentation, not
+      // a dependency, and refusing the second while guarding against the first would
+      // teach the next author to write around this check rather than to read it.
+      const sql = stripSqlComments(up(later.tag)) + stripSqlComments(down(later.tag));
+      expect(sql).not.toMatch(/jsonb_size_octet_length/);
+    }
   });
 
   // The two bugs this change actually hit while being written. A COMMENT ON's IS
