@@ -30,9 +30,8 @@
  *     measurement that #3218 and #3231 record: without the read arm the claim
  *     matches nothing and `RETURNING` yields the empty row that this whole bug is.
  *
- * And the #2446 invariant both reset lists carry the same names (#3246 appended the
- * fifteenth 2026-10-25, step 4d the sixteenth), checked here as *parity between the two
- * lists* rather than as a count in one of them.
+ * And the #2446 invariant both reset lists carry every name through #3246's sixteenth
+ * (`app.quote_webhook_id`, 0141), checked here as *parity between the two lists* rather than as a count in one of them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -190,7 +189,7 @@ describe('0138 installs a one-row claim and nothing else', () => {
   });
 });
 
-describe('#2446 — both connection-reset lists carry the sixteenth name (#3246 step 4d)', () => {
+describe('#2446 — both connection-reset lists carry the same sixteen names (#3246)', () => {
   const resetLine = (file: string) => {
     const src = readFileSync(join(ROOT, file), 'utf8');
     const line = src.split('\n').find((l) => l.includes("SELECT set_config('app.current_tenant'"));

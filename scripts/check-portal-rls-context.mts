@@ -68,25 +68,18 @@ export type TenantTable = { js: string; sql: string };
 export const MIN_TENANT_KEYED_TABLES = 100;
 /**
  * The floor is the derived anonymous surface measured on the day #3186 landed:
- * every `app/<path>` that `proxy.ts` advertises, plus the portal-auth libraries,
- * the Resend attribution library and the hand-named routes below. Pinned at the
- * current surface on purpose: a floor left at 22 would say OK the day the
- * derivation quietly stops matching `PUBLIC_PATHS` and the walk falls back to the
- * hand list, which is the exact failure #3186 was filed for. It moves when the
- * surface moves, and only with the walk that produced the new number — 104 since
- * #3246 step 4a pinned the inbound key lookup, 106 since step 4b pinned the
- * Resend attribution and the write handlers it feeds, both of which the route's
- * size ratchet pushed into `lib/`, and 107 since step 4d pinned
- * `lib/whatsapp/webhook-processor.ts`, the #3312 file whose ten statements sat
- * behind a route the scope does reach but were never counted.
+ * every `app/<path>` that `proxy.ts` advertises, plus the two portal-auth
+ * libraries and the hand-named routes below. Pinned at the current surface on
+ * purpose: a floor left at 22 would say OK the day the derivation quietly stops
+ * matching `PUBLIC_PATHS` and the walk falls back to the hand list, which is the
+ * exact failure #3186 was filed for. It moves when the surface moves, and only
+ * with the walk that produced the new number — 104 since #3246 step 4a pinned the
+ * inbound key lookup, which the route's size ratchet pushed into `lib/`.
  */
-export const MIN_SCANNED_FILES = 107;
+export const MIN_SCANNED_FILES = 104;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
- * the bare-pool CRM aggregate out of app/api/metrics; 231 with the two Resend
- * libraries #3246 step 4b pinned; 240 with the whatsapp processor #3246 step 4d
- * pinned — nine reads, all of them bound, so that floor moved with the walk and
- * not with the findings, which is what #3312 asks for). Below this
+ * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
  * the read patterns stopped working, or the scope shrank to the hand list.
  */
 export const MIN_TABLE_READS = 200;
@@ -99,9 +92,9 @@ export const MIN_TABLE_READS = 200;
  * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
  * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim), plus
  * `withPluginWebhookLookupContext` from `lib/db/plugin-webhook-context.ts` (#3246's
- * pre-auth plugin webhook lookup) and `withWhatsAppIntegrationLookupContext` from
- * `lib/db/whatsapp-integration-context.ts` (#3246 step 4d's pre-auth phone-number
- * claim). The
+ * pre-auth plugin webhook lookup) and `withQuoteWebhookLookupContext` from
+ * `lib/db/quote-webhook-context.ts` (#3246 step 4c's pre-auth payment-callback lookup).
+ * The
  * guard matches on the *call name* at each site, so the split changes nothing it
  * can see — this list is only where the names come from.
  */
@@ -116,7 +109,7 @@ export const CONTEXT_HELPERS = [
   'withFormLookupContext',
   'withUnsubscribeContactContext',
   'withPluginWebhookLookupContext',
-  'withWhatsAppIntegrationLookupContext',
+  'withQuoteWebhookLookupContext',
 ];
 
 /**
@@ -628,9 +621,6 @@ export const PINNED_TARGETS = [
   'lib/portal-auth.ts',
   'lib/portal-session.ts',
   'lib/webhooks/inbound-auth.ts',
-  'lib/email/webhook-scope.ts',
-  'lib/email/resend-event-handlers.ts',
-  'lib/whatsapp/webhook-processor.ts',
   'app/api/public',
   'app/api/tenant/portal/login',
   'app/api/forms/submit',
@@ -751,20 +741,14 @@ export function buildTargets(root: string): string[] {
  * migration 0139's SELECT-only arm on `custom_plugins` behind `app.plugin_webhook_id`,
  * opened by `withPluginWebhookLookupContext`, closed by the statement that hands the
  * claimed row's tenant to the `plugin_execution_logs` write once the HMAC has passed.
- * `webhooks` (30) and `auth/sso` (2) stay deferred to #3246. Step 4a took the 2
+ * `webhooks` and `auth/sso` (2) stay deferred to #3246. Step 4a took the 2
  * `apiKeys` reads out of `webhooks`' 44: the inbound key lookup now runs through
  * 0099's `app.auth_lookup` arm in `lib/webhooks/inbound-auth.ts`, which is a pinned
- * target of this guard rather than a deferred directory. Step 4b took the 12 Resend
- * reads out of what was left, and they left the directory rather than being excused
- * in place: the attribution reads `email_tracking` through 0105's
- * `app.tracking_lookup` arm and adopts the workspace it resolves, and the write
- * handlers run each statement inside `withTenantContext`. Both halves live in
- * `lib/email/` because the route's 500-line cap had no room left, so both are
- * pinned targets too. What remains in `webhooks` is `inbound` (24) and `payu` (6).
- * Step 4d bound nothing in a deferred directory: it pinned
- * `lib/whatsapp/webhook-processor.ts`, whose ten bare statements sat behind a route
- * the walk already reached and were therefore never counted — #3312's complaint,
- * filed against the ceilings rather than against the file.
+ * target of this guard rather than a deferred directory, so those reads are bound and
+ * the ceiling may only go down. Step 4c took the 6 `payu` reads the same way — 0141's
+ * arm opened by `withQuoteWebhookLookupContext` for the quote's own row, then
+ * `withTenantContext` for everything that writes — leaving `inbound` (24) and `resend`
+ * (12, which step 4b's branch binds) under the entry.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -788,7 +772,7 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
       + 'which is the pre-auth lookup-arm decision #3246 now tracks; a signature proves the sender, '
       + 'not the tenant, so no GUC exists to set before that resolution happens.',
-    maxFindings: 30,
+    maxFindings: 36,
   },
   {
     dir: 'app/api/auth/sso',

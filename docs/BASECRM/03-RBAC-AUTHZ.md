@@ -70,10 +70,9 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   the three `app.portal_lookup_*` GUCs plus `app.form_lookup_id`, and the five
   credential GUCs — `app.token_issue`, `app.token_credential`,
   `app.token_retire_user` (#3218/#3102), `app.oauth_client_id` (#3225) and
-  `app.unsubscribe_contact` (#3237) — plus `app.plugin_webhook_id`, the plugin
-  receiver's row-narrowing claim (#3246, 0139), and `app.whatsapp_phone_number_id`,
-  the WhatsApp webhook's phone-id claim (#3246 step 4d, 0142). See § 1 pre-auth
-  redemption below for what those guard.
+  `app.unsubscribe_contact` (#3237) — plus the two row-narrowing callback claims,
+  `app.plugin_webhook_id` (#3246, 0139) and `app.quote_webhook_id` (#3246 step 4c,
+  0141). See § 1 pre-auth redemption below for what those guard.
 
 ### Super-admin scope — the deliberate asymmetry
 
@@ -213,6 +212,20 @@ rather than new vocabulary:
   after verification, so `plugin_execution_logs` still writes under
   `tenant_isolation`. *A policy that admits no read is not a hardening gap — it is an
   unreachable endpoint.*
+- **0141 `pre_auth_quote_webhook_lookup`** (#3246 step 4c) is that endpoint again on
+  `quotes`: `POST /api/webhooks/payu` verifies PayU's hash, then reads the quote named in
+  `txnid` to learn whose payment it is — with no tenant named, so `tenant_isolation`
+  matched nothing and every verified payment answered `quote_not_found` with the 200 that
+  stops the provider retrying. 0123's `quotes_offer_credential_lookup` is no help: it keys
+  on the offer `public_token`, which a payment callback does not carry. Fix:
+  `quotes_webhook_lookup_read` (SELECT only) on `id`, `deleted_at IS NULL` frozen in,
+  behind `app.quote_webhook_id` (`lib/db/quote-webhook-context.ts`). Two things a rebuilder
+  must not lose: the cast is **guarded** — `CASE WHEN <the value is a uuid> THEN …::uuid
+  ELSE NULL::uuid END`, the shape `tenant_isolation` itself depars to — because this value
+  comes from a request body and a bare cast turned a malformed claim into `22P02`, which
+  aborts the callback's whole transaction instead of denying the read; and the claim is
+  closed by its own transaction, so the writes run in a second one under
+  `withTenantContext(tenantId, NO_USER_SENTINEL)` and stay inside `tenant_isolation`.
 
 **The same endpoint, still unreachable, for want of a writer (#3328).** 0136 and 0137
 made the OAuth *readers* work, and the flow still went nowhere, because nothing in the

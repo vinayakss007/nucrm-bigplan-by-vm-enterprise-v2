@@ -435,9 +435,9 @@ describe('#3244 follow-up — the reset-list count 02 quotes is the count the co
   const configsAt = ([file, line]: [string, number]) =>
     (read(file)[line - 1].match(/set_config\(/g) ?? []).length;
 
-  // #3246 appended the fifteenth (`app.plugin_webhook_id`, migration 0139) and step 4d
-  // the sixteenth (`app.whatsapp_phone_number_id`, 0142) in place, so this test is the
-  // screen they were written for: the docs moved with the code.
+  // #3246 appended the fifteenth (`app.plugin_webhook_id`, migration 0139) and step 4c the
+  // sixteenth (`app.quote_webhook_id`, 0141) in place, so this test is the screen it was
+  // written for: the docs moved with the code.
   it('clears sixteen GUCs on each of the two lists', () => {
     expect(read(POOL_RESET[0])[POOL_RESET[1] - 1]).toContain("set_config('app.current_tenant'");
     expect(read(RC_RESET[0])[RC_RESET[1] - 1]).toContain('SELECT set_config(');
