@@ -32,6 +32,7 @@ import { NextRequest } from 'next/server';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { getTableName } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 
 const ROOT = join(import.meta.dirname!, '../..');
@@ -77,10 +78,14 @@ const sessionRow = (conn: Conn) => {
   return [{ userId: USER_ID }];
 };
 
-const chainFor = (conn: Conn, projection: string) => {
+const chainFor = (conn: Conn) => {
   let bound: unknown;
+  let table = '';
   const builder: Record<string, unknown> = {};
-  builder.from = () => builder;
+  builder.from = (t: object) => {
+    table = getTableName(t as never);
+    return builder;
+  };
   builder.innerJoin = () => builder;
   builder.where = (f: unknown) => {
     bound = f;
@@ -90,7 +95,7 @@ const chainFor = (conn: Conn, projection: string) => {
   builder.limit = async () => {
     const params = bound ? dialect.sqlToQuery(bound as SQL).params : [];
     const email = params.find((p): p is string => typeof p === 'string' && p.includes('@'));
-    return projection === 'users' ? userRow(conn, email) : sessionRow(conn);
+    return table === 'users' ? userRow(conn, email) : sessionRow(conn);
   };
   return builder;
 };
@@ -108,7 +113,7 @@ const txFor = (conn: Conn) => ({
     }
     return Promise.resolve([]);
   },
-  select: (projection?: unknown) => chainFor(conn, projection?.users ? 'users' : 'sessions'),
+  select: () => chainFor(conn),
   insert: () => ({ values: async () => ({}) }),
   update: () => ({ set: () => ({ where: async () => ({}) }) }),
   query: {},
@@ -118,7 +123,7 @@ const bareConn = blank();
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-    select: (projection?: unknown) => chainFor(bareConn, projection?.users ? 'users' : 'sessions'),
+    select: () => chainFor(bareConn),
     execute: (f: SQL) => {
       H.calls.push({ sql: dialect.sqlToQuery(f).sql, params: dialect.sqlToQuery(f).params });
       return Promise.resolve([]);

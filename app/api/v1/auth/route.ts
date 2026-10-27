@@ -21,7 +21,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
-import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { verifyPassword, createToken, hashToken, setSessionCookie, getCurrentUser } from '@/lib/auth/session';
@@ -31,7 +30,7 @@ import { handleError, ValidationError, AuthError, ErrorCode } from '@/lib/errors
 import { devLogger } from '@/lib/dev-logger';
 import { getClientIp } from '@/lib/client-ip';
 import { createHash } from 'crypto';
-import { withUserContext } from '@/lib/db/rls';
+import { withAuthLookupContext, withUserContext } from '@/lib/db/rls';
 
 // Mirrors the private SESSION_EXPIRES_DAYS in lib/auth/session.ts (the default
 // createToken() lifetime); the sessions row must expire with the JWT it hashes
@@ -69,22 +68,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by email
-    const [user] = await db.select({
-      id: users.id,
-      email: users.email,
-      passwordHash: users.passwordHash,
-      isSuperAdmin: users.isSuperAdmin,
-      emailVerified: users.emailVerified,
-      totpEnabled: users.totpEnabled,
-      totpSecret: users.totpSecret,
-      totpBackupCodes: users.totpBackupCodes,
-    })
-    .from(users)
-    .where(and(
-      eq(sql`lower(${users.email})`, body.email.toLowerCase()),
-      sql`${users.deletedAt} IS NULL`
-    ))
-    .limit(1);
+    //
+    // #3288: this is the same read the password-reset route got wrong, and it is a
+    // login endpoint. `users` has no SELECT policy an unprivileged connection can
+    // satisfy — users_read_self needs app.current_user, users_super_admin_read
+    // needs app.is_super_admin, and neither exists before anybody has signed in —
+    // so on the bare pool (`lib/db/pool.ts` clears every app.* GUC on acquire and
+    // release) this matched zero rows for every address. The handler then threw
+    // AUTH_INVALID_CREDENTIALS before `verifyPassword` ever ran, which means a
+    // correct password was refused with the same generic message as a wrong one and
+    // nothing in the logs distinguished the two. users_auth_lookup (0088) is the
+    // shipped arm for exactly this read; it is transaction-local, SELECT-only, and
+    // names no credential because this lookup is by email, not by a bearer value.
+    const [user] = await withAuthLookupContext(async (tx) =>
+      await tx.select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        isSuperAdmin: users.isSuperAdmin,
+        emailVerified: users.emailVerified,
+        totpEnabled: users.totpEnabled,
+        totpSecret: users.totpSecret,
+        totpBackupCodes: users.totpBackupCodes,
+      })
+      .from(users)
+      .where(and(
+        eq(sql`lower(${users.email})`, body.email.toLowerCase()),
+        sql`${users.deletedAt} IS NULL`
+      ))
+      .limit(1)
+    );
 
     if (!user) {
       devLogger.auth('Login', false, body.email);
