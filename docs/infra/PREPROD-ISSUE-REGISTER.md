@@ -3998,8 +3998,9 @@ not wired in).
   503 gate for `PAYU_MERCHANT_KEY`/`_SALT` and `:78` verifies the posted hash **before** any
   invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent. Both re-pinned from `:52` and
   `:77` on 2026-10-11 — **#2527** (`5ef259f1`) inserted one line above each of them here.
-  `app/api/webhooks/telegram/bot/route.ts:77`
-  answers 403 with no `TELEGRAM_WEBHOOK_SECRET`, and `:87` timing-safe-compares the
+  `app/api/webhooks/telegram/bot/route.ts:78` (re-pinned 2026-10-27 from `:77`: **#3316** imported
+  `withAuthLookupContext` above it so the sender resolves through the privilege that can see `users`)
+  answers 403 with no `TELEGRAM_WEBHOOK_SECRET`, and `:88` (from `:87`, same edit) timing-safe-compares the
   `secret_token` header *before* reading the body. `app/api/tenant/plugins/webhook/[id]/route.ts:100` (re-pinned 2026-10-25 from `:101`) rejects in production when that plugin has no `webhookSecret`, and `:104` (from `:106`) verifies the HMAC over
   the raw text. Each of the six therefore arrives at a credential check that existed all along and
   was unreachable.
