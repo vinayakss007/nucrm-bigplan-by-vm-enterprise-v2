@@ -61,6 +61,25 @@
  * here for the same reason: each is guarded by a policy keyed on a value a
  * pre-auth request cannot have.
  *
+ * RULE 3 (#3290) — the same silence, outside the HTTP surface.
+ *
+ * Rules 1 and 2 live in app/api/**, where something always *could* pin a connection. A BullMQ
+ * processor cannot: lib/db/request-connection.ts has no request to key on, so the handler IS the
+ * lifecycle. worker.ts read `integrations` and wrote `notifications` and `lead_warming_messages`
+ * through the bare pool with no `app.current_tenant` — the INSERT raised 42501 and was retried into
+ * the failed set, and the claim-then-send answered zero rows, which the code printed as
+ * `skipped: already_processed` for messages that were never dispatched.
+ *
+ * This is the one place the narrow-table-list reasoning of rule 2 is deliberately widened. Above, "a
+ * `leads` read that comes back empty is a bug somebody notices" holds because a person is on the
+ * other end of the request. In a queue nothing is on the other end: the log line is the only surface,
+ * so a business table that answers zero rows is precisely the failure nobody sees. Hence: any table
+ * the schema declares with a tenant column, in a process entry point, on the bare pool.
+ *
+ * The table list is read out of `drizzle/schema/**` rather than transcribed, so a new tenant-scoped
+ * table joins the screen the day it is declared — a hand-kept list is how `lead_warming_messages`
+ * stayed invisible here.
+ *
  * Usage:
  *   node scripts/check-rls-route-coverage.mjs
  *   node scripts/check-rls-route-coverage.mjs --json
@@ -76,7 +95,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(HERE, '..');
 const DEFAULT_BASELINE = join(HERE, 'rls-preauth-baseline.json');
 
-function walk(dir) {
+function walk(dir, accept = (name) => name === 'route.ts' || name === 'route.tsx') {
   const out = [];
   let entries;
   try {
@@ -87,8 +106,8 @@ function walk(dir) {
   for (const name of entries) {
     const p = join(dir, name);
     const st = statSync(p);
-    if (st.isDirectory()) out.push(...walk(p));
-    else if (name === 'route.ts' || name === 'route.tsx') out.push(p);
+    if (st.isDirectory()) out.push(...walk(p, accept));
+    else if (accept(name)) out.push(p);
   }
   return out;
 }
@@ -174,15 +193,90 @@ function identityTablesIn(statement) {
 }
 
 /**
+ * The `{ … }` starting at the index of its opening brace, or the rest of the file when unbalanced.
+ * Good enough to read a `pgTable` body; a schema file with a brace inside a string literal would
+ * only ever widen the window, never shorten it, and widening errs toward flagging more.
+ */
+function balancedBraces(text, from) {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(from, i + 1);
+    }
+  }
+  return text.slice(from);
+}
+
+/**
+ * Every table the schema declares with a tenant column, read from the schema rather than
+ * transcribed: `utils.tenantId()` is `uuid('tenant_id')` (`drizzle/schema/utils.ts:47`), so a table
+ * body saying `tenantId:` is a body with the column every `tenant_isolation` policy compares. A new
+ * tenant table joins this set the day it is declared, which is the point — a transcription would be
+ * the list that forgot `lead_warming_messages` and lets #3290 through.
+ */
+function tenantScopedTables(root) {
+  const dir = join(root, 'drizzle', 'schema');
+  const names = new Set();
+  if (!existsSync(dir)) return names;
+  for (const file of walk(dir, (name) => name.endsWith('.ts'))) {
+    // Comments stripped first: a table's own doc block may name another table's column.
+    const text = stripComments(readFileSync(file, 'utf8'));
+    let at = 0;
+    while ((at = text.indexOf('pgTable(', at)) >= 0) {
+      const named = /^'([^']+)'/.exec(text.slice(at + 'pgTable('.length));
+      const brace = text.indexOf('{', at);
+      if (!named || brace < 0) break;
+      const body = balancedBraces(text, brace);
+      if (/\btenantId:/.test(body) || /'tenant_id'/.test(body)) names.add(named[1]);
+      at = brace + body.length;
+    }
+  }
+  return names;
+}
+
+/** `lead_warming_messages` → `leadWarmingMessages`, the drizzle export this repo names tables by. */
+const camelIdent = (sqlName) => sqlName.replace(/[-_]([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+function tenantTablesIn(statement, tables) {
+  const out = [];
+  for (const sqlName of tables) {
+    const chain = new RegExp(`(?:\\.from|\\.insert|\\.update|\\.delete)\\s*\\(\\s*${camelIdent(sqlName)}\\b`);
+    const raw = new RegExp(`\\b(?:from|into|update|join)\\s+${sqlName}\\b`, 'i');
+    if (chain.test(statement) || raw.test(statement)) out.push(sqlName);
+  }
+  return out;
+}
+
+/**
+ * Rule 3 (#3290): the long-running processes in this repository, named one by one.
+ *
+ * A route gets its RLS context from the request lifecycle (`lib/db/request-connection.ts` pins a
+ * connection per request after `withApiRoute` resolves the session). Nothing equivalent exists for a
+ * BullMQ processor or a cron tick: the handler IS the lifecycle, and if it does not open a context
+ * the pool connection it borrows has no tenant. That is why these files are screened separately and
+ * why the check is on the receiver rather than on the presence of a wrapper somewhere in the file.
+ *
+ * Deliberately a list, not a glob: `scripts/` holds a hundred one-off tools whose DB access is
+ * operator-run and single-tenant by construction, and letting the screen guess which processes are
+ * long-running would flag half of them and miss the next real worker. A new daemon means a line here.
+ */
+const ENTRY_POINTS = ['worker.ts', 'realtime.ts', 'instrumentation.ts', 'scripts/cron-scheduler.ts'];
+
+/**
  * @returns {{findings: Array, allowed: number, hits: Array, scanned: number,
- *            offenders: Array, notApplicable?: boolean}}
+ *            entryPoints: number, offenders: Array, notApplicable?: boolean}}
  */
 export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
   const apiDir = join(root, 'app', 'api');
-  if (!existsSync(apiDir)) {
-    return { notApplicable: true, findings: [], allowed: 0, hits: [], scanned: 0, offenders: [] };
+  const entryFiles = ENTRY_POINTS
+    .map((rel) => ({ rel, abs: join(root, rel) }))
+    .filter(({ abs }) => existsSync(abs));
+  if (!existsSync(apiDir) && entryFiles.length === 0) {
+    return { notApplicable: true, findings: [], allowed: 0, hits: [], scanned: 0, entryPoints: 0, offenders: [] };
   }
-  const files = walk(apiDir);
+  const files = existsSync(apiDir) ? walk(apiDir) : [];
 
   // ── Rule 1 (#1838): authenticated, unwrapped, querying ─────────────────────
   const offenders = [];
@@ -227,6 +321,54 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     }
   }
 
+  // ── Rule 3 (#3290): a process entry point has no request to borrow context from ──
+  //
+  // Same receiver test as rule 2, and for the same reason: `db.` / `database.` / `pool.` is the pool
+  // with every `app.*` GUC cleared, `tx.` is a handle somebody opened a privilege inside of. Lexical
+  // nesting is NOT the test, because `withTenantContext(id, user, () => db.select(…))` reads as
+  // wrapped and runs on a different connection than the one holding the GUC — it is the bug wearing
+  // the fix's clothes. A statement on the bare pool is a statement with no tenant, wherever it sits.
+  const TENANT_TABLES = tenantScopedTables(root);
+  // Emptiness is not evidence — that is the whole lesson of #3280, and a screen that silently scans
+  // zero tables is the same trap wearing a green check. If the schema cannot be read, this rule
+  // cannot certify anything, so it says so instead of reporting OK.
+  if (entryFiles.length > 0 && TENANT_TABLES.size === 0) {
+    return {
+      findings: [{
+        check: 'ENTRYPOINT_SCREEN_BLIND',
+        file: 'drizzle/schema',
+        line: 0,
+        detail: 'no table in drizzle/schema declared a tenant column — rule 3 cannot tell a safe statement from an invisible one',
+      }],
+      allowed: 0,
+      hits,
+      scanned: files.length,
+      entryPoints: entryFiles.length,
+      offenders,
+    };
+  }
+  for (const { rel, abs } of entryFiles) {
+    const lines = stripComments(readFileSync(abs, 'utf8')).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+      BARE_POOL_RE.lastIndex = 0;
+      let m;
+      while ((m = BARE_POOL_RE.exec(line)) !== null) {
+        for (const table of tenantTablesIn(statementAt(lines, i, m.index), TENANT_TABLES)) {
+          hits.push({
+            check: 'ENTRYPOINT_BARE_POOL',
+            file: rel,
+            line: i + 1,
+            detail: `${table} reached from a process entry point on the bare pool — the tenant id in a job payload is a claim until set_config makes it a check`,
+            source: line.trim().slice(0, 160),
+          });
+        }
+        if (m.index === BARE_POOL_RE.lastIndex) BARE_POOL_RE.lastIndex += 1;
+      }
+    }
+  }
+
   const findings = [];
   let allowed = 0;
   // The allowance is a COUNT, not a flag: a file tolerated at 1 that grows a second
@@ -259,7 +401,7 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     }
   }
 
-  return { findings, allowed, hits, scanned: files.length, offenders };
+  return { findings, allowed, hits, scanned: files.length, entryPoints: entryFiles.length, offenders };
 }
 
 export function readBaseline(p) {
@@ -299,9 +441,16 @@ const EXPLAIN = `rls route-coverage screen (#1838 + #3288) — what each check a
                              app.current_user / app.is_super_admin / app.auth_lookup — values a
                              pre-auth request cannot have — so the statement answers zero rows
                              and a route that reports success when it finds nothing looks correct.
+  ENTRYPOINT_BARE_POOL       (rule 3) a tenant-scoped table touched through the bare pool by a
+                             process entry point (worker.ts, realtime.ts, instrumentation.ts,
+                             scripts/cron-scheduler.ts). No request means no pinned connection, so
+                             the tenant id in a job payload is only ever a claim until
+                             withTenantContext/set_config turns it into a check.
+  ENTRYPOINT_SCREEN_BLIND     rule 3 could not read a single tenant-scoped table out of
+                             drizzle/schema/** — it refuses to report OK on a screen that is blind.
   BASELINE_STALE             an allowance with no matching site left — shrink-only ratchet
   BASELINE_UNREASONED        an allowance with no reason recorded in "_reasons"
-The receiver decides rule 2: db. is the pool with every app.* GUC cleared, tx. is a transaction
+The receiver decides rules 2 and 3: db. is the pool with every app.* GUC cleared, tx. is a transaction
 someone opened a privilege inside of. The test is per statement, not per file, because the dead
 forgot-password route already contained withTokenIssueContext two lines below the broken SELECT.
 `;
@@ -376,7 +525,7 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   if (result.findings.length === 0) {
-    console.log(`[check-rls-route-coverage] OK — ${result.scanned} API routes scanned, all authenticated db-querying handlers are wrapped, and no anonymous route touches an identity table on the bare pool (${result.allowed} tolerated in the baseline).`);
+    console.log(`[check-rls-route-coverage] OK — ${result.scanned} API routes scanned, all authenticated db-querying handlers are wrapped, no anonymous route touches an identity table on the bare pool, and ${result.entryPoints} process entry point(s) touch no tenant-scoped table on it (${result.allowed} tolerated in the baseline).`);
     return 0;
   }
   for (const f of result.findings) {

@@ -8,8 +8,10 @@
 
 import { Worker, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
-import { db } from '@/drizzle/db';
-import { notifications } from '@/drizzle/schema';
+import { and, desc, eq } from 'drizzle-orm';
+import { integrations, leadWarmingMessages } from '@/drizzle/schema';
+import { NO_USER_SENTINEL, withTenantContext, type RlsTransaction } from '@/lib/db/rls';
+import { createNotification, type NotificationType } from '@/lib/notifications';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import { redactEmail, redactPhone, redactUrl } from '@/lib/logger/pii';
 import { escapeHtml } from '@/lib/email/escape-html';
@@ -130,15 +132,30 @@ const notificationWorker = new Worker(
     console.log(`[Notification Worker] Processing job: ${job.id} - Sending notification to user ${userId}`);
     
     try {
-      await db.insert(notifications).values({
+      // #3290: this used to be an insert into `notifications` on the pool, whose connections
+      // `lib/db/pool.ts` has just cleared of every `app.*` GUC. `notifications` carries
+      // tenant_isolation FOR ALL (0019) with
+      // `WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid)`,
+      // so every job raised 42501, was retried three times, and landed in the failed set — no
+      // in-app notification was ever written. `createNotification` is the same insert with the
+      // context already around it (`lib/notifications.ts`), and the one copy of that write: #3288
+      // showed what happens when a second copy exists — one gets fixed and the other stays dead.
+      //
+      // Its `false` means "the row did not land after a retry". Returning `{sent:true}` for that
+      // would be this issue's own failure shape, so the job fails and BullMQ's retry/failed set
+      // sees a real reason.
+      const stored = await createNotification({
         userId,
         tenantId,
         title,
         body: message,
-        type: type || 'system',
+        type: (type || 'system') as NotificationType,
         metadata: data || {},
       });
-      
+      if (!stored) {
+        throw new Error(`[Notification Worker] notification for user ${userId} was not persisted (tenant ${tenantId})`);
+      }
+
       console.log(`[Notification Worker] Notification sent to user ${userId}`);
       return { sent: true, userId };
     } catch (error) {
@@ -248,31 +265,52 @@ const leadWarmingWorker = new Worker(
     try {
       if (type === 'whatsapp') {
         // Send WhatsApp via Meta Cloud API
-        const { db: database } = await import('@/drizzle/db');
-        const { integrations, leadWarmingMessages } = await import('@/drizzle/schema');
-        const { eq: eqOp, and: andOp, desc: descOp } = await import('drizzle-orm');
+        //
+        // #3290: the tenant id in a job payload is a *claim*, and until this line nothing checked
+        // it. `lib/db/request-connection.ts` pins one context per HTTP request and there is no
+        // request here, so every statement in this handler ran on a pool connection whose `app.*`
+        // GUCs `lib/db/pool.ts` had cleared: the integration SELECT below matched zero rows, the
+        // claim matched zero rows, and each zero was reported as a finding about the data instead
+        // of a missing privilege. `withTenantContext` is what makes the claim a checked one.
+        //
+        // One short context per statement, deliberately not one transaction spanning the Meta
+        // round-trip: `SET LOCAL` dies at COMMIT, and holding a pooled connection across a 15 s
+        // HTTP call is how a queue stalls the pool.
+        //
+        // `NO_USER_SENTINEL` because the payload genuinely has no actor — a birthday greeting is
+        // not sent by a logged-in user. `integrations` and `lead_warming_messages` are isolated by
+        // 0031 on `app.current_tenant` alone, and the sentinel matches no `users` row, so any
+        // policy keyed on the actor stays closed.
+        const asTenant = <T>(fn: (tx: RlsTransaction) => Promise<T>): Promise<T> =>
+          withTenantContext(tenantId, NO_USER_SENTINEL, fn);
 
-        const [integration] = await database.select()
-          .from(integrations)
-          .where(andOp(
-            eqOp(integrations.tenantId, tenantId),
-            eqOp(integrations.type, 'whatsapp'),
-            eqOp(integrations.isActive, true)
-          ))
-          .orderBy(descOp(integrations.createdAt))
-          .limit(1);
+        const byMessage = (status: 'queued' | 'sending') => and(
+          eq(leadWarmingMessages.campaignId, campaignId),
+          eq(leadWarmingMessages.contactId, contactId),
+          eq(leadWarmingMessages.status, status),
+          eq(leadWarmingMessages.channel, 'whatsapp')
+        );
+
+        const markFailed = (errorMessage: string, from: 'queued' | 'sending') =>
+          asTenant((tx) => tx.update(leadWarmingMessages)
+            .set({ status: 'failed', errorMessage })
+            .where(byMessage(from)));
+
+        const [integration] = await asTenant((tx) =>
+          tx.select()
+            .from(integrations)
+            .where(and(
+              eq(integrations.tenantId, tenantId),
+              eq(integrations.type, 'whatsapp'),
+              eq(integrations.isActive, true)
+            ))
+            .orderBy(desc(integrations.createdAt))
+            .limit(1));
 
         if (!integration) {
           console.warn(`[Lead Warming] No WhatsApp integration for tenant ${tenantId}`);
           // Update message status
-          await database.update(leadWarmingMessages)
-            .set({ status: 'failed', errorMessage: 'WhatsApp not configured' })
-            .where(andOp(
-              eqOp(leadWarmingMessages.campaignId, campaignId),
-              eqOp(leadWarmingMessages.contactId, contactId),
-              eqOp(leadWarmingMessages.status, 'queued'),
-              eqOp(leadWarmingMessages.channel, 'whatsapp')
-            ));
+          await markFailed('WhatsApp not configured', 'queued');
           return { sent: false, error: 'WhatsApp not configured' };
         }
 
@@ -305,14 +343,7 @@ const leadWarmingWorker = new Worker(
             level: 'error',
             metadata: { integrationId: integration.id, tokenExpiresAt: expiresAt.toISOString() },
           });
-          await database.update(leadWarmingMessages)
-            .set({ status: 'failed', errorMessage: 'WhatsApp token expired — re-connect the integration' })
-            .where(andOp(
-              eqOp(leadWarmingMessages.campaignId, campaignId),
-              eqOp(leadWarmingMessages.contactId, contactId),
-              eqOp(leadWarmingMessages.status, 'queued'),
-              eqOp(leadWarmingMessages.channel, 'whatsapp')
-            ));
+          await markFailed('WhatsApp token expired — re-connect the integration', 'queued');
           return { sent: false, error: 'WhatsApp token expired' };
         }
 
@@ -321,18 +352,35 @@ const leadWarmingWorker = new Worker(
         // (after a successful send whose status update didn't persist, or a
         // duplicate job) there is no 'queued' row left to claim, so we skip the
         // send instead of messaging the contact twice.
-        const claimed = await database.update(leadWarmingMessages)
-          .set({ status: 'sending' })
-          .where(andOp(
-            eqOp(leadWarmingMessages.campaignId, campaignId),
-            eqOp(leadWarmingMessages.contactId, contactId),
-            eqOp(leadWarmingMessages.status, 'queued'),
-            eqOp(leadWarmingMessages.channel, 'whatsapp')
-          ))
-          .returning({ id: leadWarmingMessages.id });
+        const claimed = await asTenant((tx) =>
+          tx.update(leadWarmingMessages)
+            .set({ status: 'sending' })
+            .where(byMessage('queued'))
+            .returning({ id: leadWarmingMessages.id }));
 
         if (claimed.length === 0) {
-          console.log('[Lead Warming] WhatsApp message already claimed/sent — skipping duplicate send');
+          // #3290 ask 2: zero rows used to be read as "already processed", which is a *success-
+          // looking* answer for the case where the row never existed — the same conflation that
+          // made #3288's route answer `{"ok":true}` for a token it never created. So ask the row,
+          // under the same checked context: a duplicate is a row in a terminal state, and anything
+          // else fails the job loudly instead of logging a skip.
+          const [row] = await asTenant((tx) =>
+            tx.select({ id: leadWarmingMessages.id, status: leadWarmingMessages.status })
+              .from(leadWarmingMessages)
+              .where(and(
+                eq(leadWarmingMessages.campaignId, campaignId),
+                eq(leadWarmingMessages.contactId, contactId),
+                eq(leadWarmingMessages.channel, 'whatsapp')
+              ))
+              .limit(1));
+
+          if (!row) {
+            throw new Error(
+              `no-op claim: no lead_warming_messages row for campaign ${campaignId} ` +
+              `contact ${contactId} in tenant ${tenantId}`
+            );
+          }
+          console.log(`[Lead Warming] WhatsApp message already ${row.status} — skipping duplicate send`);
           return { sent: false, skipped: true, reason: 'already_processed' };
         }
 
@@ -395,26 +443,18 @@ const leadWarmingWorker = new Worker(
           // Release the claim back to failed so the failure is visible and the
           // row isn't stuck in 'sending'. (We do NOT requeue: the message may
           // have been delivered; a stuck 'sending' row is safer than a resend.)
-          await database.update(leadWarmingMessages)
-            .set({ status: 'failed', errorMessage: (isStaleToken ? `WhatsApp token expired: ${errMsg}` : errMsg).slice(0, 500) })
-            .where(andOp(
-              eqOp(leadWarmingMessages.campaignId, campaignId),
-              eqOp(leadWarmingMessages.contactId, contactId),
-              eqOp(leadWarmingMessages.status, 'sending'),
-              eqOp(leadWarmingMessages.channel, 'whatsapp')
-            ));
+          await markFailed(
+            (isStaleToken ? `WhatsApp token expired: ${errMsg}` : errMsg).slice(0, 500),
+            'sending'
+          );
           throw new Error(errMsg);
         }
 
         // Update message status to sent (claimed as 'sending' above)
-        await database.update(leadWarmingMessages)
-          .set({ status: 'sent', sentAt: new Date() })
-          .where(andOp(
-            eqOp(leadWarmingMessages.campaignId, campaignId),
-            eqOp(leadWarmingMessages.contactId, contactId),
-            eqOp(leadWarmingMessages.status, 'sending'),
-            eqOp(leadWarmingMessages.channel, 'whatsapp')
-          ));
+        await asTenant((tx) =>
+          tx.update(leadWarmingMessages)
+            .set({ status: 'sent', sentAt: new Date() })
+            .where(byMessage('sending')));
 
         // Redact phone number in logs
         const maskedPhone = redactPhone(phone);
