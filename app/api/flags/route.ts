@@ -5,9 +5,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFlags } from '@/lib/flags';
-import { db } from '@/drizzle/db';
-import { sessions, tenantMembers } from '@/drizzle/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { tenantMembers } from '@/drizzle/schema';
+import { eq, and } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withUserContext } from '@/lib/db/rls';
 
@@ -23,20 +22,21 @@ export async function GET(request: NextRequest) {
   let userId: string | undefined;
 
   if (sessionCookie) {
-    const { verifyToken, hashToken } = await import('@/lib/auth/session');
-    const payload = await verifyToken(sessionCookie);
-    if (payload) {
-      const tokenHash = await hashToken(sessionCookie);
-      const results = await db.select({ userId: sessions.userId })
-        .from(sessions)
-        .where(and(
-          eq(sessions.tokenHash, tokenHash),
-          gt(sessions.expiresAt, new Date()),
-        ))
-        .limit(1);
-      if (results[0]) {
-        userId = results[0].userId;
-      }
+    // #3288: this branch read `sessions` on the bare pool to turn a token hash back into a
+    // user id. sessions_user_own (0088, FOR ALL) keys on app.current_user — the value this
+    // read exists to establish — so on a connection with every app.* GUC cleared it matched
+    // zero rows, `userId` stayed undefined, and the #1150 anonymous branch below answered
+    // {flags:{}} to a signed-in browser. Nothing errored; the flags simply were not there.
+    //
+    // The Bearer branch of this same handler already went through getCurrentUserForToken for
+    // both reasons at once (#2216: verifyToken alone accepts a revoked JWT; the helper opens
+    // withAuthResolutionContext, which is the only context that can read the session row).
+    // The cookie is the same credential in a different envelope, so it is redeemed the same
+    // way — one path, revoked-session checks included.
+    const { getCurrentUserForToken } = await import('@/lib/auth/session');
+    const user = await getCurrentUserForToken(sessionCookie);
+    if (user) {
+      userId = user.id;
     }
   } else if (authHeader?.startsWith('Bearer ')) {
     // #2216: verifyToken alone accepts JWTs whose session was revoked
