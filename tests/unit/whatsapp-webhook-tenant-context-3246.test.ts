@@ -326,10 +326,16 @@ describe('0142 installs one arm and nothing broader', () => {
   const body = () => up().replace(/\/\*![\s\S]*?\*\//g, '').replace(/--.*$/gm, '');
 
   it('is journal-registered, re-runnable, and DO-wrapped', () => {
-    const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json'), 'utf8');
-    const entry = journal.entries.at(-1);
-    expect(entry.tag).toBe(MIG);
-    expect(entry.idx).toBe(journal.entries.length - 1);
+    const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json'), 'utf8') as {
+      entries: Array<{ idx: number; when: number; tag: string }>;
+    };
+    // Deliberately not "is the last entry" — the next branch to append a migration would
+    // then have to edit this file. #2262's invariant is what the runner and the rollback
+    // both read: journaled at all, idx equal to its position, a `when` nobody else shares.
+    const pos = journal.entries.findIndex((e) => e.tag === MIG);
+    expect(pos, `${MIG} is on the journal`).toBeGreaterThanOrEqual(0);
+    expect(journal.entries[pos]!.idx).toBe(pos);
+    expect(journal.entries.filter((e) => e.when === journal.entries[pos]!.when)).toHaveLength(1);
     expect(body()).toMatch(/^DO \$\$/m);
     expect(body()).toMatch(/DROP POLICY IF EXISTS "whatsapp_integration_phone_lookup_read" ON "integrations"/);
     expect(body()).toMatch(/CREATE POLICY "whatsapp_integration_phone_lookup_read" ON "integrations"/);
