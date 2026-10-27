@@ -91,11 +91,18 @@ const txFor = (conn: Conn) => ({
   execute: (f: SQL) => {
     const call = render(f);
     H.calls.push(call);
-    // The privileges arrive through set_config(); read them back the way Postgres would apply them.
-    if (/app\.auth_lookup/.test(call.sql) && call.params.includes('true')) conn.authLookup = true;
-    if (/app\.current_user/.test(call.sql)) conn.currentUser = String(call.params[0] ?? '');
-    if (/app\.is_super_admin/.test(call.sql)) conn.isSuperAdmin = call.params.includes('true');
-    if (/app\.token_issue/.test(call.sql)) conn.tokenIssue = true;
+    // The privileges arrive through set_config(); read them back the way Postgres would apply
+    // them. The grant is spelled in the statement text (`'true'` is a literal, not a bind), while
+    // an identity value is bound as a parameter — so the two are read differently.
+    const granted = (guc: string) => call.sql.includes(`set_config('app.${guc}', 'true'`);
+    if (granted('auth_lookup')) conn.authLookup = true;
+    if (granted('is_super_admin')) conn.isSuperAdmin = true;
+    if (granted('token_issue')) conn.tokenIssue = true;
+    const asUser = call.sql.indexOf("set_config('app.current_user', $");
+    if (asUser >= 0) {
+      const ordinal = (call.sql.slice(0, asUser).match(/\$\d+/g) ?? []).length;
+      conn.currentUser = String(call.params[ordinal - 1] ?? '');
+    }
     return Promise.resolve([]);
   },
   query: {
@@ -103,6 +110,21 @@ const txFor = (conn: Conn) => ({
       findFirst: async (args: { where?: unknown; columns?: Record<string, boolean> }) =>
         findUser(conn, args.columns, args.where ? emailArg(args.where) : undefined),
     },
+  },
+  // `tx.select({id, fullName}).from(users).where(…).limit(1)` — the sibling's shape.
+  select: () => {
+    let bound: unknown;
+    const builder: Record<string, unknown> = {};
+    builder.from = () => builder;
+    builder.where = (f: unknown) => {
+      bound = f;
+      return builder;
+    };
+    builder.limit = async () => {
+      const row = findUser(conn, undefined, bound ? emailArg(bound) : undefined);
+      return row ? [row] : [];
+    };
+    return builder;
   },
   insert: (table: object) => ({
     values: (row: Record<string, unknown>) => {

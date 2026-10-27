@@ -161,7 +161,7 @@ describe('the pre-auth rule sees a bare-pool identity read', () => {
       '}',
     ].join('\n');
     const { out } = run(fixture({ 'auth/mixed/route.ts': src }));
-    expect(out).toMatch(/PREAUTH_UNCONTEXTED_READ\tapp\/api\/auth\/mixed\/route\.ts:5\s+.*sessions/);
+    expect(out).toMatch(/PREAUTH_UNCONTEXTED_READ\tapp\/api\/auth\/mixed\/route\.ts:4\s+.*sessions/);
   });
 });
 
@@ -169,14 +169,20 @@ describe('the ratchet is shrink-only, and every allowance is owned', () => {
   const site = { 'auth/w/route.ts': BARE_USERS };
 
   it('a baseline entry tolerates the site, exactly once per statement', () => {
-    const { code, out } = run(fixture(site, { 'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': 1 }));
+    const { code, out } = run(fixture(site, {
+      _reasons: { 'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': '#NNNN: reviewed, this route mints its own context elsewhere' },
+      'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': 1,
+    }));
     expect(out).not.toMatch(/PREAUTH_UNCONTEXTED_READ\t/);
     expect(code).toBe(0);
   });
 
   it('a new un-contexted read past the allowance still fails', () => {
     const two = { 'auth/w/route.ts': `${BARE_USERS}\nconst other = await db.select().from(sessions);` };
-    const { code } = run(fixture(two, { 'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': 1 }));
+    const { code } = run(fixture(two, {
+      _reasons: { 'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': '#NNNN: one of the two is reviewed' },
+      'app/api/auth/w/route.ts|PREAUTH_UNCONTEXTED_READ': 1,
+    }));
     expect(code).toBe(1);
   });
 
@@ -197,8 +203,10 @@ describe('the ratchet is shrink-only, and every allowance is owned', () => {
 
   it('--print-baseline prints, --update writes, and neither fails the screen', () => {
     const d = fixture(site);
-    expect(run(d, ['--print-baseline']).out).toMatch(/app\/api\/auth\/w\/route\.ts\|PREAUTH_UNCONTEXTED_READ/);
-    const upd = run(d, ['--update']);
+    // --baseline is explicit: a fixture must never be able to write the repository's ratchet.
+    const here = ['--baseline', 'scripts/rls-preauth-baseline.json'];
+    expect(run(d, ['--print-baseline', ...here]).out).toMatch(/app\/api\/auth\/w\/route\.ts\|PREAUTH_UNCONTEXTED_READ/);
+    const upd = run(d, ['--update', ...here]);
     expect(upd.code).toBe(0);
     expect(upd.out).toMatch(/wrote/);
   });
