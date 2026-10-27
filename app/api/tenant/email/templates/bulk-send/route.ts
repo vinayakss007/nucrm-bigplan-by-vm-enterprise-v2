@@ -28,7 +28,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * synchronous loop that blocks the request and risks timeout/partial loss),
  * this route now enqueues a single `send-bulk-emails` job — the same queue
  * mechanism the already-fixed app/api/tenant/email/bulk route uses. The worker
- * processes recipients in parallel batches with retries.
+ * processes recipients in parallel batches, and the job is queued for one
+ * attempt because that loop restarts at index 0 (#3293).
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -116,14 +117,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       last_name: c.lastName || '',
     }));
 
-    // Queue instead of sending inline (#1052).
+    // Queue instead of sending inline (#1052). One attempt, as in
+    // app/api/tenant/email/bulk: the worker restarts the recipient list at index
+    // 0, so a redelivery of this job mails the whole campaign twice (#3293).
     await addJob('send-bulk-emails', {
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       subject,
       body: bodyContent,
       recipients,
-    });
+    }, { attempts: 1 });
 
     return NextResponse.json({
       data: {
