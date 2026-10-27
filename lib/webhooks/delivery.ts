@@ -16,7 +16,7 @@ import { db } from '@/drizzle/db';
 import { webhookDeliveries } from '@/drizzle/schema/automation';
 import { eq, and, sql, gt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
-import { safeFetch } from '@/lib/security/ssrf';
+import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import { logger } from '@/lib/logger';
 
 export interface WebhookPayload {
@@ -145,6 +145,36 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startTime;
+
+    // #3299: an SSRF refusal is not a transient failure — the target will still resolve to a private
+    // address on the next attempt — so it takes the dead-letter exit now instead of the ladder below.
+    // lib/webhooks.ts:157 already treats this error class as never-retryable; this is the same rule on
+    // the path that carries a delivery row, where the old behaviour was to schedule a retry and record
+    // a nextRetryAt for a delivery that can never succeed.
+    if (error instanceof SsrfBlockedError) {
+      const blockedReason = `Blocked by SSRF protection: ${error.reason}`;
+      await db.update(webhookDeliveries)
+        .set({
+          status: 'failed',
+          responseBody: blockedReason,
+          durationMs: durationMs,
+          metadata: {
+            ...(delivery.metadata as Record<string, unknown>),
+            attempt,
+            max_retries: maxRetries,
+            url: deliveryUrl,
+            failureReason: blockedReason,
+            blockedAt: new Date().toISOString(),
+          }
+        })
+        .where(eq(webhookDeliveries.id, deliveryId));
+
+      const { moveToDeadLetterQueue } = await import('./dlq');
+      await moveToDeadLetterQueue(deliveryId);
+
+      devLogger.queue('webhook-delivery', 'blocked by SSRF protection — moved to dead letter queue');
+      return;
+    }
 
     if (attempt < maxRetries) {
       // Exponential backoff with jitter to prevent thundering herd
