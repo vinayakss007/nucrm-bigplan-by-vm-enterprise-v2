@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customEntities } from '@/drizzle/schema';
 import { eq, and, isNull, ilike, desc } from 'drizzle-orm';
@@ -67,6 +67,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3294: defining an entity type is workspace-wide schema config, so it takes the
+    // gate the custom-field DEFINITION routes already require (#3001). Reading the
+    // model and writing a record stay member-open.
+    const permErr = requirePerm(ctx, 'settings.manage');
+    if (permErr) return permErr;
 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(createEntitySchema, rawBody);

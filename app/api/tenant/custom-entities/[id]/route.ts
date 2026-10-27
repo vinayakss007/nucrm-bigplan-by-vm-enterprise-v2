@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customEntities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -53,6 +53,11 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
+    // #3294: `fields` is the shape every record of this type will have, so reshaping it
+    // from a member session is a schema change, not an edit.
+    const permErr = requirePerm(ctx, 'settings.manage');
+    if (permErr) return permErr;
+
     const id = (await params).id;
     const rawBody = await readJsonBody(request);
     const validated = validateBody(updateEntitySchema, rawBody);
@@ -91,6 +96,10 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3294: the soft delete below hides the type from every user of the workspace.
+    const permErr = requirePerm(ctx, 'settings.manage');
+    if (permErr) return permErr;
 
     const id = (await params).id;
     const [row] = await db

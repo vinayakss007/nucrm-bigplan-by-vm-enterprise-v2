@@ -72,7 +72,16 @@ vi.mock('@/drizzle/db', () => {
    * (`await chain`, `.limit(n)`, `.returning()`), so the shape of a drizzle chain is
    * not what is under test here.
    */
-  const chainable = (result: unknown): any => ({
+  interface FakeChain {
+    from(): FakeChain;
+    where(): FakeChain;
+    orderBy(): FakeChain;
+    limit(): FakeChain;
+    offset(): FakeChain;
+    returning(): FakeChain;
+    then(resolve: (v: unknown) => void): void;
+  }
+  const chainable = (result: unknown): FakeChain => ({
     from: () => chainable(result),
     where: () => chainable(result),
     orderBy: () => chainable(result),
