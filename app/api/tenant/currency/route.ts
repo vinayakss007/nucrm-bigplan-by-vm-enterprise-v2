@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -78,13 +78,19 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 /**
  * POST /api/tenant/currency
- * Set tenant default currency.
- * No module gate - available to all tenants.
+ * Set tenant default currency. Requires settings.manage (#3294): the value lands in
+ * tenants.settings and denominated every later quote and invoice.
  */
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #3294: this writes tenants.settings->default_currency, which denominated every
+    // later quote and invoice, so it joins the other settings.manage writes. The GET
+    // above stays member-open — reading the workspace currency is not changing it.
+    const permErr = requirePerm(ctx, 'settings.manage');
+    if (permErr) return permErr;
 
     const raw = await readJsonBody(req);
     const parsed = validateBody(setCurrencySchema, raw);
