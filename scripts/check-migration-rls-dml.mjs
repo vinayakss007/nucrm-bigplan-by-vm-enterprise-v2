@@ -336,6 +336,74 @@ export function buildPolicyMap(ordered) {
   );
 }
 
+const MASS_FORCE_LOOP_RE = /EXECUTE\s+format\(\s*'ALTER TABLE %I\.%I FORCE ROW LEVEL SECURITY/i;
+const ENABLE_RLS_RE = /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:"?[\w]+"?\.)?"?([a-z_][a-z0-9_]*)"?\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi;
+const FORCE_RLS_RE = /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:"?[\w]+"?\.)?"?([a-z_][a-z0-9_]*)"?\s+FORCE\s+ROW\s+LEVEL\s+SECURITY/gi;
+
+/**
+ * Which tables does the chain leave ENABLEd and never FORCE'd? (#3302)
+ *
+ * `0068_force_rls_owner.sql` is not a list of tables, it is a loop over
+ * `pg_class where relrowsecurity` — so every table that existed and was enabled
+ * when it ran is FORCE'd without ever being named, and no grep over the
+ * migration directory can see that coverage. The consequence is that the rule
+ * is temporal, not textual: a table needs its own `FORCE` only if it became
+ * RLS-enabled in a file the loop had already passed.
+ *
+ * `0115_rls_view_hardening.sql` is 47 files after `0068` and says
+ * `ALTER TABLE "ai_providers" ENABLE ROW LEVEL SECURITY` plus two policies and
+ * nothing else, which is how one table of 226 ended up enabled-not-forced while
+ * both existing screens reported perfect scores: `check-migration-rls-dml.mjs`'s
+ * own tenant-scoped union and `lib/db/least-privilege.ts`'s ownership probe both
+ * select tables by "has a uuid `tenant_id` column", and `ai_providers` has none,
+ * so it never enters their denominator (#3302).
+ *
+ * First-enable is the criterion, not last: re-running `ENABLE ROW LEVEL
+ * SECURITY` on an already-enabled table is a no-op that leaves
+ * `relforcerowsecurity` alone, so a table covered by the loop is covered even if
+ * a later file repeats the statement. That is what keeps `0088`, `0107` and the
+ * pre-auth hardening files from reading as gaps.
+ */
+export function findForceRlsGaps(ordered) {
+  let loopAt = -1;
+  let loopFile = null;
+  const firstEnable = new Map();
+  const forced = new Set();
+  ordered.forEach((entry, index) => {
+    // Only SQL counts: `0123`, `0125` and `0129` all carry "… is FORCE ROW LEVEL
+    // SECURITY" in their headers, and reading raw file text finds zero gaps in a
+    // chain that has one.
+    const sql = executableScope(stripComments(entry.sql));
+    if (MASS_FORCE_LOOP_RE.test(sql)) { loopAt = index; loopFile = entry.file; }
+    for (const m of sql.matchAll(ENABLE_RLS_RE)) {
+      if (!firstEnable.has(m[1])) firstEnable.set(m[1], { index, file: entry.file });
+    }
+    for (const m of sql.matchAll(FORCE_RLS_RE)) forced.add(m[1]);
+  });
+
+  const gaps = [];
+  for (const [table, { index, file }] of firstEnable) {
+    if (forced.has(table)) continue;
+    if (index <= loopAt) continue;
+    gaps.push({ table, enabledBy: file });
+  }
+  gaps.sort((a, b) => a.table.localeCompare(b.table));
+  return { massForceLoop: loopFile, tablesEnabled: firstEnable.size, total: ordered.length, gaps };
+}
+
+/** The census as sentences: what it checked, and what it found. */
+export function formatForceRlsGaps(report) {
+  const head = report.massForceLoop
+    ? `  force-rls census: ${report.tablesEnabled} table(s) enabled across ${report.total} file(s); the last mass-force loop is ${report.massForceLoop}, so anything it covered needs no name`
+    : `  force-rls census: ${report.tablesEnabled} table(s) enabled across ${report.total} file(s) and the chain has no mass-force loop, so every enable needs a named FORCE`;
+  if (report.gaps.length === 0) return [head, '  force-rls census: no table in the chain is left un-forced.'];
+  return [
+    head,
+    `  force-rls census: ${report.gaps.length} table(s) ENABLE ROW LEVEL SECURITY with no FORCE ROW LEVEL SECURITY:`,
+    ...report.gaps.map((g) => `       - ${g.table} (enabled by ${g.enabledBy})`),
+  ];
+}
+
 const DML_PATTERNS = [
   ['update', /\bUPDATE\s+(?:ONLY\s+)?(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\s+(?:\w+\s+)?SET\b/gi],
   ['delete', /\bDELETE\s+FROM\s+(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\b/gi],
@@ -488,6 +556,11 @@ function main() {
   const { migrationsDir, baselinePath, explain } = resolvePaths(process.argv);
   const { counts, violations, detail, admitted } = collect(migrationsDir);
   const flat = KINDS.flatMap((k) => violations[k]);
+  // #3302: the row-write rule above only ever looks at tenant-scoped tables, so a
+  // table with no `tenant_id` column can be enabled-and-never-forced for the whole
+  // history of this repository and this command still prints OK. The census has no
+  // such criterion — its denominator is every table the chain enables.
+  const census = findForceRlsGaps(orderedCorpus(migrationsDir).ordered);
 
   if (explain) {
     const tags = explain === 'all' ? [...admitted.keys()] : [explain];
@@ -533,6 +606,7 @@ function main() {
     `                     policy-derived ${counts.byPolicy} ∪ tenant_id-column ${counts.byColumn}`,
     `  policies read per table: ${counts.policiesAttributed} on ${counts.policyTables} table(s) from ${counts.journalEntries} journal entries (${counts.unlisted} file(s) not in the journal), ${counts.ambientLoops} catalogue loop(s) left unattributed`,
     `  baselined: ${(baseline.violations?.atRisk ?? []).length} row-write offender(s), ${(baseline.violations?.dynamicTarget ?? []).length} dynamic-target file(s)`,
+    ...formatForceRlsGaps(census),
   ].join('\n'));
 
   if (healed.length > 0) {
@@ -569,6 +643,24 @@ function main() {
       '.sql for that shape. Naming either one in a comment proves nothing.',
       '',
       'Do NOT add an entry to the baseline without a reason in the PR that does so.',
+    ].join('\n'));
+    process.exit(1);
+  }
+
+  if (census.gaps.length > 0) {
+    console.error([
+      '',
+      `${census.gaps.length} table(s) are ENABLE ROW LEVEL SECURITY with no FORCE ROW LEVEL SECURITY`,
+      'anywhere in the chain. FORCE is what makes the policies bind the table owner;',
+      'without it, whichever role owns the table reads and writes it with no policy',
+      'applied at all. That is invisible today because the owner is a superuser with',
+      'BYPASSRLS — it becomes real the moment ownership moves to a least-privilege',
+      'role, which is where scripts/check-db-role-privileges.mjs is pushing it, and',
+      `nothing else would notice: ${census.gaps.map((g) => g.table).join(', ')} ${census.gaps.length === 1 ? 'has' : 'have'} no uuid tenant_id column, so both the tenant-scoped union above and lib/db/least-privilege.ts\'s ownership probe exclude it by construction.`,
+      '',
+      'Fix: ALTER TABLE "<table>" FORCE ROW LEVEL SECURITY in a new migration.',
+      '`0068_force_rls_owner.sql` did this as a loop over the catalogue; a loop that',
+      'ran once cannot cover a table enabled afterwards, which is the whole defect.',
     ].join('\n'));
     process.exit(1);
   }
