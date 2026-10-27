@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -17,6 +17,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3292 ask 3: firing an integration issues a request with that integration's
+    // credentials and hands the caller whatever came back. That is a privileged
+    // action, not a read, so it needs `settings.manage` — the same permission
+    // `app/api/tenant/settings` guards with — and it needs it BEFORE the row
+    // lookup, or a 403 still confirms which instance ids exist in the workspace.
+    const forbidden = requirePerm(ctx, 'settings.manage');
+    if (forbidden) return forbidden;
 
     const body = await readJsonBody(request);
     if (!body.instance_id || !body.action) {

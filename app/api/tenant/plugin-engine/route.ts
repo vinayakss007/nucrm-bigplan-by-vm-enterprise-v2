@@ -15,6 +15,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { splitConfigCredentials, mergeKeepingSecretKeys } from '@/lib/integrations/config-credentials';
+import { integrationConfigResponse } from '@/lib/integrations/config-policy';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -102,6 +103,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const provider = getProviderDef(body.provider_id);
     const config = body.config || {};
 
+    // #3292: this handler never checks `isAdmin` (`grep -n isAdmin` over this file
+    // returns nothing) — a plain member with a session cookie and a CSRF token can
+    // write `integrations.config` here. The declared `configFields` are what the
+    // server enforces, so an out-of-policy bag is refused before the insert.
+    const configRejected = integrationConfigResponse(provider, config);
+    if (configRejected) return configRejected;
+
     if (body.test_only) {
       return NextResponse.json({ success: true, message: 'Connection validated', provider });
     }
@@ -170,11 +178,19 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         return NextResponse.json({ error: 'config must be an object' }, { status: 400 });
       }
       const [existing] = await db
-        .select({ config: integrations.config })
+        .select({ config: integrations.config, type: integrations.type })
         .from(integrations)
         .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, body.id)))
         .limit(1);
       updates['config'] = mergeKeepingSecretKeys(existing?.config, body['config']);
+      // #3292: validate the *merged* bag. Checking only the incoming keys would let
+      // a PATCH that leaves `base_url` alone keep a stored metadata address, and
+      // would let a caller who names one key smuggle the rest of the row through.
+      const mergedRejected = integrationConfigResponse(
+        existing ? getProviderDef(existing.type) : undefined,
+        updates['config'],
+      );
+      if (mergedRejected) return mergedRejected;
     }
     // #2560: guarded on `enabled` but assigned `body['isActive']`, which no
     // caller sends — the toggle stored undefined and the UI 500ed. The wire

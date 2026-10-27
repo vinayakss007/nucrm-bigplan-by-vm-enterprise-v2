@@ -14,6 +14,8 @@ import { eq, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { splitConfigCredentials } from '@/lib/integrations/config-credentials';
+import { getProviderDef } from '@/lib/integrations/registry';
+import { integrationConfigResponse } from '@/lib/integrations/config-policy';
 
 interface IntegrationRow {
   id: string;
@@ -81,6 +83,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const validated = validateBody(createIntegrationSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // #3292: `createIntegrationSchema` types the config bag as
+    // `z.record(z.string(), z.unknown())`, so the schema above says nothing about
+    // what a value may *be*. Consult the provider's declared `configFields`
+    // before the insert, so an out-of-policy bag never reaches a row.
+    const configRejected = integrationConfigResponse(getProviderDef(v.type), v.config || {});
+    if (configRejected) return configRejected;
 
     const [row] = await db.insert(integrations).values({
       tenantId: ctx.tenantId,
