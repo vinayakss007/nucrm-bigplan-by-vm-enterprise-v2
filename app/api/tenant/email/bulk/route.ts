@@ -97,15 +97,16 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const body = (template.bodyHtml || template.bodyText || '').replace(/\{\{(\w+)\}\}/g, '{$1}');
 
     // Queue instead of sending inline (#1325/#1124): bulk sends previously ran a
-    // sequential awaited loop inside the request. The worker processes recipients
-    // in parallel batches with retries.
+    // sequential awaited loop inside the request. The worker walks the recipient
+    // list from index 0, so `attempts: 1` is what keeps a redelivery from mailing
+    // the campaign twice — the queue default is 3 (#3293).
     await addJob('send-bulk-emails', {
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       subject: template.subject,
       body,
       recipients,
-    });
+    }, { attempts: 1 });
 
     console.log(`[email bulk] Queued ${recipients.length} emails for tenant ${ctx.tenantId} ` +
       `(skipped_unsubscribed=${skippedUnsubscribed}, template=${template_id})`);

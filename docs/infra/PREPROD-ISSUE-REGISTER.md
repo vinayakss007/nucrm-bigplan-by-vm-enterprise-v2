@@ -2524,7 +2524,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
   `lib/errors-server.ts:231` (re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
-  paths: `app/api/cron/subscription-renewal-check/route.ts:157` (re-pinned 2026-10-22 from `:145`: **#3045** put the `emailResult` check and the `emailRejected` guard above the insert), `contract-renewal-check/route.ts:161` (re-pinned 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
+  paths: `app/api/cron/subscription-renewal-check/route.ts:165` (re-pinned 2026-10-28 from `:157`: **#3315** put the empty-recipient guard above the send loop; earlier re-pin 2026-10-22 from `:145`: **#3045** put the `emailResult` check and the `emailRejected` guard above the insert), `contract-renewal-check/route.ts:181` (re-pinned 2026-10-28 from `:161`: **#3315** added the `recipientWarningLogged` guard above it; earlier re-pin 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
   `backup-verify/route.ts:351,384,417 (re-pinned 2026-10-15: **#2599/#2603** shifted them)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
@@ -2595,7 +2595,8 @@ entry ships nothing.
   `lead-warming/route.ts:12` "Schedule: Daily at 9:00 AM", `backup/route.ts:20` "Called daily by cron — runs pg_dump",
   `sla-check/route.ts:21` "Runs periodically (e.g., every 5-10 minutes)", `process-lead-scoring/route.ts:8` "Cron: Nightly
   Lead Scoring Recompute". And nothing else calls them: `checkSLABreach`'s only non-test consumer is
-  `app/api/cron/sla-check/route.ts:150`; `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
+  `app/api/cron/sla-check/route.ts:156` (re-pinned 2026-10-28 from `:150`: **#3315** added the recipient-reporting counters
+  above the scan loop); `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
   `processLeadWarming` is reached only through `lib/lead-warming/index.ts` and its own route. A repo-wide grep for
   `/api/cron/<name>` across these five returns tests, the dead scheduler and `postman/full-test-suite.sh` — **no UI caller, no
   worker, no second scheduler**.
@@ -2635,7 +2636,7 @@ which Postgres ignores for such a role` at 07:13, 09:58 and again 2026-10-03 05:
   the PP-028 point) found `invoices_total=1` in each of 12 tenants and **`recurring_with_next_date=0`, `due_on_or_before_today=0`
   everywhere**. Nothing is being missed today; the first tenant that marks an invoice recurring will be missed silently.
   Baseline re-checked after the probe: a bare session still sees `invoices = 0` (nothing leaked; the loop was read-only).
-- **Why CI cannot see this.** `tests/unit/contract-renewal.test.ts:204,211` (re-pinned 2026-10-22 from `:202,209`: **#3045** added the result-check comment above the `contract renewal cron scheduler` describe block) and `tests/unit/follow-up-cron.test.ts:120,130`
+- **Why CI cannot see this.** `tests/unit/contract-renewal.test.ts:214,221` (re-pinned 2026-10-28 from `:204,211`: **#3315** added the `mockLogError` handle above them; the pair is the two `fs.readFileSync` calls this sentence is about — `:214` reads `scripts/cron-scheduler.ts`, `:221` reads `deploy/cron/crontab`. Earlier re-pin 2026-10-22 from `:202,209`: **#3045** added the result-check comment above the `contract renewal cron scheduler` describe block) and `tests/unit/follow-up-cron.test.ts:125,135` (re-pinned 2026-10-28 from `:120,130`: `:125` and `:135` are the two `it` blocks whose `readFileSync` assertions this sentence describes; the stale pair surfaced while **#3315** re-minted this line for the pointer above)
   read both `scripts/cron-scheduler.ts` and `deploy/cron/crontab` as strings and assert a job name appears in each — the house
   pattern exists and is right in shape, but it covers **2 of 22** routes and treats the dead file as an authority. Nothing
   enumerates `app/api/cron/*` against the live schedule, which is precisely how five gaps became invisible.

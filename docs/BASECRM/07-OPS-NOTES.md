@@ -246,6 +246,38 @@ why every number needs its context rather than an assumption.
 - **Never run two `npm run build`s concurrently** — corrupts `.next`
   (module-not-found `.external` errors). `rm -rf .next` before a clean rebuild.
 
+## Background jobs — a queue default is a side-effect decision
+
+`worker.ts` runs one BullMQ `Worker` per job type (the bulk one at `:195`), and
+`getQueueAdapter()` picks a provider in order **Redis → pg-boss → in-memory**. The
+memory adapter registers no handlers, so a job queued there is *discarded* with a
+warning (`lib/queue/index.ts:215`).
+
+- **`attempts: 3` is the queue's default, not a per-job decision** —
+  `lib/queue/index.ts:130` (BullMQ) and `:176` (pg-boss `retryLimit`) both fall back
+  to 3 with exponential backoff. Right for a re-runnable computation, wrong for a job
+  whose work is "mail these people": the bulk processor restarts its recipient list at
+  index 0 (`worker.ts:210`) with no per-recipient claim, and #1292 masks the addresses
+  in the result set, so a retry cannot be resumed — it re-sends everyone already
+  mailed. `send-bulk-emails` is queued with `attempts: 1` at both enqueue sites
+  (`app/api/tenant/email/bulk/route.ts:103`,
+  `app/api/tenant/email/templates/bulk-send/route.ts:123`) — **#3293**.
+- **One attempt makes the dead-letter path the report.** `QueueEvents('failed')`
+  alerts only when `attemptsMade >= attempts` (`worker.ts:652`), so a campaign's first
+  job-level failure is the one recorded. Per-recipient failures are still *collected*,
+  not raised, so a partially delivered job still reads as completed — surfacing the
+  delivered count is the open half of #3293.
+- **`attempts: 0` does not mean "never retry"**: `|| 3` reads 0 as unset and asks for
+  three. One is the floor. Pinned by `tests/unit/bulk-email-single-attempt-3293.test.ts`,
+  along with the pg-boss caveat that `retryLimit` counts *retries*, so `attempts: 1`
+  there still allows one redelivery.
+- **The other side-effecting jobs were checked against the same pairing.**
+  `send-lead-warming` claims queued→sending (`worker.ts:379`); `whatsapp-webhook` asks for
+  `attempts: 5` on top of that claim (`app/api/webhooks/whatsapp/route.ts:62`); a
+  re-run of `contact-import` dedupes through `skipDuplicates` (`worker.ts:612`). The one
+  with neither is lead-warming's `send-email` (`lib/lead-warming/engine.ts:359`) — it
+  duplicates a single message per retry, which is a quota annoyance, not a re-mail storm.
+
 ## Coordination rules (multi-agent repo)
 
 - **NEVER commit/push `main`.** Branch `fix/<desc>` (or `docs/<desc>`), base `main`,
