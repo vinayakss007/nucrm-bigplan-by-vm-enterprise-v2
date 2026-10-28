@@ -22,7 +22,15 @@ import { verifySecret } from '@/lib/crypto';
  *      (`getTrustedIp` returns null, and null is not on a list) — that pair is now
  *      load-bearing on all 22 routes rather than the two #3298 found converted.
  *   2. HMAC request signing — `CRON_SIGNING_KEY`; caller sends
- *      `x-cron-signature: sha256=<hex>` over the raw request body.
+ *      `x-cron-signature: sha256=<hex>` over the raw request body. NOT USABLE YET,
+ *      in a way this header used to hide: the HMAC is computed over the `rawBody`
+ *      option, and no route under `app/api/cron` passes one — so the comparison is
+ *      against the empty string and a caller that faithfully signs its POST body is
+ *      denied as `signature_mismatch`. Nothing in `deploy/` signs either. Setting
+ *      `CRON_SIGNING_KEY` therefore switches the scheduler off, not on; wiring it
+ *      needs each route to read its body once and hand the bytes down (and to keep
+ *      parsing from that same buffer), which is a batch larger than #3298's parity
+ *      fix. Layer 1 and layer 3 are live on all 22 routes.
  *   3. Audit logging     — every DENIED decision is recorded (fire-and-forget;
  *      successes are high-volume and low-signal) with the job name, the source
  *      address and the machine-readable reason, so there is a trail of which job
