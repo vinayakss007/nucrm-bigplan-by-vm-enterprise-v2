@@ -12,10 +12,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
-import { eq, and, sql, gt, desc, asc } from 'drizzle-orm';
+import { eq, and, sql, gt, isNull, desc, asc } from 'drizzle-orm';
 import { AuthContext } from '@/lib/auth/middleware';
 import { createHash } from 'crypto';
 import { withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
+import { keyOwnerIsLive } from '@/lib/auth/api-key-membership';
+import type { DbClient } from '@/drizzle/db';
 
 /**
  * Try to authenticate via API key
@@ -44,7 +46,11 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
     .innerJoin(users, eq(users.id, apiKeys.userId))
     .where(and(
       eq(apiKeys.keyHash, keyHash),
-      eq(apiKeys.isActive, true)
+      eq(apiKeys.isActive, true),
+      // #3291: the join already reaches `users`, so the delete flag costs nothing
+      // here. A soft-deleted owner must not keep minting authenticated requests on
+      // a key that survived the deletion.
+      isNull(users.deletedAt)
     ))
   );
 
@@ -65,6 +71,19 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
   // requireAuth() only sets the tenant after this function returns, so these
   // writes were rejected by RLS and swallowed by the catch below.
   await setTenantContext(row.apiKey.tenantId, row.apiKey.userId!);
+
+  // #3291: prove the owner is still an active member of THIS tenant before the key
+  // counts — the same predicate gateway.ts:87-112 applies to the X-Tenant-ID branch
+  // and middleware.ts:158-170 applies per cookie request. It runs here rather than
+  // inside the auth-lookup read above because `tenant_members` is tenant-isolated:
+  // with app.current_tenant still empty the read would match zero rows and 401
+  // every key (see lib/auth/api-key-membership.ts). Without it,
+  // PATCH /api/tenant/members {action:"remove"} killed the target's sessions and
+  // left a standing /api/v1/** credential behind — and gateway.ts returns straight
+  // from this branch, so nothing else on the request re-checked.
+  if (!await keyOwnerIsLive(row.apiKey.tenantId, row.apiKey.userId)) {
+    return null;
+  }
 
   // Update last used + log usage atomically
   try {
@@ -204,6 +223,37 @@ export async function revokeApiKey(keyId: string, tenantId: string): Promise<boo
     .returning({ id: apiKeys.id });
 
   return revoked.length > 0;
+}
+
+/**
+ * #3291 ask 2: revoke every live key a member holds in one tenant, as a
+ * consequence of the membership write that removed or suspended them — not as a
+ * separate manual step someone has to remember.
+ *
+ * Scoped by tenant AND user: an admin removing one member must not deactivate
+ * another tenant's keys, or the same tenant's other members'. Returns the ids so
+ * the caller can audit a real count; the `.returning()` is how drizzle exposes
+ * affected rows, and an unconditional `true` is the pattern #2562/#3079 keep
+ * finding (a success the database never granted).
+ *
+ * Takes the transaction: the caller's membership write and this UPDATE have to
+ * commit together, or a rolled-back removal leaves the keys dead.
+ */
+export async function revokeUserApiKeys(
+  tx: DbClient,
+  tenantId: string,
+  userId: string,
+): Promise<string[]> {
+  const revoked = await tx.update(apiKeys)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(apiKeys.tenantId, tenantId),
+      eq(apiKeys.userId, userId),
+      eq(apiKeys.isActive, true),
+    ))
+    .returning({ id: apiKeys.id });
+
+  return revoked.map((row) => row.id);
 }
 
 /**

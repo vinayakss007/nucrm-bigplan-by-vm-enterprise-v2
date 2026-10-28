@@ -86,6 +86,17 @@ vi.mock('@/drizzle/db', () => {
   return { db };
 });
 
+// #3291 gave key resolution a membership proof (lib/auth/api-key-membership.ts).
+// This spec's subject is the audit row the route writes, and its db mock answers
+// every select with the queued entity rows, so the proof's `tenant_members` read
+// would resolve to "no member" and 401 the request before it logged anything.
+// The guarantee itself is owned by
+// tests/unit/inbound-webhook-auth-lookup-3246.test.ts.
+vi.mock('@/lib/auth/api-key-membership', () => ({
+  hasActiveMembership: async () => true,
+  keyOwnerIsLive: async () => true,
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   RateLimiter: class {
     async enforce(): Promise<void> {

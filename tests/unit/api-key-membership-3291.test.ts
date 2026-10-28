@@ -60,12 +60,14 @@ const h = vi.hoisted(() => {
     keyRows: [] as unknown[],
     membershipRows: [] as unknown[],
     membershipThrows: false,
-    predicates: {} as Record<string, unknown>,
+    predicates: {} as Record<string, unknown[]>,
+    kind: 'other' as string,
+    inserted: 'other' as string,
   };
 });
 
 const chain = vi.hoisted(() => {
-  const c: Record<string, any> = {};
+  const c: Record<string, unknown> = {};
   const which = (table: unknown) => {
     if (table === h.tables.apiKeys) return 'api_keys';
     if (table === h.tables.tenantMembers) return 'tenant_members';
@@ -81,21 +83,27 @@ const chain = vi.hoisted(() => {
     return [];
   };
   c.select = vi.fn(() => c);
-  c.from = vi.fn((table: unknown) => { c._kind = which(table); return c; });
+  c.from = vi.fn((table: unknown) => { h.kind = which(table); return c; });
   c.innerJoin = vi.fn(() => c);
-  c.where = vi.fn((p: unknown) => { h.predicates[c._kind] = p; return c; });
+  c.where = vi.fn((p: unknown) => {
+    (h.predicates[h.kind] ??= []).push(p);
+    return c;
+  });
   // A drizzle query builder is thenable; without this, `await` on a read that has
   // no `.limit()` would hand back the builder itself and every caller would see
   // zero rows, which hides the very behaviour these tests are meant to observe.
-  c.then = vi.fn((resolve: (v: unknown) => void) => resolve(rowsFor(c._kind)));
+  c.then = vi.fn((resolve: (v: unknown) => void) => resolve(rowsFor(h.kind)));
   c.limit = vi.fn(async (n: number) => {
-    h.order.push(`${c._kind}:limit(${n})`);
-    return rowsFor(c._kind);
+    h.order.push(`${h.kind}:limit(${n})`);
+    return rowsFor(h.kind);
   });
-  c.update = vi.fn(() => c);
+  c.update = vi.fn((table: unknown) => { h.kind = which(table); return c; });
   c.set = vi.fn(() => c);
-  c.insert = vi.fn((table: unknown) => { c._inserted = which(table); return c; });
-  c.values = vi.fn(async () => { h.order.push(`insert:${c._inserted}`); return c; });
+  c.insert = vi.fn((table: unknown) => {
+    h.inserted = h.kind = which(table);
+    return c;
+  });
+  c.values = vi.fn(async () => { h.order.push(`insert:${h.inserted}`); return c; });
   c.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => {
     h.order.push('tx');
     return cb(c);
@@ -144,7 +152,9 @@ async function auth(key = 'ak_live_' + 'a'.repeat(48)) {
   return tryApiKeyAuth(request(key));
 }
 
-const pred = (kind: string) => JSON.stringify(h.predicates[kind] ?? null);
+/** The FIRST predicate recorded for that table: a later usage-trail write reuses
+ * the same kind, and the auth-lookup read is the one under test. */
+const pred = (kind: string) => JSON.stringify(h.predicates[kind]?.[0] ?? null);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -153,8 +163,8 @@ beforeEach(() => {
   h.membershipRows = [{ id: 'tm-1' }];
   h.membershipThrows = false;
   h.keyRows = [ROW];
-  chain._kind = undefined;
-  chain._inserted = undefined;
+  h.kind = 'other';
+  h.inserted = 'other';
 });
 
 describe('a key is only as live as its owner’s membership (#3291 ask 1)', () => {
@@ -228,5 +238,36 @@ describe('a key is only as live as its owner’s membership (#3291 ask 1)', () =
     h.keyRows = [{ ...ROW, apiKey: { ...ROW.apiKey, expiresAt: new Date(Date.now() - 1000) } }];
     expect(await auth()).toBeNull();
     expect(h.order).not.toContain('tenant_members:limit(1)');
+  });
+});
+
+describe('hasActiveMembership, called directly as a resolvable predicate (#3291 ask 4)', () => {
+  // All three resolvers reach the proof through keyOwnerIsLive, which short-circuits
+  // a missing owner first. The exported form is the one a caller that already holds a
+  // transaction uses — scripts/check-key-resolver-membership.mjs accepts either name —
+  // so its own two arms are tested rather than inherited from the wrapper.
+  async function prove(tenantId: string, userId: string | null | undefined) {
+    const { hasActiveMembership } = await import('@/lib/auth/api-key-membership');
+    return hasActiveMembership(chain as unknown as import('@/drizzle/db').DbClient, tenantId, userId);
+  }
+
+  it('is false for an ownerless key and asks the database nothing', async () => {
+    expect(await prove('t1', null)).toBe(false);
+    expect(await prove('t1', undefined)).toBe(false);
+    expect(h.order.filter((o) => o.startsWith('tenant_members'))).toEqual([]);
+  });
+
+  it('is true only for a row matching all four predicates', async () => {
+    expect(await prove('t1', 'u1')).toBe(true);
+    const text = pred('tenant_members');
+    for (const part of ['tenant_members.tenant_id', 'tenant_members.user_id',
+      'tenant_members.status', 'active', 'isNull', 'tenant_members.deleted_at']) {
+      expect(text).toContain(part);
+    }
+  });
+
+  it('is false when no row matches', async () => {
+    h.membershipRows = [];
+    expect(await prove('t1', 'u1')).toBe(false);
   });
 });

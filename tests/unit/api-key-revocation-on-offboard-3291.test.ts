@@ -57,9 +57,21 @@ function predicateText(predicate: unknown): string {
   return walk(predicate);
 }
 
-const tableName = (table: unknown) => String((table as { name?: string })?.name ?? table);
+/** drizzle keeps the SQL table name behind a symbol; `.name` is a column's thing. */
+const DRIZZLE_NAME = Symbol.for('drizzle:Name');
+const tableName = (table: unknown) => {
+  const n = (table as Record<symbol, unknown> | null | undefined)?.[DRIZZLE_NAME];
+  return typeof n === 'string' ? n : String(table);
+};
 
-type Fake = Record<string, any>;
+/** The proxy-backed query builder: drizzle chain methods plus this harness's own slots. */
+type Fake = {
+  _rows?: unknown[];
+  _set?: Record<string, unknown>;
+  _where?: unknown;
+  _values?: unknown;
+  [key: string]: unknown;
+};
 
 function mkQuery(kind: 'select' | 'update' | 'insert', table: string): Fake {
   const q: Fake = { _rows: undefined };

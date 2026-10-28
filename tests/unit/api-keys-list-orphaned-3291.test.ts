@@ -30,18 +30,21 @@ const h = vi.hoisted(() => ({
 }));
 
 function predicateText(predicate: unknown): string {
-  const isColumn = (node: any) =>
-    !!node && typeof node === 'object' && typeof node.name === 'string' &&
-    typeof node.table?.name === 'string';
+  const NAME = Symbol.for('drizzle:Name');
+  type Node = Record<string, unknown>;
+  const isColumn = (node: unknown): node is Node & { name: string; table: Node } =>
+    !!node && typeof node === 'object' && typeof (node as Node).name === 'string' &&
+    typeof ((node as Node).table as Node | undefined)?.[NAME] === 'string';
   const walk = (node: unknown): string => {
     if (typeof node === 'string') return node;
     if (typeof node === 'number') return String(node);
     if (Array.isArray(node)) return node.map(walk).join(' ');
-    const holder = node as any;
-    if (isColumn(holder)) return `${holder.table.name}.${holder.name}`;
-    if (Array.isArray(holder?.queryChunks)) return holder.queryChunks.map(walk).join(' ');
-    if (holder?.value !== undefined) return String(holder.value);
-    return typeof holder?.name === 'string' ? holder.name : '';
+    if (!node || typeof node !== 'object') return '';
+    const holder = node as Node;
+    if (isColumn(holder)) return `${holder.table[NAME]}.${holder.name}`;
+    if (Array.isArray(holder.queryChunks)) return holder.queryChunks.map(walk).join(' ');
+    if (holder.value !== undefined) return String(holder.value);
+    return typeof holder.name === 'string' ? holder.name : '';
   };
   return walk(predicate);
 }
