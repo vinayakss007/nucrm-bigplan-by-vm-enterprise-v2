@@ -6,7 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -61,6 +61,19 @@ type ReplyOutcome =
   | { kind: 'closed' }
   | { kind: 'inserted'; reply: ReplyRow | undefined };
 
+/**
+ * #3354: the reopen's claim lost — an agent closed (or a DELETE tombstoned)
+ * the ticket between this handler's read and the UPDATE. Thrown to abort the
+ * transaction so the reply does not commit on top of a state the handler
+ * never vetted, and mapped to a 409 by POST.
+ */
+class TicketReopenLostError extends Error {
+  constructor() {
+    super('Ticket status changed concurrently');
+    this.name = 'TicketReopenLostError';
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const limited = await checkRateLimit(request, { action: 'public-ticket-replies', max: 10, windowMinutes: 1 });
@@ -107,6 +120,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return replyResponse(outcome);
   } catch (err) {
+    // #3354: the transaction already aborted — the reply was not written.
+    // Tell the customer the ticket moved under them instead of a 500.
+    if (err instanceof TicketReopenLostError) {
+      return NextResponse.json(
+        {
+          error:
+            'Ticket status changed concurrently — it was closed or updated while your reply was being written. Reload and retry.',
+        },
+        { status: 409 },
+      );
+    }
     return apiError(err);
   }
 }
@@ -141,9 +165,28 @@ async function writeReply(
   });
 
   if (ticket.status === 'resolved') {
-    await tx.update(supportTickets)
+    // #3354: the read above vetted `status='resolved'` under
+    // `id + tenant + contact + deletedAt IS NULL`; an UPDATE keyed on the id
+    // alone would stamp `open` over a ticket an agent closed (or deleted) in
+    // the gap between them. Claim the vetted from-state — Postgres
+    // re-evaluates the WHERE under the row lock — and keep the tenant and
+    // contact clauses the read carried (#3194: writes never lean on RLS).
+    // A missed claim aborts the transaction: the reply must not commit
+    // against a state this handler never saw.
+    const [reopened] = await tx.update(supportTickets)
       .set({ status: 'open', updatedAt: new Date() })
-      .where(eq(supportTickets.id, ticket.id));
+      .where(and(
+        eq(supportTickets.id, ticket.id),
+        eq(supportTickets.tenantId, ticket.tenantId),
+        // The read pinned `contact_id = contact.id`, so this ticket's contact
+        // is non-null by construction; the sql form keeps that guarantee in
+        // the claim instead of re-narrowing what the select already proved.
+        sql`${supportTickets.contactId} = ${ticket.contactId}`,
+        eq(supportTickets.status, 'resolved'),
+        isNull(supportTickets.deletedAt),
+      ))
+      .returning({ id: supportTickets.id });
+    if (!reopened) throw new TicketReopenLostError();
   }
 
   return { kind: 'inserted', reply };
