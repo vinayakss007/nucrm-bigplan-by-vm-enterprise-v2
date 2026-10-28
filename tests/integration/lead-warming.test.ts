@@ -136,6 +136,10 @@ describe('Lead Warming routes', () => {
 
   describe('PATCH /api/tenant/lead-warming/campaigns/[id]', () => {
     it('updates campaign status', async () => {
+      // #3340: PATCH now reads the row's current status under the tombstone gate
+      // before it writes, so the select side of the mock must resolve to a live
+      // campaign — the unlocked read it replaces used to be skipped entirely.
+      mockResolver(() => [{ id: 'cam-1', tenantId: 'tenant-A', name: 'Test', status: 'active', deletedAt: null }]);
       mockDb.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
