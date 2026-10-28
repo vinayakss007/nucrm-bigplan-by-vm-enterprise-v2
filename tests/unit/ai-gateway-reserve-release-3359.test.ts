@@ -154,7 +154,10 @@ describe('chat() gives an unsettled claim back (#3359)', () => {
 
   it('releases when the provider answers a fatal 4xx', async () => {
     mockFetch.mockResolvedValue({
-      ok: false, status: 400, json: async () => ({ error: { message: 'invalid request' } }),
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'invalid request' } }),
+      text: async () => '{"error":{"message":"invalid request"}}',
     });
 
     await expect(chatFn(baseReq)).rejects.toMatchObject({ code: 'invalid_request' });
