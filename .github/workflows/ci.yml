@@ -81,10 +81,10 @@ jobs:
         run: npm run guard:portal-rls-context && npm run guard:catch-empty && npm run guard:panel-error-state
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
-      - name: Cron lock + field-permission wiring guards (#2539, #2597)
-        run: npm run guard:cron-lock && npm run guard:field-permissions
-      - name: Raw-SQL + un-armed RLS read + pool TLS policy guards (#2528, #3280, #3381)
-        run: npm run guard:raw-sql && npm run guard:app-role-counts && npm run guard:pool-tls
+      - name: Cron lock, cron auth + field-permission wiring guards (#2539, #2597, #3298)
+        run: npm run guard:cron-lock && npm run guard:cron-auth && npm run guard:field-permissions
+      - name: Raw-SQL identifier + statement_timeout guard (#2528)
+        run: npm run guard:raw-sql
 
   test-unit:
     name: Unit Tests

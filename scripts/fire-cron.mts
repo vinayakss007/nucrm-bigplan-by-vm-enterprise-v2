@@ -34,6 +34,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import https from 'node:https';
 import http from 'node:http';
+import { cronAuthHeaders } from '@/lib/cron/signature';
 
 const CA_PATH = new URL('../deploy/certs/preprod-ca.pem', import.meta.url).pathname;
 
@@ -107,7 +108,7 @@ function fire(base: string, job: string, args: Args, secret: string): Promise<Fi
         hostname: target.hostname,
         port: target.port || (target.protocol === 'http:' ? 80 : 443),
         path: target.pathname + target.search,
-        headers: { 'x-cron-secret': secret, 'content-length': '0' },
+        headers: { ...cronAuthHeaders({ secret }), 'content-length': '0' },
         // Verification is on by default and pinned to the one self-signed cert
         // this deployment serves; --insecure is explicit and warned about.
         ...(transport === https

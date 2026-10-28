@@ -68,6 +68,7 @@
     "guard:coords": "node scripts/check-register-coords.mjs",
     "guard:register-drift": "node scripts/check-register-drift.mjs",
     "guard:catalog-grants": "node scripts/check-integration-catalog-grants.mjs",
+    "guard:cron-auth": "node scripts/check-cron-auth.mjs",
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",

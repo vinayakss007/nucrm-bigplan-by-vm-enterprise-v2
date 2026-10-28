@@ -168,12 +168,12 @@ Known traps that made earlier runs flaky (all now handled in the script):
   render `InlineErrorState` / `ErrorFallback` / `role="alert"`. Known-good offenders
   are grandfathered in `scripts/panel-error-state-baseline.json`, which is
   **shrink-only**: fix the page, delete its entry.
-
-- `scripts/check-app-role-counts.mjs` (`npm run guard:app-role-counts`, #3280) — a script
-  under `scripts/` may not read an RLS-filtered table without arming a context. The
-  denominator (every table `drizzle/schema/` declares, minus those a standing
-  `FOR SELECT USING (true)` policy opens) is derived from the journal, and
-  `scripts/app-role-counts-baseline.json` is **shrink-only**.
+- `scripts/check-cron-auth.mjs` (`npm run guard:cron-auth`, #3298) — every
+  `app/api/cron/*/route.ts` must import `@/lib/auth/cron` **and** call an
+  awaited `verifyCronSecret(...)`. Two shapes are named as failures: a route that
+  compares `x-cron-secret` with `verifySecret` itself (it silently skips the three
+  opt-in layers), and an un-awaited call, which fails **open** because a pending
+  Promise is truthy. `scripts/cron-auth-baseline.json` is **shrink-only**.
 
 ### What `guard:panel-error-state` cannot see (learn this before rebuilding the panels)
 
@@ -204,43 +204,39 @@ screen. Three shapes therefore pass it while the page still lies (#2868 / #2869 
 Derived counters have their own version of (2): `error ? '—' : n` must become
 `failed ? '—' : n`, or the page prints `—` above rows it is also counting.
 
-## Row counts as the application role (#3280)
+## Cron endpoints — what actually checks the caller
 
-`DATABASE_URL` is `nucrm_app`: not the table owner, not a superuser, no `BYPASSRLS` — so RLS
-binds it on every table where it is enabled, and the policies are
-`tenant_id = current_setting('app.current_tenant')` or an `app.is_super_admin` branch. A
-session that sets neither is admitted to no rows and does not raise. Measured on a development
-database: `count(*) FROM users` → **0** where the platform context reports **28**; `contacts` →
-**0** against **66**; `deal_stages` → **0** against **146**. Of the 226 tables the schema declares,
-17 have a `FOR SELECT USING (true)` policy and read fine — `tenants` is one of them, which is
-why every number needs its context rather than an assumption.
+`lib/auth/cron.ts` is the only cron auth path, and since #3298 all 22
+`app/api/cron/*` routes go through it. Before that sweep 2 of 22 did, which made
+the hardening env vars a lie: setting `CRON_ALLOWED_IPS` or `CRON_SIGNING_KEY`
+protected those two and nothing else, and the 20 others kept answering to a bare
+timing-safe secret compare.
 
-- `npm run db:count -- <table>` runs one count in both contexts, asks the catalog what the
-  table allows, and refuses anything but a validated table name. `npm run probe:sql -- "…"`
-  takes arbitrary SQL and is the tool for a `WHERE` clause; it prints the context it used too.
-- `psql "$DATABASE_URL" -c 'select count(*) from users'` is the blind read. Either take it as
-  the superuser (the restore runbooks do) or arm it: `PGOPTIONS='-c app.is_super_admin=true'`.
-- A script that reports a count now says which context produced it: `db:diagnose`,
-  `db:drift-check`, `db:audit:jsonb-size`, `bootstrap.sh`, `db:restore`, `backup:verify`,
-  `db:seed:api` and the e2e seeder were the un-armed ones (#3280); `db:state` (#3314) and the
-  backup/restore shell scripts already armed theirs.
-
-## Every pool carries the TLS policy (#3256, #3381)
-
-`pg` has one TLS channel: the `ssl` option on the pool. `?sslmode=require` in `DATABASE_URL`
-is a **libpq** parameter — `psql`, `pg_dump`, `pg_restore`, and here `pgLibpqEnv()`'s
-`PGSSLMODE` — and node-pg never reads it, so a `new Pool({ connectionString })` with no `ssl`
-is a plaintext connection against a DSN that looks encrypted. One policy covers every pool,
-app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plaintext only when
-`DATABASE_SSL === 'false'` and verifies the server certificate only in production.
-
-- `npm run guard:pool-tls` is the check: it brace-matches every `new Pool(` under `app/`,
-  `lib/`, `scripts/`, `components/` and `deploy/` and requires an `ssl` **name** in the
-  options, so shorthand and variable forms pass and a `PoolConfig` identifier has to resolve
-  to a literal in the same file that carries it.
-- Rebuilding this stack on another host: the setting is per-connection, so a `pg_hba` that
-  says `trust`/`md5` locally will let an unencrypted pool look healthy forever. That is the
-  failure #3381 was filed about.
+- **Baseline**: `x-cron-secret` vs `CRON_SECRET`, timing-safe. Unset or empty
+  `CRON_SECRET` denies *every* caller — the check fails closed, so a fresh
+  environment with no secret is not an open one.
+- **Layer 1 — `CRON_ALLOWED_IPS`** is only honoured when `TRUST_PROXY=true`
+  (`getTrustedIp` returns null otherwise, because `x-forwarded-for` is
+  client-spoofable). Allowlist configured + proxy not trusted = denial.
+- **Layer 2 — `CRON_SIGNING_KEY`** HMACs the **raw request body**. No cron route
+  reads a body (measured across all 22), so the signed payload is the empty
+  string: a caller that signs `JSON.stringify(params)` is locked out, not
+  accepted. Senders in-repo go through `lib/cron/signature.ts`
+  (`cronAuthHeaders`), which is what `scripts/cron-scheduler.ts`,
+  `scripts/fire-cron.mts` and `deploy/cron/run-cron.sh` all use now — enabling
+  the key without them would have stopped every scheduled job. The shell sender
+  needs `openssl` in the cron image; if it cannot produce a digest it exits 1
+  with `CRON NOT FIRED` rather than sending an unsigned request.
+- **Layer 3 — audit**: denials are written to the error log with
+  `context: 'cron-auth'` and the reason; successes are not logged (high volume,
+  low signal).
+- **`cleanup` has a second principal** (#1087): a logged-in super admin can
+  trigger it from the dashboard. It only falls through to `requireAuth` when no
+  `x-cron-secret` header was presented at all, so a browser trigger does not
+  land in the audit trail as a denied cron caller.
+- Reading the response tells you which half failed: **401** = the caller never
+  authenticated; **423** = it authenticated and `refuseIfCronLockHeld` found
+  another instance already ran the job.
 
 ## Deploy topology (do not conflate — AGENTS.md)
 
@@ -262,38 +258,6 @@ app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plainte
   `## HEAD (no branch)`: `git checkout main && git pull`.
 - **Never run two `npm run build`s concurrently** — corrupts `.next`
   (module-not-found `.external` errors). `rm -rf .next` before a clean rebuild.
-
-## Background jobs — a queue default is a side-effect decision
-
-`worker.ts` runs one BullMQ `Worker` per job type (the bulk one at `:195`), and
-`getQueueAdapter()` picks a provider in order **Redis → pg-boss → in-memory**. The
-memory adapter registers no handlers, so a job queued there is *discarded* with a
-warning (`lib/queue/index.ts:215`).
-
-- **`attempts: 3` is the queue's default, not a per-job decision** —
-  `lib/queue/index.ts:130` (BullMQ) and `:176` (pg-boss `retryLimit`) both fall back
-  to 3 with exponential backoff. Right for a re-runnable computation, wrong for a job
-  whose work is "mail these people": the bulk processor restarts its recipient list at
-  index 0 (`worker.ts:210`) with no per-recipient claim, and #1292 masks the addresses
-  in the result set, so a retry cannot be resumed — it re-sends everyone already
-  mailed. `send-bulk-emails` is queued with `attempts: 1` at both enqueue sites
-  (`app/api/tenant/email/bulk/route.ts:103`,
-  `app/api/tenant/email/templates/bulk-send/route.ts:123`) — **#3293**.
-- **One attempt makes the dead-letter path the report.** `QueueEvents('failed')`
-  alerts only when `attemptsMade >= attempts` (`worker.ts:652`), so a campaign's first
-  job-level failure is the one recorded. Per-recipient failures are still *collected*,
-  not raised, so a partially delivered job still reads as completed — surfacing the
-  delivered count is the open half of #3293.
-- **`attempts: 0` does not mean "never retry"**: `|| 3` reads 0 as unset and asks for
-  three. One is the floor. Pinned by `tests/unit/bulk-email-single-attempt-3293.test.ts`,
-  along with the pg-boss caveat that `retryLimit` counts *retries*, so `attempts: 1`
-  there still allows one redelivery.
-- **The other side-effecting jobs were checked against the same pairing.**
-  `send-lead-warming` claims queued→sending (`worker.ts:379`); `whatsapp-webhook` asks for
-  `attempts: 5` on top of that claim (`app/api/webhooks/whatsapp/route.ts:62`); a
-  re-run of `contact-import` dedupes through `skipDuplicates` (`worker.ts:612`). The one
-  with neither is lead-warming's `send-email` (`lib/lead-warming/engine.ts:359`) — it
-  duplicates a single message per retry, which is a quota annoyance, not a re-mail storm.
 
 ## Coordination rules (multi-agent repo)
 

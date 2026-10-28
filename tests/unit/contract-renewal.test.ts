@@ -177,9 +177,14 @@ function callsOnTable(call: SelectCall | undefined, table: unknown): boolean {
   return call !== undefined && call.table === table;
 }
 
+// The route authenticates through lib/auth/cron (#3298), which fails closed on an
+// unset CRON_SECRET and on a missing header — so a request that wants the sweep body
+// has to present both.
+process.env.CRON_SECRET = 'unit-test-cron-secret-for-3298';
+
 async function runCron() {
   const { POST } = await import('@/app/api/cron/contract-renewal-check/route');
-  const res = await POST({ headers: new Headers() } as never);
+  const res = await POST({ headers: new Headers({ 'x-cron-secret': 'unit-test-cron-secret-for-3298' }) } as never);
   return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
 

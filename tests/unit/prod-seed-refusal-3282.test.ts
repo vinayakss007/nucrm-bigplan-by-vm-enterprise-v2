@@ -485,6 +485,7 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
   it('is the seventh step of the local pre-merge screen', () => {
     const pre = read('scripts/pre-merge-check.sh');
     expect(pre).toContain('npm run guard:destructive-gate');
-    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // #3298 appended guard:cron-auth as an eighth, by name, in that issue's ask 2.
+    expect([...pre.matchAll(/▶ (\d+)\/8/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 });
