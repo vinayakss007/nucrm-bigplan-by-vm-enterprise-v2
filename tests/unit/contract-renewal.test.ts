@@ -21,9 +21,12 @@ vi.mock('@/lib/auth/cron', async (importOriginal) => ({
   verifyCronSecret: vi.fn(async () => true),
 }));
 
+// #3315: an empty recipient read has to be *reported*, so the spec needs to see
+// what the route logged, not only what it returned.
+const mockLogError = vi.fn(async () => {});
 vi.mock('@/lib/errors-server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/errors-server')>()),
-  logError: vi.fn(async () => {}),
+  logError: (opts: unknown) => mockLogError(opts),
 }));
 
 vi.mock('@/lib/api-error', async (importOriginal) => ({
@@ -235,6 +238,7 @@ describe('POST /api/cron/contract-renewal-check', () => {
     mockSweepTenants.mockClear();
     mockCreateNotification.mockClear();
     mockSendEmail.mockClear();
+    mockLogError.mockClear();
   });
 
   it('reminds and expires inside a per-tenant sweep and reports the counters', async () => {
@@ -262,6 +266,7 @@ describe('POST /api/cron/contract-renewal-check', () => {
       tenants_skipped: 0,
       tenants_failed: 0,
       remindersSent: 1,
+      reminders_without_recipient: 0,
       expired: 2,
     });
 
@@ -312,31 +317,60 @@ describe('POST /api/cron/contract-renewal-check', () => {
       tenants_skipped: 0,
       tenants_failed: 0,
       remindersSent: 0,
+      reminders_without_recipient: 0,
       expired: 0,
     });
+  });
+
+  it('reports an empty recipient read as a failed run, not as zero reminders (#3315)', async () => {
+    rowsByTable.set(contracts, [contractRow({}), contractRow({ id: 'c-2', contractNumber: 'CT-002' })]);
+    rowsByTable.set(activities, []);
+    // The batched member read comes back empty: this tenant has no active
+    // member the reminder could go to.
+    rowsByTable.set(users, []);
+
+    const res = await runCron();
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      ok: false,
+      tenants_checked: 1,
+      tenants_skipped: 0,
+      tenants_failed: 0,
+      remindersSent: 0,
+      reminders_without_recipient: 2,
+      expired: 0,
+    });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    // No dedup marker either — a run that notified nobody must not suppress the
+    // retry once the tenant gets a member back.
+    expect(inserts).toHaveLength(0);
+    expect(mockLogError).toHaveBeenCalledWith(
+      expect.objectContaining({ context: expect.stringContaining('recipients') }),
+    );
   });
 
   it('is not ok when a tenant failed, and still reports what was processed', async () => {
     rowsByTable.set(contracts, [contractRow({})]);
     rowsByTable.set(activities, []);
-    rowsByTable.set(users, []);
+    rowsByTable.set(users, [{ userId: 'user-1', email: 'ada@example.com', fullName: 'Ada' }]);
     sweepResult = { visited: 1, skipped: [], failed: [{ tenantId: OTHER_TENANT_ID, error: 'boom' }] };
 
     const res = await runCron();
 
     expect(res.status).toBe(200);
-    // A contract with no member to notify is still counted as reminded, but
-    // nothing is sent — the sweep reports the failure of the other tenant.
     expect(res.body).toEqual({
       ok: false,
       tenants_checked: 1,
       tenants_skipped: 0,
       tenants_failed: 1,
       remindersSent: 1,
+      reminders_without_recipient: 0,
       expired: 0,
     });
-    expect(mockCreateNotification).not.toHaveBeenCalled();
-    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
   });
 
   it('reports tenants the sweep skipped instead of pretending the run was clean', async () => {
@@ -353,6 +387,7 @@ describe('POST /api/cron/contract-renewal-check', () => {
       tenants_skipped: 1,
       tenants_failed: 0,
       remindersSent: 0,
+      reminders_without_recipient: 0,
       expired: 0,
     });
   });
