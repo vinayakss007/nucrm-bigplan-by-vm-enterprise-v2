@@ -10,6 +10,12 @@
  * worker logged "Email sent successfully" and returned {sent:true}, and the
  * bulk worker hardcoded success:true per recipient. Both now fail the job /
  * record the rejection so BullMQ retries and dashboards show the truth.
+ *
+ * The two halves are different on purpose: a rejected *recipient* of a bulk job
+ * is recorded, not raised (below), and #3293 queued that job with attempts: 1 —
+ * so nothing re-mails the campaign to reach the one address that bounced. A
+ * rejected single send still throws, because re-trying one recipient is not the
+ * same side effect as re-running two thousand.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
