@@ -37,6 +37,9 @@ export async function POST(request: NextRequest) {
   try {
     let remindersSent = 0;
     let pastDueCount = 0;
+    // #3315: subscriptions that were in a reminder window but had no active
+    // member to receive it — reported, never counted as sent.
+    let remindersWithoutRecipient = 0;
 
     // #2997: UTC calendar windows — the local-midnight-then-toISOString form
     // matched subscriptions one day early on hosts east of Greenwich, so the
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
     // handle (whose tenant GUC the pool pins to '') sees none of their rows.
     // The work has to run once per tenant — see lib/cron/tenant-scope.ts.
     const sweep = await sweepTenants('cron/subscription-renewal-check', async (tenantId) => {
+      let recipientWarningLogged = false;
       for (const { days, targetStr } of windows) {
 
         // Find active subscriptions ending on exactly `days` from now
@@ -102,6 +106,21 @@ export async function POST(request: NextRequest) {
             sql`tm.user_id = ${users.id}`
           )
           .limit(5);
+
+          // #3315: nobody in this tenant to tell. Send nothing, write no dedup
+          // marker (the next run has to retry once a member exists again), count
+          // nothing as reminded, and say so.
+          if (members.length === 0) {
+            remindersWithoutRecipient++;
+            if (!recipientWarningLogged) {
+              recipientWarningLogged = true;
+              void logError({
+                error: new Error('No active member to receive the subscription renewal reminders for this tenant'),
+                context: `cron/subscription-renewal-check recipients tenant=${tenantId}`,
+              });
+            }
+            continue;
+          }
 
           const endDate = new Date(sub.currentPeriodEnd ?? new Date());
           const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -180,11 +199,13 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      // #3315: an empty recipient read fails the run — see contract-renewal-check.
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
       remindersSent,
+      reminders_without_recipient: remindersWithoutRecipient,
       pastDue: pastDueCount,
     });
   } catch (err) {
