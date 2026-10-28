@@ -5,12 +5,20 @@ import { db } from '@/drizzle/db';
 import { companies, contacts, leads, deals, dealStages, pipelines } from '@/drizzle/schema/crm';
 import { users, tenants } from '@/drizzle/schema/core';
 import { eq, count } from 'drizzle-orm';
+import { withSecurityContext } from '@/lib/db/rls';
 
 async function main() {
-  // Get existing admin and tenant
-  const [admin] = await db.select().from(users).where(eq(users.isSuperAdmin, true)).limit(1);
+  // users, tenants and deal_stages are FORCE ROW LEVEL SECURITY, so on the bare
+  // pool they read as empty and this script concluded "no super admin found"
+  // about a database that has one (#3280). Every statement touching them runs in
+  // the platform context instead.
+  const [admin, tenant] = await withSecurityContext(async (tx) => {
+    const [admin] = await tx.select().from(users).where(eq(users.isSuperAdmin, true)).limit(1);
+    if (!admin) return [];
+    const [tenant] = await tx.select().from(tenants).where(eq(tenants.ownerId, admin.id)).limit(1);
+    return [admin, tenant];
+  });
   if (!admin) { console.error('No super admin found. Provision one with `npm run db:seed:from-empty` (it refuses a database that is not empty — check with `npm run db:state`).'); process.exit(1); }
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.ownerId, admin.id)).limit(1);
   if (!tenant) { console.error('No tenant found.'); process.exit(1); }
 
   const tenantId = tenant.id;
@@ -21,7 +29,8 @@ async function main() {
   // Get pipeline & stages
   const [pipeline] = await db.select().from(pipelines).where(eq(pipelines.tenantId, tenantId)).limit(1);
   if (!pipeline) { console.error('No pipeline found.'); process.exit(1); }
-  const stages = await db.select().from(dealStages).where(eq(dealStages.pipelineId, pipeline.id)).orderBy(dealStages.order);
+  const stages = await withSecurityContext((tx) =>
+    tx.select().from(dealStages).where(eq(dealStages.pipelineId, pipeline.id)).orderBy(dealStages.order));
 
   console.log(`Pipeline: ${pipeline.name} with ${stages.length} stages`);
 

@@ -55,14 +55,18 @@ vi.mock('child_process', () => ({
 }));
 
 vi.mock('pg', () => {
+  const respond = async (sqlText: string) => {
+    if (sqlText.includes('FROM backup_records')) return { rows: [state.row] };
+    if (sqlText.includes('information_schema.tables')) return { rows: [{ count: '7' }] };
+    if (sqlText.includes('FROM users')) return { rows: [{ count: '3' }] };
+    return { rows: [] };
+  };
   const MockPool = vi.fn(function MockPool() {
     return {
-      query: async (sqlText: string) => {
-        if (sqlText.includes('FROM backup_records')) return { rows: [state.row] };
-        if (sqlText.includes('information_schema.tables')) return { rows: [{ count: '7' }] };
-        if (sqlText.includes('FROM users')) return { rows: [{ count: '3' }] };
-        return { rows: [] };
-      },
+      query: respond,
+      // #3280 counts the restored rows on one client, inside a transaction that
+      // arms the platform context, so the mock has to hand out a client too.
+      connect: async () => ({ query: respond, release: () => {} }),
       end: async () => {},
     };
   });
@@ -194,7 +198,7 @@ describe('verify-backup.ts credential channel (#3260)', () => {
     expect(printed).toContain('PASS — backup is intact and restorable');
     expect(printed).toContain('ok checksum');
     expect(printed).toContain('ok schema : 7 table(s) restored');
-    expect(printed).toContain('ok data   : users rows = 3');
+    expect(printed).toContain('ok data   : 3 users row(s), counted with app.is_super_admin=true');
     expect(process.exitCode).toBe(0);
   });
 

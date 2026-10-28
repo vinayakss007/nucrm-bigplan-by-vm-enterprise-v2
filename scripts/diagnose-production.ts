@@ -107,6 +107,19 @@ async function main(): Promise<void> {
   };
   const exists = async (sql: string): Promise<boolean> => Boolean(await one(sql));
 
+  // #3280: the app role is subject to FORCE RLS, so an unarmed `count(*)` on a
+  // tenant table answers 0 on a full database — and the "empty database — safe to
+  // rebuild" verdict below is built on those counts. Take the unarmed reading of
+  // `users` (the read that has no USING(true) policy) first, then arm the platform
+  // context for the rest of the read-only transaction.
+  const blindUserRows = (await exists(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'users'`
+  ))
+    ? Number(await one('SELECT count(*) FROM "users"'))
+    : -1;
+  await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
+
   console.log('NuCRM production diagnostic (read-only)');
   console.log(`host database : ${await one('SELECT current_database()')}`);
   console.log(`connected as  : ${await one('SELECT current_user')}`);
@@ -245,16 +258,28 @@ async function main(): Promise<void> {
 
   const total = counts.filter(c => c.rows > 0).reduce((s, c) => s + c.rows, 0);
   const tenantCount = counts.find(c => c.table === 'tenants')?.rows ?? 0;
+  const userCount = counts.find(c => c.table === 'users')?.rows ?? 0;
 
   console.log('');
   if (total === 0) {
     console.log('  VERDICT: empty database — safe to rebuild from scratch.');
+    console.log('           (read in the platform context: app.is_super_admin=true.)');
   } else if (tenantCount <= 1) {
     console.log(`  VERDICT: ${total} row(s) across ${tenantCount} tenant(s) — looks like`);
     console.log('           dev/demo data. Confirm before treating it as disposable.');
   } else {
     console.log(`  VERDICT: ${total} row(s) across ${tenantCount} tenants — TREAT AS LIVE`);
     console.log('           CUSTOMER DATA. The baseline must be stamped, never executed.');
+  }
+
+  // `0` and "no rows exist" are the same string, and this verdict turns on it: an
+  // operator who runs the same count by hand gets the unarmed number.
+  if (userCount > 0 && blindUserRows !== userCount) {
+    console.log('');
+    console.log(`  NOTE(#3280): the same count of users, read before arming the GUC, answered ${blindUserRows}.`);
+    console.log('           FORCE RLS filters the app role, so an unarmed count is not evidence of');
+    console.log('           absence. The verdict above uses the armed reading; so does');
+    console.log('           `npm run db:count -- users`, which prints both side by side.');
   }
 
   heading('WHAT TO DO WITH THIS');

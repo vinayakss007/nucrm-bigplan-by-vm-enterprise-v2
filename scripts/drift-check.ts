@@ -303,21 +303,33 @@ async function main() {
         errors.push(`UNDECLARED TABLES WITH UNPARSEABLE NAMES (row counts skipped): ${skipped.join(', ')}`);
       }
       if (counted.length) {
-        const countsRes = await pool.query(
-          counted.map(t => `select '${t}'::text as tablename, count(*) as rows from public."${t}"`).join(' union all ')
-        );
-        const populated: string[] = [];
-        const empty: string[] = [];
-        for (const row of countsRes.rows) {
-          const rows = BigInt(row.rows);
-          if (rows > 0n) populated.push(`${row.tablename} (${rows} rows)`);
-          else empty.push(row.tablename);
-        }
-        if (populated.length) {
-          errors.push(`UNDECLARED TABLES WITH DATA — \`npm run db:sync\` would drop them: ${populated.join(', ')}`);
-        }
-        if (empty.length) {
-          console.log(`[info] extra tables (not in schema, empty): ${empty.join(', ')}`);
+        // #3280: this count decides whether a table is reported safe for `db:sync` to
+        // drop, and unarmed FORCE RLS answers 0 rows for every tenant table — so a
+        // populated one would be called empty and dropped without complaint.
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('SET TRANSACTION READ ONLY');
+          await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
+          const countsRes = await client.query(
+            counted.map(t => `select '${t}'::text as tablename, count(*) as rows from public."${t}"`).join(' union all ')
+          );
+          const populated: string[] = [];
+          const empty: string[] = [];
+          for (const row of countsRes.rows) {
+            const rows = BigInt(row.rows);
+            if (rows > 0n) populated.push(`${row.tablename} (${rows} rows)`);
+            else empty.push(row.tablename);
+          }
+          if (populated.length) {
+            errors.push(`UNDECLARED TABLES WITH DATA — \`npm run db:sync\` would drop them: ${populated.join(', ')}`);
+          }
+          if (empty.length) {
+            console.log(`[info] extra tables (not in schema, empty — counted with app.is_super_admin=true): ${empty.join(', ')}`);
+          }
+        } finally {
+          await client.query('ROLLBACK').catch(() => undefined);
+          client.release();
         }
       }
     }
