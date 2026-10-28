@@ -46,11 +46,29 @@ function insertBuilder() {
   };
 }
 
+/**
+ * #3347 added a precondition read (`select().from().where().limit(1)` must find
+ * the sequence under id+tenant) and a `.returning()` read-back on the parent
+ * UPDATE. These chains resolve awaitable-but-chainable results so both the old
+ * `await where()` callers and the new `.limit()`/`.returning()` callers work.
+ */
+const SEQ_ROWS: Row[] = [{ id: SEQ, tenantId: TENANT, deletedAt: null }];
+function awaitable<T>(value: T, extra: Record<string, unknown> = {}): Promise<T> {
+  const p = Promise.resolve(value);
+  Object.assign(p, extra);
+  return p;
+}
+
 function recorder() {
   return {
     insert: () => ({ values: insertBuilder() }),
     delete: () => ({ where: async () => {} }),
-    update: () => ({ set: (values: Row) => { updated.push(values); return { where: async () => [] }; } }),
+    update: () => ({
+      set: (values: Row) => {
+        updated.push(values);
+        return { where: () => awaitable(SEQ_ROWS, { returning: async () => [{ id: SEQ }] }) };
+      },
+    }),
   };
 }
 
@@ -60,9 +78,16 @@ vi.mock('@/drizzle/db', () => ({
     // hands the same recorder to `tx`.
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(recorder()),
     update: () => ({
-      set: (values: Row) => { updated.push(values); return { where: async () => [] }; },
+      set: (values: Row) => {
+        updated.push(values);
+        return { where: () => awaitable(SEQ_ROWS, { returning: async () => [{ id: SEQ }] }) };
+      },
     }),
-    select: () => ({ from: () => ({ where: async () => [] }) }),
+    select: () => ({
+      from: () => ({
+        where: () => awaitable(SEQ_ROWS, { limit: () => Promise.resolve(SEQ_ROWS) }),
+      }),
+    }),
   },
 }));
 
