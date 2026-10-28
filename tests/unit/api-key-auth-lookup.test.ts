@@ -21,13 +21,20 @@ const chain: Record<string, unknown> = vi.hoisted(() => {
   c.select = vi.fn(() => c);
   c.from = vi.fn(() => c);
   c.innerJoin = vi.fn(() => c);
-  c.where = vi.fn(async () => c._rows);
+  c.where = vi.fn(() => c);
+  // A drizzle query builder is thenable; `where` has to hand the builder back so
+  // the membership read (#3291) can chain `.limit()` on it.
+  c.then = vi.fn((resolve: (v: unknown) => void) => resolve(c._rows));
+  // #3291: the only read in this flow that asks for a limit is the membership
+  // proof, so the fixture answers it with a live member. api-key-membership-3291
+  // .test.ts is where the refusal is pinned.
+  c.limit = vi.fn(async () => [{ id: 'tm-1' }]);
   c.update = vi.fn(() => c);
   c.set = vi.fn(() => c);
   c.insert = vi.fn(() => c);
   c.values = vi.fn(async () => { order.push('usage-insert'); return c; });
   c.transaction = vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => {
-    order.push('usage-tx');
+    order.push('tx');
     return cb(c);
   });
   return c;
@@ -41,7 +48,9 @@ vi.mock('@/drizzle/schema', () => ({
     isActive: 'is_active', expiresAt: 'expires_at', scopes: 'scopes', name: 'name',
     lastUsedAt: 'last_used_at' },
   apiKeyUsage: { id: 'id', apiKeyId: 'api_key_id', tenantId: 'tenant_id' },
-  users: { id: 'id', isSuperAdmin: 'is_super_admin' },
+  users: { id: 'id', isSuperAdmin: 'is_super_admin', deletedAt: 'deleted_at' },
+  tenantMembers: { id: 'id', tenantId: 'tenant_id', userId: 'user_id',
+    status: 'status', deletedAt: 'deleted_at' },
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
 vi.mock('@/lib/db/rls', () => ({
@@ -90,7 +99,9 @@ describe('tryApiKeyAuth pre-auth lookup', () => {
     await tryApiKeyAuth(request('ak_live_' + 'b'.repeat(48)));
 
     const tenantAt = order.findIndex((o) => o.startsWith('set-tenant'));
-    const usageAt = order.findIndex((o) => o === 'usage-tx');
+    // The INSERT is the usage trail; #3291 opened a transaction earlier than that
+    // for the membership proof, so 'tx' is no longer a usable marker.
+    const usageAt = order.findIndex((o) => o === 'usage-insert');
     expect(tenantAt).toBeGreaterThan(-1);
     expect(usageAt).toBeGreaterThan(-1);
     expect(order[tenantAt]).toBe('set-tenant(t1,u1)');

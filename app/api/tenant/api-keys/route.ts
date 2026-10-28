@@ -10,8 +10,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createApiKeySchema } from '@/lib/api/schemas';
 import { generateApiKey } from '@/lib/auth/api-key';
 import { db } from '@/drizzle/db';
-import { apiKeys } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { apiKeys, tenantMembers } from '@/drizzle/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -28,6 +28,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
+    // #3291: the listing joins the owner's membership so an admin can see the
+    // exposure instead of discovering it in a post-incident review. One round trip,
+    // and `orphaned` keys off the same predicate the auth path uses
+    // (lib/auth/api-key-membership.ts: status = 'active', not soft-deleted), so the
+    // report and the enforcement cannot drift apart. RLS does the scoping for the
+    // joined row — a key whose owner left the workspace simply has no match.
     const keys = await db.select({
       id: apiKeys.id,
       name: apiKeys.name,
@@ -37,16 +43,23 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       expires_at: apiKeys.expiresAt,
       last_used_at: apiKeys.lastUsedAt,
       created_at: apiKeys.createdAt,
+      memberStatus: tenantMembers.status,
+      memberDeletedAt: tenantMembers.deletedAt,
     })
     .from(apiKeys)
+    .leftJoin(tenantMembers, and(
+      eq(tenantMembers.tenantId, apiKeys.tenantId),
+      eq(tenantMembers.userId, apiKeys.userId),
+    ))
     .where(eq(apiKeys.tenantId, ctx.tenantId))
     .orderBy(desc(apiKeys.createdAt));
 
     return NextResponse.json({
-      data: keys.map(k => ({
+      data: keys.map(({ memberStatus, memberDeletedAt, ...k }) => ({
         ...k,
         // Never return full key, only prefix
         scopes: Array.isArray(k.scopes) ? k.scopes : [],
+        orphaned: memberStatus !== 'active' || memberDeletedAt !== null,
       })),
     });
  

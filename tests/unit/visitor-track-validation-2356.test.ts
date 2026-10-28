@@ -22,7 +22,11 @@ const m = vi.hoisted(() => {
     return chain;
   };
   chain.from = count;
-  chain.where = () => Promise.resolve([{ tenantId: 'a1111111-1111-4111-8111-111111111111' }]);
+  // #3291 put a membership proof between resolving the key and writing the view,
+  // and made the lookup read `userId` to run it. Both are pinned in
+  // api-key-resolver-membership-3291.test.ts; here they are collaborators, and what
+  // is under test stays the visitorId boundary.
+  chain.where = () => Promise.resolve([{ tenantId: 'a1111111-1111-4111-8111-111111111111', userId: 'b2222222-2222-4222-8222-222222222222' }]);
   const db = {
     select: vi.fn(() => chain),
     transaction: vi.fn(async (cb: (tx: unknown) => unknown) => {
@@ -50,6 +54,11 @@ vi.mock('@/lib/api/validate', () => ({
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
 vi.mock('@/lib/visitor-tracking', () => ({ scorePageUrl: vi.fn(() => 5) }));
+vi.mock('@/lib/auth/api-key-membership', () => ({ keyOwnerIsLive: vi.fn(async () => true) }));
+vi.mock('@/lib/db/rls', () => ({
+  setTenantContext: vi.fn(async () => undefined),
+  NO_USER_SENTINEL: '00000000-0000-0000-0000-000000000000',
+}));
 
 import { POST } from '@/app/api/tenant/visitors/track/route';
 

@@ -7,7 +7,12 @@ const mockChain: Record<string, ReturnType<typeof vi.fn>> = vi.hoisted(() => {
   chain.select = vi.fn().mockReturnValue(chain);
   chain.from = vi.fn().mockReturnValue(chain);
   chain.innerJoin = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockImplementation(() => Promise.resolve(mockQueryResult));
+  // #3291 added a membership read after the key lookup, and it terminates on
+  // `.limit()`. Returning the chain (thenable, like a real drizzle builder) rather
+  // than a Promise from `.where()` is what lets both reads be answered; the
+  // membership guarantee itself is pinned in api-key-membership-3291.test.ts.
+  chain.where = vi.fn().mockReturnValue(chain);
+  chain.then = vi.fn((res: (v: unknown) => unknown) => res(mockQueryResult));
   chain.set = vi.fn().mockReturnValue(chain);
   chain.values = vi.fn().mockReturnValue(chain);
   chain.groupBy = vi.fn().mockReturnValue(chain);
