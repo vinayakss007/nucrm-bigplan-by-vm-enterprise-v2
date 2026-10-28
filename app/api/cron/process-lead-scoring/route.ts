@@ -21,7 +21,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 
 export async function POST(req: NextRequest) {
-  if (!await verifyCronSecret(req)) {
+  if (!await verifyCronSecret(req, { job: 'process-lead-scoring' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

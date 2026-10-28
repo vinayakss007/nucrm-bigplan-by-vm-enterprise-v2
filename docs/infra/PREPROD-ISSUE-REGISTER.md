@@ -4,7 +4,17 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-12 (UTC) — **PP-078**: the backup story stops being an interface problem. Measured
+> - **Last updated:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
+> its handler runs, and it still answered `invalid_client` at every caller on a fresh database, because `oauth_clients`
+> has **no writer anywhere in the application** — measured in tree (**0** `insert(oauthClients)` across `app`/`lib`/`scripts`
+> on `main`), not on the host, which remains undeployed (**PP-060**). Closed by the registration surface in **#3328**,
+> with **no migration**: this table has carried a `tenant_isolation` `FOR ALL` arm since 0088, so the INSERT was always
+> legal and the missing piece was only ever a writer — *before adding an arm, check what the existing ones already reach*.
+> This bullet re-pins the keep-the-entry rule's line as cited from `docs/README.md` (the bullet beginning
+> `- **Fixed issue** → keep the entry (do not delete)`, now line 5498 here; it was cited as 5425, which was already
+> 25 lines short of it before this entry grew the file 48 lines above it — the point PP-078's bullet records, that a
+> number in a document that grows at the top is history, not evidence).
+> - **Previous:** 2026-10-12 (UTC) — **PP-078**: the backup story stops being an interface problem. Measured
 > on the host and in the live database the same day: `backup-verify` failed **28 of 28** nights in the retained
 > `nucrm-cron` window (2026-09-15 → 2026-10-12, every line an `HTTP/1.1 500` from the deployed build), and
 > `auto-backup` has written **zero rows for nine consecutive nights** while answering **200** — because the thing
@@ -392,6 +402,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-076 | S2  | Auth / CSRF | **#2561** reported `/api/tenant/plugin-engine` POST/PATCH/DELETE as having no CSRF check. Measured, the *coverage* half of that is wrong and the *guard* is the real defect: `proxy.ts:548-564` (re-pinned 2026-10-15: **#2579/#2599/#2603** shifted it) validates the double-submit pair for **every** `/api/` mutation that carries a token and answers the 403 itself, so of **302** non-exempt mutating route files **289** were covered after all — by the proxy, not by the `requireAuth()` backstop the guard cites (`CSRF_ENFORCE_CENTRAL`, set nowhere: **3** repo-wide hits, all code or comments) — while the guard's own header asserted "There is no root Next.js middleware". The hole that is real sits upstream: the `Bearer ak_*` pass-through returns at `proxy.ts:487`, **above** that block, and a junk key then falls through to `requireAuth()`'s cookie path (`lib/auth/middleware.ts:241` → `:262`), producing a cookie-authenticated mutation no CSRF check ever inspected | 🔧 FIXED in this PR (**#2581**): in-handler `requireCsrf()` on all three mutating handlers, exempt only when `ctx.authMethod === 'api_key'` — the credential `requireAuth()` actually verified (`lib/auth/middleware.ts:252`), not `requireCsrf()`'s **client-settable** `x-auth-method` header (`:482`, which nothing in this repo ever sends) · `scripts/check-csrf-coverage.mjs` rewritten to three assertions (the edge call exists, is not behind a `process.env` test, and its exempt lists agree with the literals inside `needsCsrfValidation()` in both directions) plus honest populations (**14** in-handler / **288** proxy-covered / **34** baseline) and **deliberately no ratchet** · `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests, **4** red at `79cc642f` against the real `requireCsrf` (only `requireAuth` stubbed, via `importOriginal`) · the pass-through itself is **#2579** and the dead-flag call is **#2580**, both left open on purpose | [re-pinned 2026-10-22, +3 for #3076's new `PUBLIC_PATHS` entry: :545-561->:548-564, :484->:487]
 | PP-077 | S2  | Compliance / data integrity | **#2530**'s two compliance routes still had a path that never resolves: `POST` writes a `processing` row, does the work, then writes a terminal marker, and anything dying between those writes — SIGTERM past the drain (**PP-029**), an OOM kill, a redeploy, or the marker `UPDATE` itself throwing — left the row saying `processing` forever. Because the marker sat *inside* the work `try` whose `catch` writes the *other* marker, the failure was not a stuck row but a false record: an Article 17 erasure that ran, and whose `completed` write threw, was logged as `failed`. **2** sites in `app/` mint `processing` and nothing else in the tree writes the table | 🔧 FIXED in this PR (**#2578**): `lib/compliance/request-lifecycle.ts` — `isStaleProcessing` (a `processing` row strictly older than 15 min, sized from **8** parallel SELECTs + **5** sequential UPDATEs at **PP-028**'s ~200 ms/statement) · `reapStaleProcessing` answers it as `failed` + `stale`/`staleReason` and best-effort persists behind a CAS `WHERE id AND tenant_id AND status='processing'` · both markers moved out of the work `try` and return `false` instead of throwing, surfaced as `recordUpdateFailed` · deliberately **not** part 1's transaction (a rollback deletes the evidence that the erasure was attempted), **not** a new status (**0050**'s `chk_compliance_requests_status` is closed), `completed_at` never minted, reap-on-read not cron (**PP-051**/**PP-049**) · `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests, **8** of them red with the routes at `11802dcc` · how many rows are stuck today is **not** measured here |
 | PP-078 | S2  | Backup / restore readiness | **The nightly backup has been answering 200 and doing nothing, and what it ever wrote sits inside the database it is supposed to protect.** Measured 2026-10-12 on the host and in the live DB: the retained `nucrm-cron` log (2026-09-15 → 2026-10-12) records `backup-verify` **CRON FAILED on 28 of 28 nights** (every one an `HTTP/1.1 500` from the deployed build, i.e. **#49**'s bug still live) and `auto-backup` **8** failures, `process-sequences` 15, `retry-webhooks` 5, `detect-missed-followups` 4, `task-reminders` 3, `ai-auto-followup` 2, `usage-snapshot` 1, `backup-health` 1 — but `run-cron.sh` is `wget -q -O /dev/null … \|\| echo "[date] CRON FAILED: $JOB" >&2`, so **a 200 that did zero work emits no line at all**, and that is the whole reason the outage was invisible: `tenant_backup_records` has written **0 rows since 2026-10-03T09:26:50Z** (nine nights; only three days ever have rows — 09-25, 10-02, 10-03). The two surfaces disagree exactly as **#79** describes, now quantified: `backup_records` = **4** rows, all `status=failed`, `storage_type=local`, `size_bytes=0`, `storage_path` NULL on all four (the **#50** signature: no `pg_dump` in the image); `tenant_backup_records` = **144** rows, **138** `completed`, all `initiated_auto`, summing **2,150,042 B** of inline `backup_data` (max payload 60,523 B, `sum(data_size)` 1,986,199 B) and it has **no `storage_path`/`storage_type` column at all**, so a nightly backup cannot be pointed off-box even in principle. Payloads are honest where they exist (`rows_actually_stored` == `record_count`, 16–19 rows for a tenant whose live tables hold 1 contact + 1 activity), so the cap **#71** describes is not truncating anything — there is simply almost nothing to back up here, and none of it leaves the machine: `nucrm-minio` holds two buckets (`nucrm-backups`, `nucrm-documents`), created 2026-09-14, **both empty**. `nucrm-app` is image `nucrm-app:preprod`, built **2026-10-03T15:43:25Z** and started 16:03Z — so everything merged after that timestamp (**#49**, **#51**/**#52**, **#139**) is undeployed, and this is **PP-060**'s deploy gap observed on the one surface where it costs data rather than features | 🚨 OPEN · **owner decision**: an off-box destination for either table (and a `storage_path` on the nightly one), plus one *restored* artifact before **#2540** can be called satisfied · the runner's silence is fixable in-repo (`run-cron.sh` should assert the response body, which is also **#77**/PP-049's `ok:true` masking) · no endpoint, credential or bucket key is recorded here — the object-store pair lives in one mode-600 file on the host being decommissioned (**#2585** §2 + addendum) and is an owner custody action, not a repo one |
+| PP-079 | S2  | Edge / auth surface | **`POST /api/auth/oauth/token` answered `invalid_client` at every caller on a fresh database — byte-identical to a wrong secret — because nothing in the application writes an `oauth_clients` row.** `git grep -nE "insert\(oauthClients\)" origin/main -- app lib scripts` → **0 hits**; the only INSERT anywhere is `scripts/simulate-preprod-flows.ts:282`'s isolation probe, which writes `redirect_uris = '[]'` into the comma-delimited column the authorize matcher splits | 🔧 FIXED in this PR (**#3328**): the registration surface — `app/api/tenant/oauth-clients/` (list, `[id]`, `[id]/rotate`), `app/tenant/settings/oauth-clients/page.tsx`, `lib/auth/oauth-client.ts`, `lib/api/schemas/oauth-clients.ts` · **no migration**: `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:93`'s `tenant_isolation` `FOR ALL` arm already admits the INSERT, and `tests/integration/oauth-client-registration-3328.test.ts` proves register → authorize → token as the RLS-bound probe role · **78** tests green · **not measured live**, the host is undeployed (**PP-060**) |
 
 ## Sentry issues → register entries
 
@@ -2126,7 +2137,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
   `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:186` (re-pinned 2026-10-22 from `:181`: `d78d7698` (#2973) put the money-math comment block above it), `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
-  (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
+  (`app/api/tenant/api-keys/route.ts:104` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:197`, both re-pinned 2026-10-28 from `:91`/`:178` — **#3291** added the key-revocation import and the owner-membership proof above these lines), so
   120 is a **lower bound**, not a ceiling.
 - **Nothing 403s first — the opposite of the assumption.** `can()` short-circuits for platform accounts
   (`lib/auth/middleware.ts:433`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
@@ -3671,7 +3682,7 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87`.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
+  own coordinates are `ci.yml:86-87` — re-pinned in prose 2026-10-28 by **#3280**, which joined `guard:app-role-counts` to that same step line-count-neutrally, so `:86` names both guards and `:87` runs both: the numbers hold, the content those two lines carry does not, which is the distinction `check-register-drift` exists to make.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
   **#2829**'s `guard:panel-error-state` the next day, both read the source tree rather than this file, and both are
   wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
   the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the
@@ -4033,7 +4044,7 @@ not wired in).
   Nothing on `custom_plugins` was exposed in a response or a log on main, so this is a
   defence-in-depth fix, not a live leak.
 - **Deliberately left closed — and pinned as closed.** `/api/tenant/visitors/track`
-  (`app/api/tenant/visitors/track/route.ts:35`) was the seventh hit and is the one that must stay a 401:
+  (`app/api/tenant/visitors/track/route.ts:38`, re-pinned 2026-10-28 from `:35` — **#3291** added a key-owner membership proof above the handler) was the seventh hit and is the one that must stay a 401:
   it presents no credential of any kind and installs no limiter, so publishing it would be an
   unbounded anonymous write. `tests/unit/proxy.test.ts:151` (re-pinned 2026-10-22 from `:158`: `79d095a4` (#1269) shed 7 lines above that `describe`) asserts that 401 alongside the six
   openings, so a future "make it public for convenience" change fails a test rather than widening
@@ -5253,7 +5264,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   in-handler check is what closes it per route, which is what #2561 asked for.
 - **What this does.** `POST` / `PATCH` / `DELETE` in
   `app/api/tenant/plugin-engine/route.ts` now call `requireCsrf(request)` immediately after
-  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:74` (#1835)
+  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:76` — was `:74`, shifted by the #3292 config gate — (#1835)
   established for the same table. The exemption is keyed on `ctx.authMethod`, the credential
   `requireAuth()` actually verified and stamped at `lib/auth/middleware.ts:252`, rather than on
   `requireCsrf()`'s own signal, because that signal is the **client-settable** `x-auth-method`
@@ -5441,6 +5452,43 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   kills a request mid-flight), **PP-028** (the flat ~200 ms that sizes the deadline), **PP-051** and
   **PP-049**/**#2539** (why the cron path is the weaker house), **PP-027** (the pinned tenant carrier),
   **#2525** (id-only writes must pin the tenant too).
+
+## PP-079 — 🔧 `POST /api/auth/oauth/token` answered `invalid_client` at **every** caller on a fresh database, and the byte was identical to a wrong secret: `oauth_clients` has no writer anywhere in the app _(S2 · Edge / auth surface · issue **#3328**)_
+
+- **Found by:** following **PP-061** to its end. PP-061 opened the edge path and #3225/#3230 gave the
+  handler its lookup arm, so the route finally runs — and it still rejects everyone, because the table it
+  reads has never had a row written to it by the application.
+- **Evidence (in tree; no live request was made).** `git grep -nE "insert\(oauthClients\)" origin/main -- app lib scripts`
+  → **0 hits**. The only thing on `main` that ever INSERTs the table is the isolation probe
+  `scripts/simulate-preprod-flows.ts:282`, which writes `redirect_uris` as `'[]'` into the column
+  `app/api/auth/oauth/authorize/route.ts:28` splits on `,` — so the suite proving `oauth_clients` is
+  *tenant-isolated* is not evidence that anything can *use* it, and it is why that grep names its scope.
+- **Why the outage reads as a caller's credential problem.** `app/api/auth/oauth/token/route.ts:69`
+  answers the same 401 `invalid_client` for "no such client" as `:79` does for "wrong secret", and on a
+  fresh database the first is the only case. An integrator cannot tell a mis-typed secret from an
+  unregistered client, and no admin surface existed that could answer which.
+- **No migration, and that is the finding.** `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:93`
+  already arms `oauth_clients` with `tenant_isolation` `FOR ALL`, so a tenant-scoped INSERT was legal all
+  along — the table was unreachable for want of a writer, not for want of a policy. **Before adding an arm,
+  check what the existing ones already reach:** PP-061, #3225 and #3328 are one bug found in three passes.
+- **What a writer had to get right that a probe did not.** `client_secret` is stored verbatim because `:79`
+  compares it with `timingSafeEqual` after `Buffer.from` — hashing it changes that comparison — so it is
+  minted at `lib/auth/oauth-client.ts:31` and handed back exactly once: the create's `.returning()` at
+  `app/api/tenant/oauth-clients/route.ts:89` projects `id, clientId` and no tenant route names the secret
+  column. `redirect_uris` is one text column holding several URIs, so registration refuses a comma at
+  `lib/api/schemas/oauth-clients.ts:24` rather than storing an entry the matcher can never return. Both
+  credentials are server-minted, so a caller-supplied `client_id` is ignored, not validated.
+- **Measured:** **78** tests green — `tests/unit/oauth-client-registration-3328.test.ts` **46**,
+  `tests/unit/oauth-clients-panel-3328.test.tsx` **20** (the secret is on screen exactly once per create
+  or rotate), `tests/integration/oauth-client-registration-3328.test.ts` **12** as the RLS-bound probe
+  role, which is the only one of the three that proves the register → authorize → token chain rather than
+  each link in it; its teardown restores the shared test DB and drops the minted role. `tsc --noEmit` and
+  `eslint` exit **0**.
+- **Files:** `lib/auth/oauth-client.ts`, `lib/api/schemas/oauth-clients.ts`,
+  `app/api/tenant/oauth-clients/` (list, `[id]`, `[id]/rotate`), `app/tenant/settings/oauth-clients/page.tsx`
+  — all new — plus the nav and schema-registration mirrors and the three test files.
+- **Related:** **PP-061** ("opening the path was necessary, not sufficient"), **#3324** (the matcher the
+  column has to satisfy), **#3328**, and `docs/BASECRM/03` § #3328 for the rule.
 
 ## How to maintain this file
 

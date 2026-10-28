@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
@@ -171,8 +171,7 @@ async function resolveVerifyAlerts(): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (!verifySecret(secret, process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'backup-verify' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

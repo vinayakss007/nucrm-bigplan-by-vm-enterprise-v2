@@ -131,15 +131,33 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     // stored as-is. Read it from the validated data.
     const { steps } = v;
 
+    // #3347: nothing in this handler ever checked the sequence belongs to the
+    // caller. `concurrencyGuard` is not that check — its read finds no row for
+    // a foreign id and passes — and on the bare pool RLS is not a defense the
+    // write path may lean on (#3194). Verify the parent first; the delete/insert
+    // pair below must never run against an unverified id.
+    const [existing] = await db
+      .select({ id: sequences.id })
+      .from(sequences)
+      .where(and(
+        eq(sequences.id, sequenceId),
+        eq(sequences.tenantId, ctx.tenantId),
+        isNull(sequences.deletedAt),
+      ))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
+    }
+
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, sequences, sequenceId, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
     // Update sequence
-    await db.transaction(async (tx) => {
- 
- 
+    const lostParent = await db.transaction(async (tx) => {
+
       const updateData: Partial<typeof sequences.$inferInsert> = {};
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
@@ -147,19 +165,33 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       updateData.updatedAt = new Date();
       updateData.updatedBy = ctx.userId;
 
-      if (Object.keys(updateData).length > 1) {
-        await tx.update(sequences)
-          .set(updateData)
-          .where(and(
-            eq(sequences.id, sequenceId),
-            eq(sequences.tenantId, ctx.tenantId)
-          ));
-      }
+      // #3347: read-back with the gates the verification read just applied —
+      // tenant and tombstone. A DELETE landing between the read and this
+      // UPDATE matches zero rows; the step rewrite must not proceed on the
+      // strength of a parent this caller no longer owns or that no longer
+      // exists live.
+      const [parent] = await tx
+        .update(sequences)
+        .set(updateData)
+        .where(and(
+          eq(sequences.id, sequenceId),
+          eq(sequences.tenantId, ctx.tenantId),
+          isNull(sequences.deletedAt),
+        ))
+        .returning({ id: sequences.id });
+
+      if (!parent) return true;
 
       // Update steps if provided
       if (steps !== undefined) {
-        // Delete existing steps
-        await tx.delete(sequenceSteps).where(eq(sequenceSteps.sequenceId, sequenceId));
+        // #3347: the child delete was scoped only by the URL-supplied
+        // sequenceId — no tenant clause — so a foreign id wiped that
+        // sequence's steps wholesale. Keep the tenant clause as
+        // defense-in-depth even though the parent is verified above.
+        await tx.delete(sequenceSteps).where(and(
+          eq(sequenceSteps.sequenceId, sequenceId),
+          eq(sequenceSteps.tenantId, ctx.tenantId),
+        ));
 
         // Insert new steps
         if (steps.length > 0) {
@@ -185,7 +217,12 @@ export const PATCH = withApiRoute(async (request: NextRequest,
           await tx.insert(sequenceSteps).values(stepValues);
         }
       }
+      return false;
     });
+
+    if (lostParent) {
+      return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
       ok: true,

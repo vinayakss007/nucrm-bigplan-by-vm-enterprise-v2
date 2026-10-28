@@ -246,9 +246,23 @@ async function main() {
       if (tableCount === 0) { console.error('ERROR: restored database has zero tables'); process.exit(1); }
 
       if (backup.backup_type !== 'schema') {
-        const users = await verifyPool.query<{ count: string }>(`SELECT count(*)::text AS count FROM users`).catch(() => null);
-        if (!users) { console.error('ERROR: restored database has no readable users table'); process.exit(1); }
-        console.log(`  ok data    : users rows = ${users.rows[0]?.count ?? '0'}`);
+        // FORCE RLS travels with the dump, so an unarmed `count(*) FROM users`
+        // reads 0 on a fully restored database. Arm the platform context and
+        // label the number with the context it was read in (#3280).
+        const client = await verifyPool.connect();
+        try {
+          await client.query('BEGIN READ ONLY');
+          await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
+          const users = await client.query<{ count: string }>(`SELECT count(*)::text AS count FROM users`);
+          await client.query('ROLLBACK');
+          console.log(`  ok data    : ${users.rows[0]?.count ?? '0'} users row(s), counted with app.is_super_admin=true`);
+        } catch {
+          await client.query('ROLLBACK').catch(() => undefined);
+          console.error('ERROR: restored database has no readable users table');
+          process.exit(1);
+        } finally {
+          client.release();
+        }
       }
     } finally {
       await verifyPool.end();

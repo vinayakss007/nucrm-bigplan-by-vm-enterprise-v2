@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextResponse } from 'next/server';
@@ -42,7 +42,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
  * admits the downgrade once app.current_user is set, which the sweep does.
  */
 export async function POST(request: Request) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'subscription-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

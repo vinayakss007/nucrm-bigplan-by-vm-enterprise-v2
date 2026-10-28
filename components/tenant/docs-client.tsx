@@ -82,6 +82,7 @@ const DOCS_STRUCTURE = {
       { title: 'Tenant Settings', slug: 'settings/tenant', description: 'Workspace configuration', time: '10 min' },
       { title: 'Custom Fields', slug: 'settings/custom-fields', description: 'Add custom fields', time: '15 min' },
       { title: 'API Keys', slug: 'settings/api-keys', description: 'Generate API keys', time: '10 min' },
+      { title: 'OAuth Clients', slug: 'settings/oauth-clients', description: 'Register an app for the authorization-code flow', time: '15 min' },
     ]
   },
   'Integrations': {
@@ -2971,6 +2972,77 @@ be revoked at any time.
 - [REST API Reference](./rest-api.md) — endpoints, pagination, errors, rate limits
 - [SDK](./sdk.md) — the SDK handles auth headers for you
 - [Workspace Admin → Security Settings](../admin-guide/security-settings.md) — SSO, 2FA, sessions
+`
+    },
+    'settings/oauth-clients': {
+      title: 'OAuth Clients',
+      content: `# OAuth Clients
+
+An **OAuth client** is an application you register so it can ask a NuCRM user for permission to act
+on their behalf, instead of holding one of your workspace's API keys. Use one for anything a person
+has to sign in to — a partner portal, a "Connect to NuCRM" button in a third-party tool. Use an
+[API key](./api-keys.md) for a server job that only ever acts as your workspace.
+
+Registration lives under **Settings → OAuth Clients** and is workspace-admin only.
+
+---
+
+## Registering a client
+
+Fill in a name and one or more **redirect URIs**, one per line. The two credentials are generated
+for you — you never choose them:
+
+- **Client ID** (\`oc_…\`) is the public half. It identifies your application and is safe to show in
+  a URL.
+- **Client secret** (\`ocs_…\`) is confidential. It is shown **once**, at registration or right after
+  a rotation, and is never returned by any read afterwards. Keep it on your own server; it must
+  never appear in a browser bundle or a mobile binary.
+
+A redirect URI is matched **exactly**, including scheme, port and path. NuCRM refuses one that
+carries a fragment (a fragment never reaches the client), a comma, userinfo, or a scheme other than
+\`http\`/\`https\` — so register \`https://app.example.com/oauth/callback\`, not a prefix of it.
+
+**Rotate** replaces the secret in one call: the previous secret stops working immediately and every
+application using it has to be updated. The client ID stays the same, so your integration's URLs do
+not change.
+
+**Disable** is the kill switch that keeps the record: the client can no longer authorize or exchange,
+but its row, its name and its audit history stay for whoever asks what was connected.
+**Delete** is final and it also revokes every authorization code and every token that client holds.
+
+---
+
+## The authorization-code flow
+
+1. Send the user to \`GET /api/auth/oauth/authorize\` with your \`client_id\`, the exact
+   \`redirect_uri\`, \`response_type=code\`, a \`scope\`, and a \`state\` you can check on return. The user
+   has to be signed in.
+2. NuCRM redirects them back to your registered URI with \`?code=…&state=…\`. The code is short-lived
+   and single-use.
+3. Post that code to \`POST /api/auth/oauth/token\` as \`application/x-www-form-urlencoded\` with
+   \`grant_type=authorization_code\`, your \`client_id\`, your \`client_secret\`, and the same
+   \`redirect_uri\`. You get back \`access_token\`, \`refresh_token\`, \`scope\` and \`expires_in\` (one hour).
+4. When the access token expires, exchange the refresh token with \`grant_type=refresh_token\`. That
+   call rotates: the refresh token you sent is spent and a new one comes back with the pair.
+
+---
+
+## Errors you may see
+
+| Answer | Meaning |
+| --- | --- |
+| \`400 invalid_request\` | A missing parameter, or a \`redirect_uri\` that is not exactly one you registered. |
+| \`401 invalid_client\` | Unknown \`client_id\`, a wrong \`client_secret\`, or a deactivated client. |
+| \`400 invalid_grant\` | The code or refresh token is expired, already used, or belongs to another client. |
+| \`400 unsupported_grant_type\` | Only \`authorization_code\` and \`refresh_token\` are supported. |
+
+---
+
+## Related
+
+- [API Keys](./api-keys.md) — workspace-scoped credentials for server-to-server calls
+- [Scopes and permissions](./roles.md) — what a granted token may actually do
+- [REST API Reference](./rest-api.md) — endpoints, pagination, errors, rate limits
 `
     },
     'integrations/whatsapp': {

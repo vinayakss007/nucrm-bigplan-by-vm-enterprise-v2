@@ -76,6 +76,7 @@ const CATALOG = [
     ['/tenant/plugins',               'Plugins'],
     ['/tenant/settings/webhooks',     'Webhooks'],
     ['/tenant/settings/api-keys',     'API Keys'],
+    ['/tenant/settings/oauth-clients', 'OAuth Clients'],
     ['/tenant/docs',                  'API Docs'],
   ]},
 ] as const;

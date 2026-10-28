@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { createEmailTracking, addTracking, recordEmailMessageId } from '@/lib/email/tracking';
 import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
@@ -33,7 +33,7 @@ const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
 const SEQUENCE_LOCK_TTL = 120; // 2 minutes
 
 export async function POST(req: NextRequest) {
-  if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
+  if (!await verifyCronSecret(req, { job: 'process-sequences' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // Acquire distributed lock to prevent concurrent cron runs

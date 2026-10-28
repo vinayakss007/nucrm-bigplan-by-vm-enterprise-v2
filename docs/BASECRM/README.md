@@ -100,6 +100,13 @@ A "base CRM" that violates any of them is not this app:
   and the addresses are masked out of the result set so a retry cannot even be resumed.
   `send-bulk-emails` is therefore queued with `attempts: 1` (#3293). Before accepting any
   retry default, ask what the processor does on the *second* run. See 07 § Background jobs.
+- **A guarded table is not a usable table: a policy is not a writer.** `oauth_clients` has carried
+  `tenant_isolation` `FOR ALL` since 0088 and had **no `INSERT` anywhere in the app**, so
+  `POST /api/auth/oauth/token` answered `invalid_client` — byte-identical to a wrong secret, since
+  `app/api/auth/oauth/token/route.ts:69` and `:79` return the same 401 — for every caller on a fresh
+  database. The writer is `app/api/tenant/oauth-clients/route.ts:89`, and it needed no migration.
+  Two rules: **check what the existing arms already reach before adding one**, and when an auth
+  route rejects *everyone*, ask whether the row it reads can exist at all. See 03 § #3328.
 
 ## Provenance
 

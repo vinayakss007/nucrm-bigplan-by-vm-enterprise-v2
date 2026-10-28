@@ -169,6 +169,7 @@ export const GROUPS: SettingsGroup[] = [
     items: [
       { href: '/tenant/settings/integrations',    label: 'Integrations',     icon: Plug,        desc: 'Connected apps & channels',     keywords: 'integrations apps connectors channels telegram whatsapp slack' },
       { href: '/tenant/settings/webhooks',        label: 'Webhooks',         icon: Webhook,     desc: 'Outbound events',               adminOnly: true, keywords: 'webhooks events callbacks' },
+      { href: '/tenant/settings/oauth-clients',   label: 'OAuth Clients',    icon: Globe,       desc: 'Inbound API integrations',      adminOnly: true, keywords: 'oauth client id secret redirect uri authorize token confidential' },
     ],
   },
 ];

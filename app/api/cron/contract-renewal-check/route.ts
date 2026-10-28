@@ -8,7 +8,7 @@
  * Finds contracts ending within 30/14/7/3 days and sends reminders.
  * Creates in-app notifications + emails for contract owners/assignees.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { reminderWindows, utcDateStr } from '@/lib/cron/renewal-windows';
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,7 +25,7 @@ import { logError } from '@/lib/errors-server';
 const REMINDER_DAYS = [30, 14, 7, 3];
 
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'contract-renewal-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

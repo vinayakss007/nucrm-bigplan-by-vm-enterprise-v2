@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { backupRecords, backupAlerts, errorLogs } from '@/drizzle/schema';
@@ -20,8 +20,7 @@ import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 
 // Called daily by cron — runs pg_dump, uploads to S3/R2 or keeps local
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (!verifySecret(secret, process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'backup' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

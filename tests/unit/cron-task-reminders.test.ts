@@ -21,7 +21,8 @@ vi.mock('@/lib/crypto', async (importOriginal) => ({
   verifySecret: () => true,
 }));
 
-vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => {}) }));
+const mockLogError = vi.fn(async () => {});
+vi.mock('@/lib/errors-server', () => ({ logError: (...args: unknown[]) => mockLogError(...args) }));
 vi.mock('@/lib/api-error', () => ({
   apiError: vi.fn(() => NextResponse.json({ error: 'Internal error' }, { status: 500 })),
 }));
@@ -152,6 +153,12 @@ async function runCron() {
 
 describe('POST /api/cron/task-reminders', () => {
   beforeEach(() => {
+    // The route authenticates through the real lib/auth/cron since #3298; without
+    // a configured secret every case below would answer 401 instead of running.
+    process.env.CRON_SECRET = 's';
+    delete process.env.CRON_ALLOWED_IPS;
+    delete process.env.CRON_SIGNING_KEY;
+    delete process.env.TRUST_PROXY;
     selectCalls.length = 0;
     sweptTenants = [TENANT_A];
     currentSweepTenant = null;
@@ -363,6 +370,54 @@ describe('POST /api/cron/task-reminders', () => {
     // how a job that did nothing looked identical to one that ran.
     expect(res.status).toBe(423);
     expect(res.body).toMatchObject({ ok: false, skipped: 'lock-held', reason: 'lock-held' });
+  });
+
+  describe('#3298: the opt-in layers reach this route, not only the two that were converted', () => {
+    // The handler used to compare the header itself with crypto.verifySecret, so
+    // CRON_ALLOWED_IPS was operator-visible configuration that silently ignored
+    // twenty endpoints while lib/auth/cron.ts claimed "no route needs to be
+    // modified to benefit". Only the timing-safe comparison is stubbed (file-level
+    // mock); the layering and the denial record here are the real lib/auth/cron.
+    async function cronFrom(ip: string) {
+      const { POST } = await import('@/app/api/cron/task-reminders/route');
+      const res = await POST({
+        headers: new Headers({ 'x-cron-secret': 's', 'x-forwarded-for': ip }),
+      } as never);
+      return { status: res.status, body: await res.json() as Record<string, unknown> };
+    }
+
+    /** auditCronAuth is fire-and-forget; let its dynamic import settle. */
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    beforeEach(() => {
+      process.env.TRUST_PROXY = 'true';
+      process.env.CRON_ALLOWED_IPS = '127.0.0.1';
+      mockLogError.mockClear();
+    });
+
+    it('refuses a correct secret arriving from an address the allowlist does not list', async () => {
+      const res = await cronFrom('8.8.8.8');
+      expect(res.status).toBe(401);
+      expect(mockSweepTenants).not.toHaveBeenCalled();
+    });
+
+    it('runs the job when the source is listed', async () => {
+      const res = await cronFrom('127.0.0.1');
+      expect(res.status).toBe(200);
+      expect(mockSweepTenants).toHaveBeenCalled();
+    });
+
+    it('names the job, the source address and the reason in the denial record', async () => {
+      await cronFrom('8.8.8.8');
+      await flush();
+      const call = mockLogError.mock.calls.find(
+        (args) => (args[0] as { context?: string }).context === 'cron-auth',
+      );
+      expect(call).toBeTruthy();
+      expect((call?.[0] as { metadata: Record<string, unknown> }).metadata).toMatchObject({
+        job: 'task-reminders', reason: 'ip_not_allowed', ip: '8.8.8.8',
+      });
+    });
   });
 });
 

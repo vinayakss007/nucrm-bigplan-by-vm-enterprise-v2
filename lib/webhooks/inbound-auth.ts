@@ -27,6 +27,9 @@ import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
 import { NO_USER_SENTINEL, setTenantContext, withAuthLookupContext } from '@/lib/db/rls';
+// #3291: every resolver of apiKeys.keyHash has to prove the owner is still an
+// active member; this is the webhook-side copy of that check.
+import { keyOwnerIsLive } from '@/lib/auth/api-key-membership';
 
 export type ResolvedInboundKey = {
   id: string;
@@ -38,7 +41,8 @@ export type ResolvedInboundKey = {
 
 /**
  * Resolve an API key to a tenant and adopt that workspace for the rest of the
- * request. Returns null if the key is invalid, expired, or inactive.
+ * request. Returns null if the key is invalid, expired, inactive, or — #3291 —
+ * its owner no longer holds an active membership in that tenant.
  */
 export async function resolveApiKey(rawKey: string): Promise<ResolvedInboundKey | null> {
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
@@ -65,6 +69,16 @@ export async function resolveApiKey(rawKey: string): Promise<ResolvedInboundKey 
   // it. `setTenantContext` also stashes the pair for the PP-027 carrier, which is
   // what re-applies it inside a bare `db.transaction` behind a pooler.
   await setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL);
+
+  // #3291: `isActive` is a flag somebody has to remember to clear; an active
+  // membership is a fact. Inbound webhook delivery resolves the tenant from a key
+  // hash and nothing else, so without this proof a removed member's key keeps
+  // writing into that workspace — and keeps bumping `last_used_at`/`call_count`
+  // below, which makes the standing credential look like it is still in use by
+  // somebody who works there. Runs after `setTenantContext` because
+  // `tenant_members` is tenant-isolated: the same reason 0099 gave the key lookup
+  // its own privilege.
+  if (!await keyOwnerIsLive(row.tenantId, row.userId)) return null;
 
   // Update last_used_at and call_count
   await db.transaction((tx) =>

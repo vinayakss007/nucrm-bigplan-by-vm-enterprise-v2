@@ -253,13 +253,23 @@ export async function main() {
         // A schema-only dump legitimately has no rows; a full one must not be
         // completely empty.
         if (backup.backup_type !== 'schema') {
-          const users = await scratchPool.query<{ count: string }>(
-            `SELECT count(*)::text AS count FROM users`
-          ).catch(() => null);
-          if (!users) {
+          // FORCE RLS travels with the dump, so an unarmed `count(*) FROM users`
+          // reads 0 on a database that is full of rows. Arm the platform context
+          // and label the number with the context it was read in (#3280).
+          const client = await scratchPool.connect();
+          try {
+            await client.query('BEGIN READ ONLY');
+            await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
+            const users = await client.query<{ count: string }>(
+              `SELECT count(*)::text AS count FROM users`
+            );
+            await client.query('ROLLBACK');
+            console.log(`  ok data   : ${users.rows[0]?.count ?? '0'} users row(s), counted with app.is_super_admin=true`);
+          } catch {
+            await client.query('ROLLBACK').catch(() => undefined);
             failures.push('Restored database has no readable users table');
-          } else {
-            console.log(`  ok data   : users rows = ${users.rows[0]?.count ?? '0'}`);
+          } finally {
+            client.release();
           }
         }
       } finally {

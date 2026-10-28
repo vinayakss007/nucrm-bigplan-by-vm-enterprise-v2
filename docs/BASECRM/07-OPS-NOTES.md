@@ -169,6 +169,12 @@ Known traps that made earlier runs flaky (all now handled in the script):
   are grandfathered in `scripts/panel-error-state-baseline.json`, which is
   **shrink-only**: fix the page, delete its entry.
 
+- `scripts/check-app-role-counts.mjs` (`npm run guard:app-role-counts`, #3280) — a script
+  under `scripts/` may not read an RLS-filtered table without arming a context. The
+  denominator (every table `drizzle/schema/` declares, minus those a standing
+  `FOR SELECT USING (true)` policy opens) is derived from the journal, and
+  `scripts/app-role-counts-baseline.json` is **shrink-only**.
+
 ### What `guard:panel-error-state` cannot see (learn this before rebuilding the panels)
 
 The guard judges a **file**, and it stops at the first bound read that reaches the
@@ -197,6 +203,27 @@ screen. Three shapes therefore pass it while the page still lies (#2868 / #2869 
 
 Derived counters have their own version of (2): `error ? '—' : n` must become
 `failed ? '—' : n`, or the page prints `—` above rows it is also counting.
+
+## Row counts as the application role (#3280)
+
+`DATABASE_URL` is `nucrm_app`: not the table owner, not a superuser, no `BYPASSRLS` — so RLS
+binds it on every table where it is enabled, and the policies are
+`tenant_id = current_setting('app.current_tenant')` or an `app.is_super_admin` branch. A
+session that sets neither is admitted to no rows and does not raise. Measured on a development
+database: `count(*) FROM users` → **0** where the platform context reports **28**; `contacts` →
+**0** against **66**; `deal_stages` → **0** against **146**. Of the 226 tables the schema declares,
+17 have a `FOR SELECT USING (true)` policy and read fine — `tenants` is one of them, which is
+why every number needs its context rather than an assumption.
+
+- `npm run db:count -- <table>` runs one count in both contexts, asks the catalog what the
+  table allows, and refuses anything but a validated table name. `npm run probe:sql -- "…"`
+  takes arbitrary SQL and is the tool for a `WHERE` clause; it prints the context it used too.
+- `psql "$DATABASE_URL" -c 'select count(*) from users'` is the blind read. Either take it as
+  the superuser (the restore runbooks do) or arm it: `PGOPTIONS='-c app.is_super_admin=true'`.
+- A script that reports a count now says which context produced it: `db:diagnose`,
+  `db:drift-check`, `db:audit:jsonb-size`, `bootstrap.sh`, `db:restore`, `backup:verify`,
+  `db:seed:api` and the e2e seeder were the un-armed ones (#3280); `db:state` (#3314) and the
+  backup/restore shell scripts already armed theirs.
 
 ## Deploy topology (do not conflate — AGENTS.md)
 

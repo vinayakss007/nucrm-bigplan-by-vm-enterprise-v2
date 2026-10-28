@@ -52,6 +52,7 @@ const MUTATING_LIMITS: Record<string, LimitSet> = {
   kbCategories: { post: 10, patch: 20, delete: 10 },
   integrations: { post: 5, patch: 10, delete: 5 },
   ssoProviders: { post: 3, patch: 5, delete: 3 },
+  oauthClients: { post: 5, patch: 10, delete: 5 },
   // Projects
   projects: { post: 15, patch: 30, delete: 10 },
   milestones: { post: 10, patch: 20, delete: 10 },

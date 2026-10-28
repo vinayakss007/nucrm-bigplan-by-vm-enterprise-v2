@@ -98,6 +98,24 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const { id } = await params;
     const body = await readJsonBody(req);
 
+    // #3340: PATCH used to read nothing at all — `status` is freely mutable and
+    // the only check was the opt-in `concurrencyGuard` below. Read the row under
+    // the same tombstone gate the rest of the flow applies so a status write has
+    // a from-state to claim.
+    const [existing] = await db
+      .select({ id: leadWarmingCampaigns.id, status: leadWarmingCampaigns.status })
+      .from(leadWarmingCampaigns)
+      .where(and(
+        eq(leadWarmingCampaigns.id, id),
+        eq(leadWarmingCampaigns.tenantId, ctx.tenantId),
+        sql`${leadWarmingCampaigns.deletedAt} IS NULL`
+      ))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, leadWarmingCampaigns, id, ctx.tenantId, expectedUpdatedAt);
@@ -135,15 +153,32 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       }
     }
 
+    // #3340: Postgres re-evaluates the UPDATE's WHERE under the row lock, so
+    // naming the from-status (and keeping the tombstone gate the read applied)
+    // turns a stale write into zero rows instead of a silent stomp — including
+    // this route's own `DELETE` (which sets `status:'archived'` + `deletedAt`)
+    // landing in the gap: resurrecting a deleted campaign to `active` hands it
+    // straight back to lib/lead-warming/engine.ts:198/:469, which select sending
+    // candidates by `status='active'` alone and would keep messaging contacts.
+    const claimsStatus = updateData.status !== undefined;
+
     const [updated] = await db.update(leadWarmingCampaigns)
       .set(updateData as Partial<typeof leadWarmingCampaigns.$inferInsert>)
       .where(and(
         eq(leadWarmingCampaigns.id, id),
-        eq(leadWarmingCampaigns.tenantId, ctx.tenantId)
+        eq(leadWarmingCampaigns.tenantId, ctx.tenantId),
+        sql`${leadWarmingCampaigns.deletedAt} IS NULL`,
+        ...(claimsStatus ? [eq(leadWarmingCampaigns.status, existing.status)] : []),
       ))
       .returning();
 
     if (!updated) {
+      if (claimsStatus) {
+        return NextResponse.json(
+          { error: `Campaign status changed concurrently — cannot move '${existing.status}' to '${String(updateData.status)}'. Reload and retry.` },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 

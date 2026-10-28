@@ -104,6 +104,16 @@ vi.mock('@/drizzle/db', async () => {
   return { db };
 });
 
+// #3291 gave key resolution a membership proof (lib/auth/api-key-membership.ts).
+// This spec's subject is the entity payloads, not the credential, and the proof's
+// `tenant_members` select would consume a slot from the ordered `selectQueue`
+// below. The guarantee itself is owned by
+// tests/unit/inbound-webhook-auth-lookup-3246.test.ts.
+vi.mock('@/lib/auth/api-key-membership', () => ({
+  hasActiveMembership: async () => true,
+  keyOwnerIsLive: async () => true,
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   RateLimiter: class {
     async enforce() {

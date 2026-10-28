@@ -182,6 +182,14 @@ vi.mock('@/lib/api/validate', () => ({
   validateBody: vi.fn((_schema: unknown, raw: unknown) => ({ data: raw })),
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
+// #3291 gave the track route's key resolution a membership proof, which is a second
+// SELECT in this request. This spec's subject is counter atomicity, and its first
+// case asserts the key lookup is the only SELECT — the proof is owned by
+// tests/unit/api-key-resolver-membership-3291.test.ts.
+vi.mock('@/lib/auth/api-key-membership', () => ({
+  hasActiveMembership: async () => true,
+  keyOwnerIsLive: async () => true,
+}));
 vi.mock('@/lib/visitor-tracking', () => ({ scorePageUrl: vi.fn(() => 5) }));
 vi.mock('@/lib/portal-auth', () => ({
   resolvePortalIdentity: vi.fn(async () => ({

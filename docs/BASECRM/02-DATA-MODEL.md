@@ -161,7 +161,16 @@ ellipsis read as "close enough" while pointing a rebuilder at the table named on
 the following line), `field_permissions` (`core.ts:217`),
 `record_permissions` (`core.ts:231`),
 `audit_logs` (`core.ts:324`, `userId` deliberately **not** an FK so audit
-survives user deletion).
+survives user deletion), `oauth_clients`/`oauth_codes`/`oauth_tokens`
+(`tokens.ts:140/158/176` — three columns carry the whole OAuth contract and all
+three are shape traps: `client_secret` is `text` stored **verbatim**, because
+`/api/auth/oauth/token` compares it with `timingSafeEqual` rather than a hash;
+`redirect_uris` is ONE `text` column holding several URIs, comma-joined, so the
+comma is a delimiter and not a legal URI character; and `oauth_clients` has no
+`scopes`, no `updated_at` and no `deleted_at` column at all — scope rides on the
+code row, deactivation is `is_active`, and removal is a real `DELETE` whose FKs to
+`oauth_codes`/`oauth_tokens` are `ON DELETE CASCADE`, which is what makes deleting a
+client a revocation).
 
 ## How RLS is applied (the terrain; semantics in 03)
 

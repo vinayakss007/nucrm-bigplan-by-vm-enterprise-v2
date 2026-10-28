@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { billingEvents, subscriptions } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { isStripeConfigured, resumeSubscription } from '@/lib/stripe';
 import { deriveSubscriptionActionIdempotencyKey } from '@/lib/billing-idempotency';
 import { currencyFromProvider } from '@/lib/billing-currency';
@@ -77,7 +77,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           resumed_at: new Date().toISOString(),
           resumed_by: ctx.userId,
         },
-      }).where(eq(subscriptions.id, currentSub.id));
+      // #3344 (#3194 doctrine): the tenant clause names what the unlocked read
+      // alone used to prove. Deliberately NOT a from-status claim: this is a
+      // Stripe-first mirror write, and a lost claim would diverge the row from
+      // Stripe with no retry path (#2228's idempotency key replays Stripe's
+      // response, never this write).
+      }).where(and(
+        eq(subscriptions.id, currentSub.id),
+        eq(subscriptions.tenantId, ctx.tenantId),
+      ));
 
       await tx.insert(billingEvents).values({
         tenantId: ctx.tenantId,

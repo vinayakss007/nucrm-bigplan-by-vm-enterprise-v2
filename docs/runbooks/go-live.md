@@ -206,6 +206,15 @@ sudo -u postgres psql -d nucrm_restore_test -c "SELECT count(*) FROM contacts;"
 sudo -u postgres dropdb nucrm_restore_test
 ```
 
+Say who counted, on every number in that block (`#3280`). Run as written it is honest:
+`sudo -u postgres` is the scratch database's owner and the dump restores row security with
+it. Repeat the same two queries through `$DATABASE_URL` and `contacts` answers `0` on a
+database that restored everything — `nucrm_app` is not the owner and Row Level Security is
+enabled there, so only `tenants` reads honestly, on its `USING (true)` policy. Either keep
+counting as `postgres`, or arm the session (`PGOPTIONS='-c app.is_super_admin=true'`), or
+run `npm run db:count -- contacts`, which asks the catalog what the table allows and prints
+both contexts side by side.
+
 Record the drill date + result. Re-drill after any major schema migration.
 For a full DR walkthrough (rebuild-from-scratch, single-org restore) see
 `docs/runbooks/disaster-recovery.md` and `docs/runbooks/restore-one-organization.md`.

@@ -83,8 +83,8 @@ jobs:
         run: npm run guard:coords
       - name: Cron lock + field-permission wiring guards (#2539, #2597)
         run: npm run guard:cron-lock && npm run guard:field-permissions
-      - name: Raw-SQL identifier + statement_timeout guard (#2528)
-        run: npm run guard:raw-sql
+      - name: Raw-SQL + un-armed RLS read guards (#2528, #3280)
+        run: npm run guard:raw-sql && npm run guard:app-role-counts
 
   test-unit:
     name: Unit Tests

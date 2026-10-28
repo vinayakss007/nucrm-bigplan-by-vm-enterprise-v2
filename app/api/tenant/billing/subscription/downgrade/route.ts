@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions, plans, billingEvents } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { getPriceId, isStripeConfigured, scheduleDowngradeAtPeriodEnd } from '@/lib/stripe';
@@ -109,7 +109,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           stripe_schedule_id: scheduleId,
           downgraded_by: ctx.userId,
         },
-      }).where(eq(subscriptions.id, currentSub.id));
+      // #3344 (#3194 doctrine): tenant clause on the write; stays unconditional —
+      // a Stripe-first mirror must never lose its write to a claim (see resume).
+      }).where(and(
+        eq(subscriptions.id, currentSub.id),
+        eq(subscriptions.tenantId, ctx.tenantId),
+      ));
 
       // Record billing event
       await tx.insert(billingEvents).values({

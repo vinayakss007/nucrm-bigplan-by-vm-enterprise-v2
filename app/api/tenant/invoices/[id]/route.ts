@@ -204,8 +204,10 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
+    // #3346: the read must carry `status`, not just `id` — a payload that
+    // writes status needs the from-state to claim against.
     const [existing] = await db
-      .select({ id: invoices.id })
+      .select({ id: invoices.id, status: invoices.status })
       .from(invoices)
       .where(
         and(
@@ -222,6 +224,20 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     const guard = await concurrencyGuard(db, invoices, invoiceId, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
+    // #3346: the existence read above is unlocked. A DELETE (which tombstones
+    // and forces status='cancelled') or a competing status write can land
+    // between it and the UPDATE. Claim the vetted from-state in the WHERE:
+    // pin the tombstone gate and, when the payload writes status, the exact
+    // status that was read. Postgres re-evaluates WHERE under the row lock, so
+    // a transition only wins if it still starts from the state that was
+    // validated (#2256 vocab, #2226 ledger-owned statuses, #3159-family).
+    const claimsStatus = allowedFields.status !== undefined;
+    const writeClause = and(
+      eq(invoices.id, invoiceId),
+      eq(invoices.tenantId, ctx.tenantId),
+      sql`${invoices.deletedAt} IS NULL`,
+      ...(claimsStatus ? [eq(invoices.status, existing.status)] : []),
+    );
 
     // #2226: when the money on the invoice changes, the payment summary derived
     // from it (amountPaid/balanceDue/status/paidAt) must be recomputed from the
@@ -235,14 +251,18 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       updatedBy: ctx.userId,
     };
 
-    let updated: typeof invoices.$inferSelect | undefined;
+    let updated: typeof invoices.$inferSelect | null | undefined;
     if (ledgerAffected) {
       updated = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(invoices)
           .set(patch)
-          .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+          .where(writeClause)
           .returning();
+        // #3346: a missed claim must skip the ledger recalculation entirely —
+        // recomputing a summary for an invoice we never wrote (or that was
+        // concurrently tombstoned) is exactly the drift #2226 exists to stop.
+        if (!row) return null;
         await recalculateInvoicePayments(tx, invoiceId, ctx.tenantId);
         // Re-read after the recalc so the response reflects the recomputed summary.
         const [fresh] = await tx
@@ -256,8 +276,22 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       [updated] = await db
         .update(invoices)
         .set(patch)
-        .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+        .where(writeClause)
         .returning();
+    }
+
+    if (!updated) {
+      if (claimsStatus) {
+        return NextResponse.json(
+          {
+            error:
+              `Invoice status changed concurrently — cannot move '${existing.status}' to ` +
+              `'${allowedFields.status}'. Reload and retry.`,
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     await logAudit({

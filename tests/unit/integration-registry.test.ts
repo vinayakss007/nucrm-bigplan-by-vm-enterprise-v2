@@ -15,6 +15,13 @@ vi.mock('@/lib/integrations/providers/openai', () => ({
 vi.mock('@/lib/integrations/ai-connector', () => ({
   aiConnector: vi.fn(),
 }));
+// #3292: handleMailgun now issues its request through safeFetch, which resolves the
+// authority before connecting. Pinned to a public address so the handler test asserts
+// the request shape instead of depending on the CI runner's resolver.
+vi.mock('dns/promises', () => ({
+  resolve4: vi.fn(async () => [{ address: '198.121.228.217', ttl: 60 }]),
+  resolve6: vi.fn(async () => []),
+}));
 
 describe('Integration Registry', () => {
   beforeEach(() => {

@@ -92,6 +92,8 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => ({ eq: [a, b] })),
+  // #3344: the upgrade mirror write now claims id + tenant_id via and().
+  and: vi.fn((...parts: unknown[]) => ({ and: parts })),
 }));
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({ tenantId: TENANT, userId: 'admin-1', isAdmin: true })),

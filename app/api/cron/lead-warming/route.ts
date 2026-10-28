@@ -14,7 +14,7 @@
  * Protected by: x-cron-secret header
  */
 
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,7 +25,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 export async function POST(req: NextRequest) {
   // Validate cron secret
-  if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(req, { job: 'lead-warming' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

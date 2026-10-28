@@ -1,5 +1,17 @@
 # NuCRM Database Security Guide
 
+> **A count is not a census until you say who counted.** The application role is not the
+> table owner, is not a superuser and has no `BYPASSRLS`, so Row Level Security binds it on
+> **every** table where it is enabled — measured on the live schema: 226 tables, 226 with
+> row security. 17 of them carry a `FOR SELECT USING (true)` policy and read honestly from
+> any session (`tenants`, `plans`, `backup_records`…); for the other 209 a session that sets
+> neither `app.current_tenant` nor `app.is_super_admin` is admitted to **no rows**: `count(*)`
+> answers 0, `EXISTS` answers false, `SELECT` returns nothing, and none of it raises. Measured
+> on a development database — `users` 0 against 28, `contacts` 0 against 66, `deal_stages` 0
+> against 146. `npm run db:count -- <table>` asks the catalog what the table allows, runs the
+> same count in both contexts and prints the gap; `guard:app-role-counts` screens `scripts/`
+> so a new script cannot quote a number without naming its context (#3280).
+
 ## Overview
 
 This document covers all database security practices for NuCRM — backup/restore, migration safety, container persistence, and disaster recovery.
@@ -257,6 +269,28 @@ Then point the app's `DATABASE_URL` at **`nucrm_app`** (never the owner), and ru
 migrations as `nucrm_owner`. Migration `0068_force_rls_owner.sql` additionally
 applies `FORCE ROW LEVEL SECURITY`, so RLS holds even if the app ever connects
 as an owner.
+
+### The read-only ops role (#3280 ask 1) — proposed, not provisioned here
+
+Nothing in this repository creates this role: a `BYPASSRLS` grant is a privilege
+decision, and the standing rule from **#3246** is that a PR does not apply production
+DDL. It is written down so the decision can be made once, deliberately.
+
+```sql
+-- Operator role: SELECT only, BYPASSRLS so an on-call count is the real count.
+-- NEVER put this in the app's DATABASE_URL — scripts/preflight.ts fails production
+-- startup when the connecting role has BYPASSRLS, which is the point.
+CREATE ROLE nucrm_ops LOGIN PASSWORD '...' BYPASSRLS;
+GRANT USAGE ON SCHEMA public TO nucrm_ops;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO nucrm_ops;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO nucrm_ops;
+```
+
+Until it exists, the honest alternatives need no new privilege:
+`PGOPTIONS='-c app.is_super_admin=true' psql "$DATABASE_URL"` arms the context the
+policies already read, and `npm run db:count -- <table>` prints both contexts and says
+which one it got (#3280). An operator SQL snippet that does neither is filtered, and a
+filtered `0` looks exactly like an empty table.
 
 ### Fail-closed startup check
 

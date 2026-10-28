@@ -114,9 +114,22 @@ export const DELETE = withApiRoute(async (_request: NextRequest, { params }: { p
 
     if (!existing) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
 
-    await db.update(meetings)
+    // #3342 (#3194 doctrine): the read above only proves the row was right a
+    // moment ago, and a bare `WHERE id` put tenancy entirely on it — this was
+    // the family's worst remaining offender, an id-only write on a
+    // tenant-scoped table with no read-back. Re-assert the conditions the read
+    // vetted; an empty read-back means the row moved or was tombstoned in the
+    // gap: 404, nothing claimed, no false `ok: true`.
+    const [tombstoned] = await db.update(meetings)
       .set({ deletedAt: new Date() })
-      .where(eq(meetings.id, id));
+      .where(and(
+        eq(meetings.id, id),
+        eq(meetings.tenantId, ctx.tenantId),
+        isNull(meetings.deletedAt)
+      ))
+      .returning({ id: meetings.id });
+
+    if (!tombstoned) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

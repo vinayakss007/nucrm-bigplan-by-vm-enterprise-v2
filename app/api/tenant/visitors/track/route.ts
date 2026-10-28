@@ -12,6 +12,9 @@ import { scorePageUrl } from '@/lib/visitor-tracking';
 import { isUuid } from '@/lib/id';
 import { createHash } from 'crypto';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+// #3291: a key that cannot prove its owner is still a member authenticates nothing.
+import { keyOwnerIsLive } from '@/lib/auth/api-key-membership';
+import { NO_USER_SENTINEL, setTenantContext } from '@/lib/db/rls';
 import { readJsonBody } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
     // Resolve tenant from API key by hashing and looking up in the api_keys table
     const keyHash = createHash('sha256').update(apiKey).digest('hex');
     const keyRows = await db
-      .select({ tenantId: apiKeys.tenantId })
+      .select({ tenantId: apiKeys.tenantId, userId: apiKeys.userId })
       .from(apiKeys)
       .where(and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isActive, true)));
 
@@ -73,6 +76,18 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = keyRow.tenantId;
+
+    // #3291: this beacon is public and the key is its only credential, so the key
+    // has to prove what every other credential path proves — that its owner still
+    // holds an active membership here. `api_keys.is_active` is a flag nobody
+    // clearing the member remembered to set; a stale tracking key otherwise keeps
+    // accepting writes into the departed member's workspace. Adoption order
+    // matches lib/webhooks/inbound-auth.ts: the tenant GUC has to exist before
+    // `tenant_members` (which is tenant-isolated) can be read at all.
+    await setTenantContext(tenantId, keyRow.userId ?? NO_USER_SENTINEL);
+    if (!await keyOwnerIsLive(tenantId, keyRow.userId)) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+    }
 
     // Sanitize visitor-supplied fields before persisting (see note above).
     const safeUrl = sanitizeTrackingField(url);
