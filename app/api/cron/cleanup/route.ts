@@ -6,7 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -75,7 +75,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   //  2. a logged-in super admin triggers it manually from the dashboard.
   // #1087: the superadmin path means the settings UI no longer needs to send a
   // cron secret from the browser (it previously sent an empty one).
-  const secretOk = verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET);
+  const secretOk = await verifyCronSecret(request, { job: 'cleanup' });
   if (!secretOk) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse || !ctx.isSuperAdmin) {

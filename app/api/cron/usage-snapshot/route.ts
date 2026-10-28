@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
@@ -62,7 +62,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
  * users_count/storage_used_mb/api_calls_count as a real measurement.
  */
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'usage-snapshot' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   // Distributed dedup guard (#1255): skip if another scheduler already ran it.

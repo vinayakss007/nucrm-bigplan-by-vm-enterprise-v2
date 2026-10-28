@@ -10,6 +10,7 @@ import { logError } from '@/lib/errors-server';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { verifySecret } from '@/lib/crypto';
 import { addJob } from '@/lib/queue';
 import { processWhatsAppPayload } from '@/lib/whatsapp/webhook-processor';
 
@@ -23,7 +24,12 @@ export async function GET(req: NextRequest) {
 
   const verifyToken = process.env['WHATSAPP_WEBHOOK_VERIFY_TOKEN'];
 
-  if (mode === 'subscribe' && token === verifyToken) {
+  // #3298: this was `token === verifyToken`. Beyond the timing side, the empty case
+  // failed open — a blank `WHATSAPP_WEBHOOK_VERIFY_TOKEN=` compared equal to a caller
+  // sending `hub.verify_token=`, because URLSearchParams answers the empty string
+  // rather than null, and the channel subscribed with no credential. verifySecret
+  // returns false when either side is empty.
+  if (mode === 'subscribe' && verifySecret(token, verifyToken)) {
     return new NextResponse(challenge, { status: 200 });
   }
 

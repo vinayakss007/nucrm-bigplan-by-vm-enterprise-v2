@@ -47,7 +47,12 @@ vi.mock('@/lib/db/rls', () => ({
 }));
 
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => {}) }));
-vi.mock('@/lib/crypto', () => ({ verifySecret: () => true }));
+// #3298: this route authenticates through lib/auth/cron rather than comparing the
+// secret itself, so that is the module to stub. Allow/deny semantics are pinned in
+// auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
+// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
+// What this spec owns is the job's own logic.
+vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
 vi.mock('@/lib/cron/cron-lock', () => ({ refuseIfCronLockHeld: vi.fn(async () => null) }));
 vi.mock('@/lib/email/service', () => ({ alertSuperAdmin: vi.fn(async () => {}) }));
 vi.mock('@/lib/backups/backup-service', () => ({ pgLibpqEnv: (u: string) => ({ PGURL: u }) }));

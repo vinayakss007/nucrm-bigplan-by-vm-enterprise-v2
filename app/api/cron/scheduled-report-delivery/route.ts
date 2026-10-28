@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { generateExportData } from '@/lib/export';
 import { sendEmail } from '@/lib/email/service';
 import type { EmailAttachment } from '@/lib/email/service';
@@ -153,7 +153,7 @@ function parseCsv(csv: string): { columns: string[]; rows: string[][] } {
 }
 
 export async function POST(req: NextRequest) {
-  if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
+  if (!await verifyCronSecret(req, { job: 'scheduled-report-delivery' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const lock = await acquireLock(REPORT_LOCK_KEY, REPORT_LOCK_TTL);

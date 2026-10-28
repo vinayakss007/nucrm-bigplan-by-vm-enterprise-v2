@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { and, isNull, sql } from 'drizzle-orm';
@@ -16,7 +16,7 @@ import { logger } from '@/lib/logger';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 export async function POST(req: NextRequest) {
-  if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
+  if (!await verifyCronSecret(req, { job: 'ai-auto-followup' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // Distributed dedup guard (#1422): skip when another scheduler

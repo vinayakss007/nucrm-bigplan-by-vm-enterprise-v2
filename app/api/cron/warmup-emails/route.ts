@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { processWarmUp, type WarmUpResult } from '@/lib/email/warmup';
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 export async function POST(req: NextRequest) {
-  if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET))
+  if (!await verifyCronSecret(req, { job: 'warmup-emails' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // Distributed dedup guard (#1422): skip when another scheduler

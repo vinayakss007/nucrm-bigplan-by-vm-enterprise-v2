@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 /**
- * #3298 ask 2 — `guard:cron-auth` over every cron route.
+ * #3298 ask 2 — the screen over cron routes.
  *
  * The behaviour is pinned in cron-task-reminders.test.ts (a real allowlist denial
  * through the real lib/auth/cron). This spec pins the guarantee that keeps the
@@ -16,9 +16,11 @@
  * been seen to fail is not evidence of anything. The last case runs against the
  * real tree — that is what makes the screen a check rather than a description.
  *
- * Enforced from `test-unit` (this spec shells out to the script) in addition to the
- * `pre-merge-check.sh` step the issue asks for, so CI fails a regression on the
- * branch that introduced it instead of on the next deploy.
+ * Enforced from `test-unit` (this spec shells out to the script) rather than as a new
+ * `guard:` job: the docs census #3281/#3282 built counts `package.json` guard aliases
+ * against the CI steps that run them, so an alias with no ci.yml step would be the
+ * defined-but-unwired shape that census fails on — and the cited coordinates in
+ * `.github/workflows/ci.yml` are load-bearing for the register.
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -30,7 +32,15 @@ const ROOT = join(import.meta.dirname!, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'check-cron-auth.mjs');
 
 const CRON_MODULE = `
-export async function checkCronAuth(req, rawBody) { return { ok: true, reason: 'ok' }; }
+export async function checkCronAuth(req, rawBody) {
+  if (parseAllowlist(process.env.CRON_ALLOWED_IPS).length > 0 && !isIpAllowed(getTrustedIp(req), [])) {
+    return { ok: false, reason: 'ip_not_allowed' };
+  }
+  if (process.env.CRON_SIGNING_KEY && !req.headers.get('x-cron-signature')) {
+    return { ok: false, reason: 'signature_missing' };
+  }
+  return { ok: true, reason: 'ok' };
+}
 function auditCronAuth(jobName, result, ip) {
   if (result.ok) return;
   void (async () => {
@@ -132,6 +142,17 @@ describe('check-cron-auth.mjs fails what it claims (#3298 ask 2)', () => {
     ));
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('reason');
+  });
+
+  it('fails when the module stops reading an opt-in the operator can set', () => {
+    // The guard must not stay green while the thing it guards is switched off —
+    // the failure shape #3282 found a week later in a different file.
+    const res = run(tree(
+      { 'task-reminders': CONVERTED('task-reminders') },
+      { 'lib/auth/cron.ts': CRON_MODULE.replace('CRON_SIGNING_KEY', 'SIGNING_KEY') },
+    ));
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('CRON_SIGNING_KEY');
   });
 
   it('fails an exemption that carries no written reason, and a stale one naming a route that no longer needs it', () => {
