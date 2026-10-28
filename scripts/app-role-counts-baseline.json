@@ -1,0 +1,4 @@
+{
+  "$comment": "Shrink-only exemptions for scripts/check-app-role-counts.mjs (#3280). An entry names a script that reads an RLS-filtered table with no RLS context and why that is tolerated; `tables` must list every table it covers. A stale, duplicate, short-reasoned or incomplete entry fails the guard, so this list can only get shorter.",
+  "exempt": []
+}

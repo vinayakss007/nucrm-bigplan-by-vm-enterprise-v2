@@ -3682,7 +3682,7 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87`.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
+  own coordinates are `ci.yml:86-87` — re-pinned in prose 2026-10-28 by **#3280**, which joined `guard:app-role-counts` to that same step line-count-neutrally, so `:86` names both guards and `:87` runs both: the numbers hold, the content those two lines carry does not, which is the distinction `check-register-drift` exists to make.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
   **#2829**'s `guard:panel-error-state` the next day, both read the source tree rather than this file, and both are
   wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
   the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the

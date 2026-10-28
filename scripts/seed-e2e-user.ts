@@ -3,6 +3,7 @@ import { db } from '../drizzle/db';
 import { users, tenants, tenantMembers, roles, sessions, pipelines, dealStages, contacts, deals } from '../drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken } from '../lib/auth/session';
+import { withSecurityContext, type RlsTransaction } from '../lib/db/rls';
 import * as crypto from 'crypto';
 
 const EMAIL = 'superadmin@nucrm.com';
@@ -33,12 +34,15 @@ const DEAL_DATA = [
   { title: 'Umbrella - SaaS Subscription', amount: '90000', stageIdx: 4, contactIdx: 4 },
 ];
 
-async function ensureUserAndTenant() {
-  const existingUser = await db.select().from(users).where(eq(users.email, EMAIL)).limit(1);
+// users/tenants are FORCE ROW LEVEL SECURITY: an unarmed SELECT returns nothing, so
+// this script re-created the same E2E identity on every run and reported "already
+// exists" as false (#3280). Both steps run in the platform context.
+async function ensureUserAndTenant(tx: RlsTransaction) {
+  const existingUser = await tx.select().from(users).where(eq(users.email, EMAIL)).limit(1);
 
   if (existingUser.length > 0) {
     const user = existingUser[0];
-    const existingMembership = await db.select()
+    const existingMembership = await tx.select()
       .from(tenantMembers)
       .where(eq(tenantMembers.userId, user.id))
       .limit(1);
@@ -53,7 +57,7 @@ async function ensureUserAndTenant() {
   const tenantId = crypto.randomUUID();
   const passwordHash = await hashPassword(PASSWORD);
 
-  await db.insert(users).values({
+  await tx.insert(users).values({
     id: userId,
     email: EMAIL,
     passwordHash,
@@ -62,7 +66,7 @@ async function ensureUserAndTenant() {
     lastTenantId: tenantId,
   });
 
-  await db.insert(tenants).values({
+  await tx.insert(tenants).values({
     id: tenantId,
     name: 'E2E Test Workspace',
     slug: 'e2e-test-' + Date.now().toString(36),
@@ -70,7 +74,7 @@ async function ensureUserAndTenant() {
     status: 'active',
   });
 
-  const [role] = await db.select()
+  const [role] = await tx.select()
     .from(roles)
     .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin')))
     .limit(1);
@@ -80,7 +84,7 @@ async function ensureUserAndTenant() {
     process.exit(1);
   }
 
-  await db.insert(tenantMembers).values({
+  await tx.insert(tenantMembers).values({
     tenantId,
     userId,
     roleId: role.id,
@@ -91,7 +95,7 @@ async function ensureUserAndTenant() {
 
   const token = await createToken(userId);
   const tokenHash = await hashToken(token);
-  await db.insert(sessions).values({
+  await tx.insert(sessions).values({
     userId,
     tokenHash,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -100,15 +104,15 @@ async function ensureUserAndTenant() {
   return { userId, tenantId, created: true };
 }
 
-async function ensurePipelineAndStages(tenantId: string) {
-  let [pipeline] = await db.select()
+async function ensurePipelineAndStages(tx: RlsTransaction, tenantId: string) {
+  let [pipeline] = await tx.select()
     .from(pipelines)
     .where(and(eq(pipelines.tenantId, tenantId), eq(pipelines.isDefault, true)))
     .limit(1);
 
   if (!pipeline) {
     const pipelineId = crypto.randomUUID();
-    await db.insert(pipelines).values({
+    await tx.insert(pipelines).values({
       id: pipelineId,
       tenantId,
       name: 'Default Sales Pipeline',
@@ -118,7 +122,7 @@ async function ensurePipelineAndStages(tenantId: string) {
     pipeline = { id: pipelineId, tenantId, name: 'Default Sales Pipeline', description: 'Standard B2B sales pipeline', isDefault: true };
   }
 
-  const existingStages = await db.select()
+  const existingStages = await tx.select()
     .from(dealStages)
     .where(eq(dealStages.pipelineId, pipeline.id));
 
@@ -133,7 +137,7 @@ async function ensurePipelineAndStages(tenantId: string) {
     if (!existingNames.has(sd.name)) {
       const sid = crypto.randomUUID();
       stageIds[sd.name] = sid;
-      await db.insert(dealStages).values({
+      await tx.insert(dealStages).values({
         id: sid,
         pipelineId: pipeline.id,
         tenantId,
@@ -141,7 +145,7 @@ async function ensurePipelineAndStages(tenantId: string) {
         order: sd.order,
       });
     } else {
-      await db.update(dealStages)
+      await tx.update(dealStages)
         .set({ order: sd.order })
         .where(and(eq(dealStages.id, stageIds[sd.name]), eq(dealStages.pipelineId, pipeline.id)));
     }
@@ -217,7 +221,7 @@ async function ensureDeals(tenantId: string, pipelineId: string, stageIds: Recor
 }
 
 async function main() {
-  const { userId, tenantId, created } = await ensureUserAndTenant();
+  const { userId, tenantId, created } = await withSecurityContext(ensureUserAndTenant);
 
   if (!tenantId) {
     console.error('E2E user exists but has no tenant membership. Use --force to re-seed.');
@@ -226,7 +230,7 @@ async function main() {
 
   console.log(`E2E user: ${EMAIL} (${created ? 'created' : 'already exists'})`);
 
-  const { pipelineId, stageIds } = await ensurePipelineAndStages(tenantId);
+  const { pipelineId, stageIds } = await withSecurityContext((tx) => ensurePipelineAndStages(tx, tenantId));
   console.log(`Pipeline: ${pipelineId} with ${Object.keys(stageIds).length} stages`);
 
   const contactIds = await ensureContacts(tenantId, userId);

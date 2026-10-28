@@ -114,22 +114,34 @@ export function buildAudit({ catalogRows, answers }) {
 
 export async function runLiveAudit({ databaseUrl, limitTables, pool }) {
   const own = pool ?? await openPool(databaseUrl);
+  // #3280: unarmed, FORCE RLS makes these counts answer 0 on rows the app role
+  // cannot see, and the headline becomes "no row exceeds the ceiling". Measure the
+  // whole audit on one connection inside a read-only transaction that arms the GUC.
+  const client = typeof own.connect === 'function' ? await own.connect() : own;
+  const release = typeof client.release === 'function' ? () => client.release() : () => {};
   try {
-    const res = await own.query(CATALOG_SQL);
+    await client.query('BEGIN READ ONLY');
+    await client.query(`SELECT set_config('app.is_super_admin', 'true', true)`);
+    const res = await client.query(CATALOG_SQL);
     let targets = dedupeByColumn(res.rows.map(normaliseCatalogRow));
     if (limitTables) targets = targets.slice(0, limitTables);
     const counted = [];
     for (const t of targets) {
-      const r = await own.query(overageSql(t));
+      const r = await client.query(overageSql(t));
       counted.push({ ...t, overCeiling: Number(r.rows[0]?.over_ceiling ?? 0) });
     }
+    await client.query('ROLLBACK');
     return {
       targets: counted,
       skipped: unmeasurable(res.rows.map(normaliseCatalogRow)),
       summary: summarise(counted),
       catalogRows: res.rows.length,
     };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
   } finally {
+    release();
     if (!pool) await own.end();
   }
 }

@@ -170,10 +170,19 @@ check_setup() {
   local port
   port=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
 
+  # users is FORCE-RLS and super-admin rows carry a NULL tenant, so this count
+  # answers 0 unless the session declares the platform context (#3280).
+  # A failed query must also not look like "no admin exists".
   local admin_count
-  admin_count=$(PGPASSWORD="$pass" psql -h "$host" -p "$port" -U "$user" -d "$db_name" -t -c "SELECT COUNT(*) FROM users WHERE is_super_admin = true" 2>/dev/null | tr -d ' ' || echo "0")
+  if ! admin_count=$(PGPASSWORD="$pass" PGOPTIONS='-c app.is_super_admin=true' \
+      psql -h "$host" -p "$port" -U "$user" -d "$db_name" -t -A \
+      -c "SELECT COUNT(*) FROM users WHERE is_super_admin = true" 2>/dev/null); then
+    fail "Super-admin count unreadable — not the same as zero. Check DATABASE_URL, then run: npm run db:count -- users"
+    return 0
+  fi
+  admin_count=$(printf '%s' "$admin_count" | tr -d '[:space:]')
 
-  if [ "$admin_count" = "0" ] || [ -z "$admin_count" ]; then
+  if [ "$admin_count" = "0" ]; then
     warn "No super admin found — visit http://localhost:${PORT}/setup to create one"
   else
     ok "Super admin exists ($admin_count), login at http://localhost:${PORT}/auth/login"
