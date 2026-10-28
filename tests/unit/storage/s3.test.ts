@@ -234,18 +234,45 @@ describe('lib/storage/s3', () => {
       const s3 = await load({ S3_BUCKET: 'b' });
       awsMocks.presign.mockResolvedValue('https://signed/put');
 
-      const url = await s3.getSignedPutUrl({ key: 'up/1.png', contentType: 'image/png' });
+      const url = await s3.getSignedPutUrl({
+        key: 'up/1.png', contentType: 'image/png', contentLengthBytes: 2048,
+      });
       expect(url).toBe('https://signed/put');
 
       const [, command, options] = awsMocks.presign.mock.calls.at(-1) ?? [];
       const typed = command as { constructor: { name: string }; input: CommandInput };
       expect(typed.constructor.name).toBe('PutObjectCommand');
       expect(typed.input).toMatchObject({ Key: 'up/1.png', ContentType: 'image/png' });
-      expect(typed.input.ContentLength).toBeUndefined();
+      expect(typed.input.ContentLength).toBe(2048);
       expect(options).toEqual({ expiresIn: 600 });
     });
 
-    it('includes ContentLength only when a byte size is supplied', async () => {
+    // #3297: these two replaced the cases that pinned an OPTIONAL byte size.
+    // `...(args.contentLengthBytes ? { ContentLength } : {})` minted an URL whose
+    // SigV4 signature did not cover content-length, so a row metered at N bytes
+    // could be filled with any other number of bytes. An unbound presign is now
+    // impossible to produce by accident.
+    it('refuses to sign a PUT URL with no byte size (#3297)', async () => {
+      const s3 = await load({ S3_BUCKET: 'b' });
+      awsMocks.presign.mockResolvedValue('u');
+
+      await expect(
+        s3.getSignedPutUrl({ key: 'up/1.png', contentType: 'image/png' } as never)
+      ).rejects.toThrow(/contentLengthBytes/);
+      expect(awsMocks.presign).not.toHaveBeenCalled();
+    });
+
+    it('refuses a zero byte size instead of signing a free pass (#3297)', async () => {
+      const s3 = await load({ S3_BUCKET: 'b' });
+      awsMocks.presign.mockResolvedValue('u');
+
+      await expect(
+        s3.getSignedPutUrl({ key: 'k', contentType: 'text/plain', contentLengthBytes: 0 })
+      ).rejects.toThrow(/contentLengthBytes/);
+      expect(awsMocks.presign).not.toHaveBeenCalled();
+    });
+
+    it('honours an explicit PUT expiry and still binds the length', async () => {
       const s3 = await load({ S3_BUCKET: 'b' });
       awsMocks.presign.mockResolvedValue('u');
 
@@ -258,14 +285,6 @@ describe('lib/storage/s3', () => {
       const [, command, options] = awsMocks.presign.mock.calls.at(-1) ?? [];
       expect((command as { input: CommandInput }).input.ContentLength).toBe(1234);
       expect(options).toEqual({ expiresIn: 30 });
-    });
-
-    it('omits ContentLength when the byte size is zero', async () => {
-      const s3 = await load({ S3_BUCKET: 'b' });
-      awsMocks.presign.mockResolvedValue('u');
-      await s3.getSignedPutUrl({ key: 'k', contentType: 'text/plain', contentLengthBytes: 0 });
-      const [, command] = awsMocks.presign.mock.calls.at(-1) ?? [];
-      expect((command as { input: CommandInput }).input.ContentLength).toBeUndefined();
     });
   });
 

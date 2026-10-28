@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
 import toast from 'react-hot-toast';
 import pLimit from 'p-limit';
 
@@ -115,6 +116,16 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
       body: file,
     });
     if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+
+    // #3297 — the row above was recorded with `sizeBytes: file.size`, which is what
+    // this browser declared before a single byte moved. The PUT lands on the store
+    // directly, so only the store can say what the document actually weighs, and
+    // `max_storage_gb` is summed from that column. A settle that cannot measure
+    // (502) is not a failed upload — the file is exactly where the user put it.
+    const settled = await verifyUploadedDocument(meta.data.document.id);
+    if (settled.status === 413 || settled.status === 410) {
+      throw new Error(settled.error || 'The stored document could not be kept');
+    }
   };
 
   const onFiles = async (files: FileList | null) => {

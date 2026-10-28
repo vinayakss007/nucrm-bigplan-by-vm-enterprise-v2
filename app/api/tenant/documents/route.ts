@@ -211,6 +211,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }
 
     // Store document metadata
+    // #3297: `sizeBytes` here is the client's claim, made before any byte moved, and
+    // `max_storage_gb` is summed from this column. The row is corrected against the
+    // object by `POST /api/tenant/documents/[id]/verify` once the PUT lands — every
+    // uploader of a presigned URL has to call it, or the meter keeps reporting the
+    // claim (`tests/unit/upload-presign-settle-screen-3297.test.ts` enforces that).
     const [doc] = await db.insert(documents).values({
       tenantId: ctx.tenantId,
       name,

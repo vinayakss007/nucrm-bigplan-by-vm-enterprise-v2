@@ -12,6 +12,8 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
+  type HeadObjectCommandOutput,
   ListObjectsV2Command,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -130,24 +132,79 @@ export async function getSignedUrl(key: string, expiresIn: number = 3600, bucket
 }
 
 /**
+ * Read an object's real length back from the store.
+ *
+ * #3297: `documents.size_bytes` is the number `max_storage_gb` is metered from, and
+ * it was only ever what the upload client put in the POST body
+ * (`app/api/tenant/documents/route.ts:126`) — nothing compared it to the bytes that
+ * actually landed. `grep -rn "HeadObject\|headObject" app lib` answered 0 before
+ * this, so there was no way to ask.
+ *
+ * The return type carries the distinction the caller has to respect: `null` means
+ * the store positively says the key is not there, and ONLY that. A 503, a timeout,
+ * a bad bucket or an answer with no length THROWS — the settle route soft-deletes on
+ * `null`, so collapsing an outage into "absent" would drop a tenant's whole library
+ * from the meter on one bad gateway turn.
+ */
+export async function headObjectSize(key: string, bucket?: string): Promise<number | null> {
+  let head: HeadObjectCommandOutput | undefined;
+  try {
+    head = await s3Client.send(new HeadObjectCommand({
+      // Documents live in the user-files bucket, not the backup bucket BUCKET
+      // defaults to; a document row with no s3Bucket must still be measured where
+      // its bytes are.
+      Bucket: bucket || s3Config.bucket || BUCKET,
+      Key: key,
+    }));
+  } catch (err) {
+    const name = (err as { name?: string } | null)?.name ?? '';
+    const status = (err as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata?.httpStatusCode;
+    if (status === 404 || name === 'NoSuchKey' || name === 'NotFound') return null;
+    // AccessDenied, SlowDown, 503, a DNS failure — all unknown, all fatal to a
+    // caller that is about to trust an absence. Never a null.
+    throw err;
+  }
+
+  // A HEAD that returned no body at all is how a gateway answers a missing key.
+  if (head == null) return null;
+  if (typeof head.ContentLength !== 'number') {
+    throw new Error(`store answered HEAD for ${key} without a length — treating unknown as 0 would credit back bytes in use`);
+  }
+  return head.ContentLength;
+}
+
+/**
  * Generate a presigned PUT URL for direct browser uploads. The browser
  * uploads bytes straight to S3/R2; the server only records metadata
  * after the upload reports success. ContentType is locked into the URL
  * so the browser must re-send it on PUT.
+ *
+ * #3297 made the byte size required. SigV4 signs whatever is in the command —
+ * measured on this repo: a PutObjectCommand with `ContentLength: 1024` comes back
+ * with `X-Amz-SignedHeaders=content-length;host`, so a body of any other length is
+ * rejected by the store. Leaving the option optional meant the old
+ * `...(args.contentLengthBytes ? … : {})` quietly minted an UNBOUND URL whenever a
+ * caller forgot it, and an unbound URL is exactly the hole: a row metered at 1 byte
+ * whose object is 100 MB. A caller that has no length to declare has no business
+ * signing an upload.
  */
 export async function getSignedPutUrl(args: {
   key: string;
   contentType: string;
+  contentLengthBytes: number;
   expiresInSeconds?: number;
-  contentLengthBytes?: number;
   bucket?: string;
 }): Promise<string> {
+  const declared = args.contentLengthBytes;
+  if (typeof declared !== 'number' || !Number.isFinite(declared) || declared <= 0) {
+    throw new Error(`getSignedPutUrl requires a positive contentLengthBytes for ${args.key} (got ${String(declared)})`);
+  }
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
   const command = new PutObjectCommand({
     Bucket: args.bucket || BUCKET,
     Key: args.key,
     ContentType: args.contentType,
-    ...(args.contentLengthBytes ? { ContentLength: args.contentLengthBytes } : {}),
+    ContentLength: declared,
   });
  
  
