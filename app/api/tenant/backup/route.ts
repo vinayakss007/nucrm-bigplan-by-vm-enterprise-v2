@@ -89,6 +89,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
+    // #3298: /api/cron/backup went from comparing the secret by hand to the shared
+    // check, so it now also honours CRON_ALLOWED_IPS. This fetch sends no
+    // x-forwarded-for, and the allowlist denies an unknown source — an operator who
+    // turns the allowlist on has to list this container's own egress address too.
     const cronRes = await fetch(`${baseUrl}/api/cron/backup?type=${backupType}`, {
       method: 'POST',
       headers: { 'x-cron-secret': process.env.CRON_SECRET || '' },
