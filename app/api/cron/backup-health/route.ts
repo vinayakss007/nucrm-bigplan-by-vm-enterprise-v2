@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
 import { db } from '@/drizzle/db';
@@ -23,8 +23,7 @@ const insertAlert = (alertType: string, message: string) =>
 
 // Runs every 6 hours — checks backup health and alerts if backup is overdue
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (!verifySecret(secret, process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'backup-health' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

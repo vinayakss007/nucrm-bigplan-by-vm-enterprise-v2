@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -16,7 +16,7 @@ import { logError } from '@/lib/errors-server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'task-reminders' })) {
     return NextResponse.json({ error:'Unauthorized' }, { status:401 });
   }
 

@@ -42,7 +42,7 @@ const CRITICAL_TABLES = [
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   // Verify cron secret
-  const verified = await verifyCronSecret(req);
+  const verified = await verifyCronSecret(req, { job: 'auto-backup' });
   if (!verified) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

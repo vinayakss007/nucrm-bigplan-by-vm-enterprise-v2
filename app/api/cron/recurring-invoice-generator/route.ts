@@ -26,7 +26,7 @@
  * invoice, not itself a template); the source row remains the recurring
  * template and keeps advancing.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -101,7 +101,7 @@ function anchorDayFor(template: {
 }
 
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'recurring-invoice-generator' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

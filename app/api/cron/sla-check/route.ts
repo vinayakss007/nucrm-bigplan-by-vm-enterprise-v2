@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { verifySecret } from '@/lib/crypto';
+import { verifyCronSecret } from '@/lib/auth/cron';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -26,7 +26,7 @@ import { checkSLABreach, DEFAULT_SLA_TIMES, type SLADefinition } from '@/lib/sla
  * 4. Send in-app notifications and email alerts for breaches
  */
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
+  if (!await verifyCronSecret(request, { job: 'sla-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
