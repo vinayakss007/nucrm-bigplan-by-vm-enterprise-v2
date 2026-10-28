@@ -67,6 +67,10 @@ function notFound(name = 'NotFound'): Error & { name: string; $metadata?: { http
 let mod: typeof import('@/lib/storage/s3');
 
 beforeEach(async () => {
+  // The two error cases spyOn(S3Client.prototype,'send'); clearAllMocks does not
+  // put the class method back, so without this the gateway-error rejection leaks
+  // into the following case and a 503 masquerades as the store's answer.
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   h.sent.length = 0;
   h.signedCommands.length = 0;
@@ -128,7 +132,9 @@ describe('getSignedPutUrl binds the URL to the declared size (#3297 ask 2)', () 
 
   it('refuses to mint an unbound URL when no size was declared', async () => {
     await expect(
-      mod.getSignedPutUrl({ key: 'documents/t/a.pdf', contentType: 'application/pdf', bucket: 'bkt' }),
+      // `as never` is the point: the option is required since #3297, so minting an
+      // unbound URL now takes a type error, not just a forgotten argument.
+      mod.getSignedPutUrl({ key: 'documents/t/a.pdf', contentType: 'application/pdf', bucket: 'bkt' } as never),
     ).rejects.toThrow(/contentLengthBytes/);
     expect(h.signedCommands).toHaveLength(0);
   });

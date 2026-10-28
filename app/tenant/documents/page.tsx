@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface DocumentFile {
@@ -103,6 +104,10 @@ export default function DocumentsPage() {
               body: file,
               headers: { 'Content-Type': file.type || 'application/octet-stream' },
             });
+            // #3297 — the row holds the size this page declared, not the size the
+            // store received. Settle it, or the workspace keeps reporting a usage
+            // figure nobody measured.
+            if (data.document?.id) await verifyUploadedDocument(data.document.id);
           }
         }
       }

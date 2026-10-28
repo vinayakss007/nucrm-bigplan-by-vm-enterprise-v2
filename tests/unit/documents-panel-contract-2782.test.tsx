@@ -68,6 +68,7 @@ let metaPosts: Record<string, unknown>[] = [];
 let putKeys: string[] = [];
 let downloadGets: string[] = [];
 let deleteUrls: string[] = [];
+let verifyPaths: string[] = [];
 let id = 0;
 
 /** Exactly the validation `route.ts:139-151` applies, in the same order. */
@@ -132,6 +133,21 @@ function fakeFetch(input: string, init?: RequestInit) {
   if (method === 'PUT' && url.hostname === 's3.test') {
     putKeys.push(url.pathname);
     return json({}, 200);
+  }
+
+  // #3297 — the panel settles the row after the bytes land. This spec owns the
+  // request/response contract of the upload; documents-upload-verify-3297.test.tsx
+  // owns what the settle does with the answer, so it is served here as a no-op.
+  if (method === 'POST' && /^\/api\/tenant\/documents\/[^/]+\/verify$/.test(url.pathname)) {
+    verifyPaths.push(url.pathname);
+    const docId = url.pathname.split('/')[4];
+    const hit = docs.find((d) => d.id === docId);
+    return json({
+      data: {
+        id: docId, name: hit?.name ?? 'unknown',
+        declaredBytes: hit?.sizeBytes ?? 0, measuredBytes: hit?.sizeBytes ?? 0, adjusted: false,
+      },
+    });
   }
 
   if (method === 'DELETE' && /^\/api\/tenant\/documents(\/|$)/.test(url.pathname)) {
@@ -199,6 +215,7 @@ beforeEach(() => {
   putKeys = [];
   downloadGets = [];
   deleteUrls = [];
+  verifyPaths = [];
   docs = [
     row(),
     row({ id: PEER, name: 'peer-deal-doc.pdf', entityId: PEER_DEAL, s3Key: `documents/${TENANT}/${PEER}.pdf` }),
@@ -267,6 +284,14 @@ describe('an upload from the panel completes (#2782)', () => {
     await mount();
     await uploadOne();
     expect(putKeys).toEqual([`/documents/${TENANT}/new-1.pdf`]);
+  });
+
+  it('settles the declared size against the store once the bytes land (#3297)', async () => {
+    await mount();
+    await uploadOne();
+    await waitFor(() => expect(verifyPaths).toEqual([`/api/tenant/documents/new-1/verify`]));
+    // The settle is for the row THIS upload created, and only after the PUT.
+    expect(putKeys).toHaveLength(1);
   });
 
   it('shows the uploaded document once the list reloads', async () => {

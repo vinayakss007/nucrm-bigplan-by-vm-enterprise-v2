@@ -27,6 +27,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQLWrapper } from 'drizzle-orm';
+
+const dialect = new PgDialect();
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OTHER_TENANT = '99999999-9999-4999-8999-999999999999';
@@ -117,9 +121,15 @@ function postRequest(): NextRequest {
 
 const context = { params: Promise.resolve({ id: DOC_ID }) };
 
-/** Renders the predicate drizzle was given, to prove tenant scoping is in the WHERE. */
+/**
+ * Renders the predicate drizzle was given, to prove tenant scoping is in the WHERE
+ * and not merely re-checked in JS after an unscoped read (`[id]/route.ts:40-45`).
+ */
 function predicateNames(): string {
-  return JSON.stringify(h.wheres).slice(0, 4000);
+  return h.wheres.map((frag) => {
+    const q = dialect.sqlToQuery(frag as SQLWrapper);
+    return `${q.sql} :: ${JSON.stringify(q.params)}`;
+  }).join('\n').slice(0, 4000);
 }
 
 beforeEach(() => {
