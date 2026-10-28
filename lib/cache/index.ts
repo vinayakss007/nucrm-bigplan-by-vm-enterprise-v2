@@ -307,7 +307,21 @@ const REFRESH_SCRIPT = `
   return 0
 `;
 
-export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
+/**
+ * #3259 ask 2 — why a probe was refused. `acquired: false` alone conflated "a
+ * peer holds it" with "the store could not be consulted", and the cron routes
+ * turned either one into a 423 that blamed another instance. The field is
+ * additive: the other callers read only `acquired`.
+ */
+export type LockRefusal = 'held' | 'unavailable';
+
+export interface LockResult {
+  acquired: boolean;
+  value: string;
+  reason?: LockRefusal;
+}
+
+export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<LockResult> {
   const redis = getRedisClient();
   // #3259: getRedisClient() builds the client lazily, so the first caller of a
   // process used to hand the check below a client still `'connecting'` — a
@@ -322,18 +336,28 @@ export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): P
   // fallback at once (the stampede this lock prevents); it still returns a
   // value, so throughput degrades, not correctness. LOCK_FAIL_OPEN=true restores legacy fail-open for idempotent/guarded callers.
   if (!redis || redis.status !== 'ready') {
-    return { acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' };
+    return refuseUnavailable();
   }
   const value = makeLockValue();
   try {
     const result = await redis.call('SET', `nucrm:lock:${key}`, value, 'EX', ttlSeconds, 'NX');
     recordRedisSuccess();
-    return { acquired: result === 'OK', value };
+    return result === 'OK' ? { acquired: true, value } : { acquired: false, value, reason: 'held' };
   } catch (e) {
     console.error('[Cache] acquireLock failed', e);
     recordRedisFailure();
-    return { acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' };
+    return refuseUnavailable();
   }
+}
+
+/**
+ * The store could not be consulted. `LOCK_FAIL_OPEN=true` still means the caller
+ * is told to proceed — and then there is no refusal left to explain.
+ */
+function refuseUnavailable(): LockResult {
+  return process.env['LOCK_FAIL_OPEN'] === 'true'
+    ? { acquired: true, value: '' }
+    : { acquired: false, value: '', reason: 'unavailable' };
 }
 
 export async function releaseLock(key: string, value: string): Promise<void> {

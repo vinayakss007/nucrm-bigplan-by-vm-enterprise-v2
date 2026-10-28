@@ -51,14 +51,26 @@
  * and both `recordCronSkip` and the 423 blamed another instance, while the retry
  * that "proved it working" was just the second call finding the ready state.
  * `lib/cache/redis-ready.ts` gives that one case a bounded grace window before
- * the fail-closed answer, so a refusal here means contention or a Redis that is
- * actually down.
+ * the fail-closed answer. What remains are the two real states, named apart
+ * since ask 2 of the same issue: `lock-held` when a peer owns the key,
+ * `lock-unavailable` when the store could not be consulted.
  */
 import { NextResponse } from 'next/server';
 import { acquireLock } from '@/lib/cache';
 
 /** Machine-readable reason carried by every refused cron lock (#2539). */
 export const CRON_LOCK_REFUSED_REASON = 'lock-held';
+
+/**
+ * #3259 ask 2 — the other half of a refusal, which used to answer with
+ * `'lock-held'` too: a Redis outage read as a busy scheduler, blaming a peer
+ * that does not exist. Status stays 423; only the reason changes.
+ */
+export const CRON_LOCK_UNAVAILABLE_REASON = 'lock-unavailable';
+
+export type CronLockRefusalReason =
+  | typeof CRON_LOCK_REFUSED_REASON
+  | typeof CRON_LOCK_UNAVAILABLE_REASON;
 
 /**
  * The one place that knows a skipped cron run is a failure. 423 is "Locked"
@@ -73,16 +85,25 @@ export const CRON_LOCK_REFUSED_STATUS = 423;
  * `app/api/tenant/backup` surfaces that field to the operator who pressed
  * "Back up now" while the nightly job holds the lock.
  */
-export function cronLockRefusalResponse(key: string): NextResponse {
+export function cronLockRefusalResponse(
+  key: string,
+  reason: CronLockRefusalReason = CRON_LOCK_REFUSED_REASON,
+): NextResponse {
   return NextResponse.json(
     {
       ok: false,
-      skipped: CRON_LOCK_REFUSED_REASON,
-      reason: CRON_LOCK_REFUSED_REASON,
-      error: `Cron job "${key}" did not run: its lock is already held by another instance`,
+      skipped: reason,
+      reason,
+      error: refusalMessage(key, reason),
     },
     { status: CRON_LOCK_REFUSED_STATUS },
   );
+}
+
+function refusalMessage(key: string, reason: CronLockRefusalReason): string {
+  return reason === CRON_LOCK_UNAVAILABLE_REASON
+    ? `Cron job "${key}" did not run: its lock store could not be consulted, so the dedup check failed closed — no other instance is implied`
+    : `Cron job "${key}" did not run: its lock is already held by another instance`;
 }
 
 /**
@@ -102,8 +123,10 @@ export async function refuseIfCronLockHeld(
 ): Promise<NextResponse | null> {
   const lock = await acquireLock(key, ttlSeconds);
   if (lock.acquired) return null;
-  recordCronSkip(key);
-  return cronLockRefusalResponse(key);
+  const reason: CronLockRefusalReason =
+    lock.reason === 'unavailable' ? CRON_LOCK_UNAVAILABLE_REASON : CRON_LOCK_REFUSED_REASON;
+  recordCronSkip(key, reason);
+  return cronLockRefusalResponse(key, reason);
 }
 
 /**
@@ -112,15 +135,20 @@ export async function refuseIfCronLockHeld(
  * fire-and-forget, dynamically imported and fully guarded, so a missing DB (or
  * a unit test with no DB at all) can never turn a 423 into a 500.
  */
-function recordCronSkip(key: string): void {
+function recordCronSkip(key: string, reason: CronLockRefusalReason): void {
   void (async () => {
     try {
       const { logError } = await import('@/lib/errors-server');
       await logError({
-        error: new Error(`Cron lock refused for "${key}" — run skipped, not executed`),
+        error: new Error(
+          reason === CRON_LOCK_UNAVAILABLE_REASON
+            ? `Cron lock store unreachable for "${key}" — run refused fail-closed, no peer involved`
+            : `Cron lock refused for "${key}" — run skipped, not executed`,
+        ),
         context: 'cron-lock',
-        level: 'warning',
-        metadata: { job: key, reason: CRON_LOCK_REFUSED_REASON },
+        // An unreachable store is an outage; contention is routine.
+        level: reason === CRON_LOCK_UNAVAILABLE_REASON ? 'error' : 'warning',
+        metadata: { job: key, reason },
       });
     } catch {
       /* logging must never change what the job answers */
