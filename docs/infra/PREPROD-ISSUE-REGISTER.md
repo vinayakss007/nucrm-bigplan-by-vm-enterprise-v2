@@ -1037,7 +1037,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 - **It was not Redis.** `nucrm-redis` reports `StartedAt=2026-09-14T15:01:51Z`,
   `RestartCount=0`, `Status=running`, and `redis-cli PING → PONG` throughout: the server was
   up for three weeks. The gap is entirely inside our own lazily-constructed client.
-- **Mechanism.** `lib/cache/index.ts:338` (re-pinned 2026-10-28, off `:324`: **#3259** ask 2 added `LockResult` above it) —
+- **Mechanism.** `lib/cache/index.ts:330` (re-pinned 2026-10-28, off `:324`: **#3259** ask 2 added `LockResult` above it) —
   `if (!redis || redis.status !== 'ready') return refuseUnavailable()`, which since then answers `{ acquired: false, value: '', reason: 'unavailable' }`.
   Fail-closed is the right call for `getOrSet` (#M3: it prevents a cache stampede across
   replicas), but the return value carried no reason, so a caller could not tell _"another holder
@@ -2296,15 +2296,15 @@ unavailable from held) is **not** done by this PR; (b) the **5** routes with no 
 destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still has **zero callers** (measured below), so
 `/api/system/cron-health` remains empty whatever this PR does to the response codes.
 
-- **Mechanism, re-verified line by line.** `lib/cache/index.ts:324` returned a two-state `{ acquired, value }`, and **two**
-  separate sites collapsed "backend unavailable" into "held" (re-pinned 2026-10-28: **#3259** ask 2 added `LockResult` above them):
-  1. `lib/cache/index.ts:338-339` — client missing or not `ready` (still connecting, `isCircuitOpen()` at :94, or
+- **Mechanism, re-verified line by line.** `lib/cache/index.ts:318` returned a two-state `{ acquired, value }`, and **two**
+  separate sites collapsed "backend unavailable" into "held" (re-pinned 2026-10-28, off `:310`/`:324-325`/`:332-336`: **#3259** ask 2 added `LockResult` above them):
+  1. `lib/cache/index.ts:330` — client missing or not `ready` (still connecting, `isCircuitOpen()` at :94, or
      `redisPermanentlyDisconnected` at :98) → `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }`, carrying
      no reason. Exactly what PP-030 describes. #3259 (2026-10-25) put a bounded handshake grace in front of this branch, so
      a first-call `connecting` client is no longer reported as held; ask 2 (2026-10-28) ended the reason-less return: `refuseUnavailable()`.
-  2. `lib/cache/index.ts:346-350` — **the correction PP-030 missed**: if the client is `ready` but the `SET` itself throws,
-     the catch returned `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }` (`:349`, off `:335`), so a Redis _error_
-     also masqueraded as a held lock. The asymmetry this entry used to record here — the flag read at `:339` (off `:325`) only, so
+  2. `lib/cache/index.ts:336-340` — **the correction PP-030 missed**: if the client is `ready` but the `SET` itself throws,
+     the catch returned `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }` (`:339`, off `:335`), so a Redis _error_
+     also masqueraded as a held lock. The asymmetry this entry used to record here — the flag read at `:330` (off `:325`) only, so
      "not ready" ran and "SET errors" skipped — was **closed by #2373** (`355d1326`, 2026-10-06, whose message cites PP-049).
 - **Blast radius, measured not inherited.** `app/api/cron/` holds **22** route dirs and **22 of 22** took their
   dedup lock with `acquireLock('cron:<name>', …)` and hand-rolled the skip. What each answered when the lock was
@@ -2358,7 +2358,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
 - **Verified (on the tree this entry left, which is the tree it found — zero files changed):**
   `npx eslint --max-warnings=0 lib/cache/index.ts app/api/cron/*/route.ts` → exit 0; `tsc --noEmit` → `TSC_EXIT=0`;
   `npx vitest run tests/unit` → 6429 passed / 0 failed (426 files); `npm run -s guard:filesize` → OK.
-- **Files:** none changed. Evidence read: `lib/cache/index.ts:94,98,324-350,401,451,491` (re-pinned 2026-10-28: **#3259** ask 2 added `LockResult` and `refuseUnavailable()`); all 22 `app/api/cron/*/route.ts`
+- **Files:** none changed. Evidence read: `lib/cache/index.ts:94,98,318-341,388,438,478` (re-pinned 2026-10-28: **#3259** ask 2 added `LockResult` and `refuseUnavailable()`); all 22 `app/api/cron/*/route.ts`
   skip sites; `lib/cron/distributed-lock.ts:65`; `lib/auth/cron.ts`; `deploy/cron/run-cron.sh`; `deploy/cron/crontab`
   (read-only); `tests/unit/cron-lock.test.ts`; `tests/unit/scan7-system-resilience.test.ts`.
 - **What shipped instead of the 23-file batch, and why it is not the shape specified above (#2539, 2026-10-10).** A guard

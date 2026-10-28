@@ -309,35 +309,25 @@ const REFRESH_SCRIPT = `
 
 /**
  * #3259 ask 2 — why a probe was refused. `acquired: false` alone conflated "a
- * peer holds it" with "the store could not be consulted", and the cron routes
- * turned either one into a 423 that blamed another instance. The field is
- * additive: the other callers read only `acquired`.
+ * peer holds it" with "the store could not be consulted". Additive: every other
+ * caller reads only `acquired`.
  */
 export type LockRefusal = 'held' | 'unavailable';
-
-export interface LockResult {
-  acquired: boolean;
-  value: string;
-  reason?: LockRefusal;
-}
+export type LockResult = { acquired: boolean; value: string; reason?: LockRefusal };
 
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<LockResult> {
   const redis = getRedisClient();
-  // #3259: getRedisClient() builds the client lazily, so the first caller of a
-  // process used to hand the check below a client still `'connecting'` — a
-  // not-yet-established connection read as contention, and every cron route
-  // answered 423 "lock-held" on its own first run after a restart. One bounded
-  // grace window per client instance, shared by concurrent probes: see
-  // lib/cache/redis-ready.ts, which also covers why a Redis that really is down
-  // still fails closed here, instantly, from the second probe onwards.
+  // #3259: getRedisClient() builds the client lazily, so the first caller of a process
+  // saw a client still `'connecting'`, and every cron route answered 423 "lock-held" on
+  // its own first run after a restart. One bounded grace window per client instance,
+  // shared by concurrent probes: see lib/cache/redis-ready.ts, which also covers why a
+  // Redis that really is down still fails closed here, instantly, from probe two on.
   if (redis) await waitForRedisReady(redis);
   // #M3: on Redis unavailability, fail CLOSED by default (acquired:false) so
   // getOrSet takes its retry/stale path instead of every replica running the
   // fallback at once (the stampede this lock prevents); it still returns a
   // value, so throughput degrades, not correctness. LOCK_FAIL_OPEN=true restores legacy fail-open for idempotent/guarded callers.
-  if (!redis || redis.status !== 'ready') {
-    return refuseUnavailable();
-  }
+  if (!redis || redis.status !== 'ready') return refuseUnavailable();
   const value = makeLockValue();
   try {
     const result = await redis.call('SET', `nucrm:lock:${key}`, value, 'EX', ttlSeconds, 'NX');
@@ -350,10 +340,7 @@ export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): P
   }
 }
 
-/**
- * The store could not be consulted. `LOCK_FAIL_OPEN=true` still means the caller
- * is told to proceed — and then there is no refusal left to explain.
- */
+/** The store could not be consulted (#3259 ask 2). `LOCK_FAIL_OPEN=true` still tells the caller to proceed — and then there is no refusal left to explain. */
 function refuseUnavailable(): LockResult {
   return process.env['LOCK_FAIL_OPEN'] === 'true'
     ? { acquired: true, value: '' }
