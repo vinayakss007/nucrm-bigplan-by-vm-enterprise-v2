@@ -30,7 +30,11 @@ const SRC = readFileSync(GATE, 'utf8');
 const CODE = SRC.split('\n')
   .filter((l) => !/^\s*#/.test(l))
   .join('\n');
-const MARKERS = [...SRC.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]));
+const MARKERS = [...SRC.matchAll(/▶ (\d+)\/(\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+// Read the step count off the file rather than pinning 7 here: #3335 is adding an
+// eighth step to this same script, and a screen that hard-codes the denominator
+// would fail a correct change. 3283/3284 own the "exactly 1..7" assertion.
+const TOTAL = MARKERS.length;
 
 const TMP: string[] = [];
 const tempDir = (name: string) => {
@@ -80,18 +84,22 @@ describe('#3351 the gate reads the status of what it runs', () => {
     expect(second).toBe('set -euo pipefail');
   });
 
-  it('has seven steps, numbered, and does not renumber them', () => {
-    expect(MARKERS).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  it('numbers every step, contiguously, under one denominator', () => {
+    expect(TOTAL).toBeGreaterThanOrEqual(7);
+    const denoms = new Set(MARKERS.map(([, d]) => d));
+    expect([...denoms]).toEqual([TOTAL]);
+    expect(MARKERS.map(([n]) => n)).toEqual(
+      Array.from({ length: TOTAL }, (_, i) => i + 1)
+    );
   });
 
   it('sends every command through the one helper that reads a status', () => {
     // The shape ask 4 asked for: a new step written as a bare piped command fails
     // here rather than silently joining the "everything passes" path.
-    const commands = SRC.split('\n').filter(
-      (l) => /^\s*(npm run|npx )/.test(l) && !l.trim().startsWith('#')
-    );
-    expect(commands).toEqual([]);
-    expect([...SRC.matchAll(/^run_step /gm)].length).toBe(6);
+    const bare = CODE.split('\n').filter((l) => /^\s*(npm run|npx )/.test(l));
+    expect(bare).toEqual([]);
+    // Every step but the hand-written import sanity check (#4) goes through run_step.
+    expect([...CODE.matchAll(/^run_step /gm)].length).toBe(TOTAL - 1);
   });
 
   it('truncates captured output instead of piping the step command', () => {
