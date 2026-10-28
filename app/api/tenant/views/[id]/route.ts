@@ -81,10 +81,23 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: Params) =
     if (body.is_shared !== undefined) updates['isShared'] = body.is_shared;
     if (body.is_default !== undefined) updates['isDefault'] = body.is_default;
 
+    // #3342 (#3194 doctrine, same claim this file's DELETE already makes): the
+    // read above vets tenant, tombstone, and owner in JS, but check-then-write
+    // invalidates all three by the time the UPDATE runs. `WHERE id` alone let an
+    // in-flight PATCH land on a view that was deleted, moved, or re-owned in the
+    // gap — and the owner condition is exactly what RLS cannot express, since
+    // app.current_tenant says nothing about which user owns the row.
     const [updated] = await db.update(savedViews)
       .set(updates)
-      .where(eq(savedViews.id, id))
+      .where(and(
+        eq(savedViews.id, id),
+        eq(savedViews.tenantId, ctx.tenantId),
+        isNull(savedViews.deletedAt),
+        ...(ctx.isAdmin ? [] : [eq(savedViews.userId, ctx.userId)])
+      ))
       .returning();
+
+    if (!updated) return notFound('View');
 
     return NextResponse.json({ data: updated });
   } catch (err: unknown) {

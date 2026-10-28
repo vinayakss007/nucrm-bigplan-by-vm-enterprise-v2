@@ -2137,7 +2137,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
   `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:186` (re-pinned 2026-10-22 from `:181`: `d78d7698` (#2973) put the money-math comment block above it), `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
-  (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
+  (`app/api/tenant/api-keys/route.ts:104` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:197`, both re-pinned 2026-10-28 from `:91`/`:178` — **#3291** added the key-revocation import and the owner-membership proof above these lines), so
   120 is a **lower bound**, not a ceiling.
 - **Nothing 403s first — the opposite of the assumption.** `can()` short-circuits for platform accounts
   (`lib/auth/middleware.ts:433`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
@@ -4044,7 +4044,7 @@ not wired in).
   Nothing on `custom_plugins` was exposed in a response or a log on main, so this is a
   defence-in-depth fix, not a live leak.
 - **Deliberately left closed — and pinned as closed.** `/api/tenant/visitors/track`
-  (`app/api/tenant/visitors/track/route.ts:35`) was the seventh hit and is the one that must stay a 401:
+  (`app/api/tenant/visitors/track/route.ts:38`, re-pinned 2026-10-28 from `:35` — **#3291** added a key-owner membership proof above the handler) was the seventh hit and is the one that must stay a 401:
   it presents no credential of any kind and installs no limiter, so publishing it would be an
   unbounded anonymous write. `tests/unit/proxy.test.ts:151` (re-pinned 2026-10-22 from `:158`: `79d095a4` (#1269) shed 7 lines above that `describe`) asserts that 401 alongside the six
   openings, so a future "make it public for convenience" change fails a test rather than widening

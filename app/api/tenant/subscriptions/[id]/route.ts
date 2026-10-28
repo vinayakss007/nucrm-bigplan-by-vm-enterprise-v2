@@ -84,7 +84,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     }
 
     const [existing] = await db
-      .select({ id: serviceSubscriptions.id })
+      .select({ id: serviceSubscriptions.id, status: serviceSubscriptions.status })
       .from(serviceSubscriptions)
       .where(
         and(
@@ -101,6 +101,17 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     const guard = await concurrencyGuard(db, serviceSubscriptions, subId, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
+    // #3337: the read above is unlocked, and `concurrencyGuard` is opt-in
+    // (`lib/api/concurrency.ts` returns null when the client sent no
+    // `expectedUpdatedAt` — the default caller) and itself leaves a check-then-
+    // write window. So whenever the payload writes `status`, the UPDATE CLAIMS
+    // the status this request read; Postgres re-evaluates the WHERE under the
+    // row lock, and a transition that landed in the gap becomes zero rows
+    // instead of a silent stomp — including `DELETE` having cancelled the row
+    // (`status:'cancelled'` + `deletedAt`) and this write resurrecting it.
+    // The `deletedAt IS NULL` gate the read applied is retained on the write
+    // for the same reason: a soft-deleted row is not this handler's to edit.
+    const claimsStatus = allowedFields.status !== undefined;
 
     const [updated] = await db
       .update(serviceSubscriptions)
@@ -109,8 +120,28 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })
-      .where(and(eq(serviceSubscriptions.id, subId), eq(serviceSubscriptions.tenantId, ctx.tenantId)))
+      .where(and(
+        eq(serviceSubscriptions.id, subId),
+        eq(serviceSubscriptions.tenantId, ctx.tenantId),
+        sql`${serviceSubscriptions.deletedAt} IS NULL`,
+        ...(claimsStatus ? [eq(serviceSubscriptions.status, existing.status)] : []),
+      ))
       .returning();
+
+    if (!updated) {
+      if (claimsStatus) {
+        // A claimed status and zero rows back is not a missing subscription — the
+        // pre-read found it. It is the race itself: refuse, audit nothing, return
+        // no success body (as on #3184/#3189).
+        return NextResponse.json(
+          { error: `Subscription status changed concurrently — cannot move '${existing.status}' to '${allowedFields.status}'. Reload and retry.` },
+          { status: 409 },
+        );
+      }
+      // No status was claimed, so the only way to lose the write is the row being
+      // deleted (or soft-deleted) under us since the read — answer honestly.
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,

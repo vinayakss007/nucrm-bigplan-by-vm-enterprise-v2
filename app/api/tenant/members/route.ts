@@ -19,6 +19,8 @@ import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
+// #3291: offboarding a member also revokes the keys they hold in this tenant.
+import { revokeUserApiKeys } from '@/lib/auth/api-key';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { deleteUserSessions } from '@/lib/cache/sessions';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -274,7 +276,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         db.select({ n: sql<number>`count(*)::int` }).from(tasks).where(and(eq(tasks.assignedTo, target.userId), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt), eq(tasks.status, 'pending'))),
       ]);
 
-      await db.transaction(async (tx) => {
+      // #3291: revocation is a consequence of the membership write, not a separate
+      // manual step. The UPDATE commits with the removal, and the audit names the
+      // count so an admin can see what was taken away.
+      const revokedKeyIds = await db.transaction(async (tx) => {
         // Reassign data
         await tx.update(contacts).set({ assignedTo: reassignUserId, lastAssignedAt: new Date() }).where(and(eq(contacts.assignedTo, target.userId), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
         await tx.update(deals).set({ assignedTo: reassignUserId }).where(and(eq(deals.assignedTo, target.userId), eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
@@ -282,6 +287,8 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
         // Mark member as removed
         await tx.update(tenantMembers).set({ status: 'removed' }).where(eq(tenantMembers.id, memberId));
+
+        const keyIds = await revokeUserApiKeys(tx as unknown as DbClient, ctx.tenantId, target.userId);
 
         // Log departure
         await tx.insert(userDepartures).values({
@@ -307,6 +314,8 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         await tx.update(tenants)
           .set({ currentUsers: userCountResult?.count || 0 })
           .where(eq(tenants.id, ctx.tenantId));
+
+        return keyIds;
       });
 
       // Notify
@@ -319,6 +328,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         });
       }
       await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'member_removed', entityType: 'member', entityId: target.userId, newData: { reassigned_to: reassignTo, contacts: cCount?.n, deals: dCount?.n } });
+      await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'api_keys_revoked', entityType: 'member', entityId: target.userId, newData: { count: revokedKeyIds.length, reason: 'member_removed' } });
 
       // Invalidate removed member's sessions
       await deleteUserSessions(target.userId);
@@ -328,10 +338,22 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       const whereConditions: SQL[] = [eq(tenantMembers.id, memberId)];
       if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
-      const [updated] = await db.update(tenantMembers).set({ status: 'suspended' }).where(and(...whereConditions)).returning();
+      // #3291: the key revocation commits with the suspension. #3079: the stale
+      // guard's 409 is returned OUT of the transaction to the caller — `return
+      // stale` from inside the callback only resolves the transaction, which is how
+      // a zero-row update used to answer ok:true (and would now revoke keys for a
+      // member who was never suspended).
+      const suspension = await db.transaction(async (tx) => {
+        const [updated] = await tx.update(tenantMembers).set({ status: 'suspended' }).where(and(...whereConditions)).returning();
 
-      const stale = checkStaleUpdate(updated);
-      if (stale) return stale;
+        const stale = checkStaleUpdate(updated);
+        if (stale) return { stale, revokedKeyIds: [] as string[] };
+
+        return { stale: null, revokedKeyIds: await revokeUserApiKeys(tx as unknown as DbClient, ctx.tenantId, target.userId) };
+      });
+      if (suspension.stale) return suspension.stale;
+
+      await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'api_keys_revoked', entityType: 'member', entityId: target.userId, newData: { count: suspension.revokedKeyIds.length, reason: 'member_suspended' } });
 
       // Invalidate suspended member's sessions
       await deleteUserSessions(target.userId);

@@ -62,12 +62,21 @@ const findFirst = async (args: { columns?: Record<string, boolean> }) => {
   return H.row;
 };
 
+// #3291 put a membership proof between adopting the tenant and writing the usage
+// trail, so the fixture answers it with a live member. The guarantee itself is
+// pinned in api-key-resolver-membership-3291.test.ts; this file is about the two
+// RLS contexts #3246 needed, and the proof rides inside a third transaction.
+const membershipRead = () => ({
+  from: () => ({ where: () => ({ limit: async () => [{ id: 'tm-1' }] }) }),
+});
+
 const fakeTx = () => ({
   execute: (f: SQL) => {
     (H.calls as Call[]).push(render(f));
     return Promise.resolve([]);
   },
   update: (table: object) => chain(table),
+  select: () => membershipRead(),
   query: { apiKeys: { findFirst } },
 });
 
@@ -148,7 +157,11 @@ describe('resolveApiKey opens exactly the two contexts, in order', () => {
     const { resolveApiKey } = await import('@/lib/webhooks/inbound-auth');
     const row = await resolveApiKey('ak_live_secret-under-test');
     expect(row).toMatchObject({ tenantId: TENANT });
-    expect(H.ops).toEqual(['BEGIN', 'findFirst', 'BEGIN', 'update:api_keys:callCount,lastUsedAt,updatedAt']);
+    expect(H.ops).toEqual([
+      'BEGIN', 'findFirst',
+      // #3291: the membership proof, then the usage trail.
+      'BEGIN', 'BEGIN', 'update:api_keys:callCount,lastUsedAt,updatedAt',
+    ]);
     const [claim, adopt] = setConfigs();
     // is_local = true: the read privilege must not outlive the lookup.
     expect(claim!.sql).toMatch(/set_config\('app\.auth_lookup', 'true', true\)/);
