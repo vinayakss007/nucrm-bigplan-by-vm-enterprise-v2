@@ -37,6 +37,9 @@ export async function POST(request: NextRequest) {
   try {
     let remindersSent = 0;
     let expiredCount = 0;
+    // #3315: contracts that were in a reminder window but had no active member
+    // to receive it. Reported rather than folded into `remindersSent`.
+    let remindersWithoutRecipient = 0;
 
     // #2997: UTC calendar windows. The old form mixed local midnight with
     // `toISOString()` (one day early east of Greenwich) and then recomputed
@@ -102,6 +105,7 @@ export async function POST(request: NextRequest) {
         .limit(5);
         membersByTenant.set(tid, members);
       }));
+      let recipientWarningLogged = false;
 
       for (const contract of endingSoon) {
         // #2997: the day count comes from the same UTC window the SQL matched —
@@ -115,6 +119,22 @@ export async function POST(request: NextRequest) {
         if (sentSet.has(`${contract.id}:${days}`)) continue;
 
         const members = membersByTenant.get(contract.tenantId) ?? [];
+        // #3315: the recipient read came back empty, so this reminder goes to
+        // nobody. Nothing is sent, no dedup marker is written and nothing is
+        // counted as reminded — a run that notified nobody has to be visible,
+        // and it must stay retryable for when the tenant has a member again.
+        if (members.length === 0) {
+          remindersWithoutRecipient++;
+          if (!recipientWarningLogged) {
+            recipientWarningLogged = true;
+            void logError({
+              error: new Error(`No active member to receive the contract renewal reminders for this tenant`),
+              context: `cron/contract-renewal-check recipients tenant=${tenantId}`,
+            });
+          }
+          continue;
+        }
+
         const expiryDate = new Date(contract.endDate ?? new Date());
         const dateStr = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -194,11 +214,15 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      // #3315: an empty recipient read is a failed run, not a clean one. A green
+      // scheduler response while contracts run out unannounced is what the
+      // per-tenant sweep was written to prevent, one level further down.
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
       remindersSent,
+      reminders_without_recipient: remindersWithoutRecipient,
       expired: expiredCount,
     });
   } catch (err) {

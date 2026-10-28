@@ -46,6 +46,12 @@ export async function POST(request: NextRequest) {
     let escalations = 0;
     let notified = 0;
     let unrecordedBreaches = 0;
+    // #3315: the three ways this job can record a breach and reach nobody.
+    // `breachesWithoutRecipient` is a ticket with no assignee at all; the other
+    // two are recipient READS that came back empty and fail the run.
+    let breachesWithoutRecipient = 0;
+    let escalationsWithoutRecipient = 0;
+    let assigneeRowsMissing = 0;
 
     // support_tickets, sla_policies, sla_breaches and notifications all enforce
     // plain tenant_isolation with no super-admin branch, so this job has to run
@@ -173,9 +179,11 @@ export async function POST(request: NextRequest) {
               }
 
               // Send escalation notification
-              await sendEscalationNotification(ticket, result.breachType!, result.escalationLevel, result.minutesOverdue);
+              const escalation = await sendEscalationNotification(ticket, result.breachType!, result.escalationLevel, result.minutesOverdue);
               escalations++;
-              notified++;
+              // #3315: `notified` means "someone was actually told".
+              if (escalation.recipients > 0) notified++;
+              else escalationsWithoutRecipient++;
             }
           } else {
             // New breach — record it FIRST; notify only if the insert succeeded
@@ -204,9 +212,12 @@ export async function POST(request: NextRequest) {
             }
 
             // Send breach notification (only after a successful record)
-            await sendBreachNotification(ticket, result.breachType!, result.minutesOverdue, result.escalationLevel);
+            const breach = await sendBreachNotification(ticket, result.breachType!, result.minutesOverdue, result.escalationLevel);
             newBreaches++;
-            notified++;
+            // #3315: `notified` counts the breaches that actually reached someone.
+            if (breach.recipients > 0) notified++;
+            else breachesWithoutRecipient++;
+            if (breach.assigneeRowMissing) assigneeRowsMissing++;
           }
         }
 
@@ -215,7 +226,12 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      // #3315: a recipient READ that came back empty fails the run — the breach
+      // is recorded and escalated in the database while nobody hears about it.
+      // `breaches_without_recipient` (a ticket with no assignee) is reported but
+      // does not flip `ok`: no read happened, so it is a data gap on the ticket,
+      // not a broken notification path.
+      ok: sweep.failed.length === 0 && escalationsWithoutRecipient === 0 && assigneeRowsMissing === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
@@ -224,6 +240,9 @@ export async function POST(request: NextRequest) {
       escalations,
       notified,
       unrecorded_breaches: unrecordedBreaches,
+      breaches_without_recipient: breachesWithoutRecipient,
+      escalations_without_recipient: escalationsWithoutRecipient,
+      assignee_rows_missing: assigneeRowsMissing,
     });
 
   } catch (err: unknown) {
@@ -232,12 +251,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * #3315: what a notification helper actually achieved. `recipients` is how many
+ * people were told, so the caller can tell "notified" apart from "silently
+ * nobody". `assigneeRowMissing` separates the two failures `if (user?.email)`
+ * used to conflate: an assignee with no row in `users` at all (a broken
+ * reference the email leg can never resolve) versus an assignee who simply has
+ * no email address on file (the in-app notification still reached them).
+ */
+type NoticeResult = { recipients: number; assigneeRowMissing: boolean };
+
 async function sendBreachNotification(
   ticket: { id: string; tenantId: string; subject: string; priority: string; assignedTo: string | null },
   breachType: string,
   minutesOverdue: number,
   escalationLevel: number,
-) {
+): Promise<NoticeResult> {
   const severity = ticket.priority === 'urgent' || ticket.priority === 'high' ? 'high' : 'medium';
   const breachLabel = breachType === 'response' ? 'first response' : 'resolution';
 
@@ -254,6 +283,8 @@ async function sendBreachNotification(
       metadata: { breach_type: breachType, minutes_overdue: minutesOverdue, escalation_level: escalationLevel },
     }).catch((err) => logError({ error: err, context: 'async-catch:sla-notify' }));
   }
+  const recipients = ticket.assignedTo ? 1 : 0;
+  let assigneeRowMissing = false;
 
   // Escalation level 2+ sends email to assigned user
   if (escalationLevel >= 2 && ticket.assignedTo) {
@@ -262,7 +293,16 @@ async function sendBreachNotification(
       .where(eq(users.id, ticket.assignedTo))
       .limit(1);
 
-    if (user?.email) {
+    if (!user) {
+      // The ticket points at a user id that has no row in `users`. That is not
+      // "this person has no email address" — it is a reference this job can
+      // never notify through, and it has to be reported (#3315).
+      assigneeRowMissing = true;
+      void logError({
+        error: new Error(`SLA escalation L${escalationLevel}: assigned user ${ticket.assignedTo} has no row in users`),
+        context: 'cron/sla-check:assignee-row-missing',
+      });
+    } else if (user.email) {
       // #3045: sendEmail resolves {success:false} — the .catch() could never
       // fire, so escalation emails rejected by the provider were invisible.
       const emailResult = await sendEmail({
@@ -279,7 +319,11 @@ async function sendBreachNotification(
       });
       if (!emailResult.success) void logError({ error: new Error(`SLA escalation email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/sla-check escalation email' });
     }
+    // A user row with no email address is a configuration gap, not a broken
+    // reference: the in-app notification above already reached them.
   }
+
+  return { recipients, assigneeRowMissing };
 }
 
 async function sendEscalationNotification(
@@ -287,7 +331,7 @@ async function sendEscalationNotification(
   breachType: string,
   escalationLevel: number,
   minutesOverdue: number,
-) {
+): Promise<NoticeResult> {
   const breachLabel = breachType === 'response' ? 'first response' : 'resolution';
 
   // Find tenant admins/managers to notify on escalation
@@ -311,4 +355,16 @@ async function sendEscalationNotification(
       metadata: { breach_type: breachType, minutes_overdue: minutesOverdue, escalation_level: escalationLevel },
     }).catch((err) => logError({ error: err, context: 'async-catch:sla-escalation-notify' }));
   }
+
+  // #3315: the read came back with no owner/admin to tell, so this escalation is
+  // recorded and escalated in the database while nobody hears about it. Say so —
+  // `notified` no longer covers it.
+  if (admins.length === 0) {
+    void logError({
+      error: new Error(`SLA escalation L${escalationLevel} on ticket ${ticket.id} had no admin recipient`),
+      context: 'cron/sla-check:escalation-recipients',
+    });
+  }
+
+  return { recipients: admins.length, assigneeRowMissing: false };
 }
