@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
+import { valueIsUnfilledTemplateToken } from '@/lib/env';
 import { createHash, timingSafeEqual } from 'crypto';
 import IORedis from 'ioredis';
 
@@ -58,8 +59,15 @@ export async function GET(request: NextRequest) {
   // environment. Read per-request (module-load capture made the gate
   // untestable and silently froze whatever value the boot process had).
   const metricsSecret = process.env['METRICS_SECRET'] || '';
-  if (!metricsSecret) {
-    return new Response('# metrics disabled: METRICS_SECRET not configured\n', {
+  // #3377: `deploy/.env.production:288` ships this name as `<<<REQUIRED>>>`, and
+  // `validateEnv` has no METRICS_SECRET clause to object — so the #3374 accident
+  // does not rescue this one. The box boots and the placeholder IS the bearer
+  // token, on a path `proxy.ts` lists as public. Answer it the way #2221 answers
+  // an absent secret: disabled, not unauthorized. A 401 invites the caller to
+  // keep guessing, and a 503 that still emitted samples would look to Prometheus
+  // like a scrape target that works.
+  if (!metricsSecret || valueIsUnfilledTemplateToken(metricsSecret)) {
+    return new Response('# metrics disabled: METRICS_SECRET is unset or still the deployment template placeholder\n', {
       status: 503,
       headers: { 'Content-Type': 'text/plain' },
     });
