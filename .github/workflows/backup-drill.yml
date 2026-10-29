@@ -10,9 +10,16 @@ on:
     - cron: "37 4 * * 1" # Mondays ~04:37 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   drill:
     name: Backup -> restore -> verify
+    # #3267: the artifact upload is the only write scope this job needs.
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     services:
       postgres:
