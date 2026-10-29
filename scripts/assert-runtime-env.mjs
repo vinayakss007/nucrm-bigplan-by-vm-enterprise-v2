@@ -10,34 +10,26 @@
  * WHY THE FILE IS NOT THE ANSWER
  * ------------------------------
  * Three committed sources describe the same fail-closed decisions — `deploy/
- * .env.production` (Docker/compose), `.env.example` (what a host operator copies)
- * and `ecosystem.config.cjs` (what pm2 actually puts into the worker) — and only
- * the last of them reaches a running pm2 process. pm2 replays the environment it
- * captured at its first `start`, and dotenv/Next.js fill only names that are still
- * unset, so a value can be true on disk, absent in every worker, and nothing in the
- * logs says so. `getClientIp()` (`lib/client-ip.ts:15`) returns `'unknown'` unless
- * the value is exactly the string `'true'`, and `checkRateLimit`
- * (`lib/rate-limit.ts:442`, #2630) fails closed with 503 for every auth-scoped
- * action on `'unknown'` — a server that serves traffic, cannot log anyone in, and
- * blames the caller.
+ * .env.production` (Docker/compose), `.env.example` (what a host operator copies) and
+ * `ecosystem.config.cjs` (what pm2 actually puts into the worker) — and only the last
+ * reaches a running pm2 process: pm2 replays the environment captured at its first
+ * `start`, and dotenv/Next.js fill only names still unset, so a value can be true on
+ * disk, absent in every worker, and say nothing in the logs. `getClientIp()`
+ * (`lib/client-ip.ts:15`) returns `'unknown'` unless the value is exactly the string
+ * `'true'`, and `checkRateLimit` (`lib/rate-limit.ts:442`, #2630) fails closed with 503
+ * for every auth-scoped action on `'unknown'` — a server that serves traffic, cannot
+ * log anyone in, and blames the caller.
  *
- * So this asks the process. `checkRuntimeFlags()` is pure and takes an injected env
- * map (that is what the unit tests drive); `resolveEffectiveEnv()` decides *which*
- * process reading to use:
- *
- *   --pid <pid>      /proc/<pid>/environ. The most authoritative reading available
- *                    without a supervisor CLI, and the one this repo can actually
- *                    reach: the VM is Linux and the assert runs as the same user
- *                    that owns the worker. Preferred for a live pm2 box.
- *   --pm2 [name]     `pm2 jlist` env, which is what pm2 hands the child. Opt-in,
- *                    because pm2 is NOT installed on every box this repo is used on
- *                    (it is absent on the Docker host, where compose owns the env) —
- *                    and an unreachable source exits 2, it never degrades into a pass.
- *   --process-only   this process's own env. Correct for the container entrypoint,
- *                    where compose's `environment:` has already pinned the values.
- *   default          this env file, overlaid by process.env, overlaid by the
- *                    ecosystem `env:` block of whichever app runs the Next server —
- *                    the same precedence pm2 will apply, without needing pm2.
+ * So this asks the process. `checkRuntimeFlags()` is pure and takes an injected env map
+ * (that is what the unit tests drive); `resolveEffectiveEnv()` picks the reading, in the
+ * precedence the runtime itself uses — operator env file < process.env < the ecosystem
+ * `env:` block of whichever app runs the Next server, which is what pm2 hands the child
+ * and costs nothing to read because it is just a file. `--pid <pid>` is the
+ * authoritative one on a live box (the VM is Linux and the assert runs as the worker's
+ * own user); `--pm2 [name]` asks `pm2 jlist`, opt-in because pm2 is absent on the Docker
+ * host, where compose owns the environment; `--process-only` reads only this process's
+ * env, for a container entrypoint whose values compose already pinned. A source that
+ * cannot be read exits 2 — it never degrades into a pass.
  *
  * `--expect-production` declares intent (that is what `npm run prod:preflight`
  * passes), so an unset NODE_ENV — the exact host-path bug, since `deploy-vm.sh`
@@ -135,17 +127,13 @@ export const REQUIRED_RUNTIME_FLAGS = [
   {
     name: 'COOKIE_SECURE',
     check({ env, production }) {
-      if (eq(env.COOKIE_SECURE, 'false')) {
-        return production
-          ? fail('COOKIE_SECURE', 'false', 'true', 'every auth cookie is sent without the Secure attribute (#2275)')
-          : ok('COOKIE_SECURE', 'false', 'true in production');
-      }
-      if (unset(env.COOKIE_SECURE)) {
-        return production
-          ? ok('COOKIE_SECURE', '(unset)', 'true or unset', 'unset is fail-closed: a production build forces Secure (#2275)')
-          : ok('COOKIE_SECURE', '(unset)', 'true or unset');
-      }
-      return ok('COOKIE_SECURE', String(env.COOKIE_SECURE), 'true');
+      const v = env.COOKIE_SECURE;
+      if (eq(v, 'false')) return production
+        ? fail('COOKIE_SECURE', 'false', 'true', 'every auth cookie is sent without the Secure attribute (#2275)')
+        : ok('COOKIE_SECURE', 'false', 'true in production');
+      if (unset(v)) return ok('COOKIE_SECURE', '(unset)', 'true or unset',
+        production ? 'unset is fail-closed: a production build forces Secure (#2275)' : '');
+      return ok('COOKIE_SECURE', String(v), 'true');
     },
   },
   {
