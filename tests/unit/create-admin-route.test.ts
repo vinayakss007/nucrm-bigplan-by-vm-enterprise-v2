@@ -87,11 +87,15 @@ describe('POST /api/setup/create-admin body validation (#1072)', () => {
     expect(mockDbSelect).not.toHaveBeenCalled();
   });
 
-  it('rejects a body with a too-short password before any DB access', async () => {
+  // #3277: the length rule lives in the policy now (validatePassword via
+  // passwordSchema), and this file's session mock stubs it to always-pass — so
+  // the deterministic schema-level rejection to prove is the empty-after-trim
+  // password, which min(1) stops regardless of the mocked policy check.
+  it('rejects a body with an empty password before any DB access', async () => {
     const { res, json } = await callRoute({
       full_name: 'Admin',
       email: 'admin@example.com',
-      password: 'short',
+      password: '   ',
       workspace_name: 'Acme',
     });
     expect(res.status).toBe(400);
@@ -102,6 +106,24 @@ describe('POST /api/setup/create-admin body validation (#1072)', () => {
 
   it('rejects a body missing required fields (no workspace_name / full_name)', async () => {
     const { res, json } = await callRoute({ email: 'admin@example.com', password: 'longenough123' });
+    expect(res.status).toBe(400);
+    expect(json.error).toBe('Validation failed');
+    const fields = json.details.map((d: { field: string }) => d.field);
+    expect(fields).toContain('full_name');
+    expect(fields).toContain('workspace_name');
+    expect(mockDbSelect).not.toHaveBeenCalled();
+  });
+
+  // #3277: a whitespace name used to pass min(1), and the slug derivation
+  // stripped it to nothing — the tenant got a bare '-timestamp' slug. The
+  // fields trim before the non-empty check now.
+  it('rejects whitespace-only full_name / workspace_name before any DB access', async () => {
+    const { res, json } = await callRoute({
+      full_name: '   ',
+      email: 'admin@example.com',
+      password: 'longenough123',
+      workspace_name: ' \t ',
+    });
     expect(res.status).toBe(400);
     expect(json.error).toBe('Validation failed');
     const fields = json.details.map((d: { field: string }) => d.field);

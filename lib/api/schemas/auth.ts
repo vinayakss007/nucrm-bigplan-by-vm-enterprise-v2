@@ -5,11 +5,31 @@
  */
 import { z } from 'zod';
 import { requiredString } from './common';
+import { validatePassword } from '@/lib/auth/session';
 
 // ── Auth schemas ──
+/**
+ * #3277: the server's password policy lives in `validatePassword`
+ * (lib/auth/session.ts — min 12, upper, digit, special), but four NEW-password
+ * schemas hand-declared their own minimums, the weakest saying `min(8)`. A
+ * scripted client trusted the advertised contract and got refused mid-flow by
+ * the policy layer with a different message. This schema defers to
+ * `validatePassword` itself, so the contract and the enforcement cannot drift
+ * apart again. It belongs to NEW-password fields only; the #1286 note below
+ * keeps existing-password re-entry fields deliberately lenient on purpose.
+ */
+export const passwordSchema = z.string()
+  .trim()
+  .min(1)
+  .superRefine((value, ctx) => {
+    const error = validatePassword(value);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+  })
+  .max(128);
+
 export const signupSchema = z.object({
   email: z.string().email().max(255).transform((v) => v.trim().toLowerCase()),
-  password: z.string().min(8).max(128),
+  password: passwordSchema,
   full_name: z.string().trim().min(1).max(255),
   workspace_name: z.string().trim().min(1).max(255),
 });
@@ -27,7 +47,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8).max(128),
+  password: passwordSchema,
 });
 
 // ── 2FA schemas ──

@@ -15,8 +15,32 @@ describe('api/schemas', () => {
 
   it('signupSchema transforms email to lowercase', async () => {
     const { signupSchema } = await import('@/lib/api/schemas');
-    const result = signupSchema.parse({ email: 'User@Test.com', password: '12345678', full_name: 'User', workspace_name: 'Workspace' });
+    const result = signupSchema.parse({ email: 'User@Test.com', password: 'Passw0rd!abcdef', full_name: 'User', workspace_name: 'Workspace' });
     expect(result.email).toBe('user@test.com');
+  });
+
+  // #3277: signupSchema used to advertise min(8) while the handler enforced
+  // validatePassword (min 12 + character classes) behind it. The schema now
+  // defers to the real validator, so a weak password fails AT parse time —
+  // this file mocks nothing, so validatePassword here is the true policy.
+  it('signupSchema rejects a password the policy refuses, at parse time', async () => {
+    const { signupSchema } = await import('@/lib/api/schemas');
+    const r = signupSchema.safeParse({ email: 'user@test.com', password: '12345678', full_name: 'User', workspace_name: 'Workspace' });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.find((i) => i.path[0] === 'password')?.message).toContain('12 characters');
+    }
+    const noUpper = signupSchema.safeParse({ email: 'user@test.com', password: 'lowercase1234!x', full_name: 'User', workspace_name: 'Workspace' });
+    expect(noUpper.success).toBe(false);
+    if (!noUpper.success) {
+      expect(noUpper.error.issues.find((i) => i.path[0] === 'password')?.message).toContain('uppercase');
+    }
+  });
+
+  it('signupSchema rejects whitespace-only names', async () => {
+    const { signupSchema } = await import('@/lib/api/schemas');
+    expect(signupSchema.safeParse({ email: 'user@test.com', password: 'Passw0rd!abcdef', full_name: '  ', workspace_name: 'W' }).success).toBe(false);
+    expect(signupSchema.safeParse({ email: 'user@test.com', password: 'Passw0rd!abcdef', full_name: 'U', workspace_name: '  ' }).success).toBe(false);
   });
 
   it('createContactSchema validates URL fields', async () => {
@@ -166,9 +190,9 @@ describe('api/schemas', () => {
 
   it('resetPasswordSchema accepts valid token and password', async () => {
     const { resetPasswordSchema } = await import('@/lib/api/schemas');
-    const result = resetPasswordSchema.parse({ token: 'abc123', password: 'newpassword' });
+    const result = resetPasswordSchema.parse({ token: 'abc123', password: 'Passw0rd!abcdef' });
     expect(result.token).toBe('abc123');
-    expect(result.password).toBe('newpassword');
+    expect(result.password).toBe('Passw0rd!abcdef');
   });
 
   // NOTE: The canonical 2FA schemas live in '@/lib/api/schemas/auth' (the live

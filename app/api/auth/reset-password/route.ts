@@ -16,10 +16,14 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { sendTelegramToUser } from '@/lib/email/service';
 import { logError } from '@/lib/errors-server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { passwordSchema } from '@/lib/api/schemas/auth';
 
+// #3277: this declared min(8) while validatePassword() below enforced the
+// full policy (min 12 + character classes) — one field, two contracts. The
+// schema now defers to the validator itself.
 const schema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8),
+  password: passwordSchema,
 });
 
 export async function POST(request: NextRequest) {

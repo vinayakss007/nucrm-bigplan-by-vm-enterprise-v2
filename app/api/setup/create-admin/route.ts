@@ -13,12 +13,19 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { passwordSchema } from '@/lib/api/schemas/auth';
 
+// #3277: `password` is the shared policy schema — it defers to
+// validatePassword() (min 12 + upper + digit + special), the same validator
+// this handler runs below, so the advertised contract cannot drift from the
+// enforced one again. The name fields trim before the non-empty check: a
+// whitespace workspace_name used to pass, and the slug derivation stripped it
+// to nothing, minting a bare `'-timestamp'` slug.
 const createAdminSchema = z.object({
-  full_name: z.string().min(1, 'Full name is required'),
+  full_name: z.string().trim().min(1, 'Full name is required'),
   email: z.string().email('Valid email is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  workspace_name: z.string().min(1, 'Workspace name is required'),
+  password: passwordSchema,
+  workspace_name: z.string().trim().min(1, 'Workspace name is required'),
   setup_key: z.string().optional(),
 });
 
