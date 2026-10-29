@@ -100,15 +100,15 @@ export async function assertDumpRoleCanReadAllTenants(dbUrl: string): Promise<vo
   let canBypass: boolean;
   try {
     const result = await pool.query<{ role: string; super: boolean; bypass: boolean }>(
-      `select current_user::text as role, r.rolsuper, r.rolbypassrls
+      `select current_user::text as role, r.rolsuper as super, r.rolbypassrls as bypass
          from pg_roles r
         where r.rolname = current_user`,
     );
     const row = result.rows[0];
-    if (!row) {
-      throw new BackupConfigurationError(
-        `Backup refused: the role for ${redactUrl(dbUrl)} does not exist in pg_roles`,
-      );
+    if (!row || typeof row.super !== 'boolean' || typeof row.bypass !== 'boolean') {
+      throw new BackupConfigurationError(row
+        ? `Backup refused: pg_roles returned no readable super/bypass column for ${redactUrl(dbUrl)} — the guard refuses on an unreadable shape, not on a lack of permission`
+        : `Backup refused: the role for ${redactUrl(dbUrl)} does not exist in pg_roles`);
     }
     role = row.role;
     canBypass = row.super || row.bypass;
