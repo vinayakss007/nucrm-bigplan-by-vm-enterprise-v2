@@ -34,7 +34,6 @@
   "components/tenant/workflow-builder.tsx": 867,
   "components/ui/data-table.tsx": 789,
   "lib/ai/common.ts": 502,
-  "lib/ai/gateway.ts": 516,
   "lib/api/schemas.ts": 1241,
   "lib/audit/super-admin.ts": 511,
   "lib/cache/index.ts": 714,
