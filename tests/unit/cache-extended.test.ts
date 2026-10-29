@@ -201,6 +201,14 @@ describe('Cache Module - Extended', () => {
       vi.restoreAllMocks();
     });
 
+    // #3259 ask 2: a lock probe that could not consult the store now says which
+    // of the two refusals it is. The fail-open answer keeps its old shape — there
+    // is no refusal left to explain — and the boolean policy is untouched.
+    const refused = (setting?: string) =>
+      setting === 'true'
+        ? { acquired: true, value: '' }
+        : { acquired: false, value: '', reason: 'unavailable' };
+
     it.each([undefined, 'false', 'true', 'TRUE'])(
       'honors only explicit fail-open on command errors (LOCK_FAIL_OPEN=%s)',
       async (setting) => {
@@ -211,7 +219,7 @@ describe('Cache Module - Extended', () => {
 
         const lock = await acquireLock('test:lock', 10);
 
-        expect(lock).toEqual({ acquired: setting === 'true', value: '' });
+        expect(lock).toEqual(refused(setting));
         expect(console.error).toHaveBeenCalledWith('[Cache] acquireLock failed', error);
         expect(_getCircuitState().failures).toBe(1);
         await releaseLock('test:lock', lock.value);
@@ -239,7 +247,7 @@ describe('Cache Module - Extended', () => {
       const { acquireLock, _getCircuitState } = await import('@/lib/cache');
 
       for (let attempt = 0; attempt < 4; attempt++) {
-        expect(await acquireLock('test:lock')).toEqual({ acquired: setting === 'true', value: '' });
+        expect(await acquireLock('test:lock')).toEqual(refused(setting));
       }
 
       expect(redis.call).toHaveBeenCalledTimes(3);
@@ -256,7 +264,7 @@ describe('Cache Module - Extended', () => {
       // the same fail-closed answer, so the call costs ~1.5s of real time and no
       // SET. The window is per client instance: the second probe of a Redis that
       // is actually down is instant again (tests/unit/cron-lock-first-call-ready-3259.test.ts).
-      expect(await acquireLock('test:lock')).toEqual({ acquired: setting === 'true', value: '' });
+      expect(await acquireLock('test:lock')).toEqual(refused(setting));
       expect(redis.call).not.toHaveBeenCalled();
     });
   });
