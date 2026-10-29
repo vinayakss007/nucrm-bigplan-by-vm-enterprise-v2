@@ -376,7 +376,11 @@ describe('the route holds no statement, and the ledger counts what is left', () 
     expect(guard.PINNED_TARGETS).toContain('lib/email/webhook-scope.ts');
     expect(guard.PINNED_TARGETS).toContain('lib/email/resend-event-handlers.ts');
     expect(guard.CONTEXT_HELPERS).toContain('withTrackingLookupContext');
-    expect(guard.MIN_SCANNED_FILES).toBe(106);
+    // Re-pinned 106 -> 107 by #3280: `/api/setup/status` joined `PUBLIC_PATHS`, so
+    // the derived anonymous surface grew by one file. This case is not the floor's
+    // owner—the guard and #3186's derivation test pin it—but a second literal that
+    // has to move with it, and CI is where that shows up.
+    expect(guard.MIN_SCANNED_FILES).toBe(107);
     const webhooks = guard.SCOPE_DEFERRALS.find((d: { dir: string }) => d.dir === 'app/api/webhooks')!;
     expect(webhooks.maxFindings, '42 left the two api_keys reads, 30 leaves inbound and payu').toBe(30);
   });

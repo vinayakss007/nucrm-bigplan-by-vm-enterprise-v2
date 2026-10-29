@@ -232,7 +232,7 @@ const PUBLIC_PATHS = [
   '/api/health', '/api/track/click', '/api/track/open', '/api/track/event', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
-  '/api/setup/check', '/api/setup/create-admin',
+  '/api/setup/check', '/api/setup/create-admin', '/api/setup/status',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
   '/api/public/quotes',
   // E-signature and CSAT links are opened from an email by someone with no

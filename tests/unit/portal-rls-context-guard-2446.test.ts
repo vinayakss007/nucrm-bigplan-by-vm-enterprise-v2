@@ -303,9 +303,9 @@ describe('the walk is the portal surface, and it fails closed', () => {
     expect(res.unused).toEqual([]);
   }, 60_000);
 
-  it('walks the proxy-derived surface — 106 files, not the 22 the hand list reached (#3186)', async () => {
+  it('walks the proxy-derived surface — 107 files, not the 22 the hand list reached (#3186)', async () => {
     const res = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
-    expect(res.files).toBe(106);
+    expect(res.files).toBe(107);
     // The floor IS the surface now. Left at 22 it would still say OK the day the
     // derivation stops matching `PUBLIC_PATHS` and the walk quietly falls back to
     // the hand list — which is how #2446's sweep never looked at the capture path,

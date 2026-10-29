@@ -76,9 +76,11 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * surface moves, and only with the walk that produced the new number — 104 since
  * #3246 step 4a pinned the inbound key lookup, 106 since step 4b pinned the
  * Resend attribution and the write handlers it feeds, both of which the route's
- * size ratchet pushed into `lib/`.
+ * size ratchet pushed into `lib/`, and 107 since #3280 put `/api/setup/status` in
+ * `PUBLIC_PATHS` so an operator can ask an unauthenticated box whether it still
+ * needs its first admin.
  */
-export const MIN_SCANNED_FILES = 106;
+export const MIN_SCANNED_FILES = 107;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 231 with the two Resend
