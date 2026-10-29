@@ -77,15 +77,13 @@ describe('the guard sees a bare-pool read whose receiver sits on its own line (#
 
   it('does not invent findings anywhere else in app/api', () => {
     const files = [...new Set(raw.hits.map((h) => h.file))].sort();
-    // 3 cron routes (already baselined under #3315) + the 2 SCIM routes. Anything
-    // beyond this list is the fusion matching a chain that was never on a pool.
-    expect(files).toEqual([
-      'app/api/cron/contract-renewal-check/route.ts',
-      'app/api/cron/sla-check/route.ts',
-      'app/api/cron/subscription-renewal-check/route.ts',
-      SCIM_ITEM,
-      SCIM_LIST,
-    ].sort());
+    // Only the 2 SCIM routes. The 3 cron routes that used to be on this list are
+    // not anonymous-surface sites: they run their reads inside `sweepTenants`,
+    // which pins one connection and sets `app.current_tenant` / `app.current_user`
+    // on it for the whole sweep — see rls-guard-credits-cron-sweep-3315.test.ts
+    // for why the guard is now allowed to believe that. Anything beyond this list
+    // is the fusion matching a chain that was never on a pool.
+    expect(files).toEqual([SCIM_ITEM, SCIM_LIST].sort());
   });
 });
 
