@@ -34,7 +34,7 @@ import { tenants } from '@/drizzle/schema/core';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
 import { getProviderKey, type KeyType } from './secrets';
-import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
+import { reserveCredits, releaseCredits, deductCredits, isCentralizedProvider } from './credits';
 import { safeFetch } from '@/lib/security/ssrf';
 import { logError } from '@/lib/errors-server';
 
@@ -388,126 +388,125 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
     throw new GatewayError('invalid_request', 'messages must be a non-empty array');
   }
 
-  // Check if using centralized credits for the requested/first provider
+  // #3359: admission is an atomic reservation, not a bare read — the old
+  // snapshot gate let N concurrent chats all pass and settle, overspending a
+  // hard cap by the burst width. Every path below settles via deductCredits
+  // or releases via the finally.
   const isCentralized = await isCentralizedProvider(req.tenantId, req.provider ?? '');
+  let reserved = 0;
+  let settled = true;
   if (isCentralized) {
-    const estimatedTokens = req.max_tokens ?? 1024;
-    const creditCheck = await checkCredits(req.tenantId, estimatedTokens);
-    if (!creditCheck.allowed) {
-      throw new GatewayError('no_key_for_provider', creditCheck.reason ?? 'Insufficient credits');
-    }
+    const claim = await reserveCredits(req.tenantId, req.max_tokens ?? 1024);
+    if (!claim.allowed) throw new GatewayError('no_key_for_provider', claim.reason ?? 'Insufficient credits');
+    reserved = claim.reserved;
+    settled = reserved === 0;
   }
 
-  const configs = await loadProviderConfigs(req.tenantId);
-  const chain = buildProviderChain(configs, req.provider);
+  try {
+    const configs = await loadProviderConfigs(req.tenantId);
+    const chain = buildProviderChain(configs, req.provider);
 
-  if (chain.length === 0) {
-    throw new GatewayError('no_provider_enabled', 'No AI provider is enabled. Configure one at /tenant/settings/ai-providers.');
-  }
-
-  const errors: { provider: string; message: string; status?: number }[] = [];
-
-  for (let i = 0; i < chain.length; i++) {
-    const provider = chain[i]!;
-    const cfg = configs[provider] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
-    const start = Date.now();
-
-    let keyData: { plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null = null;
-    try {
-      keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
-    } catch (err) {
-      errors.push({ provider, message: `secrets vault: ${(err as Error).message}` });
-      // Log a stub activity row so the failure shows up in the audit
-      await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: req.model ?? cfg.default_model,
-        status: 'error', tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs: 0,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: `vault: ${(err as Error).message}`,
-        metadata: { ...(req.metadata ?? {}), attempt: i },
-      });
-      continue;
+    if (chain.length === 0) {
+      throw new GatewayError('no_provider_enabled', 'No AI provider is enabled. Configure one at /tenant/settings/ai-providers.');
     }
 
-    if (!keyData && provider !== 'ollama' && provider !== 'opencode') {
-      errors.push({ provider, message: 'no API key stored' });
-      continue;
-    }
+    const errors: { provider: string; message: string; status?: number }[] = [];
+    // Field bases shared by every ai_activity row this loop writes.
+    const baseLog = {
+      tenantId: req.tenantId, userId: req.userId, action: req.action,
+      entityType: req.entityType ?? null, entityId: req.entityId ?? null,
+    };
+    const meta = { ...(req.metadata ?? {}), fallback_chain: chain };
 
-    const apiKey = keyData?.plaintext ?? '';
-    const baseUrlOverride = keyData?.baseUrl ?? null;
-    const modelOverride = keyData?.modelOverride ?? null;
+    for (let i = 0; i < chain.length; i++) {
+      const provider = chain[i]!;
+      const cfg = configs[provider] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
+      const model = req.model ?? cfg.default_model;
+      const start = Date.now();
 
-    try {
-      const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, modelOverride, req);
-      const latencyMs = Date.now() - start;
-      const costCents = estimateCostCents(result.model, result.tokensIn, result.tokensOut);
-
-      const activityId = await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: result.model,
-        status: i === 0 ? 'success' : 'fallback_used',
-        tokensIn: result.tokensIn, tokensOut: result.tokensOut,
-        costCents, latencyMs,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: null,
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
-      });
-
-      // Deduct credits if using centralized pool
-      const providerIsCentralized = await isCentralizedProvider(req.tenantId, provider);
-      if (providerIsCentralized) {
-        await deductCredits({
-          tenantId: req.tenantId,
-          userId: req.userId,
-          action: req.action,
-          provider,
-          model: result.model,
-          tokensIn: result.tokensIn,
-          tokensOut: result.tokensOut,
-          costCents,
-          activityId,
-        });
+      let keyData: { plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null = null;
+      try {
+        keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
+      } catch (err) {
+        errors.push({ provider, message: `secrets vault: ${(err as Error).message}` });
+        // Log a stub activity row so the failure shows up in the audit
+        await logActivity({ ...baseLog, provider, model, status: 'error',
+          tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs: 0,
+          errorMessage: `vault: ${(err as Error).message}`,
+          metadata: { ...meta, attempt: i } });
+        continue;
       }
 
-      return {
-        text: result.text,
-        provider,
-        model: result.model,
-        tokensIn: result.tokensIn,
-        tokensOut: result.tokensOut,
-        latencyMs,
-        fallbacksUsed: i,
-        activityId,
-      };
-    } catch (err) {
-      const latencyMs = Date.now() - start;
-      const message = (err as Error).message;
-      const status = (err as GatewayError).status;
-      errors.push({ provider, message, status });
-
-      await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: req.model ?? cfg.default_model,
-        status: status === 429 ? 'rate_limited' : 'error',
-        tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: message.slice(0, 1000),
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
-      });
-
-      // 400 / 422 (and other non-auth 4xx) are fatal — bail out
-      if (typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429) {
-        throw new GatewayError('invalid_request', `${provider}: ${message}`, { provider, status });
+      if (!keyData && provider !== 'ollama' && provider !== 'opencode') {
+        errors.push({ provider, message: 'no API key stored' });
+        continue;
       }
-      // Otherwise keep going down the chain
-    }
-  }
 
-  throw new GatewayError(
-    'all_providers_failed',
-    `All providers failed: ${errors.map(e => `${e.provider}(${e.message})`).join('; ')}`,
-  );
+      const apiKey = keyData?.plaintext ?? '';
+      const baseUrlOverride = keyData?.baseUrl ?? null;
+      const modelOverride = keyData?.modelOverride ?? null;
+      const keyMeta = { key_type: keyData?.keyType, model_override: modelOverride };
+
+      try {
+        const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, modelOverride, req);
+        const latencyMs = Date.now() - start;
+        const costCents = estimateCostCents(result.model, result.tokensIn, result.tokensOut);
+
+        const activityId = await logActivity({ ...baseLog, provider, model: result.model,
+          status: i === 0 ? 'success' : 'fallback_used',
+          tokensIn: result.tokensIn, tokensOut: result.tokensOut,
+          costCents, latencyMs, errorMessage: null,
+          metadata: { ...meta, attempt: i, ...keyMeta } });
+
+        // Deduct credits if using centralized pool
+        const providerIsCentralized = await isCentralizedProvider(req.tenantId, provider);
+        if (providerIsCentralized) {
+          // #3359: settle the reservation — the balance nets `actual -
+          // reserved`, the ledger records true usage. A failed settle leaves
+          // the claim standing; the finally gives it back.
+          const deduction = await deductCredits({
+            ...baseLog, provider, model: result.model,
+            tokensIn: result.tokensIn, tokensOut: result.tokensOut,
+            costCents, activityId, reservedTokens: reserved,
+          });
+          settled = deduction.success;
+        }
+
+        return {
+          text: result.text, provider, model: result.model,
+          tokensIn: result.tokensIn, tokensOut: result.tokensOut,
+          latencyMs, fallbacksUsed: i, activityId,
+        };
+      } catch (err) {
+        const latencyMs = Date.now() - start;
+        const message = (err as Error).message;
+        const status = (err as GatewayError).status;
+        errors.push({ provider, message, status });
+
+        await logActivity({ ...baseLog, provider, model,
+          status: status === 429 ? 'rate_limited' : 'error',
+          tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
+          errorMessage: message.slice(0, 1000),
+          metadata: { ...meta, attempt: i, ...keyMeta } });
+
+        // 400 / 422 (and other non-auth 4xx) are fatal — bail out
+        if (typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429) {
+          throw new GatewayError('invalid_request', `${provider}: ${message}`, { provider, status });
+        }
+        // Otherwise keep going down the chain
+      }
+    }
+
+    throw new GatewayError(
+      'all_providers_failed',
+      `All providers failed: ${errors.map(e => `${e.provider}(${e.message})`).join('; ')}`,
+    );
+  } finally {
+    // #3359: a reservation that never settled — chain failed, success came
+    // from a non-centralized provider, settle rolled back — goes back to the
+    // pool. Failed calls must not eat quota.
+    if (reserved > 0 && !settled) await releaseCredits(req.tenantId, reserved);
+  }
 }
 
 /** Convenience helper for the very common 'one-shot' chat with a system prompt. */

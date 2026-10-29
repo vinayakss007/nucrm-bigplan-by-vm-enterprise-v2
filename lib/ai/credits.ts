@@ -114,40 +114,95 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
 }
 
 /**
- * Check if tenant has sufficient credits for an estimated call.
- * Returns true if call can proceed, false if blocked.
+ * #3359: the old gate was `checkCredits` — a bare read. N concurrent
+ * admissions against the same snapshot all passed and all settled later via
+ * `deductCredits`, so a hard-capped tenant could overspend the cap by the
+ * burst width. This is the admission entry point now: with a hard cap the
+ * estimate is CLAIMED atomically — `allocated - used >= est` rides in the
+ * UPDATE's WHERE, which Postgres re-evaluates under the row lock — and the
+ * caller must settle or release it. Without a hard cap nothing is reserved
+ * (`reserved: 0`) and the read-only gates still apply.
  */
-export async function checkCredits(
+export async function reserveCredits(
   tenantId: string,
   estimatedTokens: number = 500,
-): Promise<{ allowed: boolean; balance: CreditBalance; reason?: string }> {
+): Promise<{ allowed: boolean; reserved: number; balance: CreditBalance; reason?: string }> {
+  const period = getCurrentPeriod();
   const balance = await getCreditBalance(tenantId);
 
-  // If status is suspended, block all calls
   if (balance.status === 'suspended') {
-    return { allowed: false, balance, reason: 'Account suspended by administrator' };
+    return { allowed: false, reserved: 0, balance, reason: 'Account suspended by administrator' };
   }
-
-  // If exhausted and hard cap enabled, block
   if (balance.status === 'exhausted' && balance.hardCapEnabled) {
-    return { allowed: false, balance, reason: 'Credit balance exhausted. Contact administrator to allocate more tokens.' };
+    return { allowed: false, reserved: 0, balance, reason: 'Credit balance exhausted. Contact administrator to allocate more tokens.' };
+  }
+  if (balance.hardCapEnabled && balance.remainingCostCents <= 0 && balance.allocatedCostCents > 0) {
+    return { allowed: false, reserved: 0, balance, reason: 'Cost budget exhausted' };
+  }
+  if (!balance.hardCapEnabled) {
+    return { allowed: true, reserved: 0, balance };
   }
 
-  // Check remaining tokens
-  if (balance.hardCapEnabled && balance.remainingTokens < estimatedTokens) {
+  const [claimed] = await db
+    .update(tenantAiCredits)
+    .set({
+      usedTokens: sql`${tenantAiCredits.usedTokens} + ${estimatedTokens}`,
+      status: sql`CASE
+        WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
+        WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${estimatedTokens}) <= 0 THEN 'exhausted'
+        ELSE 'active'
+      END`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(tenantAiCredits.tenantId, tenantId),
+      eq(tenantAiCredits.billingPeriod, period),
+      sql`${tenantAiCredits.allocatedTokens} - ${tenantAiCredits.usedTokens} >= ${estimatedTokens}`,
+    ))
+    .returning({ id: tenantAiCredits.id });
+
+  if (!claimed) {
     return {
       allowed: false,
+      reserved: 0,
       balance,
       reason: `Insufficient credits. Remaining: ${balance.remainingTokens.toLocaleString()} tokens, estimated needed: ${estimatedTokens.toLocaleString()}`,
     };
   }
 
-  // Check cost cap
-  if (balance.hardCapEnabled && balance.remainingCostCents <= 0 && balance.allocatedCostCents > 0) {
-    return { allowed: false, balance, reason: 'Cost budget exhausted' };
-  }
+  return { allowed: true, reserved: estimatedTokens, balance };
+}
 
-  return { allowed: true, balance };
+/**
+ * #3359: give an unconsumed reservation back. Runs on every `chat()` exit that
+ * does not settle through `deductCredits` (provider chain failed, the success
+ * came from a non-centralized provider, the settle transaction rolled back).
+ * Best-effort by design: a failed release under-counts nothing that was
+ * actually spent — it only leaves quota clamped until the next settle, whose
+ * status CASE re-derives from the true `used` figure.
+ */
+export async function releaseCredits(tenantId: string, reserved: number): Promise<void> {
+  if (reserved <= 0) return;
+  const period = getCurrentPeriod();
+  try {
+    await db
+      .update(tenantAiCredits)
+      .set({
+        usedTokens: sql`${tenantAiCredits.usedTokens} - ${reserved}`,
+        status: sql`CASE
+          WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
+          WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} - ${reserved}) <= 0 THEN 'exhausted'
+          ELSE 'active'
+        END`,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(tenantAiCredits.tenantId, tenantId),
+        eq(tenantAiCredits.billingPeriod, period),
+      ));
+  } catch (err) {
+    await logError({ error: err, context: 'ai-credits: releaseCredits' });
+  }
 }
 
 /**
@@ -164,9 +219,20 @@ export async function deductCredits(params: {
   tokensOut: number;
   costCents: number;
   activityId: string | null;
+  /**
+   * #3359: tokens `reserveCredits` already added to `usedTokens` for this
+   * call. The balance settles `used + actual - reserved`; the ledger still
+   * records the true usage. Omit (or 0) for callers without a reservation.
+   */
+  reservedTokens?: number;
 }): Promise<CreditDeduction> {
   const period = getCurrentPeriod();
   const tokensUsed = params.tokensIn + params.tokensOut;
+  // The reservation is reconciled as a delta: actual < estimate nets the
+  // balance back down by the unused headroom, actual > estimate bills the
+  // overshoot. Only negatives from bad input are clamped.
+  const reserved = Math.max(0, params.reservedTokens ?? 0);
+  const delta = tokensUsed - reserved;
 
   try {
     const balance = await db.transaction(async (tx) => {
@@ -174,11 +240,11 @@ export async function deductCredits(params: {
       await tx
         .update(tenantAiCredits)
         .set({
-          usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
+          usedTokens: sql`${tenantAiCredits.usedTokens} + ${delta}`,
           usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
           status: sql`CASE 
             WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
-            WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
+            WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${delta}) <= 0 THEN 'exhausted'
             ELSE 'active'
           END`,
           updatedAt: new Date(),

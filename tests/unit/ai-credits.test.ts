@@ -98,40 +98,54 @@ describe('ai/credits', () => {
     expect(balance.remainingTokens).toBe(0);
   });
 
-  it('checkCredits allows when sufficient balance', async () => {
+  // #3359: the bare-read gate (checkCredits) is gone — admission is an atomic
+  // reservation. These five tests keep the gate semantics; the predicate and
+  // settle/release math are proven in ai-credits-reserve-reconcile-3359.test.ts.
+
+  it('reserveCredits allows when the claim lands', async () => {
     mockFindFirst.mockResolvedValue({ allocatedTokens: 100000, usedTokens: 0, allocatedCostCents: 5000, usedCostCents: 0, hardCapEnabled: true, softCapPct: 80, status: 'active' });
-    const { checkCredits } = await import('@/lib/ai/credits');
-    expect((await checkCredits('tenant-1', 500)).allowed).toBe(true);
+    mockReturning.mockResolvedValue([{ id: 'credit-row-1' }]);
+    const { reserveCredits } = await import('@/lib/ai/credits');
+    const r = await reserveCredits('tenant-1', 500);
+    expect(r.allowed).toBe(true);
+    expect(r.reserved).toBe(500);
   });
 
-  it('checkCredits blocks when suspended', async () => {
+  it('reserveCredits blocks when suspended without claiming', async () => {
     mockFindFirst.mockResolvedValue({ allocatedTokens: 100000, usedTokens: 0, allocatedCostCents: 5000, usedCostCents: 0, hardCapEnabled: true, softCapPct: 80, status: 'suspended' });
-    const { checkCredits } = await import('@/lib/ai/credits');
-    const r = await checkCredits('tenant-1');
+    const { reserveCredits } = await import('@/lib/ai/credits');
+    const r = await reserveCredits('tenant-1');
     expect(r.allowed).toBe(false);
+    expect(r.reserved).toBe(0);
     expect(r.reason).toContain('suspended');
+    expect(mockReturning).not.toHaveBeenCalled();
   });
 
-  it('checkCredits blocks when exhausted', async () => {
+  it('reserveCredits blocks when exhausted', async () => {
     mockFindFirst.mockResolvedValue({ allocatedTokens: 100000, usedTokens: 100000, allocatedCostCents: 5000, usedCostCents: 5000, hardCapEnabled: true, softCapPct: 80, status: 'exhausted' });
-    const { checkCredits } = await import('@/lib/ai/credits');
-    expect((await checkCredits('tenant-1')).allowed).toBe(false);
+    const { reserveCredits } = await import('@/lib/ai/credits');
+    const r = await reserveCredits('tenant-1');
+    expect(r.allowed).toBe(false);
+    expect(r.reserved).toBe(0);
   });
 
-  it('checkCredits blocks when insufficient tokens', async () => {
+  it('reserveCredits blocks when the claim matches no row (cap predicate lost)', async () => {
     mockFindFirst.mockResolvedValue({ allocatedTokens: 1000, usedTokens: 900, allocatedCostCents: 5000, usedCostCents: 0, hardCapEnabled: true, softCapPct: 80, status: 'active' });
-    const { checkCredits } = await import('@/lib/ai/credits');
-    const r = await checkCredits('tenant-1', 500);
+    mockReturning.mockResolvedValue([]);
+    const { reserveCredits } = await import('@/lib/ai/credits');
+    const r = await reserveCredits('tenant-1', 500);
     expect(r.allowed).toBe(false);
+    expect(r.reserved).toBe(0);
     expect(r.reason).toContain('Insufficient');
   });
 
-  it('checkCredits blocks when cost budget exhausted', async () => {
+  it('reserveCredits blocks when cost budget exhausted, before any claim', async () => {
     mockFindFirst.mockResolvedValue({ allocatedTokens: 100000, usedTokens: 0, allocatedCostCents: 100, usedCostCents: 100, hardCapEnabled: true, softCapPct: 80, status: 'active' });
-    const { checkCredits } = await import('@/lib/ai/credits');
-    const r = await checkCredits('tenant-1', 500);
+    const { reserveCredits } = await import('@/lib/ai/credits');
+    const r = await reserveCredits('tenant-1', 500);
     expect(r.allowed).toBe(false);
     expect(r.reason).toContain('Cost budget');
+    expect(mockReturning).not.toHaveBeenCalled();
   });
 
   it('deductCredits updates balance and logs to ledger', async () => {
