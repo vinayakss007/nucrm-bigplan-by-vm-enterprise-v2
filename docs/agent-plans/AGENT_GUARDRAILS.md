@@ -44,6 +44,13 @@ npx eslint <changed files> && wc -l <changed files>
 
 Only then: `git push` + `gh pr create`. Never merge your own PR (AGENTS.md).
 
+`npm run premerge` (`scripts/pre-merge-check.sh`) is that discipline as seven steps, and it
+stops at the first non-zero status. It did not used to: every step was piped into
+`head`/`tail` under `set -e` **without** `pipefail`, so the pipeline answered for `head`, and
+the file printed "ALL CHECKS PASSED — Ready to merge" over trees where `tsc`, the build, the
+suite or a guard had just failed (#3351). A step added here goes through its `run_step`
+helper — `tests/unit/pre-merge-check-status-3351.test.ts` fails one written any other way.
+
 ## 3. Dedupe protocol (shared repo, concurrent agents)
 
 Before **filing** an issue or **writing** a fix:

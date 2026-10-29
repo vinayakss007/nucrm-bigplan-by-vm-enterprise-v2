@@ -31,12 +31,11 @@
  */
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
-import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
 import { getProviderKey, type KeyType } from './secrets';
-import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
+import { deductCredits, isCentralizedProvider, releaseCredits, reserveCredits } from './credits';
 import { safeFetch } from '@/lib/security/ssrf';
-import { logError } from '@/lib/errors-server';
+import { logActivity } from './activity-log';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -330,57 +329,6 @@ function getDefaultBaseUrl(provider: string): string {
   }
 }
 
-// ── ai_activity logger ────────────────────────────────────────────────────
-
-interface LogPayload {
-  tenantId: string;
-  userId: string | null;
-  action: string;
-  provider: string;
-  model: string | null;
-  status: 'success' | 'error' | 'rate_limited' | 'fallback_used';
-  tokensIn: number;
-  tokensOut: number;
-  costCents: number;
-  latencyMs: number;
-  entityType: string | null;
-  entityId: string | null;
-  errorMessage: string | null;
-  metadata: Record<string, unknown>;
-}
-
-async function logActivity(p: LogPayload): Promise<string | null> {
-  try {
-    const [row] = await db.insert(aiActivity).values({
-      tenantId: p.tenantId,
-      userId: p.userId,
-      action: p.action,
-      provider: p.provider,
-      model: p.model,
-      status: p.status,
-      tokensIn: p.tokensIn,
-      tokensOut: p.tokensOut,
-      tokensUsed: p.tokensIn + p.tokensOut,
-      costCents: p.costCents,
-      latencyMs: p.latencyMs,
-      entityType: p.entityType,
-      entityId: p.entityId,
-      errorMessage: p.errorMessage,
-      metadata: p.metadata,
-    }).returning({ id: aiActivity.id });
-    return row?.id ?? null;
-  } catch (err) {
-    // Never let activity logging break the actual call — but never hide it
-    // either. This console.warn is why `ai_activity` holds zero rows while five
-    // AI features kept "recording" usage: chk_ai_activity_action rejects
-    // insights / email_draft / auto_followup / score_lead / sentiment_analysis,
-    // so the usage and credit rows those features are supposed to bill for were
-    // discarded without a trace.
-    void logError({ error: err, context: `ai gateway activity-log action=${p.action}` });
-    return null;
-  }
-}
-
 // ── Public entry point ────────────────────────────────────────────────────
 
 export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
@@ -388,126 +336,146 @@ export async function chat(req: GatewayRequest): Promise<GatewayResponse> {
     throw new GatewayError('invalid_request', 'messages must be a non-empty array');
   }
 
-  // Check if using centralized credits for the requested/first provider
+  // Check if using centralized credits for the requested/first provider.
+  // #3359: admission is a *claim* against the balance, not a read of it. The
+  // bare check let N concurrent calls all pass on the same snapshot and then
+  // each settle, so the tenant overspent the hard cap by up to N x the balance.
+  let reservedTokens = 0;
+  let settled = false;
   const isCentralized = await isCentralizedProvider(req.tenantId, req.provider ?? '');
   if (isCentralized) {
     const estimatedTokens = req.max_tokens ?? 1024;
-    const creditCheck = await checkCredits(req.tenantId, estimatedTokens);
-    if (!creditCheck.allowed) {
-      throw new GatewayError('no_key_for_provider', creditCheck.reason ?? 'Insufficient credits');
+    const reservation = await reserveCredits(req.tenantId, estimatedTokens);
+    if (!reservation.allowed) {
+      throw new GatewayError('no_key_for_provider', reservation.reason ?? 'Insufficient credits');
     }
+    reservedTokens = reservation.reserved;
   }
 
-  const configs = await loadProviderConfigs(req.tenantId);
-  const chain = buildProviderChain(configs, req.provider);
+  // Anything that leaves here without settling the claim hands it back, or a
+  // provider outage quietly eats the tenant's quota.
+  try {
+    const configs = await loadProviderConfigs(req.tenantId);
+    const chain = buildProviderChain(configs, req.provider);
 
-  if (chain.length === 0) {
-    throw new GatewayError('no_provider_enabled', 'No AI provider is enabled. Configure one at /tenant/settings/ai-providers.');
-  }
-
-  const errors: { provider: string; message: string; status?: number }[] = [];
-
-  for (let i = 0; i < chain.length; i++) {
-    const provider = chain[i]!;
-    const cfg = configs[provider] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
-    const start = Date.now();
-
-    let keyData: { plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null = null;
-    try {
-      keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
-    } catch (err) {
-      errors.push({ provider, message: `secrets vault: ${(err as Error).message}` });
-      // Log a stub activity row so the failure shows up in the audit
-      await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: req.model ?? cfg.default_model,
-        status: 'error', tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs: 0,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: `vault: ${(err as Error).message}`,
-        metadata: { ...(req.metadata ?? {}), attempt: i },
-      });
-      continue;
+    if (chain.length === 0) {
+      throw new GatewayError('no_provider_enabled', 'No AI provider is enabled. Configure one at /tenant/settings/ai-providers.');
     }
 
-    if (!keyData && provider !== 'ollama' && provider !== 'opencode') {
-      errors.push({ provider, message: 'no API key stored' });
-      continue;
-    }
+    const errors: { provider: string; message: string; status?: number }[] = [];
 
-    const apiKey = keyData?.plaintext ?? '';
-    const baseUrlOverride = keyData?.baseUrl ?? null;
-    const modelOverride = keyData?.modelOverride ?? null;
+    for (let i = 0; i < chain.length; i++) {
+      const provider = chain[i]!;
+      const cfg = configs[provider] ?? { enabled: false, default_model: '', temperature: 0.4, max_tokens: 1024, fallback_priority: 99 };
+      const start = Date.now();
 
-    try {
-      const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, modelOverride, req);
-      const latencyMs = Date.now() - start;
-      const costCents = estimateCostCents(result.model, result.tokensIn, result.tokensOut);
+      let keyData: { plaintext: string; baseUrl: string | null; modelOverride: string | null; keyType: KeyType } | null = null;
+      try {
+        keyData = await getProviderKey(req.tenantId, provider, req.userId ?? undefined);
+      } catch (err) {
+        errors.push({ provider, message: `secrets vault: ${(err as Error).message}` });
+        // Log a stub activity row so the failure shows up in the audit
+        await logActivity({
+          tenantId: req.tenantId, userId: req.userId, action: req.action,
+          provider, model: req.model ?? cfg.default_model,
+          status: 'error', tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs: 0,
+          entityType: req.entityType ?? null, entityId: req.entityId ?? null,
+          errorMessage: `vault: ${(err as Error).message}`,
+          metadata: { ...(req.metadata ?? {}), attempt: i },
+        });
+        continue;
+      }
 
-      const activityId = await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: result.model,
-        status: i === 0 ? 'success' : 'fallback_used',
-        tokensIn: result.tokensIn, tokensOut: result.tokensOut,
-        costCents, latencyMs,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: null,
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
-      });
+      if (!keyData && provider !== 'ollama' && provider !== 'opencode') {
+        errors.push({ provider, message: 'no API key stored' });
+        continue;
+      }
 
-      // Deduct credits if using centralized pool
-      const providerIsCentralized = await isCentralizedProvider(req.tenantId, provider);
-      if (providerIsCentralized) {
-        await deductCredits({
-          tenantId: req.tenantId,
-          userId: req.userId,
-          action: req.action,
+      const apiKey = keyData?.plaintext ?? '';
+      const baseUrlOverride = keyData?.baseUrl ?? null;
+      const modelOverride = keyData?.modelOverride ?? null;
+
+      try {
+        const result = await callProvider(provider, cfg, apiKey, baseUrlOverride, modelOverride, req);
+        const latencyMs = Date.now() - start;
+        const costCents = estimateCostCents(result.model, result.tokensIn, result.tokensOut);
+
+        const activityId = await logActivity({
+          tenantId: req.tenantId, userId: req.userId, action: req.action,
+          provider, model: result.model,
+          status: i === 0 ? 'success' : 'fallback_used',
+          tokensIn: result.tokensIn, tokensOut: result.tokensOut,
+          costCents, latencyMs,
+          entityType: req.entityType ?? null, entityId: req.entityId ?? null,
+          errorMessage: null,
+          metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
+        });
+
+        // Settle against the pool the call was admitted on. When a fallback from
+        // a non-centralized provider served it, nothing bills and the claim
+        // belongs back on the pool that was charged for it.
+        const providerIsCentralized = await isCentralizedProvider(req.tenantId, provider);
+        if (providerIsCentralized) {
+          const deducted = await deductCredits({
+            tenantId: req.tenantId,
+            userId: req.userId,
+            action: req.action,
+            provider,
+            model: result.model,
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+            costCents,
+            activityId,
+            reservedTokens,
+          });
+          // A rolled-back transaction billed nothing, so the claim is still ours
+          // to return rather than to keep out of the balance.
+          if (deducted.success) settled = true;
+        }
+
+        return {
+          text: result.text,
           provider,
           model: result.model,
           tokensIn: result.tokensIn,
           tokensOut: result.tokensOut,
-          costCents,
+          latencyMs,
+          fallbacksUsed: i,
           activityId,
+        };
+      } catch (err) {
+        const latencyMs = Date.now() - start;
+        const message = (err as Error).message;
+        const status = (err as GatewayError).status;
+        errors.push({ provider, message, status });
+
+        await logActivity({
+          tenantId: req.tenantId, userId: req.userId, action: req.action,
+          provider, model: req.model ?? cfg.default_model,
+          status: status === 429 ? 'rate_limited' : 'error',
+          tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
+          entityType: req.entityType ?? null, entityId: req.entityId ?? null,
+          errorMessage: message.slice(0, 1000),
+          metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
         });
+
+        // 400 / 422 (and other non-auth 4xx) are fatal — bail out
+        if (typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429) {
+          throw new GatewayError('invalid_request', `${provider}: ${message}`, { provider, status });
+        }
+        // Otherwise keep going down the chain
       }
+    }
 
-      return {
-        text: result.text,
-        provider,
-        model: result.model,
-        tokensIn: result.tokensIn,
-        tokensOut: result.tokensOut,
-        latencyMs,
-        fallbacksUsed: i,
-        activityId,
-      };
-    } catch (err) {
-      const latencyMs = Date.now() - start;
-      const message = (err as Error).message;
-      const status = (err as GatewayError).status;
-      errors.push({ provider, message, status });
-
-      await logActivity({
-        tenantId: req.tenantId, userId: req.userId, action: req.action,
-        provider, model: req.model ?? cfg.default_model,
-        status: status === 429 ? 'rate_limited' : 'error',
-        tokensIn: 0, tokensOut: 0, costCents: 0, latencyMs,
-        entityType: req.entityType ?? null, entityId: req.entityId ?? null,
-        errorMessage: message.slice(0, 1000),
-        metadata: { ...(req.metadata ?? {}), attempt: i, fallback_chain: chain, key_type: keyData?.keyType, model_override: modelOverride },
-      });
-
-      // 400 / 422 (and other non-auth 4xx) are fatal — bail out
-      if (typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 403 && status !== 429) {
-        throw new GatewayError('invalid_request', `${provider}: ${message}`, { provider, status });
-      }
-      // Otherwise keep going down the chain
+    throw new GatewayError(
+      'all_providers_failed',
+      `All providers failed: ${errors.map(e => `${e.provider}(${e.message})`).join('; ')}`,
+    );
+  } finally {
+    if (reservedTokens > 0 && !settled) {
+      await releaseCredits(req.tenantId, reservedTokens);
     }
   }
-
-  throw new GatewayError(
-    'all_providers_failed',
-    `All providers failed: ${errors.map(e => `${e.provider}(${e.message})`).join('; ')}`,
-  );
 }
 
 /** Convenience helper for the very common 'one-shot' chat with a system prompt. */

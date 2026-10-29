@@ -335,7 +335,8 @@ describe('cron lock first call after process start (#3259)', () => {
 
       const lock = await acquireLock('query:slow', 10);
 
-      expect(lock).toEqual({ acquired: false, value: '' });
+      // #3259 ask 2 added `reason`, so the refusal now says which of the two it is.
+      expect(lock).toEqual({ acquired: false, value: '', reason: 'unavailable' });
       // The SET was never attempted, so getOrSet still takes the retry/stale
       // path it was designed to take rather than believing it holds the lock.
       expect(clients[0].setCommands).toHaveLength(0);
@@ -347,8 +348,8 @@ describe('cron lock first call after process start (#3259)', () => {
       await acquireLock('query:slow', 10); // spends the one grace window
 
       const started = Date.now();
-      expect(await acquireLock('query:other', 10)).toEqual({ acquired: false, value: '' });
-      expect(await acquireLock('query:third', 10)).toEqual({ acquired: false, value: '' });
+      expect(await acquireLock('query:other', 10)).toEqual({ acquired: false, value: '', reason: 'unavailable' });
+      expect(await acquireLock('query:third', 10)).toEqual({ acquired: false, value: '', reason: 'unavailable' });
       // Throughput has to degrade, not stall: after the first probe learns the
       // truth, every later reader gets the old instant answer.
       expect(Date.now() - started).toBeLessThan(500);
