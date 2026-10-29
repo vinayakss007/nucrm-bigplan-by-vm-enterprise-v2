@@ -31,12 +31,11 @@
  */
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
-import { aiActivity } from '@/drizzle/schema/ai';
 import { eq } from 'drizzle-orm';
 import { getProviderKey, type KeyType } from './secrets';
 import { deductCredits, isCentralizedProvider, releaseCredits, reserveCredits } from './credits';
 import { safeFetch } from '@/lib/security/ssrf';
-import { logError } from '@/lib/errors-server';
+import { logActivity } from './activity-log';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -327,57 +326,6 @@ function getDefaultBaseUrl(provider: string): string {
     case 'opencode':  return 'https://opencode.ai/zen';
     case 'deepseek':  return 'https://api.deepseek.com';
     default:          return '';  // custom providers must have base_url set
-  }
-}
-
-// ── ai_activity logger ────────────────────────────────────────────────────
-
-interface LogPayload {
-  tenantId: string;
-  userId: string | null;
-  action: string;
-  provider: string;
-  model: string | null;
-  status: 'success' | 'error' | 'rate_limited' | 'fallback_used';
-  tokensIn: number;
-  tokensOut: number;
-  costCents: number;
-  latencyMs: number;
-  entityType: string | null;
-  entityId: string | null;
-  errorMessage: string | null;
-  metadata: Record<string, unknown>;
-}
-
-async function logActivity(p: LogPayload): Promise<string | null> {
-  try {
-    const [row] = await db.insert(aiActivity).values({
-      tenantId: p.tenantId,
-      userId: p.userId,
-      action: p.action,
-      provider: p.provider,
-      model: p.model,
-      status: p.status,
-      tokensIn: p.tokensIn,
-      tokensOut: p.tokensOut,
-      tokensUsed: p.tokensIn + p.tokensOut,
-      costCents: p.costCents,
-      latencyMs: p.latencyMs,
-      entityType: p.entityType,
-      entityId: p.entityId,
-      errorMessage: p.errorMessage,
-      metadata: p.metadata,
-    }).returning({ id: aiActivity.id });
-    return row?.id ?? null;
-  } catch (err) {
-    // Never let activity logging break the actual call — but never hide it
-    // either. This console.warn is why `ai_activity` holds zero rows while five
-    // AI features kept "recording" usage: chk_ai_activity_action rejects
-    // insights / email_draft / auto_followup / score_lead / sentiment_analysis,
-    // so the usage and credit rows those features are supposed to bill for were
-    // discarded without a trace.
-    void logError({ error: err, context: `ai gateway activity-log action=${p.action}` });
-    return null;
   }
 }
 
