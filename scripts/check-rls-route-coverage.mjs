@@ -122,6 +122,10 @@ const DB_RE = /\bdb\.(select|insert|update|delete|query|execute|transaction)\b/;
 const WRAP_USED_RE = /\b(withApiRoute|withTenantScope)\s*\(/;
 // A bare handler export that is NOT going through a wrapper.
 const BARE_EXPORT_RE = /export\s+async\s+function\s+(GET|POST|PATCH|PUT|DELETE)\b/;
+// Proof that a route the session gate steps over is not simply unauthenticated: these are the
+// mechanisms the codebase verifies credentials with when it is not looking up a session. Named
+// rather than inferred, so adding one to the list is a deliberate act.
+const AUTH_MECHANISM_RE = /\b(?:verifySCIMToken|verifyWebhookSignature|verifyApiKey|verifySignature|resolveApiKey|timingSafeEqual|createHmac|scryptSync)\b/g;
 
 /**
  * Rule 2's file-level scope: a route is on the anonymous surface when nothing in it
@@ -184,6 +188,45 @@ function statementAt(lines, lineIndex, column) {
     if (text.length > MAX) return text.slice(0, MAX);
   }
   return text.slice(0, MAX);
+}
+
+/**
+ * Drizzle chains are written across lines, and the formatter puts the receiver on its own line once
+ * the chain is long:
+ *
+ *     const [countResult] = await db
+ *       .select({ count: sql`count(*)` })
+ *       .from(users)
+ *
+ * Rule 2's per-line scan reads that as nothing at all — `BARE_POOL_RE` needs `db` and `.select` in
+ * the same line — so the guard reported "no anonymous route touches an identity table on the bare
+ * pool" while `app/api/scim/v2/Users/route.ts` did it twice per handler (#3303). A statement's
+ * receiver is a property of the statement, not of the line it happens to break on.
+ *
+ * So: glue a line to the next one while the line ends on a pool name and the next line opens with
+ * the chain call. Both conditions have to hold together, which is what keeps the fusion narrow —
+ * `const cfg = { name: "db" };` followed by `.select(…)` does not fuse (the line ends with `};`),
+ * and `(tx) => tx` followed by `.select(…)` does not fuse (the receiver is not the pool).
+ * `origStart` maps each fused line back to the source line a human has to open.
+ */
+function fuseChains(rawLines) {
+  const lines = [];
+  const origStart = [];
+  for (let k = 0; k < rawLines.length; k++) {
+    let cur = rawLines[k];
+    const start = k;
+    while (
+      /\b(?:db|database|pool)\s*$/.test(cur.trimEnd()) &&
+      k + 1 < rawLines.length &&
+      /^\s*\.\s*(?:query|select|insert|update|delete|execute)\b/.test(rawLines[k + 1])
+    ) {
+      k += 1;
+      cur = `${cur} ${rawLines[k].trim()}`;
+    }
+    lines.push(cur);
+    origStart.push(start + 1);
+  }
+  return { lines, origStart };
 }
 
 function identityTablesIn(statement) {
@@ -266,7 +309,8 @@ const ENTRY_POINTS = ['worker.ts', 'realtime.ts', 'instrumentation.ts', 'scripts
 
 /**
  * @returns {{findings: Array, allowed: number, hits: Array, scanned: number,
- *            entryPoints: number, offenders: Array, notApplicable?: boolean}}
+ *            entryPoints: number, offenders: Array, skippedAuthenticators: Array,
+ *            notApplicable?: boolean}}
  */
 export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
   const apiDir = join(root, 'app', 'api');
@@ -274,21 +318,36 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     .map((rel) => ({ rel, abs: join(root, rel) }))
     .filter(({ abs }) => existsSync(abs));
   if (!existsSync(apiDir) && entryFiles.length === 0) {
-    return { notApplicable: true, findings: [], allowed: 0, hits: [], scanned: 0, entryPoints: 0, offenders: [] };
+    return { notApplicable: true, findings: [], allowed: 0, hits: [], scanned: 0, entryPoints: 0, offenders: [], skippedAuthenticators: [] };
   }
   const files = existsSync(apiDir) ? walk(apiDir) : [];
 
   // ── Rule 1 (#1838): authenticated, unwrapped, querying ─────────────────────
   const offenders = [];
+  // Rule 1's gate is `requireAuth(` / `requireTenantCtx(`, so a route that reaches the database and
+  // authenticates by a mechanism the gate does not know was not merely not-an-offender — it was
+  // invisible. SCIM's HMAC bearer check and the Stripe/Razorpay webhook signature are real
+  // authenticators; what they are not is an RLS context, which is why #3303's two SCIM routes could
+  // sit on the bare pool unread. The gate stays as it is (only a session read off `app.current_user`
+  // can be judged for wrapping), but the routes it steps over are now named.
+  const skippedAuthenticators = [];
   for (const file of files) {
     const src = readFileSync(file, 'utf8');
-    if (!AUTH_RE.test(src) || !DB_RE.test(src)) continue;
+    if (!DB_RE.test(src)) continue;
+    if (!AUTH_RE.test(src)) {
+      const mechanisms = [...new Set(src.match(AUTH_MECHANISM_RE) ?? [])].sort();
+      if (mechanisms.length > 0) {
+        skippedAuthenticators.push({ file: relative(root, file).split('\\').join('/'), mechanisms });
+      }
+      continue;
+    }
     const wrapped = WRAP_USED_RE.test(src);
     const hasBareExport = BARE_EXPORT_RE.test(src);
     // Offender if it never actually calls a wrapper, OR it still exports a bare
     // `export async function GET/POST/...` handler (which bypasses the wrapper).
     if (!wrapped || hasBareExport) offenders.push(relative(root, file).split('\\').join('/'));
   }
+  skippedAuthenticators.sort((a, b) => a.file.localeCompare(b.file));
 
   // ── Rule 2 (#3288): anonymous surface, identity table, bare pool ───────────
   const hits = [];
@@ -297,23 +356,25 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     const rel = relative(root, file).split('\\').join('/');
     const text = readFileSync(file, 'utf8');
     if (CONTEXT_ESTABLISHED_RE.test(text)) continue;
-    const lines = stripComments(text).split('\n');
+    const stripped = stripComments(text).split('\n');
+    const { lines, origStart } = fuseChains(stripped);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
       BARE_POOL_RE.lastIndex = 0;
       let m;
       while ((m = BARE_POOL_RE.exec(line)) !== null) {
+        const at = origStart[i];
         for (const table of identityTablesIn(statementAt(lines, i, m.index))) {
-          const key = `${rel}|PREAUTH_UNCONTEXTED_READ|${i + 1}|${table}`;
+          const key = `${rel}|PREAUTH_UNCONTEXTED_READ|${at}|${table}`;
           if (seen.has(key)) continue;
           seen.add(key);
           hits.push({
             check: 'PREAUTH_UNCONTEXTED_READ',
             file: rel,
-            line: i + 1,
+            line: at,
             detail: `${table} read or written on the bare pool with no RLS context`,
-            source: line.trim().slice(0, 160),
+            source: stripped[at - 1].trim().slice(0, 160),
           });
         }
         if (m.index === BARE_POOL_RE.lastIndex) BARE_POOL_RE.lastIndex += 1;
@@ -345,23 +406,26 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
       scanned: files.length,
       entryPoints: entryFiles.length,
       offenders,
+      skippedAuthenticators,
     };
   }
   for (const { rel, abs } of entryFiles) {
-    const lines = stripComments(readFileSync(abs, 'utf8')).split('\n');
+    const stripped = stripComments(readFileSync(abs, 'utf8')).split('\n');
+    const { lines, origStart } = fuseChains(stripped);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
       BARE_POOL_RE.lastIndex = 0;
       let m;
       while ((m = BARE_POOL_RE.exec(line)) !== null) {
+        const at = origStart[i];
         for (const table of tenantTablesIn(statementAt(lines, i, m.index), TENANT_TABLES)) {
           hits.push({
             check: 'ENTRYPOINT_BARE_POOL',
             file: rel,
-            line: i + 1,
+            line: at,
             detail: `${table} reached from a process entry point on the bare pool — the tenant id in a job payload is a claim until set_config makes it a check`,
-            source: line.trim().slice(0, 160),
+            source: stripped[at - 1].trim().slice(0, 160),
           });
         }
         if (m.index === BARE_POOL_RE.lastIndex) BARE_POOL_RE.lastIndex += 1;
@@ -401,7 +465,7 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     }
   }
 
-  return { findings, allowed, hits, scanned: files.length, entryPoints: entryFiles.length, offenders };
+  return { findings, allowed, hits, scanned: files.length, entryPoints: entryFiles.length, offenders, skippedAuthenticators };
 }
 
 export function readBaseline(p) {
@@ -453,7 +517,28 @@ const EXPLAIN = `rls route-coverage screen (#1838 + #3288) — what each check a
 The receiver decides rules 2 and 3: db. is the pool with every app.* GUC cleared, tx. is a transaction
 someone opened a privilege inside of. The test is per statement, not per file, because the dead
 forgot-password route already contained withTokenIssueContext two lines below the broken SELECT.
+The receiver is a property of the statement, not of one source line: a chain whose pool name sits
+alone at the end of a line and whose .select( opens on the next is one statement, and rule 2 fuses
+the two before matching (#3303 — SCIM's directory read was exactly that shape, and the screen said
+nothing).
+Rules 2 and 3 screen the anonymous surface. Rule 1's gate is requireAuth(, so a route that
+authenticates by a mechanism the gate does not know (a SCIM bearer token, a webhook signature) is
+outside what it can certify; every such route is listed on the run's output instead of being silent.
 `;
+
+/**
+ * Rule 1 cannot judge these, so the run says so. A route behind `verifySCIMToken` or a webhook
+ * signature has no session for `withApiRoute` to pin a context to, which means the guard's OK line
+ * is about the routes it screened and not about these — printing the list is what stops that OK from
+ * being read as a claim over the whole surface (#3303).
+ */
+function printSkipped(result) {
+  if (!result.skippedAuthenticators?.length) return;
+  console.log(`  ${result.skippedAuthenticators.length} db-touching route(s) authenticate without requireAuth/requireTenantCtx, so rule 1 cannot judge them:`);
+  for (const s of result.skippedAuthenticators) {
+    console.log(`    - ${s.file} (${s.mechanisms.join(', ')})`);
+  }
+}
 
 export function main(argv = process.argv.slice(2)) {
   const opt = (flag) => {
@@ -504,6 +589,7 @@ export function main(argv = process.argv.slice(2)) {
       hits: result.hits,
       offenders: result.offenders,
       scanned: result.scanned,
+      skippedAuthenticators: result.skippedAuthenticators,
     }, null, 2));
     return result.findings.length || result.offenders.length ? 1 : 0;
   }
@@ -526,12 +612,14 @@ export function main(argv = process.argv.slice(2)) {
 
   if (result.findings.length === 0) {
     console.log(`[check-rls-route-coverage] OK — ${result.scanned} API routes scanned, all authenticated db-querying handlers are wrapped, no anonymous route touches an identity table on the bare pool, and ${result.entryPoints} process entry point(s) touch no tenant-scoped table on it (${result.allowed} tolerated in the baseline).`);
+    printSkipped(result);
     return 0;
   }
   for (const f of result.findings) {
     console.log(`${f.check}\t${f.file}:${f.line}\t${f.detail}`);
     if (f.source) console.log(`\t  ${f.source}`);
   }
+  printSkipped(result);
   console.log(`\n${result.findings.length} pre-auth identity statement(s) with no RLS context (#3288). A SELECT on these tables answers zero rows for every input, and a route that returns "ok" when it finds nothing cannot tell that apart from success. Take the read through withAuthLookupContext / withAuthResolutionContext / withOAuthClientLookupContext / withTenantContext, or record it in scripts/rls-preauth-baseline.json with a reason.`);
   return 1;
 }
