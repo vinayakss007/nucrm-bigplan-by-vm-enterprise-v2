@@ -1868,7 +1868,7 @@ inferred.
   independently and the grep is exact. Every `ai_providers` reference is to a **JSONB key inside
   `tenants.settings`**, never the table:
   ```
-  lib/ai/gateway.ts:143                           (t?.settings)['ai_providers']
+  lib/ai/gateway.ts:142                           (t?.settings)['ai_providers']   -- re-pinned 2026-10-29 from :143: f1efc909b (#3362) removed one line above it
   app/api/tenant/ai/status/route.ts:43            (t?.settings)['ai_providers']
   app/api/tenant/admin/ai-providers/route.ts:188   '{ai_providers}'   -- jsonb_set path
   ```
