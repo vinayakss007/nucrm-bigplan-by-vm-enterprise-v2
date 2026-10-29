@@ -25,6 +25,7 @@ import path from 'path';
 import { createHash } from 'crypto';
 import { createReadStream } from 'fs';
 import { pgLibpqEnv } from '../lib/backups/backup-service';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 interface BackupRow {
   id: string;
@@ -117,7 +118,14 @@ export async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  // #3256: `ssl` is the only TLS channel node-pg has. It does not read
+  // `?sslmode=` from the URL — libpq does, and libpq is what the psql /
+  // pg_restore child below speaks (via pgLibpqEnv). Omitting it here meant
+  // that once pg_hba.conf says `hostssl`, the restore succeeded and the
+  // validation query on this pool died with `no pg_hba.conf entry for host
+  // … (required no encryption)`, reporting FAIL for a dump that restores fine.
+  // One policy for every connection in the repo: see lib/db/ssl-config.ts.
+  const pool = new Pool({ connectionString: databaseUrl, ssl: pgSslConfig(), max: 1 });
   const failures: string[] = [];
   let workDir: string | null = null;
 
@@ -237,7 +245,9 @@ export async function main() {
       console.log(`  ok restore: completed in ${(restoreMs / 1000).toFixed(1)}s`);
 
       // Validate the restored database actually contains something usable.
-      const scratchPool = new Pool({ connectionString: scratchUrl.toString(), max: 1 });
+      // #3256: the same policy as the source pool above — this one is the pool
+      // that runs the query the incident actually killed.
+      const scratchPool = new Pool({ connectionString: scratchUrl.toString(), ssl: pgSslConfig(), max: 1 });
       try {
         const tables = await scratchPool.query<{ count: string }>(
           `SELECT count(*)::text AS count
