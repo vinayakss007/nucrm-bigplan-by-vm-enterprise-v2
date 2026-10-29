@@ -12,21 +12,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { resetPassword } from '@/lib/auth/password-reset';
-import { validatePassword } from '@/lib/auth/session';
+import { newPasswordSchema } from '@/lib/api/schemas/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logError } from '@/lib/errors-server';
 
-// `password` is the user's NEW password, so it must satisfy the full server
-// policy enforced by validatePassword() in lib/auth/session.ts (min 12 chars +
-// uppercase + number + special char). Enforcing it here means weak passwords
-// are rejected with the exact policy message BEFORE resetPassword() runs,
-// instead of failing later with a confusing generic 400 (#1173).
+// `password` is a NEW password, so it is checked here rather than failing later
+// inside resetPassword() with a generic 400 (#1173). The field is the shared
+// derived schema, so this route cannot state a different minimum (#3277).
 const schema = z.object({
   token: z.string().min(1),
-  password: z.string().superRefine((value, ctx) => {
-    const error = validatePassword(value);
-    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
-  }),
+  password: newPasswordSchema,
 });
 
 export async function POST(request: NextRequest) {

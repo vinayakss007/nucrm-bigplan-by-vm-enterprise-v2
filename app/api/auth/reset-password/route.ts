@@ -12,14 +12,15 @@ import { db } from '@/drizzle/db';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
-import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { newPasswordSchema } from '@/lib/api/schemas/auth';
 import { sendTelegramToUser } from '@/lib/email/service';
 import { logError } from '@/lib/errors-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 const schema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8),
+  password: newPasswordSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -31,9 +32,6 @@ export async function POST(request: NextRequest) {
     const validated = validateBody(schema, body);
     if (validated instanceof NextResponse) return validated;
     const { token, password } = validated.data;
-
-    const pwError = validatePassword(password);
-    if (pwError) return NextResponse.json({ error: pwError }, { status: 400 });
 
     const tokenHash = createHash('sha256').update(token).digest('hex');
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { validatePassword } from '@/lib/auth/session';
 
 // #1072: POST /api/setup/create-admin must validate its request body with the
 // (previously dead) Zod schema BEFORE performing any DB read/write. These tests
@@ -87,16 +88,35 @@ describe('POST /api/setup/create-admin body validation (#1072)', () => {
     expect(mockDbSelect).not.toHaveBeenCalled();
   });
 
-  it('rejects a body with a too-short password before any DB access', async () => {
+  it('rejects a password the policy refuses before any DB access', async () => {
+    // The route no longer calls the policy itself — `newPasswordSchema` does
+    // (#3277) — so this is the one case where the mocked policy says no.
+    vi.mocked(validatePassword).mockReturnValueOnce('Password must be at least 12 characters');
     const { res, json } = await callRoute({
       full_name: 'Admin',
       email: 'admin@example.com',
-      password: 'short',
+      password: 'short1234',
       workspace_name: 'Acme',
     });
     expect(res.status).toBe(400);
     expect(json.error).toBe('Validation failed');
-    expect(json.details.some((d: { field: string }) => d.field === 'password')).toBe(true);
+    const details = json.details as { field: string; message: string }[];
+    expect(details.some((d) => d.field === 'password')).toBe(true);
+    expect(details.find((d) => d.field === 'password')?.message).toContain('at least 12 characters');
+    expect(mockDbSelect).not.toHaveBeenCalled();
+  });
+
+  it('rejects whitespace-only names, which used to become an empty workspace slug', async () => {
+    const { res, json } = await callRoute({
+      full_name: '   ',
+      email: 'admin@example.com',
+      password: 'Ab1!Ab1!Ab1!',
+      workspace_name: '  ',
+    });
+    expect(res.status).toBe(400);
+    const fields = (json.details as { field: string }[]).map((d) => d.field);
+    expect(fields).toContain('full_name');
+    expect(fields).toContain('workspace_name');
     expect(mockDbSelect).not.toHaveBeenCalled();
   });
 
