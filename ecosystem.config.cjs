@@ -19,8 +19,16 @@
  * cron died with "FATAL: CRON_SECRET is required" (5 restarts → "errored") and
  * the worker silently fell back to redis://localhost:6379.
  *
- * Host vs Docker networking: this VM serves public traffic from the Docker
- * stack, whose .env.local carries Docker-network names
+ * The exception list (#3271): "Next.js reads .env.local" is true of the file's
+ * contents but NOT of a value the deployment must guarantee, because pm2 replays
+ * the environment it captured at first `start` — a config-only change reaches the
+ * workers only with `pm2 reload --update-env`. TRUST_PROXY lives in the `web` env
+ * block below for that reason; without it getClientIp() answers 'unknown' and
+ * every auth endpoint fails closed with 503. Runtime flags go in `env:`, secrets
+ * stay in .env.local.
+ *
+ * Host vs Docker networking: this VM serves public traffic from the Docker stack,
+ * whose .env.local carries Docker-network names
  * (REDIS_URL=redis://redis, S3_ENDPOINT=http://minio). Those names do NOT
  * resolve on the host, so every app below overrides them to the loopback
  * ports the infra compose publishes (Redis 127.0.0.1:6379, MinIO
@@ -45,6 +53,9 @@
  *   NUCRM_LOG_DIR           log directory              (default: ./logs)
  *   NUCRM_REDIS_URL         Redis URL as seen FROM THE HOST
  *   NUCRM_S3_ENDPOINT       S3 URL as seen FROM THE HOST
+ *   NUCRM_TRUST_PROXY       'true' only when a trusted proxy sets the headers
+ *                           the app reads client IPs from (default: 'true'; the
+ *                           VM's nginx does — see #3271)
  */
 
 // PM2 evaluates this file with an empty environment (no dotenv), but the
@@ -86,8 +97,10 @@ module.exports = {
       instances: setting('NUCRM_INSTANCES') || 'max',
       exec_mode: 'cluster',
 
-      // Environment comes from .env.local — no secrets in this file.
-      // Next.js loads .env.local itself; PM2's env_file is a no-op (#1424).
+      // Secrets stay out of this file (they come from .env.local); runtime
+      // flags belong here, because pm2 replays its captured env and Next.js's
+      // own .env.local read cannot guarantee them (#3271). PM2's env_file is a
+      // no-op (#1424).
       env: {
         NODE_ENV: 'production',
         PORT: setting('NUCRM_PORT') || 3000,
@@ -95,6 +108,11 @@ module.exports = {
         DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
         REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
         S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
+        // #2116: nginx sends a single-hop authoritative X-Forwarded-For
+        // ($remote_addr) and is the only public service here (see the -H bind
+        // above), so the app may trust the header. The Docker path pins the
+        // same value in deploy/docker-compose.production.yml.
+        TRUST_PROXY: setting('NUCRM_TRUST_PROXY') || 'true',
       },
 
       max_memory_restart: `${process.env.NUCRM_MAX_MEMORY || 512}M`,

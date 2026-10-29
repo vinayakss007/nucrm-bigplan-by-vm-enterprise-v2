@@ -2582,7 +2582,7 @@ entry ships nothing.
   "kept in sync with vercel.json crons" and states the #1422 policy: exactly ONE source active per environment. It is not in
   sync: `vercel.json` lists **18** paths, the crontab's 17 plus `recurring-invoice-generator`. (2) `vercel.json` `crons` —
   inert here (nothing runs on Vercel). (3) `scripts/cron-scheduler.ts` — **18** jobs (`:39-56`), described in its own header as
-  "a single PM2 process" and wired only to `ecosystem.config.cjs:157`. PM2's God daemon is alive (PID 1892010) but manages
+  "a single PM2 process" and wired only to `ecosystem.config.cjs:175` (re-pinned 2026-10-29 from `:157`: **#3271** put `TRUST_PROXY` in the `web` env block and its header note above this app). PM2's God daemon is alive (PID 1892010) but manages
   **nothing**: `/root/.pm2/pids/` and `/root/.pm2/logs/` are empty, `dump.pm2` was last written 2026-09-22, and no
   `cron-scheduler` process exists. Its last attempted run is recorded in-repo at `logs/cron-error-5.log`:
   `[cron-scheduler] FATAL: CRON_SECRET is required` ×12 on 2026-09-20. The host's own crontab holds nothing nucrm-related
@@ -2657,14 +2657,14 @@ which Postgres ignores for such a role` at 07:13, 09:58 and again 2026-10-03 05:
 - **Verified:** `docker exec nucrm-cron crontab -l` → 17 lines and their job names; `ls -d app/api/cron/*/` → 22 dirs;
   `docker inspect nucrm-cron` → `["crond","-f","-l","2"]`, started 2026-09-14T16:05:29Z; `pgrep -af cron-scheduler` → none,
   `/root/.pm2/{pids,logs}` empty, `dump.pm2` dated 2026-09-22; `vercel.json` 18 `crons` paths, `scripts/cron-scheduler.ts:39-56`
-  18 jobs, `ecosystem.config.cjs:157`; the `pg_stat_user_tables` counts (`backup_records=4, tenant_backup_records=144,
+  18 jobs, `ecosystem.config.cjs:175` (re-pinned 2026-10-29 from `:157`, same **#3271** growth); the `pg_stat_user_tables` counts (`backup_records=4, tenant_backup_records=144,
 backup_schedules=0, invoices=12, sla_breaches=0, contact_scores=0, lead_warming_events=0, tenants=183`); the four
   `backup_records` rows' `status`/`storage_type`/`initiated_auto`/error text; the rolled-back per-tenant invoice loop
   (`LOOP DONE tenants_scanned=183`, twelve `1|0|0` lines); `61|0|0|183` re-probe; and each `route.ts` docstring quoted above.
 - **Files:** none changed. Evidence read: `deploy/cron/crontab` (incl. its #1422 header), `deploy/cron/run-cron.sh`
   (`APP_URL=${APP_URL:-http://app:3000}` — cron reaches the app directly, so no nginx access log records it, and Next.js logs
   no request line: 0 `api/cron` mentions in 72 h of app logs, which is why the evidence here is cadence and side effects, not
-  request logs), `vercel.json`, `scripts/cron-scheduler.ts`, `ecosystem.config.cjs:150-175`,
+  request logs), `vercel.json`, `scripts/cron-scheduler.ts`, `ecosystem.config.cjs:168-193` (both ends re-pinned 2026-10-29 from `:150-175`: the **#3271** `web` env block and header note grew above this app),
   `app/api/cron/{backup,auto-backup,sla-check,lead-warming,process-lead-scoring,recurring-invoice-generator}/route.ts`,
   `lib/lead-warming/{engine.ts:154,index.ts:29}`, `lib/ai/scoring.ts:127-147`, `lib/sla.ts`,
   `lib/backups/backup-service.ts:121,234-248`, `lib/backups/script-backup-record.ts:61`, `tests/unit/contract-renewal.test.ts`,
