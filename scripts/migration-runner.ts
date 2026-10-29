@@ -13,6 +13,7 @@
 
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -51,7 +52,7 @@ class MigrationRunner {
   private applied: Map<string, AppliedMigration> = new Map();
 
   constructor(databaseUrl: string) {
-    this.pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    this.pool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
     this.db = drizzle(this.pool);
   }
 

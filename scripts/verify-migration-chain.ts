@@ -23,6 +23,7 @@
  */
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 
@@ -46,7 +47,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
 
   try {
     // Refuse to run against a database that already has content: this applies

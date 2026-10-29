@@ -22,6 +22,7 @@ import { config } from 'dotenv';
 config({ path: '.env.local' });
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 import { classify, formatVerdict } from './seed/contents';
 import { describeTarget, formatTarget } from './seed/destructive';
@@ -39,7 +40,7 @@ async function main() {
     process.exit(2);
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: pgSslConfig() });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

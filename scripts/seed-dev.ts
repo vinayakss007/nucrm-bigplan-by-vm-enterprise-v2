@@ -80,6 +80,7 @@ const seedPassword = credential.password as string;
 
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import { sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -276,7 +277,7 @@ async function main() {
   // first INSERT aborted with 42501, and the deletes that HAD run stayed
   // committed — the issue's half-wiped workspace. SET LOCAL ties the context
   // to this transaction, so COMMIT/ROLLBACK ends it.
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: pgSslConfig() });
   const client = await pool.connect();
   const db = drizzle(client, { schema });
   let failed = false;

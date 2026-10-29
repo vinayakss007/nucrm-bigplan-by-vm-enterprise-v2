@@ -48,6 +48,7 @@
  */
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 // Type-only: `PoolClient` is a @types/pg declaration, not a runtime export of
 // the CommonJS module, so it must be erased for `node --experimental-strip-types`.
 import type { PoolClient } from 'pg';
@@ -311,7 +312,7 @@ async function main(): Promise<void> {
   const asJson = process.argv.includes('--json');
   const allowNonempty = process.argv.includes('--allow-nonempty');
 
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
   const client = await pool.connect();
 
   try {
