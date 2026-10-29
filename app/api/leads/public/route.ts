@@ -329,6 +329,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ exists: false });
     }
 
+    // #3295: this endpoint answers one unauthenticated boolean — "is this person
+    // an active contact of workspace X" — and `tenant_id` is published in every
+    // embedded form, so without a limit the enumeration cost per record is one
+    // cheap GET with no backoff. POST in this file has had a per-IP budget since
+    // #1154; the GET had none.
+    const byCaller = await checkRateLimit(request, { action: 'lead_exists', max: 10, windowMinutes: 60 });
+    if (byCaller) return byCaller;
+
+    // The id arrives from a query string and names both a workspace and, one line
+    // later, a counter key. Anything that is not an id shape is refused here, so
+    // it can reach neither.
+    if (!isEntityId(tenant_id)) {
+      return NextResponse.json({ exists: false });
+    }
+
+    // A second budget, spent against the workspace being probed rather than the
+    // address probing it: an attacker rotating addresses stays under every
+    // per-IP cap while the workspace he is harvesting runs out of quota — and a
+    // different workspace's form visitors are untouched by that either.
+    const byWorkspace = await checkRateLimit(request, {
+      action: 'lead_exists_tenant',
+      max: 60,
+      windowMinutes: 60,
+      scopeKey: tenant_id,
+    });
+    if (byWorkspace) return byWorkspace;
+
     const contact = await withTenantContext(tenant_id, NO_USER_SENTINEL, tx =>
       tx.query.contacts.findFirst({
         where: and(

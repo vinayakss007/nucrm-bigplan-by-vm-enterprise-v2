@@ -16,6 +16,7 @@
  */
 
 import { cache } from './cache/index';
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getClientIp } from '@/lib/client-ip';
 import { db } from '@/drizzle/db';
@@ -426,11 +427,29 @@ export function isAuthScopedAction(action: string): boolean {
   return AUTH_RATE_ACTIONS.has(action.replace(/_/g, '-'));
 }
 
+/**
+ * #3295: the identifier a scope-keyed budget is spent against. Anonymous
+ * endpoints have no user and no trustworthy address to ration per — an
+ * existence-check on one workspace has to be rationed *against that workspace*,
+ * or the flood spends every other visitor's quota. The scope is a caller-supplied
+ * string, so it is escaped (a `:` or a newline in it would otherwise add a segment
+ * to `v1_rate:<action>:<scope>` and let it spend somebody else's bucket) and
+ * hashed past 96 chars, so a Redis key is never sized by a query parameter.
+ *
+ * This is a second bucket, not a substitute for the first: #2630's fail-closed
+ * refusal above still runs on the caller's address before this is consulted, so
+ * naming a scope cannot opt an auth endpoint out of needing one.
+ */
+export function scopeFragment(scope: string): string {
+  const encoded = encodeURIComponent(scope);
+  return encoded.length <= 96 ? encoded : createHash('sha256').update(scope).digest('hex');
+}
+
 export async function checkRateLimit(
   request: Request,
-  options: { action?: string; max?: number; windowMinutes?: number } = {}
+  options: { action?: string; max?: number; windowMinutes?: number; scopeKey?: string } = {}
 ) {
-  const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
+  const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow, scopeKey } = options;
 
   // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
   const ip = getClientIp(request);
@@ -446,7 +465,7 @@ export async function checkRateLimit(
     );
   }
 
-  const key = `v1_rate:${action}:${ip}`;
+  const key = `v1_rate:${action}:${scopeKey ? scopeFragment(scopeKey) : ip}`;
 
   // Get limit from DB first, fall back to provided max
   const dbMax = await getRateLimit(null, action);
