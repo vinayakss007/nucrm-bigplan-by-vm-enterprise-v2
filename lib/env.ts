@@ -36,6 +36,36 @@ function _getRequiredEnv(name: string, example?: string): string {
   return value;
 }
 
+/**
+ * #3374: a fill-me marker a template ships, not a value an operator chose.
+ *
+ * `deploy/.env.production` writes `SETUP_KEY=<<<REQUIRED>>>` and both compose
+ * files pass it through — plain `${SETUP_KEY}` at `docker-compose.yml:45`, and
+ * `${SETUP_KEY:?…}` in the production overlay, which only asks whether the name
+ * is non-empty. So the credential arrives *set*, and every `if (!process.env.X)`
+ * fail-closed check in this codebase reads "set" as "configured".
+ *
+ * What stops the stock value today is an accident of arithmetic: `validateEnv`
+ * below requires 20 characters and `<<<REQUIRED>>>` is 14, so the box refuses to
+ * boot — with an error that never mentions placeholders. The same family, one
+ * token over the line, gets through: `<<<POSTGRES_PASSWORD>>>` is 23 characters
+ * (that file's own line 138 ships it inside `DATABASE_URL`), `validateEnv` says
+ * nothing about its shape, and the endpoint then treats it as the key. A length
+ * rule is not a shape rule; this function is the shape rule.
+ *
+ * `<<<…>>>` is the only spelling the templates use (20 `<<<REQUIRED>>>`, one
+ * `<<<POSTGRES_PASSWORD>>>`, one `<<<REQUIRED - change from 'admin'>>>`), so the
+ * test is exact rather than a guess at what a weak secret looks like — that
+ * question is `WEAK_SECRET_PATTERNS` below, and a real random key must not trip
+ * either.
+ *
+ * `scripts/assert-runtime-env.mjs` keeps its own copy: it runs against a tree
+ * that may not be built, so it cannot import application code.
+ */
+export function valueIsUnfilledTemplateToken(value: unknown): boolean {
+  return /<<<[^<>]*>>>/.test(String(value ?? ''));
+}
+
 const WEAK_SECRET_PATTERNS = [
   'dev-', 'dev_', 'localhost', 'change-in-prod', 'change-me',
   'your-', 'example', 'changeme', 'test-secret', 'placeholder',
