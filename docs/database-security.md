@@ -6,11 +6,18 @@
 > row security. 17 of them carry a `FOR SELECT USING (true)` policy and read honestly from
 > any session (`tenants`, `plans`, `backup_records`…); for the other 209 a session that sets
 > neither `app.current_tenant` nor `app.is_super_admin` is admitted to **no rows**: `count(*)`
-> answers 0, `EXISTS` answers false, `SELECT` returns nothing, and none of it raises. Measured
+> answers 0, `sum()` answers null, `EXISTS` answers false, `SELECT` returns nothing, and none of
+> it raises. Measured
 > on a development database — `users` 0 against 28, `contacts` 0 against 66, `deal_stages` 0
-> against 146. `npm run db:count -- <table>` asks the catalog what the table allows, runs the
+> against 146. **Every count, sum and `exists` check run as the app role is filtered by RLS: a
+> zero result is not evidence of absence.** `npm run db:count -- <table>` asks the catalog what the table allows, runs the
 > same count in both contexts and prints the gap; `guard:app-role-counts` screens `scripts/`
-> so a new script cannot quote a number without naming its context (#3280).
+> so a new script cannot quote a number without naming its context (#3280). Over HTTP,
+> `GET /api/setup/status` is the same discipline in two integers
+> (`super_admin_exists`, `workspace_count`): it counts inside the security context
+> `POST /api/setup/create-admin` uses for its own guard, answers 503 rather than a confident
+> zero when the read fails, and carries no PII — so "already done" and "not yet done" are
+> distinguishable without writing any SQL.
 
 ## Overview
 
