@@ -36,6 +36,25 @@ function _getRequiredEnv(name: string, example?: string): string {
   return value;
 }
 
+/**
+ * #3374: a fill-me marker a template ships, not a value an operator chose.
+ *
+ * `deploy/.env.production` writes `SETUP_KEY=<<<REQUIRED>>>` and
+ * `docker-compose.yml` interpolates it plainly, so an unedited deploy boots a
+ * process whose credential is set — which every `if (!process.env.X)` fail-closed
+ * check on this codebase reads as "configured". `<<<…>>>` is the only shape a
+ * template token has here (20 `<<<REQUIRED>>>`, one `<<<POSTGRES_PASSWORD>>>`,
+ * one `<<<REQUIRED - change from 'admin'>>>`), so the test is exact rather than a
+ * guess at what a weak secret looks like — that question is `WEAK_SECRET_PATTERNS`
+ * below, and a real random key must not trip either.
+ *
+ * `scripts/assert-runtime-env.mjs` keeps its own copy: it runs against a tree
+ * that may not be built, so it cannot import application code.
+ */
+export function valueIsUnfilledTemplateToken(value: unknown): boolean {
+  return /<<<[^<>]*>>>/.test(String(value ?? ''));
+}
+
 const WEAK_SECRET_PATTERNS = [
   'dev-', 'dev_', 'localhost', 'change-in-prod', 'change-me',
   'your-', 'example', 'changeme', 'test-secret', 'placeholder',

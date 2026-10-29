@@ -13,6 +13,7 @@ import { hashPassword, createToken, hashToken, setSessionCookie, validatePasswor
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { valueIsUnfilledTemplateToken } from '@/lib/env';
 
 const createAdminSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -52,6 +53,19 @@ export async function POST(request: NextRequest) {
     if (process.env.NODE_ENV === 'production') {
       const expectedKey = process.env.SETUP_KEY;
       const providedKey = request.headers.get('x-setup-key') ?? validated.data.setup_key;
+      // #3374: `deploy/.env.production` ships `SETUP_KEY=<<<REQUIRED>>>` and
+      // compose interpolates it plainly, so an unedited deploy boots a process
+      // whose key IS set — to a string printed in this public repository. The
+      // `!expectedKey` test below only catches absent, and absent is the case
+      // #1254 was written for. A template token is not a secret the operator
+      // chose, so it gates nothing: refuse it as the configuration error it is.
+      // The message names the variable and never echoes its value — preflight
+      // output gets pasted into issues, and this repo is public.
+      if (valueIsUnfilledTemplateToken(expectedKey)) {
+        return NextResponse.json({
+          error: 'SETUP_KEY is not configured: the deployment template placeholder is still in place. Set a real value (openssl rand -hex 24) before bootstrapping the first Super Admin.',
+        }, { status: 403 });
+      }
       if (!expectedKey || !providedKey || providedKey !== expectedKey) {
         return NextResponse.json({ error: 'Valid x-setup-key header or setup_key field required' }, { status: 403 });
       }

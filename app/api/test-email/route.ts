@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
+import { valueIsUnfilledTemplateToken } from '@/lib/env';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /** Constant-time string comparison to prevent timing attacks */
@@ -39,7 +40,10 @@ async function guardTestEmail(request: NextRequest): Promise<NextResponse | null
   }
 
   const setupKey = process.env['SETUP_KEY'];
-  if (setupKey) {
+  // #3374: a template token is not a configured key. Left as-is it would rank a
+  // plain admin who copy-pasted `<<<REQUIRED>>>` above the super-admin rule that
+  // applies when nobody has set the variable at all.
+  if (setupKey && !valueIsUnfilledTemplateToken(setupKey)) {
     const provided = request.headers.get('x-setup-key') || '';
     if (!provided || !timingSafeEqual(provided, setupKey)) {
       return NextResponse.json({ error: 'Invalid or missing x-setup-key header' }, { status: 403 });
