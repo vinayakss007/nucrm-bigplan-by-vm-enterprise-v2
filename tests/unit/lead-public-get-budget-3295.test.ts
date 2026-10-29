@@ -79,7 +79,7 @@ vi.mock('@/drizzle/db', () => {
       insert: () => chain,
       update: () => chain,
       delete: () => chain,
-      query: {},
+      query: { systemSettings: { findFirst: async () => undefined } },
       execute: async () => ({ rows: [] }),
       transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
     },
