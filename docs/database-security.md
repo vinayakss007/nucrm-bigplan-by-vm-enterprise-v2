@@ -144,6 +144,16 @@ DATABASE_POOL_SIZE=20    # Match the code default; see WAN guidance below
 DATABASE_SSL=false       # Set true for cloud PostgreSQL
 ```
 
+> #3279: that `false` is the on-host case, and it is the one value of this variable that
+> no template shows — `deploy/.env.production` and `.env.example` both ship `true`, and
+> `ecosystem.config.cjs` pins `'true'` for all three pm2 apps. `false` is only correct
+> for a PostgreSQL on the same box that has no TLS configured; the pool uses TLS unless
+> the value is exactly `'false'` (`lib/db/ssl-config.ts:33`), and the server certificate
+> is verified only when `NODE_ENV=production` (lines 36–38), so a host deploy that forgets
+> `NODE_ENV` gets neither. Keep the `sslmode` in `DATABASE_URL` consistent with
+> `DATABASE_SSL` — `prod:preflight` now fails the specific contradiction
+> (`DATABASE_SSL=true` with `sslmode=disable`) instead of trusting the copied file.
+
 Every API request handled by `withApiRoute`/`withTenantScope` pins ONE pool client for its whole lifetime (`withPinnedConnection`, #1615), so the pool size must cover _concurrent in-flight requests_, not just DB queries. A dashboard mount alone fans out to 10–15 endpoints; a small pool (e.g. 5) against a WAN/cloud-hosted Postgres turns every mount into a connection queue behind ~1.7 s round-trips (#1972). Keep `DATABASE_POOL_SIZE` at 20+ for cloud DBs and raise `DATABASE_STATEMENT_TIMEOUT` (default 10 s) only per-query via `withTimeout` rather than globally.
 
 Pool exhaustion causes `Connection terminated due to connection timeout`. Increase pool size if you see this error.
