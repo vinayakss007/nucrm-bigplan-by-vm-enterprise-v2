@@ -4,12 +4,24 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { validatePassword } from '@/lib/auth/session';
 import { requiredString } from './common';
+
+// A new-password field is `validatePassword()` — the check the route already
+// runs — so there is no second minimum to drift (#3277). Existing-password
+// fields stay lenient; see #1286.
+export const newPasswordSchema = z
+  .string()
+  .max(128, 'Password must be at most 128 characters')
+  .superRefine((value, ctx) => {
+    const error = validatePassword(value);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+  });
 
 // ── Auth schemas ──
 export const signupSchema = z.object({
   email: z.string().email().max(255).transform((v) => v.trim().toLowerCase()),
-  password: z.string().min(8).max(128),
+  password: newPasswordSchema,
   full_name: z.string().trim().min(1).max(255),
   workspace_name: z.string().trim().min(1).max(255),
 });
@@ -27,7 +39,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8).max(128),
+  password: newPasswordSchema,
 });
 
 // ── 2FA schemas ──
@@ -35,9 +47,9 @@ export const resetPasswordSchema = z.object({
 // password re-entered to authorize a sensitive 2FA action (setup/verify/disable).
 // It is checked against the stored password hash (see app/api/tenant/2fa/*),
 // NOT against the new-password policy in validatePassword() (min 12 chars).
-// It is therefore deliberately left lenient — raising it to min(12) would lock
-// out users whose valid existing password predates the 12-char rule. Only
-// NEW-password fields (e.g. changePasswordSchema.new_password) use min(12).
+// It is therefore deliberately left lenient — raising it to the new-password
+// policy would lock out users whose valid existing password predates the
+// 12-char rule. Only NEW-password fields use `newPasswordSchema`.
 export const setup2faSchema = z.object({
   password: requiredString.min(8),
 });
@@ -65,12 +77,11 @@ export const disable2faSchema = z.object({
 });
 
 // ── Password change schema ──
-// new_password's min length must match validatePassword() in
-// lib/auth/session.ts (12 chars), or the schema accepts passwords the
-// validator then rejects (#1286).
+// current_password is re-verified against the stored hash, never re-checked
+// against the new-password policy (#1286).
 export const changePasswordSchema = z.object({
   current_password: requiredString.min(1),
-  new_password: requiredString.min(12, 'Password must be at least 12 characters'),
+  new_password: newPasswordSchema,
 });
 
 // ── SSO ──

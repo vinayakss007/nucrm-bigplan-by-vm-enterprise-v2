@@ -15,7 +15,8 @@ describe('api/schemas', () => {
 
   it('signupSchema transforms email to lowercase', async () => {
     const { signupSchema } = await import('@/lib/api/schemas');
-    const result = signupSchema.parse({ email: 'User@Test.com', password: '12345678', full_name: 'User', workspace_name: 'Workspace' });
+    // A policy-valid password (#3277: the field is validatePassword(), not min(8)).
+    const result = signupSchema.parse({ email: 'User@Test.com', password: 'Ab1!Ab1!Ab1!', full_name: 'User', workspace_name: 'Workspace' });
     expect(result.email).toBe('user@test.com');
   });
 
@@ -166,9 +167,9 @@ describe('api/schemas', () => {
 
   it('resetPasswordSchema accepts valid token and password', async () => {
     const { resetPasswordSchema } = await import('@/lib/api/schemas');
-    const result = resetPasswordSchema.parse({ token: 'abc123', password: 'newpassword' });
+    const result = resetPasswordSchema.parse({ token: 'abc123', password: 'Ab1!Ab1!Ab1!' });
     expect(result.token).toBe('abc123');
-    expect(result.password).toBe('newpassword');
+    expect(result.password).toBe('Ab1!Ab1!Ab1!');
   });
 
   // NOTE: The canonical 2FA schemas live in '@/lib/api/schemas/auth' (the live

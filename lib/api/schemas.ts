@@ -48,6 +48,7 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
+  newPasswordSchema,
   resetPasswordSchema,
   setup2faSchema,
   signupSchema,
@@ -498,7 +499,7 @@ export const updateDealStageSchema = createDealStageSchema.partial();
 // ── Member schemas ──
 export const inviteMemberSchema = z.object({
   email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(128).optional(),
+  password: newPasswordSchema.optional(),
   full_name: z.string().trim().min(1).max(200).optional(),
   role_slug: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,64}$/, 'Invalid role').optional().default('sales_rep'),
   role_id: uuidIdSchema.optional(),

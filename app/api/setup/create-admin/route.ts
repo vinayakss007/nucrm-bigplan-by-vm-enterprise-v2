@@ -9,16 +9,17 @@ import { z } from 'zod';
 import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
-import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { newPasswordSchema } from '@/lib/api/schemas/auth';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 
 const createAdminSchema = z.object({
-  full_name: z.string().min(1, 'Full name is required'),
+  full_name: z.string().trim().min(1, 'Full name is required'),
   email: z.string().email('Valid email is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  workspace_name: z.string().min(1, 'Workspace name is required'),
+  password: newPasswordSchema,
+  workspace_name: z.string().trim().min(1, 'Workspace name is required'),
   setup_key: z.string().optional(),
 });
 
@@ -56,9 +57,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Valid x-setup-key header or setup_key field required' }, { status: 403 });
       }
     }
-
-    const passwordError = validatePassword(password);
-    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
     const passwordHash = await hashPassword(password);
     const emailLower = email.trim().toLowerCase();
