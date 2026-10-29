@@ -4,19 +4,25 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 /**
- * #3374: `deploy/.env.production` ships `SETUP_KEY=<<<REQUIRED>>>`, and
- * `docker-compose.yml:45` interpolates it plainly. An operator who deploys the
- * template without editing that line boots a process whose
- * `process.env.SETUP_KEY` is the literal string printed in this **public**
- * repository — and `POST /api/setup/create-admin` compared it with `!==`, which
- * that string satisfies. The #1254 guard catches a key that is *absent*; nothing
- * caught a key that is present and unfilled.
+ * #3374: `POST /api/setup/create-admin` proved itself with `providedKey !==
+ * expectedKey`, which treats *any* set value as a chosen secret — including the
+ * fill-me marker `deploy/.env.production` ships. The production overlay's
+ * `${SETUP_KEY:?…}` cannot tell either; it asks only whether the name is non-empty.
  *
- * These tests are written against the credential gate as an operator would
- * describe it: a placeholder is not a secret, so it must not open anything.
- * The `<<<…>>>` spelling is not invented here — it is the shape the template
- * itself uses (20 `<<<REQUIRED>>>` plus `<<<POSTGRES_PASSWORD>>>` plus
- * `<<<REQUIRED - change from 'admin'>>>`, counted with grep).
+ * The severity is worth stating exactly, because the obvious version is wrong.
+ * Measured through `validateEnv` with the other credentials filled with realistic
+ * 48-64 char keys, so only the SETUP_KEY rule could speak (`npx tsx`):
+ *
+ *   SETUP_KEY=<<<REQUIRED>>>            (14) -> BOOT FAILS: SETUP_KEY must be
+ *                                                 at least 20 characters long
+ *   SETUP_KEY=<<<POSTGRES_PASSWORD>>>   (23) -> BOOT OK, validateEnv accepts it
+ *
+ * So the stock token is stopped today by an arithmetic accident — a length floor
+ * written to keep people off `aaaa…`, not to recognise a template — while the same
+ * family, spelled 23 characters long (that file's own line 138 puts it inside
+ * `DATABASE_URL`), boots and then authenticates as the first platform super admin.
+ * A length rule is not a shape rule. These tests pin the shape rule, and they run
+ * the handlers directly, which is where `validateEnv` has already had its say.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextRequest } from 'next/server';
@@ -172,11 +178,15 @@ describe('#3374 the deploy template cannot be used as the setup key', () => {
       expect(JSON.stringify(json)).not.toMatch(/<<<|>>>/);
     });
 
-    it('refuses every unfilled spelling the template actually uses', async () => {
-      process.env.SETUP_KEY = "<<<REQUIRED - change from 'admin'>>>";
-      const a = await postSetup({ ...BOOTSTRAP, setup_key: "<<<REQUIRED - change from 'admin'>>>" });
+    it('refuses every unfilled spelling, including the one that clears the 20-char floor', async () => {
+      // `<<<POSTGRES_PASSWORD>>>` is 23 characters: validateEnv's length rule has
+      // nothing to say about it, so this is the token a real mis-deploy boots with
+      // and then trusts. The 36-char `<<<REQUIRED - change from 'admin'>>>` (line
+      // 277 of the same template) is the other one that gets that far.
       process.env.SETUP_KEY = '<<<POSTGRES_PASSWORD>>>';
-      const b = await postSetup({ ...BOOTSTRAP, setup_key: '<<<POSTGRES_PASSWORD>>>' });
+      const a = await postSetup({ ...BOOTSTRAP, setup_key: '<<<POSTGRES_PASSWORD>>>' });
+      process.env.SETUP_KEY = "<<<REQUIRED - change from 'admin'>>>";
+      const b = await postSetup({ ...BOOTSTRAP, setup_key: "<<<REQUIRED - change from 'admin'>>>" });
       expect([a.status, b.status]).toEqual([403, 403]);
       expect(a.wrote + b.wrote).toBe(0);
     });
