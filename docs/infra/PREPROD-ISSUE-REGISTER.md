@@ -2008,7 +2008,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   **lead**, **project**) meant two of them were never purged by it at all. The confirm dialog's promise
   ("permanently purge **all** trash items older than 30 days") was wider than the code behind it.
 - **The leads half was already partly handled.** `app/api/cron/cleanup/route.ts:151` deletes >30-day
-  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:372`),
+  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:377 (re-pinned 2026-10-28: **#3348** added five lines above it)`),
   so nightly retention does cover leads. The manual "purge now" path did not — which is the path an admin
   reaches for when they want the trash gone _now_, and the path that reports the number.
 - **Accumulation measured, and it is latent, not live.** Under `app.is_super_admin='true'`
@@ -2241,7 +2241,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:312-314 (re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:314`, re-pinned from `:290`/`:294` on 2026-10-11 — both halves of **#2528**
   edited that file; `lib/db/query-timeout.ts:70`, re-pinned from `:63` on 2026-10-11, is clamped — `Math.round`ed
@@ -2279,7 +2279,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:312-314 (re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
@@ -2310,7 +2310,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   dedup lock with `acquireLock('cron:<name>', …)` and hand-rolled the skip. What each answered when the lock was
   already held, at the coordinates this entry still names: **20** returned HTTP 200
   `{ok:true,skipped:true,reason:'lock-held'}` (the three coordinates are read at `2d037d6a`: `auto-backup/route.ts:52-54`,
-  `cleanup/route.ts:88-90`, `backup-verify/route.ts:181-182` (re-pinned 2026-10-15: **#2539** reshaped the call and **#2575** shifted it) — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
+  `cleanup/route.ts:88-90`, `backup-verify/route.ts:180-181` (re-pinned 2026-10-28: **#3348** shifted it; first re-pinned 2026-10-15 for **#2539**/**#2575**) — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
   same lie with a different string, `reason:'Another instance running'`
   (`process-sequences/route.ts:40-42` (re-pinned 2026-10-18 from `:39-41`: **#2795**/**#2810** added one import line above `POST`), `scheduled-report-delivery/route.ts:159-161`).
   PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreported
@@ -2525,7 +2525,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `lib/errors-server.ts:231` (re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
   paths: `app/api/cron/subscription-renewal-check/route.ts:165` (re-pinned 2026-10-28 from `:157`: **#3315** put the empty-recipient guard above the send loop; earlier re-pin 2026-10-22 from `:145`: **#3045** put the `emailResult` check and the `emailRejected` guard above the insert), `contract-renewal-check/route.ts:181` (re-pinned 2026-10-28 from `:161`: **#3315** added the `recipientWarningLogged` guard above it; earlier re-pin 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
-  `backup-verify/route.ts:351,384,417 (re-pinned 2026-10-15: **#2599/#2603** shifted them)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
+  `backup-verify/route.ts:350,383,416 (re-pinned 2026-10-28: **#3348** shifted them; first shifted by **#2599/#2603** on 2026-10-15. **#216** rewrote the 383 and 416 bodies in place into logError catches, so those two no longer read as silent catches)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
   `* = host=host.docker.internal port=5432` (`:2`), `pool_mode = transaction` (`:10`) and `query_timeout = 30` (`:20`), while
@@ -2549,7 +2549,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   checkout sites confirmed by grep).
 - **Files (all read-only):** `lib/cron/tenant-scope.ts:81,122-127,139,145-178`, `lib/db/rls.ts:7-16,72-107,165-169,181-189`,
   `lib/db/request-connection.ts:31-42,138-183,204-251` (re-pinned 2026-10-25: **#3237**'s rationale block above `RESET_TENANT_GUCS_SQL` shifted the second and third ranges by two; were `:136-181,202-249`), `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
-  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:36-67,73-119,129,326`
+  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:36-67,73-119,129,326 (**#3348** rewrote the :36 secret check in place; two lines in, two out, so no coordinate in the file moved)`
   (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1; again 2026-10-18 from `:35-66,72-118,128,297` — **#2795**/**#2810** added one more line above `POST` *and* 28 lines between `:129` and `:326`, so the far coordinate moved 29, not 1),
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:231` (same #3016 shift),
   `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
@@ -5021,7 +5021,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   request-shaped key like `x" = '1' OR 1=1 --` reaching the planner as a 17-character column named
   `x = '1' OR 1=1 --`. Reaching the planner is not the failure the register records: silently
   addressing a different column is. Shape rejection also matches what the sibling sinks already do
-  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:322 (re-pinned 2026-10-13: **#2600** shifted it from :276)`), so
+  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:321 (re-pinned 2026-10-28: **#3348** shifted it; first pinned 2026-10-13 off :276 by **#2600**)`), so
   the codebase has one rule for "a name in a string" instead of two.
 - **Three sinks, one rule.** `buildInsert` (`lib/db/client.ts:142`), `buildUpdate` — which has two
   separate key lists, `dk` mapped at `:156` and `wk` at `:158`, and both interpolate — and
