@@ -19,6 +19,11 @@ import { tenantAiCredits, aiCreditsLedger, aiProviderSecrets, aiActivity } from 
 import { tenants } from '@/drizzle/schema/core';
 import { and, eq, sql, desc } from 'drizzle-orm';
 
+// The reserve/release half of the credit cap lives in ./credits-claim (the
+// file-size ratchet in #1843 gave it nowhere to grow here). Re-exported so every
+// existing `@/lib/ai/credits` import keeps working.
+export { releaseCredits, reserveCredits, type CreditReservation } from './credits-claim';
+
 export interface CreditBalance {
   allocatedTokens: number;
   usedTokens: number;
@@ -40,7 +45,7 @@ export interface CreditDeduction {
 /**
  * Get current billing period in YYYY-MM format.
  */
-function getCurrentPeriod(): string {
+export function getCurrentPeriod(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -60,6 +65,28 @@ export async function isCentralizedProvider(
     ),
   });
   return !!secret;
+}
+
+export function toCreditBalance(credits: {
+  allocatedTokens: number;
+  usedTokens: number;
+  allocatedCostCents: number;
+  usedCostCents: number;
+  hardCapEnabled: boolean;
+  softCapPct?: number | null;
+  status: string;
+} | null | undefined): CreditBalance {
+  return {
+    allocatedTokens: credits?.allocatedTokens ?? 0,
+    usedTokens: credits?.usedTokens ?? 0,
+    remainingTokens: (credits?.allocatedTokens ?? 0) - (credits?.usedTokens ?? 0),
+    allocatedCostCents: credits?.allocatedCostCents ?? 0,
+    usedCostCents: credits?.usedCostCents ?? 0,
+    remainingCostCents: (credits?.allocatedCostCents ?? 0) - (credits?.usedCostCents ?? 0),
+    hardCapEnabled: credits?.hardCapEnabled ?? true,
+    softCapPct: credits?.softCapPct ?? 80,
+    status: credits?.status ?? 'active',
+  };
 }
 
 /**
@@ -100,17 +127,7 @@ export async function getCreditBalance(tenantId: string): Promise<CreditBalance>
     }
   }
 
-  return {
-    allocatedTokens: credits?.allocatedTokens ?? 0,
-    usedTokens: credits?.usedTokens ?? 0,
-    remainingTokens: (credits?.allocatedTokens ?? 0) - (credits?.usedTokens ?? 0),
-    allocatedCostCents: credits?.allocatedCostCents ?? 0,
-    usedCostCents: credits?.usedCostCents ?? 0,
-    remainingCostCents: (credits?.allocatedCostCents ?? 0) - (credits?.usedCostCents ?? 0),
-    hardCapEnabled: credits?.hardCapEnabled ?? true,
-    softCapPct: credits?.softCapPct ?? 80,
-    status: credits?.status ?? 'active',
-  };
+  return toCreditBalance(credits);
 }
 
 /**
@@ -164,21 +181,26 @@ export async function deductCredits(params: {
   tokensOut: number;
   costCents: number;
   activityId: string | null;
+  /** #3359: tokens `reserveCredits` already claimed for this call. */
+  reservedTokens?: number;
 }): Promise<CreditDeduction> {
   const period = getCurrentPeriod();
   const tokensUsed = params.tokensIn + params.tokensOut;
+  const reserved = params.reservedTokens ?? 0;
 
   try {
     const balance = await db.transaction(async (tx) => {
-      // Deduct from balance
+      // Deduct from balance. `reserved` is subtracted because admission already
+      // moved it into `used_tokens` (#3359) — the ledger below still records
+      // the true usage.
       await tx
         .update(tenantAiCredits)
         .set({
-          usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed}`,
+          usedTokens: sql`${tenantAiCredits.usedTokens} + ${tokensUsed} - ${reserved}`,
           usedCostCents: sql`${tenantAiCredits.usedCostCents} + ${params.costCents}`,
           status: sql`CASE 
             WHEN ${tenantAiCredits.status} = 'suspended' THEN 'suspended'
-            WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed}) <= 0 THEN 'exhausted'
+            WHEN ${tenantAiCredits.allocatedTokens} - (${tenantAiCredits.usedTokens} + ${tokensUsed} - ${reserved}) <= 0 THEN 'exhausted'
             ELSE 'active'
           END`,
           updatedAt: new Date(),
