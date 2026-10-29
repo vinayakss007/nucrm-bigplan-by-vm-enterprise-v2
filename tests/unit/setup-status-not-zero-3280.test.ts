@@ -102,25 +102,31 @@ function countVisible(priv: Priv, table: 'users' | 'tenants'): unknown[] {
 }
 
 /**
- * A SELECT builder. `from` resolves at call time, which is fine: a transaction sets its
- * GUCs before it reads, and a session that forgot to is counted with the privilege it
- * actually holds — the bare pool, which sees nothing.
+ * A SELECT builder. It is a *lazy* thenable: nothing is counted until the caller awaits it,
+ * because a builder the route never awaits must not reach the connection — and because an
+ * eagerly-rejected promise nobody awaits would surface as an unhandled error, not as this
+ * test's assertion. A transaction sets its GUCs before it reads, so resolving at await time
+ * counts a statement with the privilege the session actually holds at that moment.
  */
 function makeSelect(priv: Priv) {
   return (_proj?: unknown) => {
-    const table = { current: 'users' };
-    const run = () => countVisible(priv, table.current as 'users' | 'tenants');
-    const builder: Record<string, unknown> = {
+    const state = { table: 'users' as 'users' | 'tenants' };
+    const lazy = (): Promise<unknown[]> & Record<string, unknown> => {
+      const thenable = {
+        then: <R1, R2>(
+          onFulfilled?: (v: unknown[]) => R1 | PromiseLike<R1>,
+          onRejected?: (e: unknown) => R2 | PromiseLike<R2>,
+        ) => Promise.resolve().then(() => countVisible(priv, state.table)).then(onFulfilled, onRejected),
+        where: () => lazy(),
+      };
+      return thenable as Promise<unknown[]> & Record<string, unknown>;
+    };
+    return {
       from: (marker: { __table: string }) => {
-        table.current = marker.__table;
-        const p: Promise<unknown[]> & Record<string, unknown> = Object.assign(
-          Promise.resolve().then(run),
-          { where: () => Promise.resolve().then(run) },
-        );
-        return p;
+        state.table = marker.__table;
+        return lazy();
       },
     };
-    return builder;
   };
 }
 
