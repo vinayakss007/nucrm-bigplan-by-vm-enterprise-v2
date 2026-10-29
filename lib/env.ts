@@ -329,10 +329,13 @@ export function initEnv(): EnvConfig {
   // #3271 ask 3: a runtime flag set wrong changes behaviour without changing
   // anything the operator can see, so every boot reports the flags that are not
   // in a working configuration — in every environment, and only those, so a
-  // correct deployment prints nothing here.
-  for (const row of auditRuntimeFlags()) {
-    if (row.status !== 'ok') {
-      console.error(`[env] ${row.status.toUpperCase()} ${row.name}=${row.value} — ${row.note}`);
+  // correct deployment prints nothing here. `next build` runs this too, and its
+  // environment says nothing about the process that will serve traffic.
+  if (!process.env.NEXT_PHASE?.includes('build')) {
+    for (const row of auditRuntimeFlags()) {
+      if (row.status !== 'ok') {
+        console.error(`[env] ${row.status.toUpperCase()} ${row.name}=${row.value} — ${row.note}`);
+      }
     }
   }
 
