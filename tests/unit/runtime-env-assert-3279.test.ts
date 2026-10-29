@@ -26,7 +26,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname!, '..', '..');
@@ -111,6 +111,17 @@ describe('the fail-closed flag table', () => {
     expect(asserted.length).toBeGreaterThanOrEqual(8);
   });
 
+  it('checks the template list is not a superset of the flags it asserts', async () => {
+    const m = await mod();
+    const asserted = m.REQUIRED_RUNTIME_FLAGS.map((f) => f.name);
+    // `compare: false` is the documented meaning of "this name is held equal across
+    // the two templates but is not a fail-closed rule" — DATABASE_URL, whose host,
+    // role and password differ per topology and which #2302 forbids printing.
+    const documented = m.TEMPLATE_SECURITY_FLAGS.filter((f) => f.compare !== false).map((f) => f.name);
+    const extra = documented.filter((n) => !asserted.includes(n));
+    expect(extra).toEqual([]);
+  });
+
   it('names TRUST_PROXY in it, because that is the flag #3279 cost hours on', async () => {
     const m = await mod();
     expect(m.REQUIRED_RUNTIME_FLAGS.map((f) => f.name)).toContain('TRUST_PROXY');
@@ -162,6 +173,19 @@ describe('checking a production process environment', () => {
     });
     expect(row(rows, 'CRON_ALLOWED_IPS')?.status).toBe('fail');
     expect(row(rows, 'CRON_ALLOWED_IPS')?.expected).toContain('TRUST_PROXY=true');
+  });
+
+  it('warns that CRON_SIGNING_KEY is an off switch, and reports its shape not its value', async () => {
+    // #3271's boot audit carried this finding; the folded CLI has to keep it, or
+    // deleting the second script would have silently dropped an assertion that an
+    // operator can read.
+    const secret = 'a-live-hmac-key-value';
+    const rows = (await mod()).checkRuntimeFlags({ ...GOOD, CRON_SIGNING_KEY: secret });
+    const r = row(rows, 'CRON_SIGNING_KEY');
+    expect(r?.status).toBe('warn');
+    expect(r?.value).toBe('(set)');
+    expect(JSON.stringify(rows)).not.toContain(secret);
+    expect(r?.note).toMatch(/#3298/);
   });
 
   it('fails a cookie that would ship unencrypted, and accepts the fail-closed default of unset', async () => {
@@ -395,11 +419,49 @@ describe('the command an operator runs', () => {
 
   it('runs the assertion against the repo own ecosystem config without inventing a pass', () => {
     const { code, out } = cli(['--expect-production']);
-    // ecosystem.config.cjs on main carries no TRUST_PROXY (#3271 has not merged), so
-    // a production read must surface that rather than trust the file the operator
-    // copied. Exit 1 with TRUST_PROXY named is the only honest outcome here.
-    expect(code).toBe(1);
+    // #3271 landed 2df376e97, so `ecosystem.config.cjs` now supplies TRUST_PROXY for
+    // the `web` app and the default reading of this repo's own tree is clean. That is
+    // the outcome to pin, and to pin it *with the source named*: the same
+    // environment read from the shell alone still fails (the --process-only case
+    // above), so a pass here is the config doing its job, not the tool going blind.
+    expect(code).toBe(0);
+    expect(out).toMatch(/ecosystem\.config\.cjs/);
     expect(out).toMatch(/TRUST_PROXY/);
-    expect(out).toMatch(/ecosystem\.config\.cjs|process\.env/);
+  });
+});
+
+describe('one script, not two that share its name (#3279 x #3271)', () => {
+  const scriptDir = join(ROOT, 'scripts');
+
+  it('leaves exactly one assert-runtime-env in scripts/', () => {
+    // #3271 and #3279 were filed against the same gap and each landed a CLI called
+    // `scripts/assert-runtime-env` — one `.mts`, one `.mjs`. Extension resolution
+    // picks `.mjs` first, so the pair does not merely duplicate a name: an importer
+    // of the extension-less path silently gets the other script's API.
+    const names = readdirSync(scriptDir).filter((f) => f.startsWith('assert-runtime-env'));
+    expect(names).toEqual(['assert-runtime-env.mjs']);
+  });
+
+  it('points both npm keys at that one file', () => {
+    const scripts = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts;
+    expect(scripts['assert:runtime-env']).toContain('scripts/assert-runtime-env.mjs');
+    expect(scripts['prod:preflight']).toContain('scripts/assert-runtime-env.mjs');
+    expect(scripts['assert:runtime-env']).not.toContain('assert-runtime-env.mts');
+  });
+
+  it('keeps #3271 three boot-audit flags asserted here too', async () => {
+    // `lib/env.ts auditRuntimeFlags` is what the boot log prints; the CLI has to
+    // cover the same names or folding the scripts together loses an assertion an
+    // operator can read.
+    const names = (await mod()).REQUIRED_RUNTIME_FLAGS.map((f) => f.name);
+    for (const flag of ['TRUST_PROXY', 'CRON_ALLOWED_IPS', 'CRON_SIGNING_KEY']) {
+      expect(names).toContain(flag);
+    }
+  });
+
+  it('is documented where the operator reads it', () => {
+    const runbook = readFileSync(join(ROOT, 'deploy', 'LAUNCH_RUNBOOK.md'), 'utf8');
+    expect(runbook).toContain('scripts/assert-runtime-env.mjs');
+    expect(runbook).toMatch(/one script, both|same file without/);
   });
 });

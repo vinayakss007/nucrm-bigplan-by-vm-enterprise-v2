@@ -19,7 +19,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { auditRuntimeFlags } from '@/lib/env';
-import { assertRuntimeEnv, nextAppEnv, type AssertResult } from '@/scripts/assert-runtime-env';
+import { assertRuntimeEnv, nextAppEnv } from '@/scripts/assert-runtime-env';
 
 const PRODUCTION = { NODE_ENV: 'production' };
 
@@ -100,27 +100,44 @@ describe('nextAppEnv: which pm2 app is the server', () => {
 
 describe('assertRuntimeEnv against this repo\'s own deploy wiring (#3271)', () => {
   /**
-   * Hermetic on purpose: the second argument is the whole starting environment,
-   * so the test runner's own TRUST_PROXY / CRON_* values cannot leak in, and the
-   * only way this passes is if `ecosystem.config.cjs` supplies the flag itself.
+   * Hermetic on purpose: `shellEnv` is the whole starting environment, so the
+   * test runner's own TRUST_PROXY / CRON_* values cannot leak in, and the only
+   * way the first case passes is if `ecosystem.config.cjs` supplies the flag
+   * itself.
+   *
+   * #3279 folded the two same-named CLIs into one — `scripts/assert-runtime-env
+   * .mjs`, the file the issue names, whose `resolveEffectiveEnv` already carried
+   * the ecosystem overlay, `--process-only` and `--trust-proxy-optional`. The
+   * deps-object call shape below is that script's; the three claims are the ones
+   * #3271 landed these tests for, unchanged.
    */
+  const row = (result: ReturnType<typeof assertRuntimeEnv>, name: string) => {
+    const found = result.rows.find((r) => r.name === name);
+    if (!found) throw new Error(`no row for ${name}`);
+    return found;
+  };
+
   it('holds no failure once ecosystem.config.cjs supplies the web app env', () => {
-    const result: AssertResult = assertRuntimeEnv([], PRODUCTION);
+    const result = assertRuntimeEnv({ argv: [], shellEnv: PRODUCTION, envFileCandidates: [] });
     expect(result.source).toContain('ecosystem.config.cjs');
     expect(result.failures).toBe(0);
-    expect(rowOf(result.rows, 'TRUST_PROXY').value).toBe('true');
+    expect(row(result, 'TRUST_PROXY').value).toBe('true');
   });
 
   it('fails the same environment when read from the shell alone (--process-only)', () => {
-    const result = assertRuntimeEnv(['--process-only'], PRODUCTION);
-    expect(result.source).toBe('process.env');
+    const result = assertRuntimeEnv({ argv: ['--process-only'], shellEnv: PRODUCTION });
+    expect(result.source).toContain('process.env');
     expect(result.failures).toBe(1);
+    expect(row(result, 'TRUST_PROXY').status).toBe('fail');
   });
 
   it('lets a proxy-terminating platform opt that one failure down', () => {
-    const result = assertRuntimeEnv(['--process-only', '--trust-proxy-optional'], PRODUCTION);
+    const result = assertRuntimeEnv({
+      argv: ['--process-only', '--trust-proxy-optional'],
+      shellEnv: PRODUCTION,
+    });
     expect(result.failures).toBe(0);
-    expect(result.warnings).toBe(1);
+    expect(row(result, 'TRUST_PROXY').status).toBe('warn');
   });
 });
 

@@ -67,6 +67,7 @@ export const TEMPLATE_SECURITY_FLAGS = [
   { name: 'JWT_SECRET', reason: 'session forgery' },
   { name: 'SESSION_SECRET', reason: 'session forgery' },
   { name: 'CRON_SECRET', reason: 'operator endpoint authentication' },
+  { name: 'CRON_SIGNING_KEY', reason: 'off switch, not on: no cron route passes its raw body to the HMAC (#3298)' },
   { name: 'ENCRYPTION_KEY', reason: 'field-level encryption of tenant secrets' },
   { name: 'EMERGENCY_RECOVERY_KEY', reason: 'last-resort account recovery' },
   { name: 'METRICS_SECRET', reason: '/api/metrics fails closed without it' },
@@ -103,7 +104,7 @@ const shapeOfOrigin = (v) =>
 export const REQUIRED_RUNTIME_FLAGS = [
   {
     name: 'NODE_ENV',
-    check({ env, opts, expectProductionRequested }) {
+    check({ env, expectProductionRequested }) {
       if (!expectProductionRequested) return ok('NODE_ENV', env.NODE_ENV ?? '(unset)', 'production when the deploy is production');
       return eq(env.NODE_ENV, 'production')
         ? ok('NODE_ENV', 'production', 'production')
@@ -215,6 +216,21 @@ export const REQUIRED_RUNTIME_FLAGS = [
         return fail('CRON_ALLOWED_IPS', '(set)', 'requires TRUST_PROXY=true', 'without a trusted proxy the source address is unknown and unknown is on no list, so every /api/cron/* call is denied (#3298)');
       }
       return ok('CRON_ALLOWED_IPS', '(set)', 'unset, or set with TRUST_PROXY=true');
+    },
+  },
+  {
+    name: 'CRON_SIGNING_KEY',
+    check({ env }) {
+      if (unset(env.CRON_SIGNING_KEY)) return ok('CRON_SIGNING_KEY', '(unset)', 'unset');
+      // #3271's boot audit reported this one, so the folded CLI has to keep it:
+      // the shape is reported, never the value.
+      return {
+        name: 'CRON_SIGNING_KEY',
+        value: '(set)',
+        expected: 'unset until a cron route passes its raw body down to the check',
+        status: 'warn',
+        note: 'an off switch, not an on one: no cron route passes its raw body to the HMAC, so the digest is computed over the empty string and a caller that signs its real body is denied (#3298)',
+      };
     },
   },
   {
