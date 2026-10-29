@@ -24,6 +24,15 @@ npm run prod:preflight        # env + connectivity checks
 
 Fix anything it reports before continuing.
 
+> #3279: the first half of that command is now `scripts/assert-runtime-env.mjs
+> --expect-production`, which asks the environment a server process would actually get
+> (`--pid <pid>` reads a live worker's `/proc/<pid>/environ`) instead of trusting the
+> template you copied. It fails on a `TRUST_PROXY` that never reached the process — the
+> reading that decides whether anyone can log in at all, since an unknown client IP is
+> answered with 503 for every auth action (#2630) — and on a credential still holding its
+> `<<<REQUIRED>>>` template token. On pm2, `pm2 reload ecosystem.config.cjs --update-env`
+> is what pushes a changed value into live workers; a file edit alone does not.
+>
 > Note: if `prod:preflight` errors because its script file is missing, run the
 > individual checks below manually — the go/no-go checklist at the end is the
 > authoritative gate.

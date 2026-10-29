@@ -126,7 +126,7 @@
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
     "setup": "cp -n .env.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
     "prod:launch": "bash scripts/production-launch.sh",
-    "prod:preflight": "npx tsx scripts/diagnose-production.ts",
+    "prod:preflight": "node scripts/assert-runtime-env.mjs --expect-production && npx tsx scripts/diagnose-production.ts",
     "prod:start": "bash scripts/start-production.sh",
     "prod:start:custom": "node --max-old-space-size=2048 node_modules/next/dist/bin/next start -H 127.0.0.1",
     "telegram:setup-webhook": "npx tsx scripts/telegram-setup-webhook.ts",
