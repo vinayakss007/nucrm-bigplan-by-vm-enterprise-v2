@@ -132,8 +132,25 @@ const AUTH_MECHANISM_RE = /\b(?:verifySCIMToken|verifyWebhookSignature|verifyApi
  * establishes a session or a tenant. Anything else is rule 1's territory, where a
  * bare `db` inside a wrapped handler already runs on a pinned, contextualised
  * connection — flagging those would be 60-odd false positives, not a ratchet.
+ *
+ * `sweepTenants` (#3315) earns its place on the same grounds as `withPinnedConnection`,
+ * not on the strength of its name: `lib/cron/tenant-scope.ts` takes one pinned
+ * connection for the whole sweep and calls `setTenantContext(tenantId, actingUserId)`
+ * on it before each body, with `resolveActingUser` preferring a real active
+ * `tenant_members` row precisely because `users_tenant_member_read` admits a reader
+ * only when `app.current_user` is one (0088). A bare `db` read under a sweep is
+ * therefore on that connection with those GUCs set — including a read inside a
+ * module-level helper the body awaits, which is why the test is per file and not per
+ * nesting: `app/api/cron/sla-check/route.ts:291` lives in `sendBreachNotification`,
+ * and lexical scope would have called a contextualised read a finding. `tests/unit/
+ * rls-guard-credits-cron-sweep-3315.test.ts` re-verifies both calls are still in the
+ * helper, so if the exemption ever stops being true the guard fails instead of lying.
+ *
+ * The limitation is the one this list has always had: a file that sweeps for some of
+ * its work and reads an identity table on the pool outside the sweep is exempted whole.
+ * Rule 1 and the shrink-only baseline are what keep that honest.
  */
-const CONTEXT_ESTABLISHED_RE = /\b(?:requireAuth|requireTenantCtx|requireSuperAdmin|getSessionFromRequest|withApiRoute|withTenantScope|withPinnedConnection|authenticateRequest)\s*\(/;
+const CONTEXT_ESTABLISHED_RE = /\b(?:requireAuth|requireTenantCtx|requireSuperAdmin|getSessionFromRequest|withApiRoute|withTenantScope|withPinnedConnection|sweepTenants|authenticateRequest)\s*\(/;
 
 /** Drizzle identifier and the SQL name, because a raw statement uses the latter. */
 const IDENTITY_TABLES = [
