@@ -102,6 +102,62 @@ function getOptionalEnv(name: string, defaultValue?: string): string | undefined
   return process.env[name] ?? defaultValue;
 }
 
+export type RuntimeFlagStatus = 'ok' | 'warn' | 'fail';
+
+export interface RuntimeFlagRow {
+  name: string;
+  value: string;
+  status: RuntimeFlagStatus;
+  note: string;
+}
+
+/**
+ * Fail-closed runtime flags, read back out of the environment the process
+ * actually has (#3271 ask 3). These are the settings that do not throw when
+ * misconfigured — they change behaviour quietly — so the only reliable check is
+ * to ask the running process what it sees. `audit-runtime-env` runs this;
+ * `initEnv` logs it on boot.
+ */
+export function auditRuntimeFlags(
+  env: Record<string, string | undefined> = process.env,
+  opts: { trustProxyMayBeUnset?: boolean } = {},
+): RuntimeFlagRow[] {
+  const production = env.NODE_ENV === 'production';
+  const trustProxy = env.TRUST_PROXY === 'true';
+  const trustProxyMissing = production && !trustProxy;
+  const cronAllowlist = (env.CRON_ALLOWED_IPS ?? '').trim();
+  const cronSigning = (env.CRON_SIGNING_KEY ?? '').trim();
+
+  return [
+    {
+      name: 'TRUST_PROXY',
+      value: env.TRUST_PROXY ?? '(unset)',
+      status: trustProxyMissing ? (opts.trustProxyMayBeUnset ? 'warn' : 'fail') : 'ok',
+      note: trustProxyMissing
+        ? 'getClientIp() answers "unknown" without it, and every auth endpoint behind checkRateLimit fails closed with 503 (#3271). Set it in the deploy config that builds the process env, not only in .env.local.'
+        : 'when true, x-forwarded-for / x-real-ip decide the client IP; when false every caller shares the "unknown" bucket',
+    },
+    {
+      name: 'CRON_ALLOWED_IPS',
+      value: cronAllowlist || '(unset)',
+      status: cronAllowlist && !trustProxy ? 'fail' : 'ok',
+      note: cronAllowlist && !trustProxy
+        ? 'without TRUST_PROXY=true the source address is unknown and unknown is not on any list, so this denies every /api/cron/* call'
+        : cronAllowlist
+          ? 'only these addresses may call /api/cron/*'
+          : 'any address that presents CRON_SECRET may call /api/cron/*',
+    },
+    {
+      name: 'CRON_SIGNING_KEY',
+      value: cronSigning ? '(set)' : '(unset)',
+      status: cronSigning ? 'warn' : 'ok',
+      note: cronSigning
+        ? 'off switch, not on: no cron route passes its raw body down to the check, so the HMAC is computed over the empty string and a caller that signs its body is denied (#3298)'
+        : 'callers authenticate with CRON_SECRET alone',
+    },
+  ];
+}
+
 export function validateEnv(): EnvConfig {
   const errors: string[] = [];
 
@@ -269,7 +325,20 @@ export function initEnv(): EnvConfig {
       console.error('');
     }
   }
-  
+
+  // #3271 ask 3: a runtime flag set wrong changes behaviour without changing
+  // anything the operator can see, so every boot reports the flags that are not
+  // in a working configuration — in every environment, and only those, so a
+  // correct deployment prints nothing here. `next build` runs this too, and its
+  // environment says nothing about the process that will serve traffic.
+  if (!process.env.NEXT_PHASE?.includes('build')) {
+    for (const row of auditRuntimeFlags()) {
+      if (row.status !== 'ok') {
+        console.error(`[env] ${row.status.toUpperCase()} ${row.name}=${row.value} — ${row.note}`);
+      }
+    }
+  }
+
   return config;
 }
 

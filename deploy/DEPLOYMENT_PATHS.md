@@ -48,7 +48,13 @@ Docker is used **only for the monitoring stack**.
 
 - Config: `ecosystem.config.cjs` (the single canonical PM2 config — #1424)
 - Start: `pm2 start ecosystem.config.cjs`
-- Updates: `git pull && npm ci && npm run build && pm2 reload ecosystem.config.cjs`
+- Updates: `git pull && npm ci && npm run build && pm2 reload ecosystem.config.cjs --update-env`
+- Runtime flags: `npm run assert:runtime-env` before the reload, and note the
+  `--update-env` there is not cosmetic (#3271). PM2 replays the environment it
+  captured at first `start`, so a flag added to the config — `TRUST_PROXY` is the
+  one that matters — does not reach live workers without it, and `.env.local`
+  alone cannot supply it either. `deploy.yml` already restarts with
+  `--update-env`; a hand-run reload that omits it is the gap.
 - Monitoring: `docker compose -f deploy/docker-compose.production.yml up -d`
   (Prometheus/Grafana/Loki only)
 - Cron: host crontab (`deploy/cron/crontab`) **or** the PM2 `cron` app — never both.
