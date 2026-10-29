@@ -86,6 +86,12 @@ issue a Let's Encrypt certificate.
    COOKIE_SECURE=true
    TRUST_PROXY=true
    ```
+   `TRUST_PROXY=true` here is necessary but not sufficient (#3271): the value that
+   counts is the one in the server **process** env, and pm2 replays what it
+   captured at first `start`. `ecosystem.config.cjs` pins it for the `web` app;
+   verify with `npm run assert:runtime-env`, and reload with `--update-env`.
+   Left unset, every login answers `503 Rate limiter misconfigured: client IP
+   unavailable for an auth endpoint` and nothing else looks wrong.
 4. Reload nginx: `sudo nginx -t && sudo systemctl reload nginx`.
 
 ---
