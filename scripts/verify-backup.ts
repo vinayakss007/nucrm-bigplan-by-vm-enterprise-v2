@@ -14,6 +14,10 @@
  *   npx tsx scripts/verify-backup.ts --id <uuid>     # verify a specific one
  *   npx tsx scripts/verify-backup.ts --checksum-only # skip the restore drill
  *
+ * The drill connects as BACKUP_DATABASE_URL when it is set (the role the dump was
+ * taken with), else DATABASE_URL. Only the former can `CREATE DATABASE` and read a
+ * FORCE-RLS dump back, so a hardened host must set it — see #3255.
+ *
  * Exits non-zero on any failure so it can be wired to a scheduler and alert.
  */
 
@@ -112,9 +116,13 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
 }
 
 export async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  // Same precedence as the dump: `pg_dump` runs under BACKUP_DATABASE_URL, so a
+  // verification that read the app URL would restore a backup taken by a role it
+  // cannot become — and the drill only ever passed on a host that had not done
+  // the least-privilege cutover (#3255).
+  const databaseUrl = process.env.BACKUP_DATABASE_URL || process.env.DATABASE_URL;
   if (!databaseUrl) {
-    console.error('ERROR: DATABASE_URL is required');
+    console.error('ERROR: BACKUP_DATABASE_URL (preferred) or DATABASE_URL is required');
     process.exit(1);
   }
 
