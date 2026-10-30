@@ -15,16 +15,6 @@ vi.mock('@/lib/cache', () => ({
   acquireLock: (key: string, ttl: number) => mockAcquireLock(key, ttl),
 }));
 
-// #3298: this route authenticates through lib/auth/cron rather than comparing the
-// secret itself, so that is the module to stub. Allow/deny semantics are pinned in
-// auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
-// What this spec owns is the job's own logic.
-vi.mock('@/lib/auth/cron', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/auth/cron')>()),
-  verifyCronSecret: vi.fn(async () => true),
-}));
-
 vi.mock('@/lib/errors-server', () => ({
   logError: vi.fn(async () => {}),
 }));
@@ -117,7 +107,9 @@ function referencedColumns(node: unknown, out: string[] = [], depth = 0): string
 
 async function runCron() {
   const { POST } = await import('@/app/api/cron/detect-missed-followups/route');
-  const res = await POST({ headers: new Headers() } as never);
+  // #3298: the route authenticates through verifyCronSecret, which fails closed on an
+  // unset CRON_SECRET or a missing header — so present both, the way a caller must.
+  const res = await POST({ headers: new Headers({ 'x-cron-secret': 'test-secret' }) } as never);
   return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
 
@@ -164,6 +156,7 @@ describe('Cron jobs registration', () => {
 
 describe('POST /api/cron/detect-missed-followups', () => {
   beforeEach(() => {
+    process.env.CRON_SECRET = 'test-secret';
     updates.length = 0;
     returningRows = [];
     sweptTenants = [TENANT_ID];

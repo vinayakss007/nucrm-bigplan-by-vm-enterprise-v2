@@ -110,12 +110,6 @@ vi.mock('drizzle-orm', () => ({
   ),
 }));
 
-// #3298: this route authenticates through lib/auth/cron rather than comparing the
-// secret itself, so that is the module to stub. Allow/deny semantics are pinned in
-// auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
-// What this spec owns is the job's own logic.
-vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
 vi.mock('@/lib/cache', () => ({ acquireLock: vi.fn().mockResolvedValue({ acquired: true, value: 'l' }) }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn() }));
@@ -167,6 +161,7 @@ const lineItemFixture: Row = {
 
 describe('recurring-invoice-generator cron', () => {
   beforeEach(async () => {
+    process.env.CRON_SECRET = 'test-secret';
     vi.clearAllMocks();
     inserted.length = 0;
     updated.length = 0;
@@ -176,14 +171,11 @@ describe('recurring-invoice-generator cron', () => {
       await body(TENANT_A);
       return { visited: 1, skipped: [], failed: [] };
     });
-    // clearAllMocks() keeps mockReturnValue(), so pin the auth seam per test.
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
-    vi.mocked(verifyCronSecret).mockResolvedValue(true);
+    // #3298: no `@/lib/crypto` stub — makeReq() sends the real CRON_SECRET and the
+    // denial case sends no header at all.
   });
 
   it('rejects requests without a valid cron secret', async () => {
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
-    vi.mocked(verifyCronSecret).mockResolvedValueOnce(false);
     const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
     const res = await POST(makeReq(false));
     expect(res.status).toBe(401);

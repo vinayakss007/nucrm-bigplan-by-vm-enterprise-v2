@@ -200,12 +200,6 @@ vi.mock('@/drizzle/db', () => ({
   },
 }));
 
-// #3298: this route authenticates through lib/auth/cron rather than comparing the
-// secret itself, so that is the module to stub. Allow/deny semantics are pinned in
-// auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
-// What this spec owns is the job's own logic.
-vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
 vi.mock('@/lib/cache', () => ({
   acquireLock: vi.fn().mockResolvedValue({ acquired: true, value: 'lock-1' }),
   releaseLock: vi.fn().mockResolvedValue(undefined),
@@ -235,6 +229,8 @@ function sqlText(query: SqlFragment | undefined): string {
 
 describe('cleanup cron — split platform / tenant RLS contexts', () => {
   beforeEach(async () => {
+    // #3298: verifyCronSecret fails closed on an unset CRON_SECRET.
+    process.env.CRON_SECRET = 'test-secret';
     vi.clearAllMocks();
     mockState.eqCalls.length = 0;
     mockState.ltCalls.length = 0;
@@ -253,9 +249,7 @@ describe('cleanup cron — split platform / tenant RLS contexts', () => {
     mockState.txThrow = false;
     mockSweepTenants.mockImplementation(defaultSweep);
     // clearAllMocks() does not drop a mockReturnValue() set by an earlier test —
-    // reset the auth seams explicitly so cases stay independent.
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
-    vi.mocked(verifyCronSecret).mockResolvedValue(true);
+    // reset the auth seam explicitly so cases stay independent.
     const { requireAuth } = await import('@/lib/auth/middleware');
     vi.mocked(requireAuth).mockReset();
   });
@@ -272,10 +266,10 @@ describe('cleanup cron — split platform / tenant RLS contexts', () => {
 
   it('accepts a manually triggered run from a logged-in super admin', async () => {
     const { requireAuth } = await import('@/lib/auth/middleware');
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: true } as never);
-    vi.mocked(verifyCronSecret).mockResolvedValueOnce(false);
 
+    // #3298: the dashboard path presents no `x-cron-secret` at all, which is how the
+    // route tells the two principals apart before it calls verifyCronSecret.
     const { POST } = await import('@/app/api/cron/cleanup/route');
     const res = await POST(makeRequest({}));
 
@@ -285,10 +279,8 @@ describe('cleanup cron — split platform / tenant RLS contexts', () => {
 
   it('rejects a non-super-admin and an anonymous caller', async () => {
     const { requireAuth } = await import('@/lib/auth/middleware');
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
     const { NextResponse } = await import('next/server');
     // No cron secret on the wire: the dashboard path is the only way in.
-    vi.mocked(verifyCronSecret).mockResolvedValue(false);
     vi.mocked(requireAuth).mockResolvedValue({ isSuperAdmin: false } as never);
 
     const { POST } = await import('@/app/api/cron/cleanup/route');

@@ -147,12 +147,6 @@ vi.mock('@/drizzle/db', () => ({
   },
 }));
 
-// #3298: this route authenticates through lib/auth/cron rather than comparing the
-// secret itself, so that is the module to stub. Allow/deny semantics are pinned in
-// auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
-// What this spec owns is the job's own logic.
-vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
 vi.mock('@/lib/cache', () => ({
   acquireLock: vi.fn().mockResolvedValue(mockLock),
   releaseLock: vi.fn().mockResolvedValue(undefined),
@@ -178,6 +172,7 @@ function makeRequest(): NextRequest {
 
 describe('subscription-check cron — per-tenant sweep', () => {
   beforeEach(() => {
+    process.env.CRON_SECRET = 'test-secret';
     vi.clearAllMocks();
     mockState.eqCalls.length = 0;
     mockState.inArrayCalls.length = 0;
@@ -193,9 +188,6 @@ describe('subscription-check cron — per-tenant sweep', () => {
   });
 
   it('rejects requests without a valid cron secret', async () => {
-    const { verifyCronSecret } = await import('@/lib/auth/cron');
-    vi.mocked(verifyCronSecret).mockResolvedValueOnce(false);
-
     const { POST } = await import('@/app/api/cron/subscription-check/route');
     const res = await POST(
       new Request('http://localhost/api/cron/subscription-check', { method: 'POST' }) as unknown as NextRequest,

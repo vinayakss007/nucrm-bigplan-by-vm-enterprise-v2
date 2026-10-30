@@ -15,6 +15,7 @@
  */
 
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
+import { cronAuthHeaders } from '@/lib/cron/signature';
 
 registerProcessErrorHandlers('cron-scheduler');
 
@@ -62,7 +63,7 @@ async function runJob(job: CronJob): Promise<void> {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'x-cron-secret': CRON_SECRET,
+        ...cronAuthHeaders({ secret: CRON_SECRET }),
         'Content-Type': 'application/json',
       },
       signal: AbortSignal.timeout(120_000), // 2 min timeout

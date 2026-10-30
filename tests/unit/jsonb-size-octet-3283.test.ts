@@ -447,10 +447,12 @@ describe('#3283 the screen is wired, with both controls', () => {
     // guard as the fifth; #3281 appended guard:seed-credential as the sixth and #3282
     // guard:destructive-gate as the seventh. Appending a step here buys nothing: the CI
     // job above runs the same alias with both controls, and docs/README.md's census
-    // counts workflow steps, not local ones.
+    // counts workflow steps, not local ones. (#3298 did append an eighth — see that
+    // issue's ask 2, which names this file — so the count below is theirs now, not
+    // ours; the point of this test is that guard:jsonb-size is still not in here.)
     const pre = readFileSync(join(ROOT, 'scripts/pre-merge-check.sh'), 'utf8');
     expect(pre).not.toContain('guard:jsonb-size');
-    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect([...pre.matchAll(/▶ (\d+)\/8/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(pre).toContain('guard:rollback-coverage');
   });
 });

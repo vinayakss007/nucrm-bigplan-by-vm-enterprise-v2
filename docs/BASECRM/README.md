@@ -94,19 +94,13 @@ A "base CRM" that violates any of them is not this app:
   `app.unsubscribe_contact`). Any new one of these has to be appended to *both*
   connection-reset lists — `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts`
   pins the two lists equal and pinned to the literal count.
-- **A queue default is a side-effect decision.** `lib/queue/index.ts:130` hands every job
-  `attempts: 3`, and for a job whose work is "mail these people" a retry is a re-send:
-  the processor restarts its recipient list at index 0 with no claim and no dedupe key,
-  and the addresses are masked out of the result set so a retry cannot even be resumed.
-  `send-bulk-emails` is therefore queued with `attempts: 1` (#3293). Before accepting any
-  retry default, ask what the processor does on the *second* run. See 07 § Background jobs.
-- **A guarded table is not a usable table: a policy is not a writer.** `oauth_clients` has carried
-  `tenant_isolation` `FOR ALL` since 0088 and had **no `INSERT` anywhere in the app**, so
-  `POST /api/auth/oauth/token` answered `invalid_client` — byte-identical to a wrong secret, since
-  `app/api/auth/oauth/token/route.ts:69` and `:79` return the same 401 — for every caller on a fresh
-  database. The writer is `app/api/tenant/oauth-clients/route.ts:89`, and it needed no migration.
-  Two rules: **check what the existing arms already reach before adding one**, and when an auth
-  route rejects *everyone*, ask whether the row it reads can exist at all. See 03 § #3328.
+- **A cron opt-in layer protects exactly the routes that call it.** One entry
+  point (`verifyCronSecret` in `lib/auth/cron.ts`), awaited, in every
+  `app/api/cron/*` route — #3298 found 2 of 22 and fixed the rest. A route that
+  compares `x-cron-secret` itself ignores `CRON_ALLOWED_IPS` / `CRON_SIGNING_KEY`
+  that the operator believes are on, and an un-awaited call fails **open**.
+  `guard:cron-auth` enforces both. The signature layer HMACs the raw body, which
+  for these routes is the empty string. See 07 § Cron endpoints.
 
 ## Provenance
 
