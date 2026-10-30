@@ -295,7 +295,7 @@ describe('#3282 seed-fresh.ts refuses before it deletes, and seeds a password no
   });
 
   it('stays inside one pinned connection and one transaction, like #2628 left seed-dev', () => {
-    expect(src).toMatch(/new Pool\(\{ connectionString: process\.env\.DATABASE_URL, max: 1 \}\)/);
+    expect(src).toMatch(/new Pool\(\{ connectionString: process\.env\.DATABASE_URL, max: 1, ssl: pgSslConfig\(\) \}\)/);
     expect(src).toMatch(/drizzle\(client/);
     expect(src).toMatch(/await client\.query\('BEGIN'\)/);
   });

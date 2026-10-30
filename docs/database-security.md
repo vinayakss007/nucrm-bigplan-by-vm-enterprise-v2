@@ -161,6 +161,13 @@ DATABASE_SSL=false       # Set true for cloud PostgreSQL
 > `DATABASE_SSL` — `prod:preflight` now fails the specific contradiction
 > (`DATABASE_SSL=true` with `sslmode=disable`) instead of trusting the copied file.
 
+**The policy applies to every pool, not only the app's.** `ssl` is the one TLS channel
+node-pg has; `sslmode=` in `DATABASE_URL` is libpq's parameter, read by `psql`/`pg_dump`/
+`pg_restore` and by `pgLibpqEnv()`'s `PGSSLMODE`, and never by a `Pool`. So the migration,
+seed, restore and verification scripts pass `ssl: pgSslConfig()` like `lib/db/pool.ts` does
+(#3256, #3381), and `npm run guard:pool-tls` fails any new `new Pool(` that omits the option —
+including one built from a `PoolConfig` variable whose literal in that file does not carry it.
+
 Every API request handled by `withApiRoute`/`withTenantScope` pins ONE pool client for its whole lifetime (`withPinnedConnection`, #1615), so the pool size must cover _concurrent in-flight requests_, not just DB queries. A dashboard mount alone fans out to 10–15 endpoints; a small pool (e.g. 5) against a WAN/cloud-hosted Postgres turns every mount into a connection queue behind ~1.7 s round-trips (#1972). Keep `DATABASE_POOL_SIZE` at 20+ for cloud DBs and raise `DATABASE_STATEMENT_TIMEOUT` (default 10 s) only per-query via `withTimeout` rather than globally.
 
 Pool exhaustion causes `Connection terminated due to connection timeout`. Increase pool size if you see this error.

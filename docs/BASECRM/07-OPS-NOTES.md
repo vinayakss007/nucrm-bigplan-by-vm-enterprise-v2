@@ -225,6 +225,23 @@ why every number needs its context rather than an assumption.
   `db:seed:api` and the e2e seeder were the un-armed ones (#3280); `db:state` (#3314) and the
   backup/restore shell scripts already armed theirs.
 
+## Every pool carries the TLS policy (#3256, #3381)
+
+`pg` has one TLS channel: the `ssl` option on the pool. `?sslmode=require` in `DATABASE_URL`
+is a **libpq** parameter — `psql`, `pg_dump`, `pg_restore`, and here `pgLibpqEnv()`'s
+`PGSSLMODE` — and node-pg never reads it, so a `new Pool({ connectionString })` with no `ssl`
+is a plaintext connection against a DSN that looks encrypted. One policy covers every pool,
+app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plaintext only when
+`DATABASE_SSL === 'false'` and verifies the server certificate only in production.
+
+- `npm run guard:pool-tls` is the check: it brace-matches every `new Pool(` under `app/`,
+  `lib/`, `scripts/`, `components/` and `deploy/` and requires an `ssl` **name** in the
+  options, so shorthand and variable forms pass and a `PoolConfig` identifier has to resolve
+  to a literal in the same file that carries it.
+- Rebuilding this stack on another host: the setting is per-connection, so a `pg_hba` that
+  says `trust`/`md5` locally will let an unencrypted pool look healthy forever. That is the
+  failure #3381 was filed about.
+
 ## Deploy topology (do not conflate — AGENTS.md)
 
 - **This host = Docker.** `nucrm-app`, `nucrm-nginx`, `nucrm-pgbouncer` are live

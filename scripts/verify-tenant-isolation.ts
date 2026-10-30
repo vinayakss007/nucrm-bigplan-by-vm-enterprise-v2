@@ -24,6 +24,7 @@
  */
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 interface TableRow {
   table_name: string;
@@ -49,7 +50,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
 
   try {
     // ── Who are we, and can we be constrained at all? ──────────────────────

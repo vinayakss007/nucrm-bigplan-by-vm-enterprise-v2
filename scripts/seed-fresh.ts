@@ -34,6 +34,7 @@ import { config } from 'dotenv';
 config({ path: '.env.local' });
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '@/lib/db/ssl-config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { createInterface } from 'node:readline';
 import { eq } from 'drizzle-orm';
@@ -87,7 +88,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: pgSslConfig() });
   const client = await pool.connect();
   const db = drizzle(client, { schema });
 
