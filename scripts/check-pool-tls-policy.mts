@@ -211,7 +211,7 @@ function scanSource(file: string, raw: string): PoolSite[] {
     } else if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
       form = 'identifier';
       body = literalFor(source, arg);
-      detail = body === null ? `new Pool(${arg}) — ${arg} has no object literal in this file to read` : `${arg} resolves to an object literal in this file`;
+      detail = body === null ? `new Pool(${arg}) — ${arg} has no object literal in this file to read` : '';
     } else {
       form = 'unmatched';
       detail = 'the argument is neither an object literal nor a single identifier';
