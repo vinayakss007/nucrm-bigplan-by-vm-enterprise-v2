@@ -231,3 +231,8 @@ so 02, 03 and that test moved together in #3246 instead of one of them drifting.
 table whose `tenant_id` is NOT NULL — and, unlike 0136–0138, the dead half was the
 *read*: one SELECT-only arm, no write granted, and the migration lands UNAPPLIED with
 the rest of the backlog.
+
+**Re-counted 2026-10-27 for #3246 step 4d.** `app.whatsapp_phone_number_id` is the
+**sixteenth** name on both reset lists (0142, the **142nd** journal entry over **284**
+`.sql` files), and the tree holds **938** `*.test.*` files. Same rule as above: 02, 03
+and the drill moved with the two lists, and 0142 lands UNAPPLIED like 0139–0141.

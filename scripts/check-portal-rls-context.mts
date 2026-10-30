@@ -76,15 +76,17 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * surface moves, and only with the walk that produced the new number — 104 since
  * #3246 step 4a pinned the inbound key lookup, 106 since step 4b pinned the
  * Resend attribution and the write handlers it feeds, both of which the route's
- * size ratchet pushed into `lib/`, and 107 since #3280 put `/api/setup/status` in
- * `PUBLIC_PATHS` so an operator can ask an unauthenticated box whether it still
- * needs its first admin.
+ * size ratchet pushed into `lib/`, and 107 since step 4d pinned
+ * `lib/whatsapp/webhook-processor.ts`, the #3312 file whose ten statements sat
+ * behind a route the scope does reach but were never counted.
  */
 export const MIN_SCANNED_FILES = 107;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 231 with the two Resend
- * libraries #3246 step 4b pinned). Below this
+ * libraries #3246 step 4b pinned; 240 with the whatsapp processor #3246 step 4d
+ * pinned — nine reads, all of them bound, so that floor moved with the walk and
+ * not with the findings, which is what #3312 asks for). Below this
  * the read patterns stopped working, or the scope shrank to the hand list.
  */
 export const MIN_TABLE_READS = 200;
@@ -97,7 +99,9 @@ export const MIN_TABLE_READS = 200;
  * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
  * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim), plus
  * `withPluginWebhookLookupContext` from `lib/db/plugin-webhook-context.ts` (#3246's
- * pre-auth plugin webhook lookup). The
+ * pre-auth plugin webhook lookup) and `withWhatsAppIntegrationLookupContext` from
+ * `lib/db/whatsapp-integration-context.ts` (#3246 step 4d's pre-auth phone-number
+ * claim). The
  * guard matches on the *call name* at each site, so the split changes nothing it
  * can see — this list is only where the names come from.
  */
@@ -112,6 +116,7 @@ export const CONTEXT_HELPERS = [
   'withFormLookupContext',
   'withUnsubscribeContactContext',
   'withPluginWebhookLookupContext',
+  'withWhatsAppIntegrationLookupContext',
 ];
 
 /**
@@ -625,6 +630,7 @@ export const PINNED_TARGETS = [
   'lib/webhooks/inbound-auth.ts',
   'lib/email/webhook-scope.ts',
   'lib/email/resend-event-handlers.ts',
+  'lib/whatsapp/webhook-processor.ts',
   'app/api/public',
   'app/api/tenant/portal/login',
   'app/api/forms/submit',
@@ -755,6 +761,10 @@ export function buildTargets(root: string): string[] {
  * handlers run each statement inside `withTenantContext`. Both halves live in
  * `lib/email/` because the route's 500-line cap had no room left, so both are
  * pinned targets too. What remains in `webhooks` is `inbound` (24) and `payu` (6).
+ * Step 4d bound nothing in a deferred directory: it pinned
+ * `lib/whatsapp/webhook-processor.ts`, whose ten bare statements sat behind a route
+ * the walk already reached and were therefore never counted — #3312's complaint,
+ * filed against the ceilings rather than against the file.
  */
 export type ScopeDeferral = {
   dir: string;
