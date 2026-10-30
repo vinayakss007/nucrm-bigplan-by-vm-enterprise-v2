@@ -11,7 +11,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   extractStatements,
@@ -122,5 +123,55 @@ describe('chain guard and runner classify index DDL the same way (#3301)', () =>
   it('the guard itself still passes on the tree as shipped', () => {
     const out = execFileSync('node', ['scripts/check-migration-chain.mjs'], { cwd: ROOT, encoding: 'utf8' });
     expect(out).toContain('OK — no new chain defects');
+  });
+
+  it('rejects a NEW blocking file on an empty baseline, and accepts it online', () => {
+    // The ratchet is only worth having if it fires. Run the guard against a
+    // throwaway chain (it reads every path relative to cwd) so the assertion is
+    // about the screen, not about the 53 files history left behind.
+    const dir = mkdtempSync(join(tmpdir(), 'chain-ratchet-'));
+    try {
+      mkdirSync(join(dir, 'drizzle/migrations/meta'), { recursive: true });
+      mkdirSync(join(dir, 'scripts'), { recursive: true });
+      writeFileSync(
+        join(dir, 'drizzle/migrations/meta/_journal.json'),
+        JSON.stringify({
+          version: '7', dialect: 'postgresql',
+          entries: [
+            { idx: 0, version: '7', when: 1700000000000, tag: '0001_a', breakpoints: 1 },
+            { idx: 1, version: '7', when: 1700000001000, tag: '0002_b', breakpoints: 1 },
+          ],
+        }),
+      );
+      writeFileSync(join(dir, 'scripts/migration-chain-baseline.json'),
+        JSON.stringify({ counts: {}, violations: {} }));
+      const online = 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "a_c_fk_idx" ON "public"."a" ("c");\n';
+      writeFileSync(join(dir, 'drizzle/migrations/0002_b.sql'), online);
+
+      const run = () => {
+        try {
+          return {
+            status: 0,
+            out: execFileSync('node', [join(ROOT, 'scripts/check-migration-chain.mjs')], { cwd: dir, encoding: 'utf8', stdio: 'pipe' }),
+          };
+        } catch (e) {
+          return { status: (e as { status?: number }).status ?? -1, out: `${(e as { stdout?: string }).stdout ?? ''}${(e as { stderr?: string }).stderr ?? ''}` };
+        }
+      };
+
+      writeFileSync(join(dir, 'drizzle/migrations/0001_a.sql'),
+        'CREATE INDEX IF NOT EXISTS "a_c_fk_idx" ON "public"."a" ("c");\n');
+      const blocking = run();
+      expect(blocking.status).toBe(1);
+      expect(blocking.out).toContain('blockingIndex: 0001_a');
+      expect(blocking.out).not.toContain('0002_b');
+
+      writeFileSync(join(dir, 'drizzle/migrations/0001_a.sql'), online);
+      const fixed = run();
+      expect(fixed.status).toBe(0);
+      expect(fixed.out).toContain('OK — no new chain defects');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

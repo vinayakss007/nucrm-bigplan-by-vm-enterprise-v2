@@ -18,19 +18,19 @@
 --
 -- 3. Online builds (CONCURRENTLY), and the engine that must apply this file.
 --    A plain CREATE INDEX takes SHARE on the table for the whole build, and
---    SHARE blocks every INSERT/UPDATE/DELETE. And it is not one short window per
---    index here: drizzle-orm's migrate() runs its loop inside
---    one transaction around every pending file, so 100 blocking builds over 50
---    tables would lock writes out for the duration of the entire backlog apply
---    (#2537). migrate() cannot run CONCURRENTLY at all — it aborts with SQLSTATE
---    25001 — so scripts/migrate.ts routes a pending set carrying it through this
---    repo's online engine instead (chooseApplyRoute -> applyMigrationFile,
---    scripts/migrate-fresh.ts), which autocommits CONCURRENTLY statements outside
---    any transaction and stamps each file as it completes (#3301). The trade is
---    real: a concurrent build scans the table twice and waits for pre-existing
---    transactions to end, so the wall clock is longer, and a build that fails
---    leaves an INVALID index behind that `IF NOT EXISTS` would then skip. The
---    sweep and post-check below are what make that case loud instead of silent.
+--    SHARE blocks every INSERT/UPDATE/DELETE. Not one short window per index
+--    here either: migrate() holds one transaction around every pending file,
+--    so 100 blocking builds over 50 tables lock writes out for the duration of
+--    the entire backlog apply (#2537). migrate() cannot run CONCURRENTLY at
+--    all — it aborts with SQLSTATE 25001 — so scripts/migrate.ts routes a
+--    pending set carrying it through this repo's online engine instead
+--    (chooseApplyRoute -> applyMigrationFile, scripts/migrate-fresh.ts), which
+--    autocommits CONCURRENTLY statements outside any transaction and stamps
+--    each file as it completes (#3301). The trade is real: a concurrent build
+--    scans the table twice and waits for pre-existing transactions to end, so
+--    the wall clock is longer, and a build that fails leaves an INVALID index
+--    behind that `IF NOT EXISTS` would then skip. The sweep and post-check
+--    below are what make that case loud instead of silent.
 --
 -- 4. Naming/idempotency. Every index is `<table>_<col>_fk_idx` (the issue's
 --    convention), all <= 63 chars, no collisions with existing index names, and

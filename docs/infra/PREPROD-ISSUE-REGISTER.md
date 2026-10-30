@@ -3219,7 +3219,7 @@ not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sit
     `journalEntryCount` and every string that called it "pending" now says what it is
     (`117 journal entr(ies); the ledger decides which are outstanding`), including both confirm prompts.
     Scope stated honestly: on the unusable host URL the run dies **earlier** than this catch — at
-    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:215`, re-pinned from `:201` on 2026-10-08 — **#2450** inserted lines above it here), which
+    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:217`, re-pinned from `:201` on 2026-10-08 — **#2450** inserted lines above it here — then from `:215` on 2026-10-30, two lines, by **#3301**'s routing imports), which
     exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
     quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
     search_path), and the old handler answered "everything is pending". There is no read-only way to
@@ -3323,7 +3323,7 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   `drizzle.__drizzle_migrations` counts + newest `created_at`, `42P01` on `public.__drizzle_migrations`,
   `_journal.json` (116 entries on `673eecf2`, 117 on `310129bf`) vs `git ls-tree origin/main:drizzle/migrations`
   (matching `.sql` file counts, 0 unjournalised on both),
-  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:132-142` (journal-count headline),
+  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:134-144` (journal-count headline, re-pinned from `:132-142` on 2026-10-30 by **#3301**),
   `:177-186` (prompts), `:233-279` (the `catch` that meant "fresh DB"), `:215` (where the host URL actually
   dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved), `lib/db/ssl-config.ts:33-41`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
@@ -3400,9 +3400,10 @@ INDEX` would otherwise abort the whole run" — and that measurement is not repr
   therefore either taken against a different database or taken in the same blind context the migration itself
   will run in; on this database it does not reproduce. Two consequences the header does not state: the dedupe
   is not "expected to be a no-op", it is a **4-row mutation of historical (trashed) records** that will execute
-  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:429` (re-pinned from `:376` on 2026-10-08, **#2450**) takes the
-  **incremental** path (`drizzle`'s built-in migrator, now at line 559), which wraps each file in one transaction and
-  stops on the first error: the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
+  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:441` (re-pinned from `:376` on 2026-10-08 by **#2450** and from `:429` on 2026-10-30 by **#3301**, which replaced the one-line `freshPath` boolean with `chooseApplyRoute()`) takes the
+  **incremental** path (`drizzle`'s built-in migrator, now at line 586 — 559 before **#3301**), which wraps the whole
+  pending set in one transaction and stops on the first error (#3301 corrected "each file"; a pending file carrying
+  `CONCURRENTLY` is routed away from it, and `0114` carries none): the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
   cannot be advanced past 0113 without changing something.**
 
 - **`0107` and `0108` are the same shape with the failure moved, not removed.** `0107` backfills
@@ -3472,7 +3473,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
   standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
   exactly one file. `npm run db:status` on this tree → `Applied: 99 / Pending: 21 / Total: 120`, `0114` pending.
-- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
+- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:31,200-201,404-434,586` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved; again on 2026-10-30 from 29, 198-199, 402-429 and 559, which **#3301** moved — its routing also corrected the sentence at `:404` from "wraps each migration file in a transaction" to "wraps the whole pending set in ONE transaction", which is what `drizzle-orm/pg-core/dialect.js` does),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth and **#3225** its thirteenth and **#3237** its fourteenth, then **#3246** its fifteenth, `app.plugin_webhook_id`, the line unmoved in all of them)` (text extended by **#2446**'s
@@ -5050,7 +5051,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   everywhere except `:568` / `:578` — and those interpolate `tokenHash`, a `sha256…digest('hex')`, so
   quoting cannot break a hex string and it is written here only so the pattern is not copied into
   server code. The other **9** are constants in their own file: `REQUIRED_EXTENSIONS` at
-  `scripts/migrate.ts:328` plus four static strings at `:364-394`, the literal `idx.sql` array at
+  `scripts/migrate.ts:330` (re-pinned from `:328` on 2026-10-30 by **#3301**) plus four static strings at `:366-396` (were `:364-394`), the literal `idx.sql` array at
   `scripts/add-indexes.ts:57`, and the three `…IN (${list})` checks built from module-level arrays at
   `drizzle/schema/record-links.ts:117-119`.
 - **What this does NOT do.** It is not **#683**'s per-table column allowlist. `password_hash`,

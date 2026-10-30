@@ -210,6 +210,16 @@ describe('splitSql / extractStatements', () => {
     expect(partitionStatements(stmts).some((c) => c.type === 'nontransactional')).toBe(true);
   });
 
+  it('keeps everything after an unterminated dollar tag instead of dropping it', () => {
+    // A file truncated mid-block is a repo defect, but the splitter must not
+    // turn it into silently-missing SQL: it still has to reach the runner, so
+    // the run fails on syntax instead of applying half the file.
+    const sql = "DO $$ BEGIN\nCREATE INDEX ix_a ON t (c);\n";
+    const stmts = splitSql(sql);
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0]!).toContain('CREATE INDEX ix_a');
+  });
+
   it('strips the DOWN section and honours statement-breakpoints', () => {
     const sql = [
       'CREATE TABLE up_only (id uuid);',
