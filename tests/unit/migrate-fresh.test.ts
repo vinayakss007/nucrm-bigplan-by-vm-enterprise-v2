@@ -178,6 +178,38 @@ describe('splitSql / extractStatements', () => {
     expect(stmts[1]!).toContain("'a;b'");
   });
 
+  it('closes ONE dollar-quoted block, not every later occurrence of the tag', () => {
+    // Two consecutive `DO $$…$$;` blocks are two statements. Swallowing the
+    // second block's opening tag merges everything between them — including a
+    // CREATE INDEX — into one statement that LEADS with `DO`, which is what
+    // #3301's routing classifies by.
+    const sql = [
+      "DO $$ BEGIN RAISE NOTICE 'a'; END $$;",
+      'CREATE INDEX ix_a ON t (c);',
+      "DO $$ BEGIN RAISE NOTICE 'b'; END $$;",
+      'CREATE INDEX ix_b ON t (d);',
+    ].join('\n');
+    const stmts = splitSql(sql);
+    expect(stmts).toHaveLength(4);
+    expect(stmts[0]).toMatch(/^DO \$\$/);
+    expect(stmts[0]).not.toContain('CREATE INDEX');
+    expect(stmts[1]).toMatch(/^CREATE INDEX ix_a/);
+    expect(stmts[2]).toMatch(/^DO \$\$/);
+    expect(stmts[3]).toMatch(/^CREATE INDEX ix_b/);
+  });
+
+  it('keeps a CONCURRENTLY build after two dollar-quoted blocks visible to the splitter (#3301)', () => {
+    const sql = [
+      "DO $$ BEGIN RAISE NOTICE 'a'; END $$;",
+      "DO $$ BEGIN RAISE NOTICE 'b'; END $$;",
+      'CREATE INDEX CONCURRENTLY ix_a ON t (c);',
+    ].join('\n');
+    const stmts = extractStatements(sql);
+    expect(stmts).toHaveLength(3);
+    expect(stmts[2]).toContain('CONCURRENTLY');
+    expect(partitionStatements(stmts).some((c) => c.type === 'nontransactional')).toBe(true);
+  });
+
   it('strips the DOWN section and honours statement-breakpoints', () => {
     const sql = [
       'CREATE TABLE up_only (id uuid);',
