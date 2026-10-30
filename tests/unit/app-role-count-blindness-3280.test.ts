@@ -308,7 +308,7 @@ describe('#3280 the screen is wired and the census says so', () => {
 
   it('runs in CI by alias, on the step that already reads raw SQL', () => {
     expect(ci).toContain('npm run guard:raw-sql && npm run guard:app-role-counts');
-    expect(ci).toContain('(#2528, #3280)');
+    expect(ci).toMatch(/- name: Raw-SQL \+ un-armed RLS read.*#2528, #3280/);
   });
 
   it('sits at the line the preprod register cites, so no coordinate moves', () => {
