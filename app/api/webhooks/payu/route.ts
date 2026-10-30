@@ -7,10 +7,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { isPayUConfigured, verifyPayUResponse } from '@/lib/payu';
-import { db } from '@/drizzle/db';
 import { quotes, invoices, invoicePayments } from '@/drizzle/schema';
 import { recalculateInvoicePayments } from '@/lib/billing/payments';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import { NO_USER_SENTINEL, withTenantContext } from '@/lib/db/rls';
+import { withQuoteWebhookLookupContext } from '@/lib/db/quote-webhook-context';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/webhooks/payu
@@ -24,8 +26,16 @@ import { eq, and, desc, sql } from 'drizzle-orm';
  *   paid_at set on full settlement), then marks the quote accepted.
  * - Failure: records the failure on the quote's metadata.
  *
- * All writes happen inside a single transaction and are idempotent per txnid,
- * so PayU retries / duplicate callbacks never double-record a payment.
+ * #3246 step 4c split the database work in two, because a callback has no workspace to
+ * run under until its quote has been read. The lookup of the quote named in `txnid` runs
+ * in one transaction carrying migration 0141's SELECT-only claim on that row and projects
+ * {id, tenantId} and nothing else; the writes then run in a second transaction that names
+ * the workspace that lookup returned. Before this, the single transaction opened with a
+ * read FORCE RLS answered with zero rows, so every verified payment — success or failure —
+ * replied `quote_not_found`, settled nothing, and returned the 200 that stops PayU retry.
+ *
+ * Writes are idempotent per txnid, so PayU retries / duplicate callbacks never
+ * double-record a payment.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,6 +59,12 @@ interface ProcessResult {
 }
 
 export async function POST(request: NextRequest) {
+  // #3246: the workspace adopted below lives on the connection that set it and the pool
+  // clears it on release, and nothing else wraps this anonymous path — pin one client.
+  return withTenantScope(() => handlePayu(request));
+}
+
+async function handlePayu(request: NextRequest) {
   try {
     if (!isPayUConfigured()) {
       return NextResponse.json({ error: 'PayU is not configured' }, { status: 503 });
@@ -113,11 +129,35 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // The verified hash covers `txnid`, and the quote id inside it is the credential 0141
+    // admits: one row by primary key, read-only (measured — the same UPDATE under the
+    // claim alone touches 0 rows), and nothing at all once its transaction commits.
+    const [owner] = await withQuoteWebhookLookupContext(quoteId, (tx) =>
+      tx
+        .select({ id: quotes.id, tenantId: quotes.tenantId })
+        .from(quotes)
+        .where(and(eq(quotes.id, quoteId), isNull(quotes.deletedAt)))
+        .limit(1));
+
+    if (!owner) {
+      void logError({ error: 'PayU verified a txnid naming no quote row', context: 'webhooks/payu quote-lookup', level: 'warning', metadata: { txnid, quoteId } });
+      return NextResponse.json({
+        received: true,
+        txnid,
+        status,
+        quoteId,
+        processed: false,
+        reason: 'quote_not_found',
+      });
+    }
+
     let result: ProcessResult;
     try {
-      result = await db.transaction(async (tx): Promise<ProcessResult> => {
+      result = await withTenantContext(owner.tenantId, NO_USER_SENTINEL, async (tx): Promise<ProcessResult> => {
         const now = new Date();
 
+        // Re-read under the adopted workspace: the claim that found the row is closed with
+        // its own transaction, and the columns the writes branch on belong to this snapshot.
         const [quote] = await tx
           .select({
             id: quotes.id,
@@ -126,7 +166,7 @@ export async function POST(request: NextRequest) {
             metadata: quotes.metadata,
           })
           .from(quotes)
-          .where(and(eq(quotes.id, quoteId), sql`${quotes.deletedAt} IS NULL`))
+          .where(and(eq(quotes.id, owner.id), isNull(quotes.deletedAt)))
           .limit(1);
 
         if (!quote) {
@@ -146,7 +186,7 @@ export async function POST(request: NextRequest) {
             and(
               eq(invoices.tenantId, quote.tenantId),
               eq(invoices.quoteId, quote.id),
-              sql`${invoices.deletedAt} IS NULL`
+              isNull(invoices.deletedAt)
             )
           )
           .orderBy(desc(invoices.createdAt))
@@ -175,7 +215,7 @@ export async function POST(request: NextRequest) {
                 and(
                   eq(invoicePayments.reference, txnid),
                   eq(invoicePayments.tenantId, quote.tenantId),
-                  sql`${invoicePayments.deletedAt} IS NULL`
+                  isNull(invoicePayments.deletedAt)
                 )
               )
               .limit(1);

@@ -221,8 +221,11 @@ The **GUCs**, and the file that actually writes each one (re-measured at
 - `lib/db/plugin-webhook-context.ts` — `app.plugin_webhook_id` (constant `:30`,
   written `:52`; `setPluginWebhookTenantContext` `:62` clears it and also sets
   `app.current_tenant`/`app.current_user` at `:69-70`; migration 0139).
-- `lib/db/whatsapp-integration-context.ts` — `app.whatsapp_phone_number_id`
-  (constant `:29`, written `:54`; migration 0142).
+- `lib/db/quote-webhook-context.ts` — `app.quote_webhook_id` (constant `:30`,
+  written `:50`; `withQuoteWebhookLookupContext` `:63` opens a transaction that
+  reads one quote row and nothing else, and the claim dies at its COMMIT — the
+  adopted workspace is named by `withTenantContext` in a second transaction, not
+  by a handover statement here; migration 0141).
 - `app.allow_audit_purge` is not a `set_config` at all — it is `SET LOCAL` in
   `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
 
