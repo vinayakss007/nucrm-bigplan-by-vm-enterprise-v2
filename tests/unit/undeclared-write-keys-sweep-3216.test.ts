@@ -302,7 +302,6 @@ describe('#3216 — no write may pass a key its table does not declare', () => {
     result = await sweep();
     // Reported, not asserted: these are the sites static analysis cannot see, so the
     // reader knows what the sweep did *not* check.
-    // eslint-disable-next-line no-console
     console.log(`[3216 sweep] ${result.files} files · ${result.statements} write statements · ${result.guards} guard sites · ${result.unresolved.length} unresolved · ${result.ambiguous.length} ambiguous`);
   }, 120_000);
 

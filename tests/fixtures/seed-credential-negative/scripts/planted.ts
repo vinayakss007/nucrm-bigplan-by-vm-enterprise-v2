@@ -5,7 +5,7 @@
 // without its second half.
 import bcrypt from 'bcryptjs';
 
-const DEFAULT_ADMIN_PASSWORD = 'Hunter2Gate!';
+const _DEFAULT_ADMIN_PASSWORD = 'Hunter2Gate!';
 
 export async function make() {
   return bcrypt.hash('Admin123!', 12);
