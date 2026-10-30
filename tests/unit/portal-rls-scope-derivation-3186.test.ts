@@ -136,10 +136,11 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     // `app/api/unsubscribe` came off the same regex when #3225/#3231 and #3237
     // invented their privileges and bound the reads; a route that has been fixed
     // must not be able to take its exemption back. #3246 step 2 did the same for
-    // `app/api/tenant/plugins/webhook`, whose arm is migration 0139.
+    // `app/api/tenant/plugins/webhook`, whose arm is migration 0139, and step 3 did
+    // it for `app/api/auth/sso`, whose two arms are migration 0140.
     for (const entry of SCOPE_DEFERRALS) {
       expect(entry.dir, entry.deferredTo).toMatch(
-        /^app\/api\/(cron|webhooks|auth\/sso)$/,
+        /^app\/api\/(cron|webhooks)$/,
       );
     }
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
@@ -197,12 +198,15 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     expect(deferred.filter((d) => d.dir === 'app/api/tenant/plugins/webhook').map((d) => d.count)).toEqual([1]);
   });
 
-  it('and a finding in the dir #3246 step 2 bounded out is reported, not excused', () => {
+  it('and a finding in a dir #3246 bounded out is reported, not excused', () => {
     // The other way the same assertion can rot: re-adding the entry. Nothing in the live
-    // ledger covers `app/api/tenant/plugins/webhook` now, so its read has to be bound.
-    const { kept, deferred } = applyDeferrals([v('app/api/tenant/plugins/webhook/callback/route.ts')], SCOPE_DEFERRALS);
-    expect(deferred.filter((d) => d.dir === 'app/api/tenant/plugins/webhook')).toEqual([]);
-    expect(kept.map((k) => k.file)).toContain('app/api/tenant/plugins/webhook/callback/route.ts');
+    // ledger covers `app/api/tenant/plugins/webhook` (0139) or `app/api/auth/sso` (0140)
+    // now, so their reads have to be bound.
+    for (const file of ['app/api/tenant/plugins/webhook/callback/route.ts', 'app/api/auth/sso/start/route.ts']) {
+      const { kept, deferred } = applyDeferrals([v(file)], SCOPE_DEFERRALS);
+      expect(deferred.map((d) => d.dir), file).not.toContain(file.replace(/\/[^/]+\/route\.ts$/, ''));
+      expect(kept.map((k) => k.file), file).toContain(file);
+    }
   });
 
   it('each live deferral sits EXACTLY on its pin — growth and rot both fail', async () => {

@@ -30,8 +30,8 @@
  *     measurement that #3218 and #3231 record: without the read arm the claim
  *     matches nothing and `RETURNING` yields the empty row that this whole bug is.
  *
- * And the #2446 invariant both reset lists carry every name through #3246's sixteenth
- * (`app.quote_webhook_id`, 0141), checked here as *parity between the two lists* rather than as a count in one of them.
+ * And the #2446 invariant both reset lists carry the fifteenth name (#3246 appended
+ * it 2026-10-25), checked here as *parity between the two lists* rather than as a count in one of them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -189,7 +189,7 @@ describe('0138 installs a one-row claim and nothing else', () => {
   });
 });
 
-describe('#2446 — both connection-reset lists carry the same sixteen names (#3246)', () => {
+describe('#2446 — both connection-reset lists carry the fifteenth name (#3246)', () => {
   const resetLine = (file: string) => {
     const src = readFileSync(join(ROOT, file), 'utf8');
     const line = src.split('\n').find((l) => l.includes("SELECT set_config('app.current_tenant'"));
@@ -201,7 +201,7 @@ describe('#2446 — both connection-reset lists carry the same sixteen names (#3
     const pool = resetLine('lib/db/pool.ts');
     const pinned = resetLine('lib/db/request-connection.ts');
     expect(pool.map((p) => p.guc)).toEqual(pinned.map((p) => p.guc));
-    expect(pool.length).toBe(16);
+    expect(pool.length).toBe(17);
     expect(pinned.find((p) => p.guc === 'app.unsubscribe_contact')?.to).toBe('');
   });
 

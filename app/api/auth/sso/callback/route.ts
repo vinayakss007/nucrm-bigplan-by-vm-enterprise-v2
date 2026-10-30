@@ -12,8 +12,8 @@
  * to the provider's tenant, and create a session cookie.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
-import { withUserContext, withSecurityContext } from '@/lib/db/rls';
+import { withSecurityContext, withTenantContext } from '@/lib/db/rls';
+import { withSsoProviderLookupContext } from '@/lib/db/sso-lookup-context';
 import {
   ssoProviders,
   ssoSessions,
@@ -57,7 +57,10 @@ export async function GET(request: NextRequest) {
     return redirectToLogin('SSO state mismatch');
   }
 
-  const [provider] = await db
+  // 0140's primary-key arm: the state cookie names the provider, and nothing is
+  // authenticated yet, so `sso_providers.tenant_isolation` alone would match zero
+  // rows and bounce a successfully authenticated user as "no longer available".
+  const [provider] = await withSsoProviderLookupContext(stateCookie.providerId, (tx) => tx
     .select({
       id: ssoProviders.id,
       tenantId: ssoProviders.tenantId,
@@ -66,7 +69,7 @@ export async function GET(request: NextRequest) {
     })
     .from(ssoProviders)
     .where(eq(ssoProviders.id, stateCookie.providerId))
-    .limit(1);
+    .limit(1));
   if (!provider || !provider.isActive) {
     await clearSsoState();
     return redirectToLogin('SSO provider is no longer available');
@@ -125,11 +128,13 @@ export async function GET(request: NextRequest) {
   const tokenHash = await hashToken(sessionToken);
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-  // Identity was just proven by the IdP assertion; scope the session write to
-  // it. `sessions_user_own` validates new rows with its USING clause, so with
-  // no context the callback could authenticate successfully and still not be
-  // able to create a session.
-  await withUserContext(userId, async (tx) => {
+  // Identity was just proven by the IdP assertion; scope the session writes to it.
+  // `sessions_user_own` validates the `sessions` row with its USING clause, and
+  // `sso_sessions` has only `tenant_isolation`, which keys on `app.current_tenant` —
+  // so the block needs both names, not just the user's. Measured on the dev database:
+  // a user-only context raises `new row violates row-level security policy` on the
+  // `sso_sessions` insert, and the same insert lands once the tenant is named.
+  await withTenantContext(provider.tenantId, userId, async (tx) => {
     await tx.insert(sessions).values({
       userId,
       tokenHash,

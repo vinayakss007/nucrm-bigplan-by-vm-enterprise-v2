@@ -161,16 +161,7 @@ ellipsis read as "close enough" while pointing a rebuilder at the table named on
 the following line), `field_permissions` (`core.ts:217`),
 `record_permissions` (`core.ts:231`),
 `audit_logs` (`core.ts:324`, `userId` deliberately **not** an FK so audit
-survives user deletion), `oauth_clients`/`oauth_codes`/`oauth_tokens`
-(`tokens.ts:140/158/176` — three columns carry the whole OAuth contract and all
-three are shape traps: `client_secret` is `text` stored **verbatim**, because
-`/api/auth/oauth/token` compares it with `timingSafeEqual` rather than a hash;
-`redirect_uris` is ONE `text` column holding several URIs, comma-joined, so the
-comma is a delimiter and not a legal URI character; and `oauth_clients` has no
-`scopes`, no `updated_at` and no `deleted_at` column at all — scope rides on the
-code row, deactivation is `is_active`, and removal is a real `DELETE` whose FKs to
-`oauth_codes`/`oauth_tokens` are `ON DELETE CASCADE`, which is what makes deleting a
-client a revocation).
+survives user deletion).
 
 ## How RLS is applied (the terrain; semantics in 03)
 
@@ -221,27 +212,27 @@ The **GUCs**, and the file that actually writes each one (re-measured at
 - `lib/db/plugin-webhook-context.ts` — `app.plugin_webhook_id` (constant `:30`,
   written `:52`; `setPluginWebhookTenantContext` `:62` clears it and also sets
   `app.current_tenant`/`app.current_user` at `:69-70`; migration 0139).
-- `lib/db/quote-webhook-context.ts` — `app.quote_webhook_id` (constant `:30`,
-  written `:50`; `withQuoteWebhookLookupContext` `:63` opens a transaction that
-  reads one quote row and nothing else, and the claim dies at its COMMIT — the
-  adopted workspace is named by `withTenantContext` in a second transaction, not
-  by a handover statement here; migration 0141).
+- `lib/db/sso-lookup-context.ts` — `app.sso_lookup_domain` (`:32`) and
+  `app.sso_provider_id` (`:35`), written `:72` and `:79`; both take the whole
+  lookup through `withSsoDomainLookupContext` `:87` / `withSsoProviderLookupContext`
+  `:100`. Neither hands over a tenant — the callback writes under the existing
+  `withTenantContext` (migration 0140).
 - `app.allow_audit_purge` is not a `set_config` at all — it is `SET LOCAL` in
   `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
 
 Cleared on checkout/return as noted in 01: the two reset lists
-(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **sixteen** GUCs,
+(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **seventeen** GUCs,
 and `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts:192-206` pins them equal
 to each other *and* to that literal count. A new context GUC therefore means
-editing both lists **and** bumping the `toBe(16)`. Nothing checks the lists
+editing both lists **and** bumping the `toBe(17)`. Nothing checks the lists
 against the *writers* above, so a GUC that is set but never reset still passes.
 
 ## Migrations
 
 - **Convention**: 4-digit zero-padded `NNNN_name.sql` + sibling
-  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 280 `.sql` files,
-  140 `.down.sql` — every forward step has one since #3284 closed the last gap.
-- **Journal**: `drizzle/migrations/meta/_journal.json` — 140 entries, idx 0..139.
+  `NNNN_name.down.sql`, `--> statement-breakpoint`-separated. 282 `.sql` files,
+  141 `.down.sql` — every forward step has one since #3284 closed the last gap.
+- **Journal**: `drizzle/migrations/meta/_journal.json` — 141 entries, idx 0..140.
   **Snapshots**: only `0000/0001/0002/0018_snapshot.json` exist → the chain is
   largely **hand-written SQL**, not `drizzle-kit`-generated. `drizzle.config.ts`
   points `out: './drizzle/migrations'`, `schema: ./drizzle/schema/index.ts`.

@@ -155,7 +155,7 @@ describe('#2446 — the new GUC is on both reset lists, spelled as the module sp
     for (const file of ['lib/db/pool.ts', 'lib/db/request-connection.ts']) {
       const list = resetLine(file);
       expect(list.find((p) => p.guc === 'app.plugin_webhook_id')?.to, file).toBe('');
-      expect(list.length, file).toBe(16);
+      expect(list.length, file).toBe(17);
     }
     expect(resetLine('lib/db/pool.ts').map((p) => p.guc)).toEqual(resetLine('lib/db/request-connection.ts').map((p) => p.guc));
   });
