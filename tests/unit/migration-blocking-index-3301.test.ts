@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import {
   extractStatements,
   filesNeedingOnlineApply,
+  splitSql,
   stripSqlComments,
 } from '../../scripts/migrate-fresh';
 import { hasBlockingIndexBuild, topLevelIndexDdl } from '../../scripts/migration-index-ddl.mjs';
@@ -105,6 +106,17 @@ describe('chain guard and runner classify index DDL the same way (#3301)', () =>
     // No stale entries: converting one of these files means regenerating the
     // baseline, exactly like the guard's own "healed" hint.
     expect(baseline.violations.blockingIndex.filter((v) => !flagged.has(v))).toEqual([]);
+  });
+
+  it('splitting a real migration file only moves boundaries, never loses text', () => {
+    // The dollar-block fix changes how many statements each file yields, so
+    // this is the safety property the apply path depends on: the same bytes,
+    // re-grouped. Whitespace after a `;` is the one thing the splitter drops.
+    const lossy = upFiles.filter((t) => {
+      const text = read(t);
+      return splitSql(text).join('').replace(/\s+/g, '') !== text.replace(/\s+/g, '');
+    });
+    expect(lossy).toEqual([]);
   });
 
   it('the guard itself still passes on the tree as shipped', () => {
