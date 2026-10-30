@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import type { Metadata } from 'next';
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { BRAND, PLATFORM_STATS } from '@/lib/marketing/site';
 import { PILLARS } from '@/lib/marketing/features';
@@ -75,6 +76,47 @@ const BENTO = [
   { slug: 'analytics', span: 'lg:col-span-2', stat: 'Scheduled reports' },
   { slug: 'platform', span: 'lg:col-span-2', stat: 'Audit-ready' },
 ];
+
+/* Pale category tints for the integration wall and the module rail. The
+   saturation stays low so the logos read as colour without breaking the warm
+   editorial palette. */
+const DEFAULT_CONNECTOR_TINT = { ink: '#475569', rgb: '100 116 139' };
+
+const CONNECTOR_TINT: Record<string, { ink: string; rgb: string }> = {
+  'Email delivery': { ink: '#b45309', rgb: '217 119 6' },
+  'Mailbox sync': { ink: '#2563eb', rgb: '59 130 246' },
+  Messaging: { ink: '#0f9f6e', rgb: '16 185 129' },
+  'Chat-ops': { ink: '#7c3aed', rgb: '139 92 246' },
+  Payments: { ink: '#4f46e5', rgb: '99 102 241' },
+  'AI providers': { ink: '#c2410c', rgb: '234 88 12' },
+  Calendar: { ink: '#0284c7', rgb: '14 165 233' },
+  Identity: { ink: '#0d9488', rgb: '20 184 166' },
+  Events: { ink: '#ea580c', rgb: '249 115 22' },
+  Platform: DEFAULT_CONNECTOR_TINT,
+  Capture: { ink: '#db2777', rgb: '236 72 153' },
+};
+
+function connectorTint(category: string): CSSProperties {
+  const tint = CONNECTOR_TINT[category] ?? DEFAULT_CONNECTOR_TINT;
+  return {
+    '--logo-ink': tint.ink,
+    '--logo-wash': `rgb(${tint.rgb} / 0.09)`,
+    '--logo-wash-strong': `rgb(${tint.rgb} / 0.16)`,
+    '--logo-line': `rgb(${tint.rgb} / 0.24)`,
+    '--logo-orb': `rgb(${tint.rgb} / 0.15)`,
+  } as CSSProperties;
+}
+
+const MODULE_TINT: Record<string, string> = {
+  Core: '#2563eb',
+  Dashboard: '#64748b',
+  Automation: '#d97706',
+  Messaging: '#0f9f6e',
+  AI: '#b45309',
+  Analytics: '#0891b2',
+  Revenue: '#c2410c',
+  Governance: '#475569',
+};
 
 const TOUR: TourTab[] = [
   {
@@ -238,7 +280,9 @@ export default function LandingPage() {
               key={m.id}
               className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-2.5"
             >
-              <Icon name={m.icon} className="h-4 w-4 text-sky-300" />
+              <span className="flex shrink-0" style={{ color: MODULE_TINT[m.category] ?? '#a94f32' }}>
+                <Icon name={m.icon} className="h-4 w-4" />
+              </span>
               <span className="whitespace-nowrap text-[13px] font-semibold text-slate-300">{m.name}</span>
             </span>
           ))}
@@ -355,7 +399,7 @@ export default function LandingPage() {
             sub="Not a CRM with add-ons bolted on. Each area below is a first-class part of the same system, sharing the same records, permissions and history."
           />
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-6">
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             {BENTO.map((b, i) => {
               const p = pillar(b.slug);
               const wide = b.span === 'lg:col-span-3';
@@ -373,7 +417,7 @@ export default function LandingPage() {
                       <div className="relative flex flex-1 flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <IconTile name={p.icon} accent={p.accent} size={wide ? 'lg' : 'md'} />
-                          <span className="mk-mono rounded-md border border-white/[0.07] bg-white/[0.03] px-2 py-1 text-[10px] text-slate-500">
+                          <span className="mk-mono rounded-md border border-white/[0.07] bg-white/[0.03] px-2 py-1 text-[10.5px] text-slate-500">
                             {b.stat}
                           </span>
                         </div>
@@ -442,11 +486,11 @@ export default function LandingPage() {
                     <span className="mk-small mt-1 block">{s.blurb}</span>
                     <span className="mk-mono mt-2.5 flex flex-wrap gap-1">
                       {s.pipelines[0]?.stages.slice(0, 3).map((st) => (
-                        <span key={st} className="rounded border border-white/[0.07] bg-white/[0.03] px-1.5 py-[2px] text-[9.5px] text-slate-500">
+                        <span key={st} className="rounded border border-white/[0.07] bg-white/[0.03] px-1.5 py-[2px] text-[10.5px] text-slate-500">
                           {st}
                         </span>
                       ))}
-                      <span className="px-1 py-[2px] text-[9.5px] text-slate-600">
+                      <span className="px-1 py-[2px] text-[10.5px] text-slate-600">
                         +{Math.max(0, (s.pipelines[0]?.stages.length ?? 0) - 3)}
                       </span>
                     </span>
@@ -498,15 +542,20 @@ export default function LandingPage() {
                   className="pointer-events-none absolute inset-0 -z-10 rounded-[32px] bg-gradient-to-br from-blue-600/22 to-cyan-500/12 blur-3xl"
                   aria-hidden
                 />
-                <div className="grid grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
                   {builtIn.map((c) => (
                     <div
                       key={c.name}
                       title={c.what}
-                      className="mk-card mk-card-hover flex aspect-square flex-col items-center justify-center gap-2 p-2 text-center"
+                      style={connectorTint(c.category)}
+                      className="mk-card mk-card-hover mk-logo-tile flex aspect-square flex-col items-center justify-center gap-2 p-2 text-center"
                     >
-                      <Icon name={c.icon} className="h-5 w-5 text-slate-300" />
-                      <span className="text-[10px] font-semibold leading-tight text-slate-500">{c.name}</span>
+                      <span className="mk-logo-orb flex h-9 w-9 items-center justify-center rounded-xl">
+                        <span className="mk-logo-ink flex">
+                          <Icon name={c.icon} className="h-5 w-5" />
+                        </span>
+                      </span>
+                      <span className="mk-logo-label text-[11px] font-semibold leading-tight">{c.name}</span>
                     </div>
                   ))}
                 </div>
@@ -660,7 +709,7 @@ export default function LandingPage() {
             sub="No contact bands, no marketing-tier maths, no negotiating for a feature you assumed was included. Start free and stay there as long as it works."
           />
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-4">
+          <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {PLANS.map((plan, i) => (
               <Reveal key={plan.id} delay={i * 70}>
                 <div
@@ -697,7 +746,7 @@ export default function LandingPage() {
                           className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${plan.featured ? 'text-sky-300' : 'text-emerald-400'}`}
                           strokeWidth={2.6}
                         />
-                        <span className="text-[12.5px] leading-relaxed text-slate-400">{f}</span>
+                        <span className="text-[13.5px] leading-relaxed text-slate-400">{f}</span>
                       </li>
                     ))}
                   </ul>
