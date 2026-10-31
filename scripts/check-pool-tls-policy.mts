@@ -13,8 +13,8 @@
  * whatever the URL claims. `lib/db/ssl-config.ts` is the single policy; #3256
  * and #3381 fixed the call sites that had decided TLS for themselves. This
  * screen is what makes that the LAST manual pass: every `new Pool(` in
- * first-party source — `.ts`, `.mts`, `.mjs` — must carry a TLS entry in its
- * options, by one of these shapes:
+ * first-party source — `.ts`, `.mts`, `.mjs`, `.js`, `.cjs` — must carry a TLS
+ * entry in its options, by one of these shapes:
  *
  *   - an `ssl:` property (any expression), or
  *   - the shorthand `ssl` naming a variable (`scripts/dr.ts`,
@@ -66,7 +66,8 @@ function sourceFiles(dir: string): string[] {
     if (statSync(p).isDirectory()) {
       if (!SKIP_DIRS.has(name)) out.push(...sourceFiles(p));
     } else if (
-      (name.endsWith('.ts') || name.endsWith('.mts') || name.endsWith('.mjs'))
+      (name.endsWith('.ts') || name.endsWith('.mts') || name.endsWith('.mjs')
+        || name.endsWith('.js') || name.endsWith('.cjs'))
       && !name.endsWith('.d.ts')
     ) {
       out.push(p);
