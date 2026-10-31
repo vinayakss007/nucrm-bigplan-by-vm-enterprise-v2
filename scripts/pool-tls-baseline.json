@@ -2,12 +2,9 @@
   "_comment": [
     "Files whose pg.Pool sites are exempt from scripts/check-pool-tls-policy.mts,",
     "each with the reason. Shrink-only: an entry whose file stops producing a",
-    "finding fails the screen, so an exemption cannot outlive its code (#3381)."
+    "finding fails the screen, so an exemption cannot outlive its code (#3381).",
+    "Emptied 2026-10-31: its one entry, scripts/verify-backup.ts, was fixed by",
+    "#3255/#3256 landing, and the screen said so instead of letting it sit."
   ],
-  "entries": [
-    {
-      "file": "scripts/verify-backup.ts",
-      "reason": "Both pools lack the TLS entry; the fix is the open PR for #3256 (branch fix/verify-backup-tls-3256). Exempted so this screen can land green without stepping on that PR; delete this entry the day #3256 merges."
-    }
-  ]
+  "entries": []
 }
