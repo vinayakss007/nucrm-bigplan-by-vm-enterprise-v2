@@ -43,17 +43,22 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **28** of the `guard:*` aliases by name —
-`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **30** of the `guard:*` aliases by name —
+`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:override-ranges`,
-`guard:panel-error-state`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
+`guard:panel-error-state`, `guard:pm-log-paths`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **3** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **35** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **37** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
 and the nine additions since those measurements are #2832, #2828, #3167, #3241, #3284, #3283, #3281, #3282 and #3280.
+It stood at **28 / 35** while three more landed uncounted — **#3381** wired `guard:pool-tls`, **#3298** wired
+`guard:cron-auth` and **#3253** wired `guard:pm-log-paths` (whose name carries no digit on purpose: both the
+census command below and `tests/unit/docs-guard-coverage-counts-3239.test.ts` match aliases with
+`guard:[a-z-]+`, so a `guard:pm2-…` name would be read as `guard:pm` and the paragraph would silently
+disagree with the workflow) — and it is **30 / 37** now, which is what the command prints.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 

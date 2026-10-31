@@ -143,8 +143,9 @@ describe('the baseline cannot rot', () => {
   });
 
   it('a matching entry with a real reason excuses quietly', () => {
-    // scripts/verify-backup.ts is the one live exemption this screen carries,
-    // held until #3256's PR lands; run() fails the day its finding disappears.
+    // verify-backup.ts is used here as a filename that exists and can be made to
+    // "carry" a planted finding; the live baseline it once was is empty since
+    // #3255/#3256 landed, which is run()'s business, not this entry's shape.
     expect(verifyEntry({ file: exemptFile, reason: 'x'.repeat(50) }, withFinding, ROOT)).toBeNull();
   });
 
