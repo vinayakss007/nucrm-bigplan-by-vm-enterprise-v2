@@ -13,8 +13,8 @@
  * whatever the URL claims. `lib/db/ssl-config.ts` is the single policy; #3256
  * and #3381 fixed the call sites that had decided TLS for themselves. This
  * screen is what makes that the LAST manual pass: every `new Pool(` in
- * first-party source must carry a TLS entry in its options, by one of these
- * shapes:
+ * first-party source — `.ts`, `.mts`, `.mjs` — must carry a TLS entry in its
+ * options, by one of these shapes:
  *
  *   - an `ssl:` property (any expression), or
  *   - the shorthand `ssl` naming a variable (`scripts/dr.ts`,
@@ -35,14 +35,15 @@
  *
  * Exemptions live in `scripts/pool-tls-baseline.json`, are shrink-only, and
  * are RE-VERIFIED every run: an entry whose file no longer produces a finding
- * fails the screen, so an exemption cannot outlive its code. It exists today
- * for `scripts/verify-backup.ts`, whose two sites are fixed by the open PR for
- * #3256; the day that merges, its entry becomes stale and must be deleted.
+ * fails the screen, so an exemption cannot outlive its code. It is empty: the
+ * one entry it was born with (`scripts/verify-backup.ts`, awaiting the PR for
+ * #3256) went stale the moment that landed.
  *
- * Usage: npm run guard:pool-tls [--json]
+ * Usage: npm run guard:pool-tls [--json] [root]   (root defaults to the repo; pass
+ * a directory to scan a smaller tree, which is how the unit screen feeds fixtures)
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,7 +65,10 @@ function sourceFiles(dir: string): string[] {
     if (name.startsWith('.') && SKIP_DIRS.has(name)) continue;
     if (statSync(p).isDirectory()) {
       if (!SKIP_DIRS.has(name)) out.push(...sourceFiles(p));
-    } else if ((name.endsWith('.ts') || name.endsWith('.mts')) && !name.endsWith('.d.ts')) {
+    } else if (
+      (name.endsWith('.ts') || name.endsWith('.mts') || name.endsWith('.mjs'))
+      && !name.endsWith('.d.ts')
+    ) {
       out.push(p);
     }
   }
@@ -72,10 +76,23 @@ function sourceFiles(dir: string): string[] {
 }
 
 /**
+ * Is the quoted run `[start, end)` an object key? It must open an entry — the
+ * previous live character is `{` or `,` — and be addressed by a colon, so a
+ * value in a ternary (`cond ? 'ssl' : 'no'`) stays data.
+ */
+function isKeyRun(src: string, start: number, end: number): boolean {
+  const before = src.slice(0, start).replace(/\s+$/, '');
+  if (!/[{,]$/.test(before)) return false;
+  return /^:/.test(src.slice(end).replace(/^\s+/, ''));
+}
+
+/**
  * Blank `//` and `/* *​/` comments to spaces, offsets intact, and blank string
  * and template bodies too — this screen's only pattern is `new Pool(`, a
  * construct that belongs in code, never in data; a console message quoting it
- * (or this guard's own error strings) must not read as a pool site.
+ * (or this guard's own error strings) must not read as a pool site. A quoted
+ * object KEY is the exception: it names an option, and `{ 'ssl': cfg }` is the
+ * same connection as `{ ssl: cfg }`.
  */
 export function maskComments(src: string): string {
   const out = src.split('');
@@ -126,7 +143,9 @@ export function maskComments(src: string): string {
         if (src[j] === quote) { j++; break; }
         j++;
       }
-      blank(i, j);
+      // `{ 'ssl': cfg }` names an option in quotes; blanking it would hide the
+      // entry the pool carries. A run is only kept when it opens an object entry.
+      if (!isKeyRun(src, i, j)) blank(i, j);
       i = j;
       continue;
     }
@@ -151,13 +170,14 @@ export function matchBraces(src: string, open: number): number {
 
 /**
  * Does this options literal carry a TLS entry? `ssl:` anywhere, or the
- * shorthand identifier `ssl` bounded by `{`/`,`/`}`. A spread `...ssl` is NOT
-* credit: what it carries is a decision made somewhere else, and the point of
+ * shorthand identifier `ssl` bounded by `{`/`,`/`}` — quoted either way, since
+ * `{ 'ssl': cfg }` is the same connection as `{ ssl: cfg }`. A spread `...ssl` is NOT
+ * credit: what it carries is a decision made somewhere else, and the point of
  * this screen is that the decision is visible at the pool.
  */
 export function hasTlsEntry(objText: string): boolean {
-  if (/(?<![A-Za-z0-9_$])ssl\s*:/.test(objText)) return true;
-  return /[{,]\s*ssl\s*(?:[,}])/.test(objText);
+  if (/(?<![A-Za-z0-9_$])['"]?ssl['"]?\s*:/.test(objText)) return true;
+  return /[{,]\s*['"]?ssl['"]?\s*(?:[,}])/.test(objText);
 }
 
 export type PoolSite = {
@@ -261,9 +281,13 @@ export function verifyEntry(entry: BaselineEntry, findings: Finding[], root = RO
 export type RunResult = { findings: Finding[]; stale: Array<{ file: string; why: string }>; sites: number; files: number };
 
 export function run(root = ROOT): RunResult {
+  // The two floors below are about the repo walk, so they assert only when the
+  // walk IS the repo. A caller scanning a smaller tree — the unit screen's
+  // one-file fixtures — cannot satisfy them and must not be told to.
+  const repoWide = resolve(root) === resolve(ROOT);
   const rel = (p: string) => relative(root, p).split(sep).join('/');
   const files = sourceFiles(root);
-  if (!files.some((f) => rel(f) === 'lib/db/ssl-config.ts')) {
+  if (repoWide && !files.some((f) => rel(f) === 'lib/db/ssl-config.ts')) {
     throw new Error('walk did not reach lib/db/ssl-config.ts — the tree is not mounted where this guard expects');
   }
   const findings: Finding[] = [];
@@ -275,7 +299,7 @@ export function run(root = ROOT): RunResult {
     sites += found.length;
     findings.push(...analyzeSource(rel(file), src));
   }
-  if (sites < MIN_POOL_SITES) {
+  if (repoWide && sites < MIN_POOL_SITES) {
     throw new Error(
       `found ${sites} Pool site(s); expected at least ${MIN_POOL_SITES} — the walk or the patterns broke, `
       + 'and a guard that sees nothing passes everything',
@@ -296,7 +320,8 @@ export function run(root = ROOT): RunResult {
 
 function main() {
   const json = process.argv.includes('--json');
-  const { findings, stale, sites, files } = run();
+  const root = process.argv.slice(2).find((a) => !a.startsWith('-'));
+  const { findings, stale, sites, files } = run(root ? resolve(root) : ROOT);
   if (json) {
     console.log(JSON.stringify({ scanned: files, sites, findings, stale }, null, 2));
   } else if (findings.length === 0 && stale.length === 0) {
