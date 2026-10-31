@@ -73,9 +73,11 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * purpose: a floor left at 22 would say OK the day the derivation quietly stops
  * matching `PUBLIC_PATHS` and the walk falls back to the hand list, which is the
  * exact failure #3186 was filed for. It moves when the surface moves, and only
- * with the walk that produced the new number.
+ * with the walk that produced the new number: 120 after #3312 pinned the ten
+ * lib/ files an anonymous route calls and steps 4b/4d's three libraries came
+ * back as pinned targets, none of which the 103 floor had counted.
  */
-export const MIN_SCANNED_FILES = 103;
+export const MIN_SCANNED_FILES = 120;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
@@ -91,7 +93,11 @@ export const MIN_TABLE_READS = 200;
  * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
  * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim), plus
  * `withPluginWebhookLookupContext` from `lib/db/plugin-webhook-context.ts` (#3246's
- * pre-auth plugin webhook lookup). The
+ * pre-auth plugin webhook lookup), `withQuoteWebhookLookupContext` from
+ * `lib/db/quote-webhook-context.ts` and `withWhatsAppIntegrationLookupContext` from
+ * `lib/db/whatsapp-integration-context.ts` (#3246 steps 4c/4d's payment-callback and
+ * WhatsApp lookups), plus `withSsoDomainLookupContext`/`withSsoProviderLookupContext`
+ * from `lib/db/sso-lookup-context.ts` (#3246 step 3's IdP handoff). The
  * guard matches on the *call name* at each site, so the split changes nothing it
  * can see — this list is only where the names come from.
  */
@@ -106,6 +112,8 @@ export const CONTEXT_HELPERS = [
   'withFormLookupContext',
   'withUnsubscribeContactContext',
   'withPluginWebhookLookupContext',
+  'withQuoteWebhookLookupContext',
+  'withWhatsAppIntegrationLookupContext',
   'withSsoDomainLookupContext',
   'withSsoProviderLookupContext',
 ];
@@ -618,6 +626,9 @@ function tsFiles(path: string): string[] {
 export const PINNED_TARGETS = [
   'lib/portal-auth.ts',
   'lib/portal-session.ts',
+  'lib/email/webhook-scope.ts',
+  'lib/email/resend-event-handlers.ts',
+  'lib/whatsapp/webhook-processor.ts',
   'lib/webhooks/inbound-auth.ts',
   'lib/webhooks/',
   'lib/payu.ts',
@@ -770,7 +781,7 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
       + 'which is the pre-auth lookup-arm decision #3246 now tracks; a signature proves the sender, '
       + 'not the tenant, so no GUC exists to set before that resolution happens.',
-    maxFindings: 44,
+    maxFindings: 24,
   },
   {
     dir: 'lib/webhooks',

@@ -397,7 +397,7 @@ describe('the guard knows the helper and counts the file', async () => {
   it('recognises the helper and pins the processor', () => {
     expect(guard.CONTEXT_HELPERS).toContain('withWhatsAppIntegrationLookupContext');
     expect(guard.PINNED_TARGETS).toContain(PROC);
-    expect(guard.MIN_SCANNED_FILES).toBe(107);
+    expect(guard.MIN_SCANNED_FILES).toBe(120);
   });
 
   it('counts the processor and finds nothing unbound in it', async () => {

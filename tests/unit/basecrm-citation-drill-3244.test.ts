@@ -437,17 +437,19 @@ describe('#3244 follow-up — the reset-list count 02 quotes is the count the co
 
   // #3246 appended the fifteenth (`app.plugin_webhook_id`, 0139) and then the
   // sixteenth and seventeenth (`app.sso_lookup_domain`, `app.sso_provider_id`, 0140) in
-  // place, so this test is the screen it was written for: the docs moved with the code.
-  it('clears seventeen GUCs on each of the two lists', () => {
+  // place; steps 4c/4d appended `app.quote_webhook_id` (0141) and
+  // `app.whatsapp_phone_number_id` (0142). This test is the screen it was written for:
+  // the docs move with the code.
+  it('clears nineteen GUCs on each of the two lists', () => {
     expect(read(POOL_RESET[0])[POOL_RESET[1] - 1]).toContain("set_config('app.current_tenant'");
     expect(read(RC_RESET[0])[RC_RESET[1] - 1]).toContain('SELECT set_config(');
     const poolN = configsAt(POOL_RESET);
     const rcN = configsAt(RC_RESET);
-    expect(poolN, `pool.ts:${POOL_RESET[1]} clears ${poolN}`).toBe(17);
-    expect(rcN, `request-connection.ts:${RC_RESET[1]} clears ${rcN}`).toBe(17);
+    expect(poolN, `pool.ts:${POOL_RESET[1]} clears ${poolN}`).toBe(19);
+    expect(rcN, `request-connection.ts:${RC_RESET[1]} clears ${rcN}`).toBe(19);
   });
 
-  it('and the docs that state the operative count say seventeen, not a remembered smaller number', () => {
+  it('and the docs that state the operative count say nineteen, not a remembered smaller number', () => {
     // The stale counts are not hypothetical: the superseded `#3234` branch head said
     // *twelve* and its re-push says *thirteen*, both behind the code. Only the files
     // that state the number as fact are screened — `README.md` narrates the audit
@@ -455,7 +457,7 @@ describe('#3244 follow-up — the reset-list count 02 quotes is the count the co
     // would fail on the sentence that exists to prevent the mistake.
     for (const doc of ['docs/BASECRM/02-DATA-MODEL.md', 'docs/BASECRM/03-RBAC-AUTHZ.md']) {
       const t = readFileSync(join(ROOT, doc), 'utf8');
-      expect(t, `${doc} dropped the seventeen claim`).toContain('seventeen');
+      expect(t, `${doc} dropped the nineteen claim`).toContain('nineteen');
     }
     for (const doc of ['docs/BASECRM/02-DATA-MODEL.md', 'docs/BASECRM/03-RBAC-AUTHZ.md', 'docs/BASECRM/06-REBUILD-GUIDE.md']) {
       expect(

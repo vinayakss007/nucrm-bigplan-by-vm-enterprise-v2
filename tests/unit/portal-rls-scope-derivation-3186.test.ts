@@ -138,10 +138,15 @@ describe('a deferral is a counted exemption, and the count is the ratchet (#3186
     // must not be able to take its exemption back. #3246 step 2 did the same for
     // `app/api/tenant/plugins/webhook`, whose arm is migration 0139, and step 3 did
     // it for `app/api/auth/sso`, whose two arms are migration 0140.
+    // `app/api/auth/sso` came off the same regex when step 3 bound its two arms, and
+    // #3312's lib/ entries are not routes taking an exemption back: they are helpers an
+    // anonymous route calls, which the guard could not see until #3312 pinned them.
     for (const entry of SCOPE_DEFERRALS) {
-      expect(entry.dir, entry.deferredTo).toMatch(
-        /^app\/api\/(cron|webhooks)$/,
-      );
+      if (entry.deferredTo === '#3312') {
+        expect(entry.dir, entry.deferredTo).toMatch(/^lib\//);
+      } else {
+        expect(entry.dir, entry.deferredTo).toMatch(/^app\/api\/(cron|webhooks)$/);
+      }
     }
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/metrics');
   });
