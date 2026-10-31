@@ -26,6 +26,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { evaluateRolePrivileges } from '../lib/db/least-privilege.ts';
+import { pgSslConfig } from '../lib/db/ssl-config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqlPath = join(__dirname, 'provision-app-role.sql');
@@ -77,7 +78,9 @@ async function verify(databaseUrl, appPassword) {
   u.password = appPassword;
   const appUrl = u.toString();
 
-  const pool = new Pool({ connectionString: appUrl, max: 1, connectionTimeoutMillis: 8000 });
+  // #3381: the app URL inherits DATABASE_URL's query string, but node-pg reads no
+  // `sslmode` — the shared policy is the only thing that puts TLS on this connection.
+  const pool = new Pool({ connectionString: appUrl, ssl: pgSslConfig(), max: 1, connectionTimeoutMillis: 8000 });
   try {
     const { rows } = await pool.query(
       `SELECT current_user AS rolname,

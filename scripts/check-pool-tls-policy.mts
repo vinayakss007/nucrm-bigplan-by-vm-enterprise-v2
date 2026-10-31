@@ -15,8 +15,10 @@
  *
  * `lib/db/ssl-config.ts` fixed the disagreement by policy; #3382 took it to
  * backup-verify's own pools and #3381 to the last 11 sites. This screen is what keeps
- * the fix from re-drifting. It walks every non-test `.ts`/`.mts`/`.tsx` source,
- * brace-matches the argument of each `new Pool(`, and requires a TLS entry.
+ * the fix from re-drifting. It walks every non-test `.ts`/`.mts`/`.tsx`/`.mjs`/`.cjs`/`.js`
+ * source (the ops scripts are `.mjs`, and provision-app-role.mjs carried a bare pool
+ * the first cut of this walk could not see), brace-matches the argument of each
+ * `new Pool(`, and requires a TLS entry.
  *
  * Two decisions, because both are the kind a grep gets wrong:
  *
@@ -42,7 +44,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const SOURCE_DIRS = ['app', 'lib', 'scripts', 'components', 'deploy'];
-const SOURCE_EXT = /\.(ts|mts|tsx)$/;
+const SOURCE_EXT = /\.(ts|mts|tsx|mjs|cjs|js)$/;
 
 export type PoolSite = {
   file: string;
@@ -238,7 +240,7 @@ function walk(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) walk(path, acc);
-    else if (SOURCE_EXT.test(entry.name) && !/\.test\.(ts|tsx)$/.test(entry.name)) acc.push(path);
+    else if (SOURCE_EXT.test(entry.name) && !/\.(test|spec)\.[a-z]+$/.test(entry.name)) acc.push(path);
   }
   return acc;
 }
