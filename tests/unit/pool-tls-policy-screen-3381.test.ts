@@ -188,7 +188,7 @@ describe('the real tree arrives clean (#3381 ask 1)', () => {
   });
 });
 
-describe('#3381 the screen walks the .mjs ops scripts too', () => {
+describe('#3381 the screen walks every extension first-party source is written in', () => {
   it('fails a bare .mjs pool, the shape provision-app-role.mjs shipped', () => {
     const res = run(fixture({ 'scripts/ops.mjs': 'const pool = new Pool({ connectionString: u, max: 1 });\n' }), '--json');
     const out = JSON.parse(res.stdout);
@@ -196,8 +196,22 @@ describe('#3381 the screen walks the .mjs ops scripts too', () => {
     expect(out.findings).toHaveLength(1);
   });
 
+  it('fails a pool in a .js or .cjs file too, so trimming the walk is caught here', () => {
+    const out = JSON.parse(run(fixture({
+      'scripts/a.js': 'const pool = new Pool({ connectionString: u });\n',
+      'scripts/b.cjs': 'const pool = new Pool({ connectionString: u });\n',
+    }), '--json').stdout);
+    expect(out.sites).toBe(2);
+    expect(out.findings).toHaveLength(2);
+  });
+
   it('arms provision-app-role.mjs with the shared policy', () => {
     const src = readFileSync(join(ROOT, 'scripts/provision-app-role.mjs'), 'utf8');
+    expect(src).toMatch(/ssl:\s*pgSslConfig\(\)/);
+  });
+
+  it('arms the byte-ceiling audit, the .mjs pool that walked free since #3283', () => {
+    const src = readFileSync(join(ROOT, 'scripts/audit-jsonb-byte-overage.mjs'), 'utf8');
     expect(src).toMatch(/ssl:\s*pgSslConfig\(\)/);
   });
 });
