@@ -48,8 +48,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         const { getS3Config } = await import('@/lib/storage/s3-config');
         const cfg = getS3Config();
         if (!cfg.configured) return { latency_ms: 0, message: 'Not configured (MinIO dev-only)' };
-        const { S3Client, HeadBucketCommand } = await import('@aws-sdk/client-s3');
-        const client = new S3Client({ region: cfg.region, endpoint: cfg.endpoint, credentials: cfg.credentials });
+        const { HeadBucketCommand } = await import('@aws-sdk/client-s3');
+        const { createS3Client } = await import('@/lib/storage/s3-client');
+        const client = await createS3Client(cfg);
         const t = Date.now();
         await client.send(new HeadBucketCommand({ Bucket: cfg.bucket }));
         return { latency_ms: Date.now() - t, message: `Bucket ${cfg.bucket} reachable` };

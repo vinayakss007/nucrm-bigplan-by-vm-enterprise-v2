@@ -19,28 +19,21 @@ import {
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import { getS3Config } from './s3-config';
-import { ensureBucket } from './ensure-bucket';
+import { s3ClientOptions } from './s3-client';
 
 // Resolved through getS3Config() so that S3_ACCESS_KEY / S3_SECRET_KEY (the
 // names docker-compose exports) are honoured as well as the AWS-style
 // S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY.
 const s3Config = getS3Config();
 
-const s3Client = new S3Client({
-  region: s3Config.region,
-  endpoint: s3Config.endpoint, // For R2: https://xxx.r2.cloudflarestorage.com
-  credentials: s3Config.credentials,
-  forcePathStyle: true,
-});
+const s3Client = new S3Client(s3ClientOptions(s3Config));
 
 const BUCKET = s3Config.backupBucket || 'nucrm-backups';
 const BACKUP_PREFIX = 'backups/';
 
 export async function uploadBackup(backupData: Buffer, filename: string): Promise<string> {
   const key = `${BACKUP_PREFIX}${filename}`;
-
-  await ensureBucket(BUCKET, s3Config, s3Client);
-
+  
   await s3Client.send(new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
@@ -116,11 +109,8 @@ export async function uploadFileToS3(
   contentType: string = 'application/octet-stream',
   bucket?: string
 ): Promise<string> {
-  const target = bucket || BUCKET;
-  await ensureBucket(target, s3Config, s3Client);
-
   await s3Client.send(new PutObjectCommand({
-    Bucket: target,
+    Bucket: bucket || BUCKET,
     Key: key,
     Body: data,
     ContentType: contentType,
@@ -206,10 +196,6 @@ export async function getSignedPutUrl(args: {
     throw new Error(`getSignedPutUrl requires a positive contentLengthBytes for ${args.key} (got ${String(declared)})`);
   }
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-  // Asked before the URL is minted, not after the browser has the bytes: a PUT to a
-  // bucket that does not exist would otherwise surface as a raw store response in
-  // the visitor's devtools with no NuCRM error path behind it (#3258).
-  await ensureBucket(args.bucket || BUCKET, s3Config, s3Client);
   const command = new PutObjectCommand({
     Bucket: args.bucket || BUCKET,
     Key: args.key,
