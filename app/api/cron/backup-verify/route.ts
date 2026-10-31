@@ -78,6 +78,9 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
   }
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
   const { createS3Client } = await import('@/lib/storage/s3-client');
+  // #3387: addressing is resolved once, in lib/storage/s3-client — this path used
+  // to pick virtual-host by accident and a path-style gateway answers nothing at
+  // bucket.host. Six lines here: the pre-prod register cites this file by line.
   const client = await createS3Client(cfg);
   const res = await client.send(
     new GetObjectCommand({ Bucket: cfg.backupBucket, Key: storagePath })
