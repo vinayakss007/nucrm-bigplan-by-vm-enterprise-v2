@@ -120,6 +120,11 @@ routes, and `npm run backup:verify`). The blocker is that it must be
 2. **Confirm off-site storage**: backups upload to the `BACKUP_BUCKET`
    (`.env`). For a single-VM deploy, point this at an _external_ S3/MinIO, not
    the same VM — a backup on the box that dies with the box is not a backup.
+   Then ask the store rather than assuming it: `npm run storage:buckets`
+   creates any configured bucket that is missing, and proves the credentials by
+   writing, reading back and deleting a probe object (#3258). It prints only the
+   env-var NAMES that supplied the keys; a `CreateBucket` refusal is a policy
+   answer, not a software one, and says so.
 3. **Run one now and verify it restores** (this is the part usually skipped):
    ```bash
    /usr/local/bin/run-cron.sh auto-backup     # or trigger from Superadmin → Backups
