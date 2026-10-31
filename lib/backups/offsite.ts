@@ -14,7 +14,7 @@
 
 import type { StorageClass } from '@aws-sdk/client-s3';
 import { getS3Config, describeS3ConfigGap } from '@/lib/storage/s3-config';
-import { ensureBucket } from '@/lib/storage/ensure-bucket';
+import { createS3Client } from '@/lib/storage/s3-client';
 import { applyRetentionPolicy, readRetentionConfig, MIN_RETENTION_DAYS, type BackupEntry } from './retention-policy';
 
 export interface UploadResult {
@@ -46,19 +46,13 @@ export async function uploadBackupArtifact(args: {
     throw new OffsiteUploadError(gap ?? 'S3 backup bucket not configured');
   }
 
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+  const { PutObjectCommand } = await import('@aws-sdk/client-s3');
   const { readFile } = await import('fs/promises');
 
-  const s3Client = new S3Client({
-    region: cfg.region,
-    endpoint: cfg.endpoint,
-    credentials: cfg.credentials,
-  });
+  const s3Client = await createS3Client(cfg);
 
   const body = await readFile(args.localPath);
   const storagePath = `backups/${args.filename}`;
-
-  await ensureBucket(cfg.backupBucket, cfg, s3Client);
 
   await s3Client.send(
     new PutObjectCommand({
@@ -159,15 +153,11 @@ export async function purgeExpiredBackups(retentionDays: number): Promise<{
     );
   }
 
-  const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import(
+  const { ListObjectsV2Command, DeleteObjectsCommand } = await import(
     '@aws-sdk/client-s3'
   );
 
-  const s3Client = new S3Client({
-    region: cfg.region,
-    endpoint: cfg.endpoint,
-    credentials: cfg.credentials,
-  });
+  const s3Client = await createS3Client(cfg);
 
   const bucket = cfg.backupBucket;
   const cutoff = new Date(Date.now() - retentionDays * 86_400_000);
@@ -231,15 +221,11 @@ export async function purgeWithTieredRetention(): Promise<{
     );
   }
 
-  const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import(
+  const { ListObjectsV2Command, DeleteObjectsCommand } = await import(
     '@aws-sdk/client-s3'
   );
 
-  const s3Client = new S3Client({
-    region: cfg.region,
-    endpoint: cfg.endpoint,
-    credentials: cfg.credentials,
-  });
+  const s3Client = await createS3Client(cfg);
 
   const bucket = cfg.backupBucket;
   const entries: BackupEntry[] = [];
