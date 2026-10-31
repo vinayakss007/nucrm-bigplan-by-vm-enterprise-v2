@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { resolveGatewayTenant, validateCORS } from '@/lib/api/gateway';
 
 /**
@@ -91,6 +92,7 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
 
     return setCORSHeaders(response, origin);
   } catch (_error) {
+    void logError({ error: _error, context: 'api/v1 proxy' });
     const errorResponse = NextResponse.json(
       { error: 'Internal gateway error during proxy' },
       { status: 502 }
