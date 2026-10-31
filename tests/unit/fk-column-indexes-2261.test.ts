@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
+import { extractStatements, partitionStatements } from '../../scripts/migrate-fresh';
 
 /**
  * CI guard for Issue #2261: every single-column FK at migration head must have
@@ -124,7 +125,7 @@ const EXPECTED: string[] = [
 ];
 
 function upPairs(sql: string): { pair: string; name: string }[] {
-  return [...sql.matchAll(/^CREATE INDEX IF NOT EXISTS "([a-z0-9_]+)" ON "public"\."([a-z0-9_]+)" \("([a-z0-9_]+)"\);$/gm)]
+  return [...sql.matchAll(/^CREATE INDEX CONCURRENTLY IF NOT EXISTS "([a-z0-9_]+)" ON "public"\."([a-z0-9_]+)" \("([a-z0-9_]+)"\);$/gm)]
     .map((m) => ({ pair: `${m[2]}|${m[3]}`, name: m[1] }));
 }
 
@@ -142,15 +143,28 @@ describe('0118_fk_column_indexes (#2261)', () => {
     }
   });
 
-  it('contains only CREATE INDEX statements (no CONCURRENTLY, no other DDL)', () => {
-    const code = UP.split('\n')
-      .filter((l) => l.trim() === '--> statement-breakpoint' || !l.trim().startsWith('--'))
-      .filter((l) => !l.trim().startsWith('/*') && !l.trim().startsWith('*/'))
-      .join('\n');
-    expect(code).not.toMatch(/CONCURRENTLY/i);
-    const statements = code.split('--> statement-breakpoint').map((s) => s.trim()).filter(Boolean);
-    expect(statements.length).toBe(100);
-    for (const s of statements) expect(s).toMatch(/^CREATE INDEX IF NOT EXISTS "[a-z0-9_]+" ON "public"\."[a-z0-9_]+" \("[a-z0-9_]+"\);$/);
+  /**
+   * #3301 replaced this file's original "no CONCURRENTLY, no other DDL" rule —
+   * that rule was the written form of the stale claim that the repo had no
+   * online-migration runner, and it put 100 write-locking SHARE holders inside
+   * the one transaction drizzle-orm opens around every pending file. The builds
+   * are online now; what must still hold is that the file is ONLY online index
+   * DDL plus the two PL/pgSQL guards that make a re-run safe.
+   */
+  it('is 100 online builds plus the invalid-index sweep and post-check, nothing else', () => {
+    const chunks = partitionStatements(extractStatements(UP));
+    const builds = chunks
+      .filter((c): c is { type: 'nontransactional'; statement: string } => c.type === 'nontransactional')
+      .map((c) => c.statement);
+    expect(builds).toHaveLength(100);
+    for (const b of builds) {
+      expect(b).toMatch(/^CREATE INDEX CONCURRENTLY IF NOT EXISTS "[a-z0-9_]+" ON "public"\."[a-z0-9_]+" \("[a-z0-9_]+"\);$/);
+    }
+    const inTx = chunks.filter((c) => c.type === 'tx').flatMap((c) => (c as { statements: string[] }).statements);
+    expect(inTx).toHaveLength(2);
+    for (const stmt of inTx) expect(stmt).toMatch(/^DO \$mig\$/);
+    expect(inTx[0]).toContain('DROP INDEX');
+    expect(inTx[1]).toContain('RAISE EXCEPTION');
   });
 
   it('down drops exactly the same 100 index names', () => {

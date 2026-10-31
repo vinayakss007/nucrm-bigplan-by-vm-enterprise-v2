@@ -91,26 +91,29 @@ export function sha256Hex(content: string | Buffer): string {
  * Splits SQL into statements on semicolons while respecting dollar-quoted
  * blocks ($$…$$), named dollar tags ($tag$…$tag$), and single-quoted
  * string literals. Semicolons inside those contexts are never treated as
- * statement terminators. (Moved verbatim from scripts/migrate.ts.)
+ * statement terminators. The only splitter in the repo — scripts/migrate.ts
+ * imports it rather than keeping its own copy.
  */
 export function splitSql(sql: string): string[] {
   const stmts: string[] = [];
   let current = '';
   let i = 0;
   while (i < sql.length) {
-    // Dollar-quoted block: $$ or $tag$
+    // Dollar-quoted block: $$ or $tag$. PostgreSQL does not nest them, so the
+    // block ends at the FIRST later occurrence of the same tag. Consuming every
+    // occurrence instead (as this loop used to) merges the next block — and any
+    // statement between them — into the current one, and the merged statement
+    // then leads with the first block's keyword. That is what hid a CREATE
+    // INDEX from #3301's transaction-vs-online classification.
     if (sql[i] === '$') {
       const tagMatch = sql.slice(i).match(/^\$([^$]*)\$/);
       if (tagMatch) {
         const tag = tagMatch[0];
         current += tag;
         i += tag.length;
-        let closeIdx = sql.indexOf(tag, i);
-        while (closeIdx !== -1) {
-          current += sql.slice(i, closeIdx + tag.length);
-          i = closeIdx + tag.length;
-          closeIdx = sql.indexOf(tag, i);
-        }
+        const closeIdx = sql.indexOf(tag, i);
+        if (closeIdx === -1) { current += sql.slice(i); i = sql.length; }
+        else { current += sql.slice(i, closeIdx + tag.length); i = closeIdx + tag.length; }
         continue;
       }
     }
@@ -237,6 +240,59 @@ export function extractStatements(content: string): string[] {
     }
   }
   return out;
+}
+
+/* ─────────────────────────── engine routing ─────────────────────────────── */
+
+/** One journal entry paired with the bytes the runner would apply (null when
+ *  the journal lists a file that is not on disk). */
+export interface PendingFileContent {
+  tag: string;
+  content: string | null;
+}
+
+/**
+ * Which pending files CANNOT be applied inside a transaction (#3301): the ones
+ * carrying top-level `CONCURRENTLY` index DDL.
+ *
+ * Classified with the runner's own two helpers, so the answer is what the
+ * runner would actually do with the text: `extractStatements` resolves comments,
+ * the `--> statement-breakpoint` marker and dollar-quoted bodies first, then
+ * `partitionStatements` decides by each statement's leading keyword. A textual
+ * scan gets this wrong in both directions — 0118 names the keyword twice in the
+ * header comment that explained why it did NOT use it.
+ */
+export function filesNeedingOnlineApply(files: PendingFileContent[]): string[] {
+  const tags: string[] = [];
+  for (const file of files) {
+    if (file.content === null) continue;
+    const needsOnline = partitionStatements(extractStatements(file.content))
+      .some((chunk) => chunk.type === 'nontransactional');
+    if (needsOnline) tags.push(file.tag);
+  }
+  return tags;
+}
+
+export type ApplyRoute = 'fresh-replay' | 'online-incremental' | 'drizzle-incremental';
+
+/**
+ * Pick the apply engine for a `db:migrate` run.
+ *
+ * - empty ledger → the fresh replay, which already runs CONCURRENTLY DDL
+ *   outside its transactions (`applyMigrationFile`);
+ * - stamped ledger whose pending files need online DDL → the same engine,
+ *   because `migrate()` from drizzle-orm puts ONE transaction around every
+ *   pending file and `CREATE INDEX CONCURRENTLY` aborts inside it (25001);
+ * - stamped ledger with blocking-only DDL → drizzle-orm's migrator, unchanged.
+ */
+export function chooseApplyRoute(opts: {
+  ledgerRowCount: number;
+  journalEntryCount: number;
+  onlineTags: string[];
+}): ApplyRoute {
+  if (opts.ledgerRowCount === 0 && opts.journalEntryCount > 0) return 'fresh-replay';
+  if (opts.onlineTags.length > 0) return 'online-incremental';
+  return 'drizzle-incremental';
 }
 
 /* ────────────────────────────── error policy ────────────────────────────── */
