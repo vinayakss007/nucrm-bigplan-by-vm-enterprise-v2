@@ -66,14 +66,16 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   GUCs are cleared, not the statement; re-pinned 2026-10-25 @ `2ff3e88b5` from
   `:97-98,245`, which was itself a re-pin of `:93-94,241`) and by PgBouncer
   `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). Each of those reset
-  statements clears **seventeen** `set_config`s in the tree measured here:
+  statements clears **nineteen** `set_config`s in the tree measured here:
   tenant/user/super-admin, the `app.auth_lookup` + `app.tracking_lookup` lookups,
   the three `app.portal_lookup_*` GUCs plus `app.form_lookup_id`, and the five
   credential GUCs — `app.token_issue`, `app.token_credential`,
   `app.token_retire_user` (#3218/#3102), `app.oauth_client_id` (#3225) and
-  `app.unsubscribe_contact` (#3237) — plus the two row-narrowing claims of the
-  anonymous receivers: `app.plugin_webhook_id` (#3246, 0139) and
-  `app.sso_lookup_domain` + `app.sso_provider_id` (#3246, 0140). See § 1
+  `app.unsubscribe_contact` (#3237) — plus the four row-narrowing claims of the
+  anonymous receivers: `app.plugin_webhook_id` (#3246, 0139),
+  `app.sso_lookup_domain` + `app.sso_provider_id` (#3246, 0140),
+  `app.quote_webhook_id` (#3246, 0141) and `app.whatsapp_phone_number_id`
+  (#3246, 0142). See § 1
   pre-auth redemption below for what those guard.
 
 ### Super-admin scope — the deliberate asymmetry

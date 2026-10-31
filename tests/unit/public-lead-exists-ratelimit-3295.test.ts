@@ -44,6 +44,11 @@ function actions(): string[] {
   return limiter.mock.calls.map((c) => (c[1] as { action?: string })?.action ?? 'api');
 }
 
+/** Every workspace scope the limiter was asked for, in order (`undefined` = caller). */
+function scopes(): (string | undefined)[] {
+  return limiter.mock.calls.map((c) => (c[1] as { scopeKey?: string })?.scopeKey);
+}
+
 beforeEach(() => {
   limiter.mockReset();
   limiter.mockResolvedValue(null);
@@ -62,11 +67,13 @@ describe('GET /api/leads/public is throttled before it is answered (#3295)', () 
 
   it('gives each workspace its own slice of a caller budget, so one page cannot spend another', async () => {
     await get({ email: 'ada@example.com', tenant_id: TENANT });
-    const tenantScoped = actions().find((a) => a !== 'lead_exists');
+    await get({ email: 'ada@example.com', tenant_id: OTHER_TENANT });
 
-    expect(tenantScoped, 'a second, tenant-scoped bucket').toBeDefined();
-    expect(tenantScoped).toContain(TENANT);
-    expect(tenantScoped).not.toContain(OTHER_TENANT);
+    // The per-caller bucket carries no scope; the workspace bucket names the
+    // workspace being probed, so the two tenants land in different counters.
+    expect(scopes(), 'one workspace-scoped bucket per probed workspace').toEqual([
+      undefined, TENANT, undefined, OTHER_TENANT,
+    ]);
   });
 
   it('never reaches the database once the limiter has said no', async () => {

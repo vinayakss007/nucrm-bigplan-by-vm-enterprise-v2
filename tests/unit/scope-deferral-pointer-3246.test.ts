@@ -33,12 +33,16 @@ const GUARD_SRC = readFileSync(
 );
 
 describe('#3246 the deferral ledger points at live work', () => {
-  it('has exactly the two directories, at the ceilings they were measured with', () => {
+  it('has exactly the directories still deferred, at the ceilings they were measured with', () => {
+    // app/api/cron and app/api/webhooks are #3246's; the two lib/ entries are #3312's,
+    // added when that guard started scanning lib/ files an anonymous route calls.
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
       'app/api/webhooks',
+      'lib/webhooks',
+      'lib/stripe-subscription-sync.ts',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 44]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 24, 22, 2]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }

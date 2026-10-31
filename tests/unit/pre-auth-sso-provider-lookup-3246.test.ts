@@ -177,7 +177,7 @@ describe('#2446 — both new GUCs are on both reset lists', () => {
       for (const guc of ['app.sso_lookup_domain', 'app.sso_provider_id']) {
         expect(list.find((p) => p.guc === guc)?.to, `${file} ${guc}`).toBe('');
       }
-      expect(list.length, file).toBe(17);
+      expect(list.length, file).toBe(19);
     }
     expect(resetLine('lib/db/pool.ts').map((p) => p.guc)).toEqual(resetLine('lib/db/request-connection.ts').map((p) => p.guc));
   });

@@ -354,9 +354,15 @@ describe('0141 is the arm the callback needed, and no wider', () => {
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: Array<{ idx: number; tag: string; when: number }>;
     };
-    const mine = journal.entries.find((e) => e.tag === '0141_pre_auth_quote_webhook_lookup');
-    expect(mine).toMatchObject({ idx: 141 });
-    expect(journal.entries.filter((e) => e.when === mine!.when)).toHaveLength(1);
+    // Position, not a literal: three other migrations landed without a journal entry
+    // and had to be appended before this one, so an `idx: 141` pin would fail the
+    // repair that makes this file applicable at all. #2262's invariant — journaled at
+    // all, idx equal to its position, a `when` nobody else shares — is what the runner
+    // and the rollback both read (the same reason step 4d dropped its "is last" pin).
+    const pos = journal.entries.findIndex((e) => e.tag === '0141_pre_auth_quote_webhook_lookup');
+    expect(pos, '0141_pre_auth_quote_webhook_lookup is on the journal').toBeGreaterThanOrEqual(0);
+    expect(journal.entries[pos]!.idx).toBe(pos);
+    expect(journal.entries.filter((e) => e.when === journal.entries[pos]!.when)).toHaveLength(1);
   });
 
   it('spells its GUC the same in the migration, the helper and both reset lists', async () => {

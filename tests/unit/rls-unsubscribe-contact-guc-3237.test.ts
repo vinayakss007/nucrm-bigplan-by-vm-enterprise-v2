@@ -201,7 +201,7 @@ describe('#2446 — both connection-reset lists carry the fifteenth name (#3246)
     const pool = resetLine('lib/db/pool.ts');
     const pinned = resetLine('lib/db/request-connection.ts');
     expect(pool.map((p) => p.guc)).toEqual(pinned.map((p) => p.guc));
-    expect(pool.length).toBe(17);
+    expect(pool.length).toBe(19);
     expect(pinned.find((p) => p.guc === 'app.unsubscribe_contact')?.to).toBe('');
   });
 

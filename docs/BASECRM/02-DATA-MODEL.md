@@ -221,10 +221,10 @@ The **GUCs**, and the file that actually writes each one (re-measured at
   `lib/db/audit-archival.ts:179`, gated by the 0042 trigger.
 
 Cleared on checkout/return as noted in 01: the two reset lists
-(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **seventeen** GUCs,
+(`lib/db/pool.ts:241`, `lib/db/request-connection.ts:103`) carry **nineteen** GUCs,
 and `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts:192-206` pins them equal
 to each other *and* to that literal count. A new context GUC therefore means
-editing both lists **and** bumping the `toBe(17)`. Nothing checks the lists
+editing both lists **and** bumping the `toBe(19)`. Nothing checks the lists
 against the *writers* above, so a GUC that is set but never reset still passes.
 
 ## Migrations
