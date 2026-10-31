@@ -28,6 +28,7 @@
 
 import type { S3Client } from '@aws-sdk/client-s3';
 import { getS3Config, describeS3ConfigGap, type S3Config } from '../lib/storage/s3-config';
+import { createS3Client } from '../lib/storage/s3-client';
 import { ensureBucket, type BucketAssurance } from '../lib/storage/ensure-bucket';
 
 export interface BucketReport {
@@ -115,13 +116,7 @@ export async function main(argv: string[] = process.argv.slice(2), clientFactory
     return 1;
   }
 
-  const { S3Client: ClientCtor } = await import('@aws-sdk/client-s3');
-  const client = clientFactory ? clientFactory(cfg) : new ClientCtor({
-    region: cfg.region,
-    endpoint: cfg.endpoint,
-    credentials: cfg.credentials,
-    forcePathStyle: true,
-  });
+  const client = clientFactory ? clientFactory(cfg) : await createS3Client(cfg);
 
   const buckets = configuredBuckets(cfg, extra);
   const reports: BucketReport[] = [];

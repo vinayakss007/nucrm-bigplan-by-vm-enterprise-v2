@@ -14,6 +14,7 @@
 
 import type { StorageClass } from '@aws-sdk/client-s3';
 import { getS3Config, describeS3ConfigGap } from '@/lib/storage/s3-config';
+import { ensureBucket } from '@/lib/storage/ensure-bucket';
 import { createS3Client } from '@/lib/storage/s3-client';
 import { applyRetentionPolicy, readRetentionConfig, MIN_RETENTION_DAYS, type BackupEntry } from './retention-policy';
 
@@ -53,6 +54,8 @@ export async function uploadBackupArtifact(args: {
 
   const body = await readFile(args.localPath);
   const storagePath = `backups/${args.filename}`;
+
+  await ensureBucket(cfg.backupBucket, cfg, s3Client);
 
   await s3Client.send(
     new PutObjectCommand({

@@ -15,6 +15,8 @@ vi.mock('@aws-sdk/client-s3', () => {
   class PutObjectCommand extends Command {}
   class ListObjectsV2Command extends Command {}
   class DeleteObjectsCommand extends Command {}
+  class HeadBucketCommand extends Command {}
+  class CreateBucketCommand extends Command {}
   class S3Client {
     constructor(config: Record<string, unknown>) {
       built.push(config);
@@ -24,7 +26,14 @@ vi.mock('@aws-sdk/client-s3', () => {
       return {};
     }
   }
-  return { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand };
+  return {
+    S3Client,
+    PutObjectCommand,
+    ListObjectsV2Command,
+    DeleteObjectsCommand,
+    HeadBucketCommand,
+    CreateBucketCommand,
+  };
 });
 
 vi.mock('fs/promises', () => ({
@@ -40,18 +49,31 @@ const ENV_VARS = [
 
 const ROOT = join(__dirname, '..', '..');
 
-/** The argument text of every `new S3Client(…)`, taken up to its matching paren. */
+/** Names a module can spell the SDK constructor with: `S3Client`, `… as Foo`, `…: Foo`. */
+function clientNames(source: string): string[] {
+  const names = new Set<string>();
+  const specifiers = /(?:import|const)\s*\{([^}]*)\}\s*(?:=|from)\s*\(?\s*['"]@aws-sdk\/client-s3['"]/g;
+  for (const clause of [...source.matchAll(specifiers)].flatMap((m) => m[1].split(','))) {
+    const [bound, local] = clause.trim().split(/\s+(?:as|:)\s+/);
+    if (bound === 'S3Client') names.add(local ?? 'S3Client');
+  }
+  return [...names];
+}
+
+/** The argument text of every client construction, taken up to the matching paren. */
 function clientConstructionArgs(source: string): string[] {
   const args: string[] = [];
-  const needle = 'new S3Client(';
-  for (let at = source.indexOf(needle); at !== -1; at = source.indexOf(needle, at + 1)) {
-    let depth = 1;
-    let i = at + needle.length;
-    for (; i < source.length && depth > 0; i += 1) {
-      if (source[i] === '(') depth += 1;
-      else if (source[i] === ')') depth -= 1;
+  for (const name of clientNames(source)) {
+    const needle = `new ${name}(`;
+    for (let at = source.indexOf(needle); at !== -1; at = source.indexOf(needle, at + 1)) {
+      let depth = 1;
+      let i = at + needle.length;
+      for (; i < source.length && depth > 0; i += 1) {
+        if (source[i] === '(') depth += 1;
+        else if (source[i] === ')') depth -= 1;
+      }
+      args.push(source.slice(at + needle.length, i - 1));
     }
-    args.push(source.slice(at + needle.length, i - 1));
   }
   return args;
 }
@@ -206,14 +228,17 @@ describe('#3387 — one addressing style for every S3 client', () => {
       expect(sources().reduce((n, s) => n + clientConstructionArgs(s.text).length, 0)).toBeGreaterThan(0);
     });
 
-    it('every module that reaches for the SDK reaches for the resolution too', () => {
+    it('every module that builds a client reaches for the resolution too', () => {
+      // Command-only modules (lib/storage/ensure-bucket.ts and its callers)
+      // legitimately import the SDK without constructing anything, so the rule is
+      // about the constructor, not the import.
       const drifters = sources()
-        .filter(({ text }) => /['"]@aws-sdk\/client-s3['"]/.test(text))
+        .filter(({ text }) => clientConstructionArgs(text).length > 0)
         .filter(({ text }) => !/['"]@\/?lib\/storage\/s3-client['"]|['"]\.\.\/lib\/storage\/s3-client['"]|['"]\.\/s3-client['"]/.test(text))
         .map(({ file }) => file);
       expect(drifters).toEqual([]);
-      const importers = sources().filter(({ text }) => /['"]@aws-sdk\/client-s3['"]/.test(text));
-      expect(importers.length).toBeGreaterThanOrEqual(8);
+      const resolvers = sources().filter(({ text }) => /s3-client['"]/.test(text));
+      expect(resolvers.length).toBeGreaterThanOrEqual(8);
     });
   });
 });
