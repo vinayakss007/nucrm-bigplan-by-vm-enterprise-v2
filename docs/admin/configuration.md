@@ -77,6 +77,7 @@ Every environment variable NuCRM uses, grouped by purpose. The authoritative, co
 | `BACKUP_BUCKET` | Dedicated bucket for database backups. |
 | `S3_REGION` | Region (`auto` for R2, else `us-east-1`). |
 | `S3_ENDPOINT` | Custom endpoint (e.g. Cloudflare R2). |
+| `S3_FORCE_PATH_STYLE` | How the bucket is addressed (#3387). Unset means **path style** — `host/bucket` — which is the only style a self-hosted gateway resolves and which AWS and R2 also serve. Set `false` only for an endpoint that refuses it. |
 
 > If bucket + access key + secret key aren't all present, off-site storage is treated as
 > unconfigured and backups stay on the app host only — which does **not** survive a container
