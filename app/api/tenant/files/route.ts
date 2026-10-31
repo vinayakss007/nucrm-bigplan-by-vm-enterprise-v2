@@ -21,6 +21,7 @@ import { extname } from 'path';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { getS3Config, isS3Configured } from '@/lib/storage/s3-config';
+import { ensureBucket } from '@/lib/storage/ensure-bucket';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -36,11 +37,13 @@ function getS3Client() {
       forcePathStyle: true,
     }),
     bucket,
+    cfg,
   };
 }
 
 async function s3Upload(data: Buffer, key: string, contentType: string) {
-  const { client, bucket } = getS3Client();
+  const { client, bucket, cfg } = getS3Client();
+  await ensureBucket(bucket, cfg, client);
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, ContentType: contentType }));
 }
 

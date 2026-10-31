@@ -43,6 +43,9 @@ vi.mock('@aws-sdk/client-s3', () => {
     DeleteObjectCommand: Cmd,
     HeadObjectCommand: Cmd,
     HeadBucketCommand: Cmd,
+    // #3258: the write paths now ask whether the bucket exists before they write,
+    // so the module surface they import has to carry the bucket commands too.
+    CreateBucketCommand: Cmd,
   };
 });
 vi.mock('@aws-sdk/s3-request-presigner', () => ({

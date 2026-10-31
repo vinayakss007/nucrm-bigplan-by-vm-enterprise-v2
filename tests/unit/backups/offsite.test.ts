@@ -23,6 +23,9 @@ vi.mock('@aws-sdk/client-s3', () => {
     }
   }
   class PutObjectCommand extends Command { static override type = 'put'; }
+  // #3258: uploadBackupArtifact now asks whether its bucket exists before it writes.
+  class HeadBucketCommand extends Command { static override type = 'headBucket'; }
+  class CreateBucketCommand extends Command { static override type = 'create'; }
   class ListObjectsV2Command extends Command { static override type = 'list'; }
   class DeleteObjectsCommand extends Command { static override type = 'delete'; }
 
@@ -41,7 +44,7 @@ vi.mock('@aws-sdk/client-s3', () => {
     }
   }
 
-  return { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand };
+  return { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, HeadBucketCommand, CreateBucketCommand };
 });
 
 vi.mock('fs/promises', () => ({
