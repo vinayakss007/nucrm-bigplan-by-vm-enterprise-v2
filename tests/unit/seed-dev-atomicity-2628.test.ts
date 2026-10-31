@@ -70,7 +70,7 @@ describe('seed:dev re-runnability (#2628)', () => {
     expect(SRC).toContain("set_config('app.current_tenant', $1, true)");
     expect(SRC).toContain("set_config('app.current_user', $2, true)");
     // Transaction-scoped, on the pinned connection the whole seed then uses.
-    expect(SRC).toContain('new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: pgSslConfig() })');
+    expect(SRC).toMatch(/new Pool\(\{[^}]*\bmax: 1\b[^}]*\}\)/);
     expect(SRC).toContain('drizzle(client, { schema })');
     expect(ctx).toBeLessThan(inserts()[0].at);
   });

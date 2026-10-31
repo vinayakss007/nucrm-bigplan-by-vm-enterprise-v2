@@ -43,17 +43,17 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **29** of the `guard:*` aliases by name —
-`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`,
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **28** of the `guard:*` aliases by name —
+`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:override-ranges`,
 `guard:panel-error-state`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **3** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **36** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **35** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
-and the eleven additions since those measurements are #2832, #2828, #3167, #3241, #3284, #3283, #3281, #3282, #3280, #3381 and #3298.
+and the nine additions since those measurements are #2832, #2828, #3167, #3241, #3284, #3283, #3281, #3282 and #3280.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -77,7 +77,7 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5425` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule), re-pinned by **PP-076**, after
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5498` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, and from `:5425` by **PP-079** for the same three additions), re-pinned by **PP-076**, after
 **PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
 The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
 inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the
@@ -124,7 +124,7 @@ statement that nobody has checked, not a verdict that they are wrong.
 ## How current is "current"?
 
 Every count came from these commands. Run them before quoting a number, including these.
-Re-run 2026-10-26 against `main = f054c6e95` plus #3246 steps 2 and 3. Unchanged: `app/tenant` and
+Re-run 2026-10-26 against `main = f054c6e95` plus #3246 step 2. Unchanged: `app/tenant` and
 `app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts` count.
 Each number that moved is corrected below and says what the file had been quoting.
 
@@ -133,11 +133,11 @@ cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 514 API routes (was 507)
 find app/tenant -name page.tsx | wc -l                    # 149 tenant pages
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 1002 (was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 926 (#3246 adds one, the two merges four; was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 290 total .sql (was 277; #3284 added 0036's down, and the four 0140–0142 up-migrations that a merge dropped from the journal are now paired with it)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 145 up-migrations (was 139), each with a `.down.sql` since #3284
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 145 journal entries (was 139)
+ls drizzle/migrations/*.sql | wc -l                       # 280 total .sql (was 277; #3284 added 0036's down)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 140 up-migrations (was 139), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 140 journal entries (was 139)
 node -pe "Object.keys(require('./package.json').scripts).length"               # 122 scripts (was 96; #3284 added guard:rollback-coverage)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13
@@ -178,7 +178,7 @@ PP-040, PP-041, PP-042 remain the record of what the gap was.
 
 ```sh
 npm run guard:chain                                  # detects all 5 chain defects, baselines all 5
-node -e 'const b=require("fs").readFileSync(".github/workflows/ci.yml","utf8").split("\n").filter(l=>!/^\s*#/.test(l)).join("\n");const g=new Set([...b.matchAll(/npm run (guard:[a-z-]+)/g)].map(m=>m[1]));console.log(g.size+"/"+Object.keys(require("./package.json").scripts).filter(k=>k.startsWith("guard:")).length+" guard aliases ci.yml runs")'   # THIS is the census check: the A/B it prints must equal the count the "current by definition" paragraph carries. Counting grep lines is not a check — `grep -c "run: npm run guard" .github/workflows/ci.yml` counts LINES, `ci.yml:81`, `:85` and `:87` each chain three aliases behind `&&`, and a guard invoked inside a `run: |` block is invisible to it as well, because the pattern sits on the `run: |` line and not on the command line. It answers 22 where 29 are wired. Re-measure the paragraph from this line and never from a grep.
+node -e 'const b=require("fs").readFileSync(".github/workflows/ci.yml","utf8").split("\n").filter(l=>!/^\s*#/.test(l)).join("\n");const g=new Set([...b.matchAll(/npm run (guard:[a-z-]+)/g)].map(m=>m[1]));console.log(g.size+"/"+Object.keys(require("./package.json").scripts).filter(k=>k.startsWith("guard:")).length+" guard aliases ci.yml runs")'   # THIS is the census check: the A/B it prints must equal the count the "current by definition" paragraph carries. Counting grep lines is not a check — `grep -c "run: npm run guard" .github/workflows/ci.yml` counts LINES, `ci.yml:81` chains three aliases behind `&&` and `:85` chains two, and a guard invoked inside a `run: |` block is invisible to it as well, because the pattern sits on the `run: |` line and not on the command line. It answers 18 where 22 are wired. Re-measure the paragraph from this line and never from a grep.
 # which file wires which — per-file totals, not the union, so `ci.yml`'s line and
 # `nightly-soak.yml`'s overlap by design:
 node -e 'const fs=require("fs");const a=Object.keys(require("./package.json").scripts).filter(k=>k.startsWith("guard:"));
@@ -190,7 +190,7 @@ docker ps --format '{{.Names}}'                      # nucrm-app, nucrm-nginx, n
 
 Why the census is measured by alias and not by line, and why this block used to carry a `grep` that
 under-counted: GitHub runs each `run:` block as one shell, so a step may chain several guards onto a
-single line — `ci.yml:81`, `:85` and `:87` each run three — and a line-anchored `grep 'run: npm run guard'`
+single line — `ci.yml:81` runs three and `:85` runs two — and a line-anchored `grep 'run: npm run guard'`
 sees only the first alias on each. It prints 18 lines today for the **22** distinct aliases the first
 command above counts, and it once printed 7 on a much smaller tree, which is how the paragraph came to
 name fewer guards than CI actually runs. The `grep` line is gone from this document on purpose: a command

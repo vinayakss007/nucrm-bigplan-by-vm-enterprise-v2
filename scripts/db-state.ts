@@ -27,6 +27,7 @@ import { pgSslConfig } from '../lib/db/ssl-config';
 import { classify, formatVerdict } from './seed/contents';
 import { describeTarget, formatTarget } from './seed/destructive';
 import { STATE_SQL, readStateCounts, nextStep } from './seed/state';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import {
   FULL_FORCE_RLS_CENSUS_SQL,
   evaluateForceRlsCensus,

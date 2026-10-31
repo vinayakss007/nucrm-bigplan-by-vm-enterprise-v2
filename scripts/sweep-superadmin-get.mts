@@ -38,6 +38,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join} from 'node:path';
 import { SignJWT } from 'jose';
 import pg from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 const API_ROOT = 'app/api/superadmin';
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
@@ -147,7 +148,7 @@ function listSize(payload: unknown, depth = 0): number | null {
 
 
 async function main(): Promise<number> {
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, ssl: pgSslConfig() });
 
   // `users` is guarded by tenant_isolation, whose policies have a
   // `app.is_super_admin` branch — and a bare connection sets none of the GUCs,

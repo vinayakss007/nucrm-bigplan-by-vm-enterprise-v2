@@ -50,6 +50,8 @@ import { existsSync, mkdtempSync, rmSync, statSync, createReadStream } from 'fs'
 import { tmpdir } from 'os';
 import path from 'path';
 import { createHash } from 'crypto';
+import { pgSslConfig } from '../lib/db/ssl-config';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 interface BackupRow {
   id: string;

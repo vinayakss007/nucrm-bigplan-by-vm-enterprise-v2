@@ -5,288 +5,322 @@
  */
 
 /**
- * One TLS policy at every `new Pool(` (#3381).
+ * Pool TLS-policy guard (#3381).
  *
- * `pg` does not read `?sslmode=` from a connection string. That parameter is
- * libpq's — what `psql`/`pg_dump`/`pg_restore` speak, reached in this repo through
- * `pgLibpqEnv()` copying it into `PGSSLMODE`. A node-pg pool has exactly one TLS
- * channel: the `ssl` option. Omit it and the driver connects in plaintext whatever
- * the URL says.
+ * `pg` does not read `?sslmode=` from a connection string — that parameter is
+ * libpq's, spoken by psql/pg_dump/pg_restore. A node-pg pool has exactly one
+ * TLS channel: the `ssl` option. Omit it and the driver connects in plaintext
+ * whatever the URL claims. `lib/db/ssl-config.ts` is the single policy; #3256
+ * and #3381 fixed the call sites that had decided TLS for themselves. This
+ * screen is what makes that the LAST manual pass: every `new Pool(` in
+ * first-party source must carry a TLS entry in its options, by one of these
+ * shapes:
  *
- * `lib/db/ssl-config.ts` fixed the disagreement by policy; #3382 took it to
- * backup-verify's own pools and #3381 to the last 11 sites. This screen is what keeps
- * the fix from re-drifting. It walks every non-test `.ts`/`.mts`/`.tsx`/`.mjs`/`.cjs`/`.js`
- * source (the ops scripts are `.mjs`, and provision-app-role.mjs carried a bare pool
- * the first cut of this walk could not see), brace-matches the argument of each
- * `new Pool(`, and requires a TLS entry.
+ *   - an `ssl:` property (any expression), or
+ *   - the shorthand `ssl` naming a variable (`scripts/dr.ts`,
+ *     `scripts/preflight.ts`, `scripts/bootstrap-test-db.ts`), or
+ *   - a by-name options object (`new Pool(poolConfig)` at
+ *     `lib/db/pool.ts:203`): #3381's open question, decided — a variable is
+ *     covered ONLY when this screen can resolve it to an object literal in the
+ *     same file and that literal satisfies the rules above. An unresolvable
+ *     name is a finding, not a skip, because the grep-based alternative would
+ *     report covered sites as missing and drive whoever fixes this to exempt
+ *     the screen instead of the code. A refactor that hides the literal behind
+ *     a function call must keep the literal reachable here or move its
+ *     exemption into the baseline with a reason.
  *
- * Two decisions, because both are the kind a grep gets wrong:
+ * Reporting is per FILE, not line (#guard:filesize / #guard:public-ratelimit
+ * convention): inserting `ssl:` at one site must not fail the screen at
+ * another, and a fix that adds a line cannot churn this screen's record.
  *
- * 1. **The option's name is read, never its value.** `scripts/dr.ts`, `preflight.ts` and
- *    `bootstrap-test-db.ts` pass `ssl` as a variable, and `new Pool({ connectionString,
- *    ssl })` passes it as shorthand; all three satisfy the screen, and so does `ssl:`
- *    with a value the screen cannot see the shape of.
- * 2. **A `PoolConfig`-variable argument is proved, not assumed.** `lib/db/pool.ts` builds
- *    `const poolConfig: PoolConfig = { … }` and calls `new Pool(poolConfig)`. Counting
- *    that as covered is how the next refactor renames the variable, or moves it to a
- *    helper in another file, and the screen certifies a TLS policy it never saw. So an
- *    identifier must resolve, in the same file, to a literal that itself carries the
- *    entry — and a spread (`{ ...cfg }`) is unprovable, because its contribution is
- *    invisible here.
+ * Exemptions live in `scripts/pool-tls-baseline.json`, are shrink-only, and
+ * are RE-VERIFIED every run: an entry whose file no longer produces a finding
+ * fails the screen, so an exemption cannot outlive its code. It exists today
+ * for `scripts/verify-backup.ts`, whose two sites are fixed by the open PR for
+ * #3256; the day that merges, its entry becomes stale and must be deleted.
  *
- * Findings are grouped by **file**, and there is no baseline: #3381 landed its 11 sites
- * in the same change as this screen, so a new site has to answer in code rather than in
- * a JSON exemption.
- *
- * Usage: npx tsx scripts/check-pool-tls-policy.mts [--json] [source-root…]
+ * Usage: npm run guard:pool-tls [--json]
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SOURCE_DIRS = ['app', 'lib', 'scripts', 'components', 'deploy'];
-const SOURCE_EXT = /\.(ts|mts|tsx|mjs|cjs|js)$/;
+export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+export const BASELINE_FILE = 'scripts/pool-tls-baseline.json';
 
-export type PoolSite = {
-  file: string;
-  line: number;
-  /** the argument text exactly as written, trimmed */
-  arg: string;
-  /** how the argument was understood */
-  form: 'literal' | 'identifier' | 'empty' | 'unmatched';
-  hasTls: boolean;
-  /** why `hasTls` was decided, for --json */
-  detail: string;
-};
+/**
+ * Floor measured on this tree the day #3381 landed (29 sites). If the walk
+ * finds materially fewer pools than that, the walk is broken, not the code —
+ * a guard that sees nothing passes everything.
+ */
+export const MIN_POOL_SITES = 25;
 
-const OPENERS: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
+const SKIP_DIRS = new Set(['node_modules', '.next', '.qoder', 'tests', 'dist', 'coverage', '.git']);
 
-/** Comments blanked out, offsets and line breaks preserved, strings untouched. */
-export function maskComments(text: string): string {
-  const out = text.split('');
-  let quote = '';
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      if (c === '\\') i++;
-      else if (c === quote || (c === '\n' && quote !== '`')) quote = '';
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (name.startsWith('.') && SKIP_DIRS.has(name)) continue;
+    if (statSync(p).isDirectory()) {
+      if (!SKIP_DIRS.has(name)) out.push(...sourceFiles(p));
+    } else if ((name.endsWith('.ts') || name.endsWith('.mts')) && !name.endsWith('.d.ts')) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+/**
+ * Blank `//` and `/* *​/` comments to spaces, offsets intact, and blank string
+ * and template bodies too — this screen's only pattern is `new Pool(`, a
+ * construct that belongs in code, never in data; a console message quoting it
+ * (or this guard's own error strings) must not read as a pool site.
+ */
+export function maskComments(src: string): string {
+  const out = src.split('');
+  const blank = (from: number, to: number) => {
+    for (let i = from; i < to && i < out.length; i++) if (out[i] !== '\n') out[i] = ' ';
+  };
+  let i = 0;
+  const n = src.length;
+  const AFTER_OPERAND = /[A-Za-z0-9_$)\]]/;
+  while (i < n) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (c === '/' && d === '/') {
+      let j = i;
+      while (j < n && src[j] !== '\n') j++;
+      blank(i, j);
+      i = j;
       continue;
     }
-    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
-    if (c !== '/') continue;
-    if (text[i + 1] === '/') {
-      let j = i;
-      while (j < text.length && text[j] !== '\n') out[j++] = ' ';
-      i = j - 1;
-    } else if (text[i + 1] === '*') {
-      let j = i;
-      while (j < text.length && !(text[j] === '*' && text[j + 1] === '/')) { if (text[j] !== '\n') out[j] = ' '; j++; }
-      out[j++] = ' '; out[j++] = ' ';
-      i = j - 1;
+    if (c === '/' && d === '*') {
+      let j = i + 2;
+      while (j < n && !(src[j] === '*' && src[j + 1] === '/')) j++;
+      blank(i, Math.min(j + 2, n));
+      i = j + 2;
+      continue;
     }
+    if (c === '/' && !AFTER_OPERAND.test(src.slice(0, i).replace(/\s+$/, '').slice(-1) ?? '')) {
+      let j = i + 1;
+      let cls = false;
+      while (j < n) {
+        const e = src[j];
+        if (e === '\\') { j += 2; continue; }
+        if (e === '[') { cls = true; j++; continue; }
+        if (e === ']' && cls) { cls = false; j++; continue; }
+        if (e === '\n') break;
+        if (e === '/' && !cls) { j++; break; }
+        j++;
+      }
+      while (j < n && /[dgimsuy]/.test(src[j])) j++;
+      i = j;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c;
+      let j = i + 1;
+      while (j < n) {
+        if (src[j] === '\\') { j += 2; continue; }
+        if (src[j] === quote) { j++; break; }
+        j++;
+      }
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    i++;
   }
   return out.join('');
 }
 
-
-/** As above, and the inside of every string blanked too — so a message that
- *  *quotes* `new Pool(` is not mistaken for a call site. Offsets are preserved. */
-export function blankCode(text: string): string {
-  const masked = maskComments(text);
-  const out = masked.split('');
-  let quote = '';
-  for (let i = 0; i < masked.length; i++) {
-    const c = masked[i];
-    if (quote) {
-      if (c === '\\') { out[i++] = ' '; out[i] = ' '; continue; }
-      if (c === quote || (c === '\n' && quote !== '`')) quote = '';
-      else if (c !== '\n') out[i] = ' ';
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') quote = c;
-  }
-  return out.join('');
-}
-
-/** Index of the delimiter closing the one at `open`, skipping strings and comments. */
-function matchCloser(text: string, open: number): number {
-  const close = OPENERS[text[open]];
-  if (!close) return -1;
+/** End offset (exclusive) of the object literal whose `{` is at `open`. */
+export function matchBraces(src: string, open: number): number {
   let depth = 0;
-  let quote = '';
-  for (let i = open; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      if (c === '\\') i++;
-      else if (c === quote || (c === '\n' && quote !== '`')) quote = '';
-      continue;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return i + 1;
     }
-    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
-    if (c === '/' && text[i + 1] === '/') { i = text.indexOf('\n', i); if (i < 0) return -1; continue; }
-    if (c === '/' && text[i + 1] === '*') { i = text.indexOf('*/', i + 2) + 1; if (i < 1) return -1; continue; }
-    if (c === text[open] && OPENERS[c]) depth++;
-    else if (c === close) { depth--; if (depth === 0) return i; }
   }
   return -1;
 }
 
-/** Strip one wrapping quote pair from a declared key. Written with charCodes so this file has no unbalanced quote of its own. */
-function unkey(k: string): string {
-  const first = k.charCodeAt(0);
-  if (first !== 34 && first !== 39 && first !== 96) return k;
-  return k.charCodeAt(k.length - 1) === first ? k.slice(1, -1) : k;
+/**
+ * Does this options literal carry a TLS entry? `ssl:` anywhere, or the
+ * shorthand identifier `ssl` bounded by `{`/`,`/`}`. A spread `...ssl` is NOT
+* credit: what it carries is a decision made somewhere else, and the point of
+ * this screen is that the decision is visible at the pool.
+ */
+export function hasTlsEntry(objText: string): boolean {
+  if (/(?<![A-Za-z0-9_$])ssl\s*:/.test(objText)) return true;
+  return /[{,]\s*ssl\s*(?:[,}])/.test(objText);
 }
 
-/** Property names declared at the top level of an object literal body. */
-function topLevelKeys(body: string): { keys: string[]; spread: boolean } {
-  const keys: string[] = [];
-  let spread = false;
-  let depth = 0;
-  let quote = '';
-  let token = '';
-  let sawColon = false;
-  const name = () => {
-    const t = unkey(token.trim());
-    token = '';
-    if (!t) return;
-    if (t.startsWith('...')) spread = true;
-    else if (/^[A-Za-z_$][\w$]*$/.test(t)) keys.push(t);
-  };
-  for (let i = 0; i < body.length; i++) {
-    const c = body[i];
-    if (quote) {
-      token += c;
-      if (c === '\\') { token += body[++i] ?? ''; continue; }
-      if (c === quote || (c === '\n' && quote !== '`')) quote = '';
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') { quote = c; token += c; continue; }
-    if (c === '{' || c === '(' || c === '[') { depth++; token += c; continue; }
-    if (c === '}' || c === ')' || c === ']') { depth--; token += c; continue; }
-    if (depth > 0) { token += c; continue; }
-    // A bare identifier before `:` is a key; one after it is that key's value, and
-    // a bare identifier with no `:` in its segment at all is shorthand — `{ ssl }` —
-    // which is a name too. Keeping the two apart is what stops `{ defaults: ssl }`
-    // from reading as an `ssl` entry.
-    if (c === ',') { if (sawColon) token = ''; else name(); sawColon = false; continue; }
-    if (c === ':') { name(); sawColon = true; continue; }
-    token += c;
-  }
-  if (!sawColon) name();
-  return { keys, spread };
-}
+export type PoolSite = {
+  line: number;
+  kind: 'literal' | 'variable' | 'unresolved';
+  name?: string;
+  hasTls: boolean;
+  problem?: string;
+};
 
-/** The object literal assigned to `const|let|var <name> = {`, in this same file. */
-function literalFor(source: string, name: string): string | null {
-  const re = new RegExp(`(?:const|let|var)\\s+${name}\\s*(:[^=]*?)?=\\s*\\{`);
-  const m = re.exec(source);
-  if (!m) return null;
-  const open = source.indexOf('{', m.index + m[0].length - 1);
-  const close = matchCloser(source, open);
-  return close < 0 ? null : source.slice(open + 1, close);
-}
+const POOL_RE = /\bnew\s+(?:[A-Za-z_$][\w$]*\.)?Pool\s*\(\s*/g;
 
-function scanSource(file: string, raw: string): PoolSite[] {
+/** Every `new Pool(` site in one source, with its options resolved. */
+export function poolSites(src: string): PoolSite[] {
+  const masked = maskComments(src);
+  const lineOf = (offset: number) => masked.slice(0, offset).split('\n').length;
   const sites: PoolSite[] = [];
-  const source = maskComments(raw);
-  // Sites are *found* in the string-blanked copy, then *read* in the comment-blanked
-  // one, so a screen message quoting `new Pool(` cannot register as a pool site while
-  // a quoted option key (`{ 'ssl': … }`) is still visible to the reader.
-  const found = blankCode(raw);
-  const lineAt = (index: number) => source.slice(0, index).split('\n').length;
-  for (const m of found.matchAll(/new\s+Pool\s*\(/g)) {
-    const open = m.index + m[0].length - 1;
-    const close = matchCloser(source, open);
-    if (close < 0) {
-      sites.push({ file, line: lineAt(m.index), arg: '', form: 'unmatched', hasTls: false, detail: 'unbalanced parentheses after new Pool(' });
+  let m: RegExpExecArray | null;
+  while ((m = POOL_RE.exec(masked)) !== null) {
+    const at = m.index + m[0].length;
+    const c = masked[at];
+    if (c === '{') {
+      const end = matchBraces(masked, at);
+      if (end === -1) {
+        sites.push({ line: lineOf(m.index), kind: 'unresolved', hasTls: false, problem: 'options literal never closes' });
+        continue;
+      }
+      sites.push({ line: lineOf(m.index), kind: 'literal', hasTls: hasTlsEntry(masked.slice(at, end)) });
       continue;
     }
-    const arg = source.slice(open + 1, close).trim();
-    if (arg === '') {
-      sites.push({ file, line: lineAt(m.index), arg, form: 'empty', hasTls: false, detail: 'no options object at all' });
+    const id = /^[A-Za-z_$][\w$]*/.exec(masked.slice(at))?.[0];
+    if (!id) {
+      sites.push({ line: lineOf(m.index), kind: 'unresolved', hasTls: false, problem: 'no options object or resolvable name after new Pool(' });
       continue;
     }
-    let body: string | null = null;
-    let form: PoolSite['form'] = 'literal';
-    let detail = '';
-    if (arg.startsWith('{')) {
-      body = arg.slice(1, arg.lastIndexOf('}'));
-    } else if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
-      form = 'identifier';
-      body = literalFor(source, arg);
-      detail = body === null ? `new Pool(${arg}) — ${arg} has no object literal in this file to read` : '';
-    } else {
-      form = 'unmatched';
-      detail = 'the argument is neither an object literal nor a single identifier';
-    }
-    if (body === null) {
-      sites.push({ file, line: lineAt(m.index), arg, form, hasTls: false, detail });
+    // By-name decision, stated in the header: resolve to an in-file literal.
+    const declRe = new RegExp(
+      `(?:const|let|var)\\s+${id}(?:\\s*:\\s*[\\w.<>[\\]]+)?\\s*=\\s*\\{`,
+    );
+    const dm = declRe.exec(masked);
+    if (!dm) {
+      sites.push({
+        line: lineOf(m.index), kind: 'unresolved', name: id, hasTls: false,
+        problem: `PoolConfig \`${id}\` has no object-literal declaration in this file — a variable this screen cannot read is not coverage`,
+      });
       continue;
     }
-    const { keys, spread } = topLevelKeys(body);
-    const hasTls = !spread && keys.includes('ssl');
-    sites.push({
-      file,
-      line: lineAt(m.index),
-      arg,
-      form,
-      hasTls,
-      detail: spread ? 'a spread contributes unknown options' : hasTls ? 'ssl entry found' : `no ssl entry (keys: ${keys.join(', ') || 'none'})`,
-    });
+    const open = masked.indexOf('{', dm.index + dm[0].length - 1);
+    const end = matchBraces(masked, open);
+    if (end === -1) {
+      sites.push({ line: lineOf(m.index), kind: 'unresolved', name: id, hasTls: false, problem: `declaration of \`${id}\` never closes` });
+      continue;
+    }
+    sites.push({ line: lineOf(m.index), kind: 'variable', name: id, hasTls: hasTlsEntry(masked.slice(open, end)) });
   }
   return sites;
 }
 
-function walk(dir: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) walk(path, acc);
-    else if (SOURCE_EXT.test(entry.name) && !/\.(test|spec)\.[a-z]+$/.test(entry.name)) acc.push(path);
+export type Finding = { file: string; count: number; problem: string; line: number };
+
+/** One finding per (file, problem class); the report is by file, never by line. */
+export function analyzeSource(rel: string, src: string): Finding[] {
+  const sites = poolSites(src);
+  const classes = new Map<string, { count: number; line: number }>();
+  for (const s of sites) {
+    if (s.hasTls) continue;
+    const problem =
+      s.kind === 'variable'
+        ? `PoolConfig variable \`${s.name}\` resolves to a literal with no TLS entry`
+        : s.problem ?? 'pool options carry no TLS entry — pg connects in plaintext whatever the URL says';
+    const hit = classes.get(problem) ?? { count: 0, line: s.line };
+    hit.count++;
+    classes.set(problem, hit);
   }
-  return acc;
+  return [...classes].map(([problem, { count, line }]) => ({ file: rel, count, problem, line }));
 }
 
-export function screen(root: string, dirs: string[] = SOURCE_DIRS): PoolSite[] {
-  const sites: PoolSite[] = [];
-  for (const dir of dirs) {
-    try { readdirSync(join(root, dir)); } catch { continue; }
-    for (const file of walk(join(root, dir))) {
-      sites.push(...scanSource(relative(root, file).replace(/\\/g, '/'), readFileSync(file, 'utf8')));
-    }
-  }
-  return sites;
+export type BaselineEntry = { file: string; reason: string };
+
+export function loadBaseline(root = ROOT): BaselineEntry[] {
+  const path = join(root, BASELINE_FILE);
+  if (!existsSync(path)) return [];
+  return (JSON.parse(readFileSync(path, 'utf8')) as { entries?: BaselineEntry[] }).entries ?? [];
 }
 
-export function main(argv: string[] = process.argv.slice(2)): number {
-  const json = argv.includes('--json');
-  const roots = argv.filter((a) => !a.startsWith('--'));
-  const root = roots[0] ?? '.';
-  const sites = screen(root);
-  const missing = sites.filter((s) => !s.hasTls);
-  const byFile = new Map<string, PoolSite[]>();
-  for (const site of missing) byFile.set(site.file, [...(byFile.get(site.file) ?? []), site]);
+/** A baseline entry must have a real file with a real finding and a long reason. */
+export function verifyEntry(entry: BaselineEntry, findings: Finding[], root = ROOT): string | null {
+  if (!entry.file || entry.file.includes('..') || entry.file.startsWith('/')) {
+    return `file must be a repository-relative path, not "${entry.file}"`;
+  }
+  if (!existsSync(join(root, entry.file))) return `${entry.file} does not exist — the exemption protects nothing`;
+  if ((entry.reason ?? '').trim().length < 40) {
+    return 'a deferral needs a reason of at least 40 characters — one a reviewer can disagree with';
+  }
+  if (!findings.some((f) => f.file === entry.file)) {
+    return `${entry.file} produces no finding — the fix landed and this exemption outlived its code; delete the entry`;
+  }
+  return null;
+}
 
+export type RunResult = { findings: Finding[]; stale: Array<{ file: string; why: string }>; sites: number; files: number };
+
+export function run(root = ROOT): RunResult {
+  const rel = (p: string) => relative(root, p).split(sep).join('/');
+  const files = sourceFiles(root);
+  if (!files.some((f) => rel(f) === 'lib/db/ssl-config.ts')) {
+    throw new Error('walk did not reach lib/db/ssl-config.ts — the tree is not mounted where this guard expects');
+  }
+  const findings: Finding[] = [];
+  let sites = 0;
+  for (const file of files) {
+    const src = readFileSync(file, 'utf8');
+    if (!/\bnew\s+Pool\b|\bnew\s+(?:[A-Za-z_$][\w$]*\.)?Pool\s*\(/.test(src)) continue;
+    const found = poolSites(src);
+    sites += found.length;
+    findings.push(...analyzeSource(rel(file), src));
+  }
+  if (sites < MIN_POOL_SITES) {
+    throw new Error(
+      `found ${sites} Pool site(s); expected at least ${MIN_POOL_SITES} — the walk or the patterns broke, `
+      + 'and a guard that sees nothing passes everything',
+    );
+  }
+  const baseline = loadBaseline(root);
+  const exempt = new Set(baseline.map((e) => e.file));
+  const kept = findings.filter((f) => !exempt.has(f.file));
+  const stale: Array<{ file: string; why: string }> = [];
+  for (const entry of baseline) {
+    const why = verifyEntry(entry, findings, root);
+    if (why) stale.push({ file: entry.file, why });
+  }
+  return { findings: kept, stale, sites, files: files.length };
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────────────
+
+function main() {
+  const json = process.argv.includes('--json');
+  const { findings, stale, sites, files } = run();
   if (json) {
-    process.stdout.write(`${JSON.stringify({
-      poolSites: sites.length,
-      withoutTlsPolicy: missing.map((s) => ({ file: s.file, line: s.line, form: s.form, detail: s.detail })),
-    })}\n`);
-  } else if (byFile.size > 0) {
-    process.stderr.write(`\n✖ pg.Pool sites with no TLS policy (#3381): ${missing.length} in ${byFile.size} file(s)\n`);
-    for (const [file, list] of [...byFile].sort()) {
-      process.stderr.write(`  - ${file}: ${list.length} site(s) — ${list.map((s) => s.detail).join('; ')}\n`);
-    }
-    process.stderr.write(
-      '\n  `ssl` is a node-pg option, not a URL parameter: add `ssl: pgSslConfig()` to the pool\n' +
-        '  options (or to the PoolConfig literal the pool is built from). A pool built without it\n' +
-        '  connects in plaintext even when DATABASE_URL says sslmode=require.\n\n',
-    );
-  } else {
-    process.stdout.write(
-      `[check-pool-tls-policy] OK — ${sites.length} pg.Pool site(s) across ` +
-        `${new Set(sites.map((s) => s.file)).size} file(s), every one declares a TLS entry.\n`,
+    console.log(JSON.stringify({ scanned: files, sites, findings, stale }, null, 2));
+  } else if (findings.length === 0 && stale.length === 0) {
+    console.log(
+      `[check-pool-tls-policy] OK — ${sites} Pool site(s) across ${files} file(s): every one passes `
+      + 'the TLS policy (lib/db/ssl-config.ts), by-name configs resolved to a literal with ssl.',
     );
   }
-  return byFile.size > 0 ? 1 : 0;
+  if (findings.length > 0 || stale.length > 0) {
+    const rows = [
+      ...findings.map((f) => `    ${f.file}  ${f.count} site(s) — ${f.problem}`),
+      ...stale.map((s) => `    BASELINE ${s.file} — ${s.why}`),
+    ];
+    const msg =
+      `\n  \x1b[31m✖ Pool TLS-policy guard failed (#3381).\x1b[0m\n\n${rows.join('\n')}\n\n`
+      + '  Fix: add `ssl: pgSslConfig()` (import from lib/db/ssl-config) to the pool options —\n'
+      + '  `?sslmode=` in the URL does NOTHING for node-pg; only the ssl option opens TLS.\n'
+      + '  If the file is genuinely deferred (another PR is mid-fix), add an entry to\n'
+      + `  ${BASELINE_FILE} naming a reason a reviewer can disagree with — the entry\n`
+      + '  fails the screen the day its finding disappears, so it cannot outlive the code.\n';
+    if (!json) console.error(msg);
+    process.exit(1);
+  }
 }
 
-if (process.argv[1]?.includes('check-pool-tls-policy')) process.exit(main());
+// Only when run directly: the unit suite imports these functions.
+if (process.argv[1]?.includes('check-pool-tls-policy')) main();
