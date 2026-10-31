@@ -159,8 +159,9 @@ async function openPool(databaseUrl) {
   const url = databaseUrl ?? process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required (or pass --database-url)');
   const { default: pg } = await import('pg');
+  const { pgSslConfig } = await import('../lib/db/ssl-config.ts');
   // The URL is never printed: in the deploy topology it carries the password.
-  return new pg.Pool({ connectionString: url, statement_timeout: 120_000 });
+  return new pg.Pool({ connectionString: url, ssl: pgSslConfig(), statement_timeout: 120_000 });
 }
 
 export function formatReport(result) {
