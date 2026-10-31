@@ -81,10 +81,10 @@ jobs:
         run: npm run guard:portal-rls-context && npm run guard:catch-empty && npm run guard:panel-error-state
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
-      - name: Cron lock + field-permission wiring guards (#2539, #2597)
-        run: npm run guard:cron-lock && npm run guard:field-permissions
-      - name: Raw-SQL + un-armed RLS read guards (#2528, #3280)
-        run: npm run guard:raw-sql && npm run guard:app-role-counts
+      - name: Cron lock, cron auth + field-permission wiring guards (#2539, #2597, #3298)
+        run: npm run guard:cron-lock && npm run guard:cron-auth && npm run guard:field-permissions
+      - name: Raw-SQL + un-armed RLS read + pool TLS policy guards (#2528, #3280, #3381)
+        run: npm run guard:raw-sql && npm run guard:app-role-counts && npm run guard:pool-tls
 
   test-unit:
     name: Unit Tests
@@ -901,3 +901,12 @@ jobs:
             exit 1
           }
           echo "OK: a CHECK the database enforces more narrowly than the code writes turns this screen red, exactly as PP-059 requires."
+
+# #3267: the token scopes are declared here instead of inherited — with no
+# top-level block every job gets whatever the repository default happens to be.
+# `security-events: write` is the only write scope anything in this file needs
+# (the SARIF upload); everything else is read-only. The block is appended at EOF
+# for the same reason #3241 appended its job last: every `ci.yml:<line>`
+# coordinate the register cites is above it, and an insert mid-file re-pins all
+# of them. Narrowing further to job level waits for that re-pin.
+permissions: { contents: read, security-events: write }

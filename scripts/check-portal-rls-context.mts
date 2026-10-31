@@ -68,23 +68,19 @@ export type TenantTable = { js: string; sql: string };
 export const MIN_TENANT_KEYED_TABLES = 100;
 /**
  * The floor is the derived anonymous surface measured on the day #3186 landed:
- * every `app/<path>` that `proxy.ts` advertises, plus the portal-auth libraries,
- * the Resend attribution library and the hand-named routes below. Pinned at the
- * current surface on purpose: a floor left at 22 would say OK the day the
- * derivation quietly stops matching `PUBLIC_PATHS` and the walk falls back to the
- * hand list, which is the exact failure #3186 was filed for. It moves when the
- * surface moves, and only with the walk that produced the new number — 104 since
- * #3246 step 4a pinned the inbound key lookup, 106 since step 4b pinned the
- * Resend attribution and the write handlers it feeds, both of which the route's
- * size ratchet pushed into `lib/`, and 107 since #3280 put `/api/setup/status` in
- * `PUBLIC_PATHS` so an operator can ask an unauthenticated box whether it still
- * needs its first admin.
+ * every `app/<path>` that `proxy.ts` advertises, plus the two portal-auth
+ * libraries and the hand-named routes below. Pinned at the current surface on
+ * purpose: a floor left at 22 would say OK the day the derivation quietly stops
+ * matching `PUBLIC_PATHS` and the walk falls back to the hand list, which is the
+ * exact failure #3186 was filed for. It moves when the surface moves, and only
+ * with the walk that produced the new number: 120 after #3312 pinned the ten
+ * lib/ files an anonymous route calls and steps 4b/4d's three libraries came
+ * back as pinned targets, none of which the 103 floor had counted.
  */
-export const MIN_SCANNED_FILES = 107;
+export const MIN_SCANNED_FILES = 120;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
- * the bare-pool CRM aggregate out of app/api/metrics; 231 with the two Resend
- * libraries #3246 step 4b pinned). Below this
+ * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
  * the read patterns stopped working, or the scope shrank to the hand list.
  */
 export const MIN_TABLE_READS = 200;
@@ -97,7 +93,11 @@ export const MIN_TABLE_READS = 200;
  * anonymous form-render/capture lookup) and `withUnsubscribeContactContext` from
  * `lib/db/unsubscribe-contact-context.ts` (#3237's pre-auth contact claim), plus
  * `withPluginWebhookLookupContext` from `lib/db/plugin-webhook-context.ts` (#3246's
- * pre-auth plugin webhook lookup). The
+ * pre-auth plugin webhook lookup), `withQuoteWebhookLookupContext` from
+ * `lib/db/quote-webhook-context.ts` and `withWhatsAppIntegrationLookupContext` from
+ * `lib/db/whatsapp-integration-context.ts` (#3246 steps 4c/4d's payment-callback and
+ * WhatsApp lookups), plus `withSsoDomainLookupContext`/`withSsoProviderLookupContext`
+ * from `lib/db/sso-lookup-context.ts` (#3246 step 3's IdP handoff). The
  * guard matches on the *call name* at each site, so the split changes nothing it
  * can see — this list is only where the names come from.
  */
@@ -112,6 +112,10 @@ export const CONTEXT_HELPERS = [
   'withFormLookupContext',
   'withUnsubscribeContactContext',
   'withPluginWebhookLookupContext',
+  'withQuoteWebhookLookupContext',
+  'withWhatsAppIntegrationLookupContext',
+  'withSsoDomainLookupContext',
+  'withSsoProviderLookupContext',
 ];
 
 /**
@@ -622,9 +626,17 @@ function tsFiles(path: string): string[] {
 export const PINNED_TARGETS = [
   'lib/portal-auth.ts',
   'lib/portal-session.ts',
-  'lib/webhooks/inbound-auth.ts',
   'lib/email/webhook-scope.ts',
   'lib/email/resend-event-handlers.ts',
+  'lib/whatsapp/webhook-processor.ts',
+  'lib/webhooks/inbound-auth.ts',
+  'lib/webhooks/',
+  'lib/payu.ts',
+  'lib/razorpay.ts',
+  'lib/stripe.ts',
+  'lib/stripe-period.ts',
+  'lib/stripe-plan-resolution.ts',
+  'lib/stripe-subscription-sync.ts',
   'app/api/public',
   'app/api/tenant/portal/login',
   'app/api/forms/submit',
@@ -745,16 +757,7 @@ export function buildTargets(root: string): string[] {
  * migration 0139's SELECT-only arm on `custom_plugins` behind `app.plugin_webhook_id`,
  * opened by `withPluginWebhookLookupContext`, closed by the statement that hands the
  * claimed row's tenant to the `plugin_execution_logs` write once the HMAC has passed.
- * `webhooks` (30) and `auth/sso` (2) stay deferred to #3246. Step 4a took the 2
- * `apiKeys` reads out of `webhooks`' 44: the inbound key lookup now runs through
- * 0099's `app.auth_lookup` arm in `lib/webhooks/inbound-auth.ts`, which is a pinned
- * target of this guard rather than a deferred directory. Step 4b took the 12 Resend
- * reads out of what was left, and they left the directory rather than being excused
- * in place: the attribution reads `email_tracking` through 0105's
- * `app.tracking_lookup` arm and adopts the workspace it resolves, and the write
- * handlers run each statement inside `withTenantContext`. Both halves live in
- * `lib/email/` because the route's 500-line cap had no room left, so both are
- * pinned targets too. What remains in `webhooks` is `inbound` (24) and `payu` (6).
+ * `webhooks` (44) and `auth/sso` (2) stay deferred to #3246.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -778,14 +781,23 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
       + 'which is the pre-auth lookup-arm decision #3246 now tracks; a signature proves the sender, '
       + 'not the tenant, so no GUC exists to set before that resolution happens.',
-    maxFindings: 30,
+    maxFindings: 24,
   },
   {
-    dir: 'app/api/auth/sso',
-    deferredTo: '#3246',
-    why: 'The IdP handoff resolves ssoProviders by issuer/state before a tenant or user is known; '
-      + 'that read is #3246\'s lookup arm, not a missing transaction context, and inventing a GUC '
-      + 'for it is not this guard\'s call.',
+    dir: 'lib/webhooks',
+    deferredTo: '#3312',
+    why: 'Webhook delivery and field-mapping helpers read tenant-policyed tables on the bare pool '
+      + 'or on transaction handles not bound by a context-establishing call. They are invoked by '
+      + 'anonymous webhook routes that derive tenant from provider signatures; each helper must '
+      + 'receive and bind a tenant context. Fix tracked as part of #3312.',
+    maxFindings: 22,
+  },
+  {
+    dir: 'lib/stripe-subscription-sync.ts',
+    deferredTo: '#3312',
+    why: 'Stripe subscription sync reads tenant-policyed tables on a transaction handle that callers '
+      + 'may leave unbound, falling back to the bare pool. Callers must pass a context-bound handle. '
+      + 'Fix tracked as part of #3312.',
     maxFindings: 2,
   },
 ];

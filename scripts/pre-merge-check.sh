@@ -46,17 +46,17 @@ echo "  PRE-MERGE SAFETY CHECK"
 echo "═══════════════════════════════════════════"
 
 # 1. TypeScript check
-run_step "▶ 1/7 TypeScript check" 20 "No TS errors" npx tsc --noEmit --pretty
+run_step "▶ 1/8 TypeScript check" 20 "No TS errors" npx tsc --noEmit --pretty
 
 # 2. Build check
-run_step "▶ 2/7 Build check" 5 "Build succeeded" npm run build
+run_step "▶ 2/8 Build check" 5 "Build succeeded" npm run build
 
 # 3. Unit tests
-run_step "▶ 3/7 Unit tests" 5 "All tests pass" npm run test:unit
+run_step "▶ 3/8 Unit tests" 5 "All tests pass" npm run test:unit
 
 # 4. Check for new imports from @/lib — verify they exist
 echo ""
-echo "▶ 4/7 Import sanity check..."
+echo "▶ 4/8 Import sanity check..."
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" != "main" ]; then
   # `|| true` because grep exits 1 when there is nothing to import, which is the
@@ -75,7 +75,7 @@ if [ "$BRANCH" != "main" ]; then
     fi
   done <<< "$NEW_IMPORTS"
   if [ -n "$MISSING" ]; then
-    fail "Step 4/7 (4/7 Import sanity check) found @/lib imports with no file behind them:${MISSING}"
+    fail "Step 4/8 (4/8 Import sanity check) found @/lib imports with no file behind them:${MISSING}"
   fi
   if [ -z "$NEW_IMPORTS" ]; then
     echo "   No new @/lib imports"
@@ -89,7 +89,7 @@ fi
 # migration guards live in ci.yml; this file is the local pre-push screen, and a
 # rollback that cannot run is exactly the thing a local screen should refuse.
 # Static only: no database, no credentials.
-run_step "▶ 5/7 Rollback coverage (#3284)" 3 "Every .down.sql runs, and owns only its own objects" npm run guard:rollback-coverage
+run_step "▶ 5/8 Rollback coverage (#3284)" 3 "Every .down.sql runs, and owns only its own objects" npm run guard:rollback-coverage
 
 # 6. Committed credentials (#3281). The second guard in this file, and the reason it
 # is here rather than only in ci.yml is the shape of the failure: a password literal
@@ -97,7 +97,7 @@ run_step "▶ 5/7 Rollback coverage (#3284)" 3 "Every .down.sql runs, and owns o
 # before the push is not a re-run of a job, it is a rewrite of history (#2302 is the
 # purge that has to happen for the one already published). Static only, and it owns
 # the same exit codes ci.yml greps for.
-run_step "▶ 6/7 No committed password literal (#3281)" 3 "No password literal survives in scripts, app source or workflows" npm run guard:seed-credential
+run_step "▶ 6/8 No committed password literal (#3281)" 3 "No password literal survives in scripts, app source or workflows" npm run guard:seed-credential
 
 # 7. Destructive scripts (#3282). The third guard in this file, and the one whose
 # absence is the actual bug: `prod:seed` was not dangerous because nobody wrote a
@@ -105,7 +105,16 @@ run_step "▶ 6/7 No committed password literal (#3281)" 3 "No password literal 
 # second issue in a week to find a guard that was green while the thing it guards
 # was off. Static only, no database: the screen reads the package.json-reachable
 # scripts and asks whether each destructive one names its own confirmation.
-run_step "▶ 7/7 Destructive script gates (#3282)" 3 "Every reachable destructive statement names an opt-in, or is tolerated with a reason" npm run guard:destructive-gate
+run_step "▶ 7/8 Destructive script gates (#3282)" 3 "Every reachable destructive statement names an opt-in, or is tolerated with a reason" npm run guard:destructive-gate
+
+# 8. Cron authentication (#3298). Ask 2 of that issue names this file, not ci.yml, and
+# the reason is the failure it guards: a cron route that compares the secret itself is
+# not broken, it is *un-hardened* — and the only signal that it is un-hardened is an
+# env var the operator set believing it applied. ci.yml runs the same alias; this step
+# is about catching it before the push, the way steps 5-7 catch their guards. It goes
+# through run_step for the #3351 reason: a `| tail` here would let a refusal through and
+# print the banner anyway.
+run_step "▶ 8/8 Cron routes authenticate through lib/auth/cron (#3298)" 3 "Every cron route awaits verifyCronSecret; no route compares the secret itself" npm run guard:cron-auth
 
 echo ""
 echo "═══════════════════════════════════════════"

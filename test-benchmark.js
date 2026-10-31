@@ -1,4 +1,3 @@
-const start = Date.now();
 async function uploadMock(file, delay) {
     return new Promise(resolve => setTimeout(resolve, delay));
 }

@@ -50,12 +50,13 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
      check (the rule `0136:45` spells out for exactly this reason). So "you
      cannot write a row into someone else's tenant" survives, but "you cannot
      write a row with no tenant" no longer does — and that is the shape
-     #3246's three deferred classes describe (`app/api/webhooks`,
-     `app/api/auth/sso`, `app/api/tenant/plugins/webhook`: per their
-     `SCOPE_DEFERRALS` entries, no tenant GUC exists to set before the provider
-     payload, IdP assertion or installation row resolves the tenant). For those
-     handlers the tenantless-write guard is the application's, not the policy's;
-     claiming RLS covers it would be the false alarm #3186 is about.
+     #3246's deferred class still describes (`app/api/webhooks`, per its
+     `SCOPE_DEFERRALS` entry: no tenant GUC exists to set before the provider
+     payload resolves the tenant). The two classes 0139 and 0140 bounded out —
+     the plugin receiver and `/api/auth/sso` — each read a row that *carries* the
+     tenant, then name `app.current_tenant` from it before any write, so their
+     tenantless-write guard is the application's, not the policy's. Claiming RLS
+     covers it would be the false alarm #3186 is about.
 - **GUCs are session-local.** `withTenantContext(tenant,user,tx)`
   (`lib/db/rls.ts:120`) runs `SELECT set_config('app.current_tenant', $1, true)`
   (is_local=true → dies at COMMIT/ROLLBACK). Cleared on pool checkout/return
@@ -65,14 +66,17 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   GUCs are cleared, not the statement; re-pinned 2026-10-25 @ `2ff3e88b5` from
   `:97-98,245`, which was itself a re-pin of `:93-94,241`) and by PgBouncer
   `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). Each of those reset
-  statements clears **fifteen** `set_config`s in the tree measured here:
+  statements clears **nineteen** `set_config`s in the tree measured here:
   tenant/user/super-admin, the `app.auth_lookup` + `app.tracking_lookup` lookups,
   the three `app.portal_lookup_*` GUCs plus `app.form_lookup_id`, and the five
   credential GUCs — `app.token_issue`, `app.token_credential`,
   `app.token_retire_user` (#3218/#3102), `app.oauth_client_id` (#3225) and
-  `app.unsubscribe_contact` (#3237) — plus `app.plugin_webhook_id`, the plugin
-  receiver's row-narrowing claim (#3246, 0139). See § 1 pre-auth redemption below
-  for what those guard.
+  `app.unsubscribe_contact` (#3237) — plus the four row-narrowing claims of the
+  anonymous receivers: `app.plugin_webhook_id` (#3246, 0139),
+  `app.sso_lookup_domain` + `app.sso_provider_id` (#3246, 0140),
+  `app.quote_webhook_id` (#3246, 0141) and `app.whatsapp_phone_number_id`
+  (#3246, 0142). See § 1
+  pre-auth redemption below for what those guard.
 
 ### Super-admin scope — the deliberate asymmetry
 
@@ -125,7 +129,7 @@ for the pre-tenant email→user lookup) and `withAuthResolutionContext`
 `setAuthResolutionContext` (`:68`), `setTokenIssueContext` (`:197`) and
 `withTokenIssueContext` (`:225`) documented under § 1 pre-auth redemption below.
 
-### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0139)
+### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0140)
 Three user-scoped, secret-bearing tables — **`password_resets`**,
 **`email_verifications`**, **`oauth_codes`** — carry only a `*_user_own` policy
 that needs `app.current_user`, which pre-auth flows (forgot-password, verify-email,
@@ -167,10 +171,10 @@ no freshness clause, so it admits the row before *and* after the tombstone —
 `*_token_retire_read` pair keyed on `app.token_retire_user` (`0135:138-159`). **A
 claim that cannot see its own row silently updates zero rows.**
 
-**The same two traps, re-run one layer up (0136–0139).** The OAuth endpoints,
-`/api/unsubscribe` and the plugin webhook receiver each hit the *identical* failure
-and each got the *identical* fix, so treat these as four worked examples of the rule
-rather than new vocabulary:
+**The same two traps, re-run one layer up (0136–0140).** The OAuth endpoints,
+`/api/unsubscribe`, the plugin webhook receiver and the SSO handoff each hit the
+*identical* failure and each got the *identical* fix, so treat these as five worked
+examples of the rule rather than new vocabulary:
 
 - **0136 `pre_auth_oauth_rls`** (#3225) gave `oauth_clients` a SELECT arm
   `app.auth_lookup = 'true' AND client_id = current_setting('app.oauth_client_id')`
@@ -213,33 +217,20 @@ rather than new vocabulary:
   `tenant_isolation`. *A policy that admits no read is not a hardening gap — it is an
   unreachable endpoint.*
 
-**The same endpoint, still unreachable, for want of a writer (#3328).** 0136 and 0137
-made the OAuth *readers* work, and the flow still went nowhere, because nothing in the
-app ever wrote an `oauth_clients` row: a fresh workspace's every token exchange answered
-`401 invalid_client`, and "unknown client" is indistinguishable from "wrong secret" to
-the caller. `app/api/tenant/oauth-clients/route.ts:89` is that writer, gated on
-`can(ctx, 'settings.manage')` (`:33`) like every other settings surface. It needed **no
-migration**, and that is the rule to take from it — *before adding an arm, check what the
-existing ones already reach*: 0088's `tenant_isolation` FOR ALL (`0088:93`) admits the
-INSERT under the tenant GUC `requireAuth` already sets, because this write is made by a
-logged-in workspace admin rather than by an anonymous bearer of a credential.
-
-Two contracts the writer owns, both of them shape-of-column problems:
-
-- `client_secret` is minted server-side (`lib/auth/oauth-client.ts:31`) and revealed
-  **once**, in the create and rotate responses. No read path selects the column — not the
-  list, not the detail, not the `.returning()` of the write — so the panel cannot leak it
-  and a rebuilt one must not "helpfully" return it either. Rotation exists because a
-  secret you cannot read back is a secret you can only replace.
-- `redirect_uris` is written by `serializeRedirectUris` (`:60`) as a bare comma join with
-  no padding, and the validator refuses any URI containing a comma
-  (`lib/api/schemas/oauth-clients.ts:24`), because #3324's matcher parses that one column
-  by splitting on `,`. A registration form that accepted a comma would store a URI the
-  server could never re-admit — the client would be bricked at its own authorize step.
-
-`tests/integration/oauth-client-registration-3328.test.ts` drives register → authorize →
-token as the RLS-bound probe role, because every layer of that chain has been the broken
-one at some point and only the whole flow proves all of them at once.
+- **0140 `pre_auth_sso_provider_lookup`** (#3246) is the same dead endpoint twice over,
+  and the one case where the caller holds no row id. `GET /api/auth/sso/start` resolves
+  `sso_providers` by the caller's email **domain** (`config->'email_domains' ? domain`)
+  and `GET /api/auth/sso/callback` by the provider id in its own signed state cookie, so
+  it got two arms, one per key: `sso_providers_domain_lookup_read` repeats the route's
+  predicate (`provider_type = 'oidc' AND is_active AND deleted_at IS NULL` plus the `?`
+  test against `app.sso_lookup_domain`), and `sso_providers_id_lookup_read` narrows on
+  `id` only — deliberately *not* `is_active`, because callback/route.ts answers "no
+  longer available" from the row it read. Both are SELECT-only; `sso_sessions` gets
+  nothing. Its insert ran under `withUserContext`, which names `app.current_user` and
+  not the tenant, and `sso_sessions` has only `tenant_isolation`: measured, that raises
+  `new row violates row-level security policy`, so the route now uses the existing
+  `withTenantContext(provider.tenantId, userId, …)`. *Narrowing by a value the caller
+  already knows beats a boolean that lets the query choose the row (0134).*
 
 **The arm inventory, per table** (`password_resets` / `email_verifications` /
 `oauth_codes`), as 0135 leaves them — 11 `CREATE POLICY` statements, four per table

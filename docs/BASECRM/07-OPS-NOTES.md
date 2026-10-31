@@ -175,6 +175,13 @@ Known traps that made earlier runs flaky (all now handled in the script):
   `FOR SELECT USING (true)` policy opens) is derived from the journal, and
   `scripts/app-role-counts-baseline.json` is **shrink-only**.
 
+- `scripts/check-cron-auth.mjs` (`npm run guard:cron-auth`, #3298) — every
+  `app/api/cron/*/route.ts` must import `@/lib/auth/cron` **and** call an
+  awaited `verifyCronSecret(...)`. Two shapes are named as failures: a route that
+  compares `x-cron-secret` with `verifySecret` itself (it silently skips the three
+  opt-in layers), and an un-awaited call, which fails **open** because a pending
+  Promise is truthy. `scripts/cron-auth-baseline.json` is **shrink-only**.
+
 ### What `guard:panel-error-state` cannot see (learn this before rebuilding the panels)
 
 The guard judges a **file**, and it stops at the first bound read that reaches the
@@ -224,6 +231,57 @@ why every number needs its context rather than an assumption.
   `db:drift-check`, `db:audit:jsonb-size`, `bootstrap.sh`, `db:restore`, `backup:verify`,
   `db:seed:api` and the e2e seeder were the un-armed ones (#3280); `db:state` (#3314) and the
   backup/restore shell scripts already armed theirs.
+
+## Every pool carries the TLS policy (#3256, #3381)
+
+`pg` has one TLS channel: the `ssl` option on the pool. `?sslmode=require` in `DATABASE_URL`
+is a **libpq** parameter — `psql`, `pg_dump`, `pg_restore`, and here `pgLibpqEnv()`'s
+`PGSSLMODE` — and node-pg never reads it, so a `new Pool({ connectionString })` with no `ssl`
+is a plaintext connection against a DSN that looks encrypted. One policy covers every pool,
+app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plaintext only when
+`DATABASE_SSL === 'false'` and verifies the server certificate only in production.
+
+- `npm run guard:pool-tls` is the check: it brace-matches every `new Pool(` under `app/`,
+  `lib/`, `scripts/`, `components/` and `deploy/` and requires an `ssl` **name** in the
+  options, so shorthand and variable forms pass and a `PoolConfig` identifier has to resolve
+  to a literal in the same file that carries it.
+- Rebuilding this stack on another host: the setting is per-connection, so a `pg_hba` that
+  says `trust`/`md5` locally will let an unencrypted pool look healthy forever. That is the
+  failure #3381 was filed about.
+
+## Cron endpoints — what actually checks the caller
+
+`lib/auth/cron.ts` is the only cron auth path, and since #3298 all 22
+`app/api/cron/*` routes go through it. Before that sweep 2 of 22 did, which made
+the hardening env vars a lie: setting `CRON_ALLOWED_IPS` or `CRON_SIGNING_KEY`
+protected those two and nothing else, and the 20 others kept answering to a bare
+timing-safe secret compare.
+
+- **Baseline**: `x-cron-secret` vs `CRON_SECRET`, timing-safe. Unset or empty
+  `CRON_SECRET` denies *every* caller — the check fails closed, so a fresh
+  environment with no secret is not an open one.
+- **Layer 1 — `CRON_ALLOWED_IPS`** is only honoured when `TRUST_PROXY=true`
+  (`getTrustedIp` returns null otherwise, because `x-forwarded-for` is
+  client-spoofable). Allowlist configured + proxy not trusted = denial.
+- **Layer 2 — `CRON_SIGNING_KEY`** HMACs the **raw request body**. No cron route
+  reads a body (measured across all 22), so the signed payload is the empty
+  string: a caller that signs `JSON.stringify(params)` is locked out, not
+  accepted. Senders in-repo go through `lib/cron/signature.ts`
+  (`cronAuthHeaders`), which is what `scripts/cron-scheduler.ts`,
+  `scripts/fire-cron.mts` and `deploy/cron/run-cron.sh` all use now — enabling
+  the key without them would have stopped every scheduled job. The shell sender
+  needs `openssl` in the cron image; if it cannot produce a digest it exits 1
+  with `CRON NOT FIRED` rather than sending an unsigned request.
+- **Layer 3 — audit**: denials are written to the error log with
+  `context: 'cron-auth'` and the reason; successes are not logged (high volume,
+  low signal).
+- **`cleanup` has a second principal** (#1087): a logged-in super admin can
+  trigger it from the dashboard. It only falls through to `requireAuth` when no
+  `x-cron-secret` header was presented at all, so a browser trigger does not
+  land in the audit trail as a denied cron caller.
+- Reading the response tells you which half failed: **401** = the caller never
+  authenticated; **423** = it authenticated and `refuseIfCronLockHeld` found
+  another instance already ran the job.
 
 ## Deploy topology (do not conflate — AGENTS.md)
 

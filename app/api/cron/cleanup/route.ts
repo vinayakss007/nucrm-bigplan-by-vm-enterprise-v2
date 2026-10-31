@@ -75,7 +75,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   //  2. a logged-in super admin triggers it manually from the dashboard.
   // #1087: the superadmin path means the settings UI no longer needs to send a
   // cron secret from the browser (it previously sent an empty one).
-  const secretOk = await verifyCronSecret(request, { job: 'cleanup' });
+  //
+  // #3298: the header is probed before calling verifyCronSecret, because that helper
+  // *audits* a denial. Run on the browser path it would record a warning row for every
+  // manual trigger — and denial rows are what the alerting reads. A caller that presents
+  // no cron credential at all is not a denied cron caller; it is a different principal.
+  const secretOk = request.headers.get('x-cron-secret') !== null
+    && await verifyCronSecret(request, { job: 'cleanup' });
   if (!secretOk) {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse || !ctx.isSuperAdmin) {

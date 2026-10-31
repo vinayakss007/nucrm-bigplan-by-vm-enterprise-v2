@@ -16,39 +16,20 @@ import { verifySecret } from '@/lib/crypto';
  * is configured, so existing deployments and callers keep working unchanged:
  *
  *   1. IP allowlisting   — `CRON_ALLOWED_IPS` (comma-separated IPs / CIDRs).
- *      Reads the source address from `x-forwarded-for` / `x-real-ip`, which any
- *      client can forge, so those headers are honoured only when `TRUST_PROXY=true`.
- *      Set `CRON_ALLOWED_IPS` without `TRUST_PROXY` and every cron request is denied
- *      (`getTrustedIp` returns null, and null is not on a list) — that pair is now
- *      load-bearing on all 22 routes rather than the two #3298 found converted.
  *   2. HMAC request signing — `CRON_SIGNING_KEY`; caller sends
- *      `x-cron-signature: sha256=<hex>` over the raw request body. NOT USABLE YET,
- *      in a way this header used to hide: the HMAC is computed over the `rawBody`
- *      option, and no route under `app/api/cron` passes one — so the comparison is
- *      against the empty string and a caller that faithfully signs its POST body is
- *      denied as `signature_mismatch`. Nothing in `deploy/` signs either. Setting
- *      `CRON_SIGNING_KEY` therefore switches the scheduler off, not on; wiring it
- *      needs each route to read its body once and hand the bytes down (and to keep
- *      parsing from that same buffer), which is a batch larger than #3298's parity
- *      fix. Layer 1 and layer 3 are live on all 22 routes.
- *   3. Audit logging     — every DENIED decision is recorded (fire-and-forget;
- *      successes are high-volume and low-signal) with the job name, the source
- *      address and the machine-readable reason, so there is a trail of which job
- *      was refused and why.
+ *      `x-cron-signature: sha256=<hex>` over the raw request body. No cron route
+ *      reads a body, so the body here is the empty string — which is what
+ *      `deploy/cron/run-cron.sh`, `scripts/cron-scheduler.ts` and
+ *      `scripts/fire-cron.mts` sign.
+ *   3. Audit logging     — a *denied* call is recorded (fire-and-forget) with the
+ *      job, the source IP and the reason. Granted calls are not: they are the
+ *      happy path, high-volume and low-signal.
  *
  * Fails CLOSED: any misconfiguration or unexpected error denies the request.
  *
- * Reach matters more than design. Layers 1-3 live in `checkCronAuth`, and
- * `verifyCronSecret` is the only entry point that also runs the record above — so
- * a route that compares the secret itself with `lib/crypto.verifySecret` gets the
- * baseline and silently opts out of the rest. #3298 found exactly that in twenty of
- * the twenty-two routes under `app/api/cron`: setting `CRON_ALLOWED_IPS` and
- * `CRON_SIGNING_KEY` produced an operator-visible configuration that applied to two
- * endpoints. All twenty-two now call `verifyCronSecret` and name their job, and
- * `scripts/check-cron-auth.mjs` is what keeps that true — enforced from `test-unit`
- * (tests/unit/cron-auth-screen-3298.test.ts runs it against the real tree) rather
- * than as a new `guard:` alias, because an alias with no ci.yml step is precisely
- * the defined-but-unwired shape the docs census in #3281/#3282 fails on.
+ * #3298: layers 1-3 only protect a route that calls this module, and 20 of 22
+ * cron routes were comparing the secret by hand instead. `guard:cron-auth`
+ * fails the build on a cron route that reaches for `verifySecret` directly.
  */
 
 interface CronAuthResult {
@@ -188,18 +169,18 @@ function auditCronAuth(jobName: string, result: CronAuthResult, ip: string | nul
 }
 
 /**
- * The cron auth check routes are meant to call.
+ * The boolean check every cron route calls.
  *
  * Verifies the timing-safe secret plus any configured opt-in controls (IP
- * allowlist / HMAC signature) and records denied attempts, naming the job in the
- * record — pass `{ job }`, or a denial is logged as 'unknown' and cannot be traced
- * to the scheduler that was refused (#3298 ask 3). A route that compares the secret
- * by hand with `lib/crypto.verifySecret` skips all of it, which is why
- * `scripts/check-cron-auth.mjs` walks `app/api/cron` and requires this call.
+ * allowlist / HMAC signature) and records denied attempts to the audit log.
  *
- * Takes a `Request`, not a `NextRequest`: every check here reads headers only, and
- * one route (`app/api/cron/subscription-check`) is handed a plain `Request` by its
- * wrapper. Naming the wider type keeps that route from casting to satisfy the check.
+ * Takes `Request`, not `NextRequest`: route handlers are free to type their
+ * argument as the Web standard one, and this module only reads headers.
+ *
+ * The layers used to be reached by 2 of 22 routes (#3298) — a route opted in by
+ * calling *this* function, and `CRON_ALLOWED_IPS` / `CRON_SIGNING_KEY` were
+ * operator configuration that twenty routes silently ignored. Which routes call
+ * it is now `guard:cron-auth`'s job, not a claim in a comment.
  */
 export async function verifyCronSecret(req: Request, opts?: { job?: string; rawBody?: string }): Promise<boolean> {
   const result = await checkCronAuth(req, opts?.rawBody);

@@ -45,7 +45,7 @@ vi.mock('@/lib/email/warmup', () => ({
 // #3298: this route authenticates through lib/auth/cron rather than comparing the
 // secret itself, so that is the module to stub. Allow/deny semantics are pinned in
 // auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
+// and that the route reaches them at all is pinned in cron-auth-uniform-3298.test.ts.
 // What this spec owns is the job's own logic.
 vi.mock('@/lib/auth/cron', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth/cron')>()),

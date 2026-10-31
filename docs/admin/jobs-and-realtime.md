@@ -51,8 +51,13 @@ Scheduled work is exposed as HTTP endpoints under `app/api/cron/*` and triggered
 
 > **Run exactly one cron source per environment** — never both — to avoid duplicate execution.
 
-Cron endpoints are authenticated with **`CRON_SECRET`**, optionally hardened with
-`CRON_ALLOWED_IPS` and `CRON_SIGNING_KEY` (HMAC). Source: `lib/auth/cron.ts`.
+Cron endpoints are authenticated by `verifyCronSecret` in `lib/auth/cron.ts` —
+**`CRON_SECRET`** always, plus two opt-in layers that apply to every one of the 22
+routes (`CRON_ALLOWED_IPS`, which needs `TRUST_PROXY=true`, and `CRON_SIGNING_KEY`,
+an HMAC over the raw request body). No cron route reads a body, so the signed
+payload is the empty string; `lib/cron/signature.ts` builds both headers for the
+TS schedulers, and `deploy/cron/run-cron.sh` signs with `openssl`, so that container
+needs it installed. Source: `lib/auth/cron.ts`.
 
 ### The scheduled jobs (~22)
 

@@ -442,3 +442,13 @@ jobs:
             fi
             git checkout main
             exit 1
+
+    # #3267 ask 2, repo-side half: naming the environment gives the owner
+    # something to scope the DEPLOY_* secrets *to* (the settings-side half and
+    # the rest of the checklist are in docs/infra/github-push-access.md). With
+    # it set, a missing `if:` guard fails as "job needs approval/errored", not
+    # as "job ran with the VM key". Both blocks are appended at EOF so no
+    # `deploy.yml:<line>` register coordinate above them moves.
+    environment: production
+
+permissions: { contents: read }

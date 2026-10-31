@@ -28,7 +28,7 @@ vi.mock('drizzle-orm', async (importOriginal) => {
   };
 });
 
-// Controls what db.query.* returns during a run.
+// Controls what the processor's selects answer during a run.
 const state: {
   integration: { tenantId: string } | null;
   contact: { id: string } | null;
@@ -41,20 +41,49 @@ const state: {
   updateWheres: [], inserts: [],
 };
 
-vi.mock('@/drizzle/db', () => {
+/** The rows the processor's own `tx.select(...)` should answer for a given table. */
+function rowsFor(name: string): unknown[] {
+  if (name === 'integrations') return state.integration ? [{ id: 'int-1', ...state.integration }] : [];
+  if (name === 'contacts') return state.contact ? [state.contact] : [];
+  if (name === 'whatsapp_conversations') return state.conversation ? [state.conversation] : [];
+  if (name === 'whatsapp_messages') return state.existingMessage ? [state.existingMessage] : [];
+  return [];
+}
+
+vi.mock('@/drizzle/db', async () => {
+  // Resolved inside the factory: a table's SQL name is not a stable property of the
+  // object, and guessing it is how this stub silently answers `[]` for `integrations`.
+  const { getTableName } = await import('drizzle-orm');
+  const tableName = (tbl: unknown) => getTableName(tbl as never);
+
   const makeUpdate = () => ({
     set: () => ({
       where: (cond: unknown) => { state.updateWheres.push(cond); return Promise.resolve(); },
     }),
   });
-  const tx = {
-    query: {
-      whatsappConversations: { findFirst: () => Promise.resolve(state.conversation) },
-      whatsappMessages: { findFirst: () => Promise.resolve(state.existingMessage) },
+  // `execute` is a no-op: 0142's claim and `withTenantContext` both start their
+  // transaction with a set_config, and the GUC plumbing itself is
+  // whatsapp-webhook-tenant-context-3246.test.ts's job. This file is about the
+  // predicates the statements carry (H-A, H-B).
+  const select = () => ({
+    from: (tbl: unknown) => {
+      const name = tableName(tbl);
+      const chain = {
+        where: () => chain,
+        limit: () => Promise.resolve(rowsFor(name)),
+        then: (res: (v: unknown) => unknown) => Promise.resolve(rowsFor(name)).then(res),
+      };
+      return chain;
     },
+  });
+  const tx = {
+    // Both context helpers issue `SELECT set_config(...)` on the handle before the
+    // statements below run; answering empty keeps the test on the predicates.
+    execute: () => Promise.resolve([]),
+    select,
     insert: (tbl: unknown) => ({
       values: () => {
-        state.inserts.push(String((tbl as { _?: { name?: string } })?._?.name ?? 'insert'));
+        state.inserts.push(tableName(tbl));
         return { returning: () => Promise.resolve([{ id: 'new-id', contactId: state.contact?.id ?? null }]) };
       },
     }),
@@ -62,12 +91,6 @@ vi.mock('@/drizzle/db', () => {
   };
   return {
     db: {
-      query: {
-        integrations: { findFirst: () => Promise.resolve(state.integration) },
-        contacts: { findFirst: () => Promise.resolve(state.contact) },
-        whatsappConversations: { findFirst: () => Promise.resolve(state.conversation) },
-        whatsappMessages: { findFirst: () => Promise.resolve(state.existingMessage) },
-      },
       transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
       update: makeUpdate,
     },

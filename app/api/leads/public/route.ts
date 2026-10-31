@@ -325,17 +325,19 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get('email')?.trim().toLowerCase();
     const tenant_id = searchParams.get('tenant_id');
 
-    if (!email || !tenant_id) {
-      return NextResponse.json({ exists: false });
-    }
-
     // #3295: this endpoint answers one unauthenticated boolean — "is this person
     // an active contact of workspace X" — and `tenant_id` is published in every
     // embedded form, so without a limit the enumeration cost per record is one
     // cheap GET with no backoff. POST in this file has had a per-IP budget since
-    // #1154; the GET had none.
+    // #1154; the GET had none. The caller budget comes before the parameter
+    // check on purpose: a probe with no email is still a probe, and answering it
+    // for free leaves the endpoint's cheapest request un-throttled.
     const byCaller = await checkRateLimit(request, { action: 'lead_exists', max: 10, windowMinutes: 60 });
     if (byCaller) return byCaller;
+
+    if (!email || !tenant_id) {
+      return NextResponse.json({ exists: false });
+    }
 
     // The id arrives from a query string and names both a workspace and, one line
     // later, a counter key. Anything that is not an id shape is refused here, so

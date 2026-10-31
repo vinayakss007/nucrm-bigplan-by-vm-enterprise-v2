@@ -14,6 +14,7 @@
  * role or the migration chain that follows cannot connect — but it is now inside a gated script.
  */
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import { createInterface } from 'node:readline';
 
 import {
@@ -69,7 +70,7 @@ async function main() {
     return;
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: pgSslConfig() });
 
   try {
     console.log('[drop-all] Dropping all schemas (public + drizzle)...');

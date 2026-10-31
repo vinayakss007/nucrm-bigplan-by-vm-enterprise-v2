@@ -44,6 +44,7 @@
  */
 
 import { Pool } from 'pg';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import { spawn } from 'child_process';
 import { existsSync, mkdtempSync, rmSync, statSync, createReadStream } from 'fs';
 import { tmpdir } from 'os';
@@ -138,7 +139,7 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: catalogUrl, max: 1 });
+  const pool = new Pool({ connectionString: catalogUrl, max: 1, ssl: pgSslConfig() });
   let workDir: string | null = null;
   const t0 = Date.now();
 
@@ -209,7 +210,7 @@ async function main() {
     }
 
     // ── Pre-flight: refuse to clobber a non-empty target unless allowed ─────
-    const targetPool = new Pool({ connectionString: targetUrl, max: 1 });
+    const targetPool = new Pool({ connectionString: targetUrl, max: 1, ssl: pgSslConfig() });
     try {
       const { rows: tRows } = await targetPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM information_schema.tables
@@ -236,7 +237,7 @@ async function main() {
     const restoreMs = Date.now() - restoreStart;
 
     // ── Validate the result ──────────────────────────────────────────────────
-    const verifyPool = new Pool({ connectionString: targetUrl, max: 1 });
+    const verifyPool = new Pool({ connectionString: targetUrl, max: 1, ssl: pgSslConfig() });
     try {
       const tables = await verifyPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM information_schema.tables

@@ -441,7 +441,8 @@ describe('#3284 the rollback-coverage job is wired into CI', () => {
     // third (guard:destructive-gate) as 7/7, so the numbering this issue minted at
     // 1..5 is now 1..7. Pin it closed: a step added or dropped without renumbering
     // fails here rather than printing a stale count.
-    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // (#3298's guard:cron-auth is the fourth, so the pin reads 1..8 now.)
+    expect([...pre.matchAll(/▶ (\d+)\/8/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(pre).toContain('npm run guard:seed-credential');
   });
 });

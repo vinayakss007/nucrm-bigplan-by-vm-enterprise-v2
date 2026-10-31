@@ -118,7 +118,7 @@ describe('#3351 the gate reads the status of what it runs', () => {
 
   it('reaches the banner only on a tree where every step answered zero', () => {
     expect([...CODE.matchAll(/ALL CHECKS PASSED/g)].length).toBe(1);
-    expect(CODE.lastIndexOf('ALL CHECKS PASSED')).toBeGreaterThan(CODE.lastIndexOf('run_step "▶ 7/7'));
+    expect(CODE.lastIndexOf('ALL CHECKS PASSED')).toBeGreaterThan(CODE.lastIndexOf(`run_step "▶ ${TOTAL}/${TOTAL}`));
   });
 
   it('keeps the three guards the other screens pin this file for', () => {
@@ -142,14 +142,14 @@ describe('#3351 the gate, run against stubs that fail on demand', () => {
     const res = runGate(stubBin({ failMatching: 'tsc' }));
     expect(res.status).not.toBe(0);
     expect(res.stdout).not.toContain('Ready to merge');
-    expect(res.stdout).toContain('✖ Step 1/7');
+    expect(res.stdout).toContain(`✖ Step 1/${TOTAL}`);
     expect(res.stdout).toContain('exited 3');
   }, 60_000);
 
   it('stops on a failing build, which is the step whose whole point was truncated away', () => {
     const res = runGate(stubBin({ failMatching: 'run build' }));
     expect(res.status).not.toBe(0);
-    expect(res.stdout).toContain('✖ Step 2/7');
+    expect(res.stdout).toContain(`✖ Step 2/${TOTAL}`);
     expect(res.stdout).not.toContain('Ready to merge');
     // Steps 4 onward never ran, so their verdicts are absent rather than optimistic.
     expect(res.stdout).not.toContain('Rollback coverage');
@@ -158,14 +158,14 @@ describe('#3351 the gate, run against stubs that fail on demand', () => {
   it('stops on a failing guard, naming which one', () => {
     const res = runGate(stubBin({ failMatching: 'guard:destructive-gate' }));
     expect(res.status).not.toBe(0);
-    expect(res.stdout).toContain('✖ Step 7/7');
+    expect(res.stdout).toContain(`✖ Step 7/${TOTAL}`);
     expect(res.stdout).not.toContain('Ready to merge');
   }, 60_000);
 
   it('shows the failing step its own output even though the excerpt is bounded', () => {
     const res = runGate(stubBin({ failMatching: 'guard:seed-credential' }));
     expect(res.status).not.toBe(0);
-    expect(res.stdout).toContain('✖ Step 6/7');
+    expect(res.stdout).toContain(`✖ Step 6/${TOTAL}`);
     expect(res.stdout).toContain('No committed password literal (#3281)');
     expect(res.stdout).toContain('FAILED');
     // 40 noise lines per step, bounded: the gate reports, it does not dump the suite.
@@ -240,7 +240,7 @@ describe('#3351 step 4: a missing @/lib module is a decision, not a subshell acc
     const repo = scratchRepo(`import { missing } from '@/lib/not-there';`);
     const res = runGate(stubBin(), repo);
     expect(res.status).not.toBe(0);
-    expect(res.stdout).toContain('✖ Step 4/7');
+    expect(res.stdout).toContain(`✖ Step 4/${TOTAL}`);
     expect(res.stdout).toContain('lib/not-there.ts');
     expect(res.stdout).not.toContain('Ready to merge');
   }, 60_000);

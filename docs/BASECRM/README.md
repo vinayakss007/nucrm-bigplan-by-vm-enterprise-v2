@@ -237,3 +237,14 @@ so 02, 03 and that test moved together in #3246 instead of one of them drifting.
 table whose `tenant_id` is NOT NULL — and, unlike 0136–0138, the dead half was the
 *read*: one SELECT-only arm, no write granted, and the migration lands UNAPPLIED with
 the rest of the backlog.
+
+**Re-counted again 2026-10-31 for the 0140–0142 journal repair.** Four up-migrations
+(0140 jsonb size, 0141 ai-providers FORCE RLS, 0141 quote-webhook lookup, 0142
+whatsapp phone lookup) had landed on disk while a merge resolution dropped their
+journal entries, so the chain screen saw orphans. The journal now carries **145**
+entries over **290** `.sql` files — 145 forward, 145 `.down.sql` — and the tree holds
+**1002** `*.test.*` files. Steps 4c/4d also appended `app.quote_webhook_id` and
+`app.whatsapp_phone_number_id` to both reset lists, so both now clear **nineteen**
+GUCs, and `app/api/webhooks` plus the ten `lib/` files #3312 pinned leave **107** reads
+in **4** counted deferrals across a **120**-file anonymous walk (the guard re-derives
+all four). The migrations remain UNAPPLIED with the rest of the backlog (#2537).

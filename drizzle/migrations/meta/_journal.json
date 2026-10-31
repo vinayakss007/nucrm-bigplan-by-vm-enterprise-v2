@@ -986,14 +986,35 @@
       "version": "7",
       "idx": 140,
       "when": 1793140000000,
-      "tag": "0140_jsonb_size_octet_length",
+      "tag": "0140_pre_auth_sso_provider_lookup",
       "breakpoints": true
     },
     {
       "version": "7",
       "idx": 141,
       "when": 1793200000000,
+      "tag": "0140_jsonb_size_octet_length",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 142,
+      "when": 1793260000000,
       "tag": "0141_ai_providers_force_rls",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 143,
+      "when": 1793320000000,
+      "tag": "0141_pre_auth_quote_webhook_lookup",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 144,
+      "when": 1793380000000,
+      "tag": "0142_whatsapp_integration_phone_lookup_read",
       "breakpoints": true
     }
   ]

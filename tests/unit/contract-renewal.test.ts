@@ -14,7 +14,7 @@ vi.mock('@/lib/cache', async (importOriginal) => ({
 // #3298: this route authenticates through lib/auth/cron rather than comparing the
 // secret itself, so that is the module to stub. Allow/deny semantics are pinned in
 // auth-cron-verify-secret.test.ts, the denial record in cron-task-reminders.test.ts,
-// and that the route reaches them at all is pinned in cron-auth-screen-3298.test.ts.
+// and that the route reaches them at all is pinned in cron-auth-uniform-3298.test.ts.
 // What this spec owns is the job's own logic.
 vi.mock('@/lib/auth/cron', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth/cron')>()),
@@ -177,9 +177,14 @@ function callsOnTable(call: SelectCall | undefined, table: unknown): boolean {
   return call !== undefined && call.table === table;
 }
 
+// The route authenticates through lib/auth/cron (#3298), which fails closed on an
+// unset CRON_SECRET and on a missing header — so a request that wants the sweep body
+// has to present both.
+process.env.CRON_SECRET = 'unit-test-cron-secret-for-3298';
+
 async function runCron() {
   const { POST } = await import('@/app/api/cron/contract-renewal-check/route');
-  const res = await POST({ headers: new Headers() } as never);
+  const res = await POST({ headers: new Headers({ 'x-cron-secret': 'unit-test-cron-secret-for-3298' }) } as never);
   return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
 

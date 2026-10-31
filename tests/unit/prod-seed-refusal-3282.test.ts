@@ -295,7 +295,7 @@ describe('#3282 seed-fresh.ts refuses before it deletes, and seeds a password no
   });
 
   it('stays inside one pinned connection and one transaction, like #2628 left seed-dev', () => {
-    expect(src).toMatch(/new Pool\(\{ connectionString: process\.env\.DATABASE_URL, max: 1 \}\)/);
+    expect(src).toMatch(/new Pool\(\{ connectionString: process\.env\.DATABASE_URL, max: 1, ssl: pgSslConfig\(\) \}\)/);
     expect(src).toMatch(/drizzle\(client/);
     expect(src).toMatch(/await client\.query\('BEGIN'\)/);
   });
@@ -485,6 +485,7 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
   it('is the seventh step of the local pre-merge screen', () => {
     const pre = read('scripts/pre-merge-check.sh');
     expect(pre).toContain('npm run guard:destructive-gate');
-    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // #3298 appended guard:cron-auth as an eighth, by name, in that issue's ask 2.
+    expect([...pre.matchAll(/▶ (\d+)\/8/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 });

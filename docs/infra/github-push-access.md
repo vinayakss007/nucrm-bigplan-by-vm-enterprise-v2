@@ -93,3 +93,41 @@ What that needs from the repository owner:
 The script is idempotent: it lists existing issues first and skips any title that is already filed, so a
 retry after a partial run will not create duplicates. A token that lacks the permission fails fast with
 the API's own message rather than filing nothing and exiting 0.
+
+## Workflow trust checklist (#3267) — the halves that are settings, not files
+
+`scripts/check-workflow-trust.mjs` (run by *Workflow Lint → Assert the fork trust boundary*) asserts
+the file-side boundary: no `pull_request_target`, no fork-reachable job reading a repo secret, no
+fork-reachable `runs-on: self-hosted`, a top-level `permissions:` in every workflow, and an `environment:`
+on every job that touches `DEPLOY_*`. It cannot see repository settings, so these stay with the owner.
+Verify each after any change to the runner, the key, or the token.
+
+1. **Move the `DEPLOY_*` secrets into the `production` environment.** `deploy.yml` now names that
+   environment (`deploy.yml` job `deploy`), so *Settings → Secrets and variables → Actions →
+   Environments → production* is where `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_URL` and friends belong.
+   Repository-level secrets are readable by *every* workflow in the repo; environment secrets are not.
+   Until they move, the environment name only marks the target — it does not restrict anything.
+2. **Keep the deploy key read-only.** Option 1 above ("Allow write access") is the smallest unblock for
+   `git push`, and the largest blast radius: that key lives on the VM the deploys land on, and a
+   write-capable key can push a workflow file that then runs with this repository's secrets. Option 2
+   (fine-grained PAT) is preferred for that reason.
+3. **Audit the PAT scopes.** The token needs `Contents: Read and write` (push) and `Issues: Read and
+   write` (filing). It must **not** have `Actions`, `Secrets`, or `Administration` — with those, a stolen
+   token can read or replace `DEPLOY_SSH_KEY`, or dispatch a workflow, without ever touching a branch.
+   Check at *Settings → Developer settings → Fine-grained tokens → the token → Repository permissions*.
+4. **Do not register a self-hosted runner on this VM while any workflow can reach one.** A
+   `pull_request` job scheduled on `self-hosted` executes a contributor's fork code on the host that
+   holds `/root/all-keys`, `/srv/nucrm`, and the SSH key GitHub already trusts. If a runner is added
+   later, set *Settings → Actions → Runners → Runner groups* so only the workflows that need it can
+   schedule there, and keep the `runners: { group: … }` line in the workflow that uses it.
+5. **Set the repository default token to read-only** (*Settings → Actions → General → Workflow
+   permissions → Read repository contents and packages permissions*). The `permissions:` blocks in the
+   workflow files then state each job's actual need instead of loosening a permissive default.
+6. **Rotate anything that surfaced in a log, then re-create it in the environment.** #3267's process
+   note: a credential that appeared in chat or log output is leaked. Move `DEPLOY_*` (item 1) by
+   generating new values rather than copying the repository-level ones, so the copy that was visible
+   is also the copy that stops working.
+
+```bash
+node scripts/check-workflow-trust.mjs   # the file-side half, exit 1 on any breach
+```

@@ -376,12 +376,11 @@ describe('the route holds no statement, and the ledger counts what is left', () 
     expect(guard.PINNED_TARGETS).toContain('lib/email/webhook-scope.ts');
     expect(guard.PINNED_TARGETS).toContain('lib/email/resend-event-handlers.ts');
     expect(guard.CONTEXT_HELPERS).toContain('withTrackingLookupContext');
-    // Re-pinned 106 -> 107 by #3280: `/api/setup/status` joined `PUBLIC_PATHS`, so
-    // the derived anonymous surface grew by one file. This case is not the floor's
-    // owner—the guard and #3186's derivation test pin it—but a second literal that
-    // has to move with it, and CI is where that shows up.
-    expect(guard.MIN_SCANNED_FILES).toBe(107);
+    // The floor is the whole derived surface, so it moves when any step pins a file:
+    // 106 with step 4b's two Resend libraries, 107 with step 4d's whatsapp processor,
+    // and 120 once #3312 pinned the ten lib/ files an anonymous route calls.
+    expect(guard.MIN_SCANNED_FILES).toBe(120);
     const webhooks = guard.SCOPE_DEFERRALS.find((d: { dir: string }) => d.dir === 'app/api/webhooks')!;
-    expect(webhooks.maxFindings, '42 left the two api_keys reads, 30 leaves inbound and payu').toBe(30);
+    expect(webhooks.maxFindings, '42 left the two api_keys reads, 24 is what inbound and payu leave').toBe(24);
   });
 });

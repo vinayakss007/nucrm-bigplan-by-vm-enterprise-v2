@@ -17,7 +17,7 @@ const owners = Array.from({ length: NUM_ITEMS }, (_, i) => ({
 console.time('Array .find');
 for (const t of justExpired) {
   const owner = owners.find(o => o.id === t.id);
-  const to = t.billingEmail || owner?.ownerEmail;
+  const _to = t.billingEmail || owner?.ownerEmail;
 }
 console.timeEnd('Array .find');
 
@@ -26,6 +26,6 @@ console.time('Map .get');
 const ownersMap = new Map(owners.map(o => [o.id, o]));
 for (const t of justExpired) {
   const owner = ownersMap.get(t.id);
-  const to = t.billingEmail || owner?.ownerEmail;
+  const _to = t.billingEmail || owner?.ownerEmail;
 }
 console.timeEnd('Map .get');
