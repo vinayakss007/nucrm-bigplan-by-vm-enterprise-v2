@@ -16,7 +16,6 @@
 import { Pool } from 'pg';
 import { pgSslConfig } from '../lib/db/ssl-config';
 import { createInterface } from 'node:readline';
-import { pgSslConfig } from '../lib/db/ssl-config';
 
 import {
   describeTarget,

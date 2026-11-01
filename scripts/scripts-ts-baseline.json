@@ -1,0 +1,299 @@
+{
+  "_comment": [
+    "Type errors scripts/** is known to carry, recorded as file + TS code + message + count so",
+    "a line-number shift cannot fake a pass (#3413). Shrink-only: an entry whose errors vanish,",
+    "or whose count drops, fails the screen — the floor can only come down. Re-cut it by",
+    "piping `node scripts/check-scripts-typecheck.mjs --json` output into a tally, never by",
+    "hand: an entry that does not match a real diagnostic is a lie the next reader inherits."
+  ],
+  "entries": [
+    {
+      "file": "scripts/_debug-create-admin.ts",
+      "code": "TS18048",
+      "message": "'result.t' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/_debug-create-admin.ts",
+      "code": "TS18048",
+      "message": "'result.u' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/_debug-create-admin.ts",
+      "code": "TS18048",
+      "message": "'t' is possibly 'undefined'.",
+      "count": 5
+    },
+    {
+      "file": "scripts/_debug-create-admin.ts",
+      "code": "TS18048",
+      "message": "'u' is possibly 'undefined'.",
+      "count": 5
+    },
+    {
+      "file": "scripts/check-schema-drift-live.ts",
+      "code": "TS2352",
+      "message": "Conversion of type 'Index[]' to type 'Set<{ config: { name?: string | undefined; }; }>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
+      "count": 1
+    },
+    {
+      "file": "scripts/check-schema-drift-live.ts",
+      "code": "TS2352",
+      "message": "Conversion of type 'UniqueConstraint[]' to type 'Set<{ config: { name?: string | undefined; columns: { name: string; }[]; }; }>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
+      "count": 1
+    },
+    {
+      "file": "scripts/drift-check.ts",
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
+      "count": 2
+    },
+    {
+      "file": "scripts/lighthouse-audit.ts",
+      "code": "TS1192",
+      "message": "Module '\"/workspaces/nucrm-bigplan-by-vm-enterprise-v2/node_modules/chrome-launcher/dist/index\"' has no default export.",
+      "count": 1
+    },
+    {
+      "file": "scripts/lighthouse-audit.ts",
+      "code": "TS18048",
+      "message": "'htmlResult' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/lighthouse-audit.ts",
+      "code": "TS18048",
+      "message": "'runnerResult' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migrate.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 3
+    },
+    {
+      "file": "scripts/migrate.ts",
+      "code": "TS7006",
+      "message": "Parameter 'e' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migration-runner.ts",
+      "code": "TS2307",
+      "message": "Cannot find module 'commander' or its corresponding type declarations.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migration-runner.ts",
+      "code": "TS2339",
+      "message": "Property 'size' does not exist on type 'Migration[]'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migration-runner.ts",
+      "code": "TS2345",
+      "message": "Argument of type 'Map<string, Migration>' is not assignable to parameter of type 'Migration[]'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migration-runner.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/migration-runner.ts",
+      "code": "TS7006",
+      "message": "Parameter 'options' implicitly has an 'any' type.",
+      "count": 2
+    },
+    {
+      "file": "scripts/preprod-api-e2e.ts",
+      "code": "TS2339",
+      "message": "Property 'contactEmail' does not exist on type 'RunState'.",
+      "count": 7
+    },
+    {
+      "file": "scripts/probe-write-contexts.ts",
+      "code": "TS2741",
+      "message": "Property 'message' is missing in type '{ ok: true; }' but required in type '{ ok: boolean; code?: string | undefined; message: string; }'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS18048",
+      "message": "'cCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS18048",
+      "message": "'coCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS18048",
+      "message": "'dCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS18048",
+      "message": "'ins' is possibly 'undefined'.",
+      "count": 4
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS18048",
+      "message": "'lCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-api-data.ts",
+      "code": "TS2769",
+      "message": "No overload matches this call.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-dev.ts",
+      "code": "TS2322",
+      "message": "Type 'T | undefined' is not assignable to type 'T'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-dev.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 8
+    },
+    {
+      "file": "scripts/seed-dev.ts",
+      "code": "TS2769",
+      "message": "No overload matches this call.",
+      "count": 11
+    },
+    {
+      "file": "scripts/seed-e2e-user.ts",
+      "code": "TS18048",
+      "message": "'pipeline' is possibly 'undefined'.",
+      "count": 4
+    },
+    {
+      "file": "scripts/seed-e2e-user.ts",
+      "code": "TS18048",
+      "message": "'user' is possibly 'undefined'.",
+      "count": 3
+    },
+    {
+      "file": "scripts/seed-e2e-user.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "scripts/seed-e2e-user.ts",
+      "code": "TS2739",
+      "message": "Type '{ id: `${string}-${string}-${string}-${string}-${string}`; tenantId: string; name: string; description: string; isDefault: true; }' is missing the following properties from type '{ createdAt: Date; updatedAt: Date | null; deletedAt: Date | null; id: string; tenantId: string; name: string; description: string | null; isDefault: boolean | null; metadata: unknown; }': createdAt, updatedAt, deletedAt, metadata",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-e2e-user.ts",
+      "code": "TS2769",
+      "message": "No overload matches this call.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-fresh.ts",
+      "code": "TS18048",
+      "message": "'admin' is possibly 'undefined'.",
+      "count": 6
+    },
+    {
+      "file": "scripts/seed-fresh.ts",
+      "code": "TS18048",
+      "message": "'adminRole' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-fresh.ts",
+      "code": "TS18048",
+      "message": "'pipeline' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed-fresh.ts",
+      "code": "TS18048",
+      "message": "'tenant' is possibly 'undefined'.",
+      "count": 9
+    },
+    {
+      "file": "scripts/seed/contacts.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "scripts/seed/contacts.ts",
+      "code": "TS2769",
+      "message": "No overload matches this call.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed/deals.ts",
+      "code": "TS2769",
+      "message": "No overload matches this call.",
+      "count": 1
+    },
+    {
+      "file": "scripts/seed/helpers.ts",
+      "code": "TS2322",
+      "message": "Type 'T | undefined' is not assignable to type 'T'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/sim-superadmin-roles.ts",
+      "code": "TS18048",
+      "message": "'collection.GET' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/sim-superadmin-roles.ts",
+      "code": "TS2322",
+      "message": "Type 'Promise<{ id: string; roleId?: undefined; } | { id: string; roleId: string; }>' is not assignable to type 'Promise<Record<string, string>>'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/sim-superadmin-roles.ts",
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/sim-superadmin-roles.ts",
+      "code": "TS2722",
+      "message": "Cannot invoke an object which is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "scripts/simulate-preprod-flows.ts",
+      "code": "TS2339",
+      "message": "Property 'tenant_id' does not exist on type '{ user_id: string; }'.",
+      "count": 1
+    },
+    {
+      "file": "scripts/verify-backup.ts",
+      "code": "TS2345",
+      "message": "Argument of type 'Record<string, string>' is not assignable to parameter of type 'ProcessEnv'.",
+      "count": 2
+    }
+  ]
+}

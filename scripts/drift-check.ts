@@ -452,8 +452,8 @@ async function main() {
       console.log(JSON.stringify({
         tables: { expected: expectedTables.size, present: actualTables.size - extraTables.length },
         functions: { expected: expectedFunctions.size, present: actualFunctions.size },
-        columnsCompared,
-        findings: columnFindings,
+        columnsCompared: comparison.columnsCompared,
+        findings: fresh,
         allowlisted: masked.map(f => f.key),
         allowlistStale: staleAllow,
         errors,
