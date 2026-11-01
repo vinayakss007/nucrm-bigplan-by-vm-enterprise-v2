@@ -248,6 +248,10 @@ export async function handleSSOCallback(
 
   let userId: string;
   if (existingUsers[0]) {
+    // #3401: refuse, do not filter. A filtered read would route a deleted account's
+    // email into the INSERT below, and `users.email` is UNIQUE across a soft delete,
+    // so the sign-in would surface as a 23505 rather than a denial.
+    if (existingUsers[0].deletedAt) throw new Error('This account is no longer active');
     userId = existingUsers[0].id;
   } else {
     const [newUser] = await withSecurityContext(async (tx) =>

@@ -114,9 +114,9 @@ export async function POST_login(request: NextRequest) {
     // PP-012: no SELECT policy on `users` is satisfiable by an unauthenticated
     // connection, so this lookup matched zero rows and every login answered
     // "Invalid email or password" regardless of what was typed. The auth-lookup
-    // context grants exactly this read — never UPDATE or DELETE.
+    // context grants the read; #3401's isNull(deletedAt) is what refuses a tombstone.
     const [user] = await withAuthLookupContext(async (tx) =>
-      await tx.select().from(users).where(eq(users.email, email)).limit(1)
+      await tx.select().from(users).where(and(eq(users.email, email), isNull(users.deletedAt))).limit(1)
     );
 
     if (!user || !user.passwordHash || !await verifyPassword(password, user.passwordHash)) {
@@ -277,8 +277,8 @@ export async function POST_signup(request: NextRequest) {
     const passwordError = validatePassword(password);
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
-    // Same RLS lookup gap as login: without the auth-lookup context this read
-    // returned nothing, so the duplicate-account 409 could never fire.
+    // Same RLS lookup gap as login, and deliberately NOT filtered on deletedAt (#3401): a
+    // tombstone holds the UNIQUE email, so the 409 must see it or the re-signup dies on 23505.
     const [existing] = await withAuthLookupContext(async (tx) =>
       await tx.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
     );
