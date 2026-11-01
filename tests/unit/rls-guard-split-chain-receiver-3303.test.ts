@@ -6,26 +6,27 @@
 /**
  * #3303 — rule 2 of the RLS route-coverage guard reads one source line at a time,
  * so a drizzle chain that puts its receiver on the previous line is invisible to
- * it. `app/api/scim/v2/Users/route.ts:122` is exactly that shape:
+ * it. `app/api/scim/v2/Users/route.ts:122` was exactly that shape:
  *
  *     const [countResult] = await db
  *       .select({ count: sql`count(*)` })
  *       .from(users)
  *       .innerJoin(tenantMembers, …)
  *
- * `BARE_POOL_RE` needs `db` and `.select` in the same line, so the guard answers
- * "no anonymous route touches an identity table on the bare pool" while SCIM does
+ * `BARE_POOL_RE` needs `db` and `.select` in the same line, so the guard answered
+ * "no anonymous route touches an identity table on the bare pool" while SCIM did
  * it twice per handler. Measured on `9e186db0e`, fusing the continuation lines
- * surfaces **10** statements in **2** files — the two the issue names — and
- * nothing else in 518 routes, which is what makes this a real blind spot rather
+ * surfaced **10** statements in **2** files — the two the issue names — and
+ * nothing else in 518 routes, which is what made this a real blind spot rather
  * than a wider net.
  *
- * The other half of #3303 is a privilege decision (a `users_tenant_scim_read`
- * arm, or `withSecurityContext` for a machine token with no acting user) and that
- * is not this guard's call. So the 10 land in `scripts/rls-preauth-baseline.json`
- * as *counted, reasoned* allowances: the guard sees them, CI stays green, and the
- * ratchet is shrink-only — fixing SCIM has to lower the number, and leaving a
- * number that excuses nothing trips `BASELINE_STALE`.
+ * The privilege half of #3303 landed in the same branch: both SCIM routes now run
+ * inside `withScimTenantContext` and migration 0143 adds the two narrow `users`
+ * arms that context keys on. So the real tree reports nothing, the two
+ * `rls-preauth-baseline.json` allowances are gone, and what remains here is the
+ * proof that the fusion still *would* see the shape — exercised on fixtures, not
+ * on the live tree. scim-tenant-context-3303.test.ts owns the fix's own
+ * assertions; this file keeps the guard honest about the chain it was written for.
  */
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -53,75 +54,63 @@ function fixture(body: string): string {
   return dir;
 }
 
-describe('the guard sees a bare-pool read whose receiver sits on its own line (#3303)', () => {
-  it('counts the SCIM list handler instead of reporting nothing', () => {
-    expect(hitsIn(SCIM_LIST).length).toBeGreaterThanOrEqual(4);
-    expect(hitsIn(SCIM_ITEM).length).toBeGreaterThanOrEqual(4);
-  });
-
-  it('names the table, not just the line', () => {
-    const tables = new Set(hitsIn(SCIM_LIST).map((h) => h.detail.split(' ')[0]));
-    // `users` is the directory read; `tenant_members` is what the join turns into
-    // a zero-row answer for a machine token with no acting user.
-    expect([...tables].sort()).toContain('users');
-  });
-
-  it('reports the line a human has to open in the editor, not the fused one', () => {
-    const list = hitsIn(SCIM_LIST);
-    expect(list.length, 'vacuous if the SCIM route reports nothing').toBeGreaterThan(0);
-    for (const h of list) {
-      const srcLine = readFileSync(join(ROOT, SCIM_LIST), 'utf8').split('\n')[h.line - 1] ?? '';
-      expect(srcLine).toMatch(/\b(?:db|database|pool)\s*$/);
+describe('the fusion still sees the SCIM chain its fixtures reproduce (#3303)', () => {
+  it('reports a receiver line, and names the identity table, for the list-handler shape', () => {
+    const dir = fixture(
+      'const [countResult] = await db\n'
+      + '  .select({ count: sql`count(*)` })\n'
+      + '  .from(users)\n'
+      + '  .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id));\n',
+    );
+    try {
+      const hits = analyse({ root: dir, baseline: {} }).hits;
+      expect(hits).toHaveLength(1);
+      // The line a human has to open in the editor is the receiver's, not the fused one.
+      expect(hits[0].line).toBe(1);
+      expect(hits[0].detail.split(' ')[0]).toBe('users');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('no longer finds that chain in the real tree, because #3303 moved it under a context', () => {
+    expect(hitsIn(SCIM_LIST)).toEqual([]);
+    expect(hitsIn(SCIM_ITEM)).toEqual([]);
   });
 
   it('does not invent findings anywhere else in app/api', () => {
-    const files = [...new Set(raw.hits.map((h) => h.file))].sort();
-    // Only the 2 SCIM routes. The 3 cron routes that used to be on this list are
-    // not anonymous-surface sites: they run their reads inside `sweepTenants`,
-    // which pins one connection and sets `app.current_tenant` / `app.current_user`
-    // on it for the whole sweep — see rls-guard-credits-cron-sweep-3315.test.ts
-    // for why the guard is now allowed to believe that. Anything beyond this list
-    // is the fusion matching a chain that was never on a pool.
-    expect(files).toEqual([SCIM_ITEM, SCIM_LIST].sort());
+    // The 3 cron routes that used to be on this list are not anonymous-surface
+    // sites: they run their reads inside `sweepTenants`, which pins one connection
+    // and sets `app.current_tenant` / `app.current_user` on it for the whole sweep
+    // — see rls-guard-credits-cron-sweep-3315.test.ts. Anything beyond that would
+    // be the fusion matching a chain that was never on a pool.
+    expect(raw.hits).toEqual([]);
   });
 });
 
-describe('the 10 newly-visible SCIM statements are accounted for, not waved at', () => {
-  it('runs green only because the baseline allows them', () => {
+describe('the ten allowances are retired, not left excusing nothing', () => {
+  it('runs green with no tolerance and no findings', () => {
     expect(current.findings).toEqual([]);
-    expect(current.allowed).toBe(raw.hits.length);
+    expect(current.allowed).toBe(0);
   });
 
-  it('each SCIM allowance carries a reason a reviewer can disagree with', () => {
-    for (const file of [SCIM_LIST, SCIM_ITEM]) {
-      const key = `${file}|PREAUTH_UNCONTEXTED_READ`;
-      expect(baseline[key], `${key} must be counted`).toBeGreaterThan(0);
-      const why = baseline._reasons?.[key] ?? '';
-      expect(why.length, `${key} needs a reason`).toBeGreaterThan(60);
-      expect(why).toMatch(/#3303/);
-    }
-  });
-
-  it('counts what is really there, so the ratchet can only go down', () => {
-    for (const file of [SCIM_LIST, SCIM_ITEM]) {
-      expect(baseline[`${file}|PREAUTH_UNCONTEXTED_READ`]).toBe(hitsIn(file).length);
-    }
+  it('keeps no SCIM count and no SCIM reason behind', () => {
+    expect(Object.keys(baseline).filter((k) => k.includes('scim'))).toEqual([]);
+    expect(Object.keys(baseline._reasons ?? {}).filter((k) => k.includes('scim'))).toEqual([]);
   });
 });
 
-describe('what rule 1 still cannot judge is said out loud', () => {
-  it('lists the routes that authenticate by a mechanism the guard does not know', () => {
-    // Rule 1's gate is `requireAuth(` / `requireTenantCtx(`. A route that reaches
-    // the database and authenticates some other way is skipped — and until this
-    // ran, nobody could see that happening.
+describe('rule 1 now judges a route whose token names the tenant', () => {
+  it('no longer lists SCIM among the routes it cannot judge', () => {
+    // Rule 1's gate used to be `requireAuth(` / `requireTenantCtx(` alone, so a
+    // route that authenticated by verifying a tenant-naming token was skipped in
+    // silence. `verifySCIMToken` is now a mechanism rule 1 knows to ask about.
     expect(Array.isArray(current.skippedAuthenticators)).toBe(true);
     const files = current.skippedAuthenticators.map((s) => s.file);
-    expect(files).toContain(SCIM_LIST);
-    expect(files).toContain(SCIM_ITEM);
+    expect(files).not.toContain(SCIM_LIST);
+    expect(files).not.toContain(SCIM_ITEM);
     for (const s of current.skippedAuthenticators) {
       expect(s.mechanisms.length).toBeGreaterThan(0);
-      // …and none of them is something the guard already treats as an entry point.
       expect(s.file).toMatch(/^app\/api\//);
     }
   });
