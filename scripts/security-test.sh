@@ -5,14 +5,26 @@
 # Tests: Auth, CRUD, Security, Rate Limits, Data Transmission
 # ═══════════════════════════════════════════════════════════════
 
-# #77: the origin and the seed account are parameters, not literals. This suite
-# only ever worked against `seed:dev` data, so pointed at any other database every
-# section failed with 401 and the run read like an app outage.
+# #77: the origin is a parameter, not a literal. This suite only ever worked
+# against `seed:dev` data, so pointed at any other database every section failed
+# with 401 and the run read like an app outage.
 BASE_URL="${BASE_URL:-http://localhost:3000}"
-TEST_EMAIL="${TEST_EMAIL:-admin@test.com}"
-TEST_PASSWORD="${TEST_PASSWORD:-password123}"
-LOGIN_JSON=$(printf '{"email":"%s","password":"%s"}' "$TEST_EMAIL" "$TEST_PASSWORD")
-BAD_LOGIN_JSON=$(printf '{"email":"%s","password":"wrongpassword"}' "$TEST_EMAIL")
+
+# ═══════════════════════════════════════════════════════════════
+# Credentials (#3281)
+# ═══════════════════════════════════════════════════════════════
+# This script used to send admin@test.com / "password123" six times, and
+# scripts/seed-dev.ts used to hash that literal into the platform bypass role.
+# The seed's password now comes from $SEED_PASSWORD and is never committed, so
+# neither name can have a default here either. Same convention as
+# scripts/smoke-test.sh: refuse before touching a running server.
+if [ -z "${SEC_TEST_EMAIL:-}" ] || [ -z "${SEC_TEST_PASSWORD:-}" ]; then
+    echo "❌ SEC_TEST_EMAIL and SEC_TEST_PASSWORD are both required (#3281)." >&2
+    echo "   They are the seeded super admin: SEC_TEST_EMAIL=admin@test.com, and" >&2
+    echo "   SEC_TEST_PASSWORD is the \$SEED_PASSWORD that 'npm run seed:dev' was given." >&2
+    exit 2
+fi
+LOGIN_PAYLOAD=$(printf '{"email":"%s","password":"%s"}' "$SEC_TEST_EMAIL" "$SEC_TEST_PASSWORD")
 
 # The live session cookie and the freshly minted API keys used to sit at fixed,
 # guessable paths directly under /tmp, readable by any local user.
@@ -59,7 +71,7 @@ print(next((r['id'] for r in rows if r.get('name')=='$name' and r.get('is_active
 relogin() {
     local code
     code=$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" -d "$LOGIN_JSON")
+        -H "Content-Type: application/json" -d "$LOGIN_PAYLOAD")
     if [ "$code" != "200" ]; then
         fail "re-login refused (HTTP $code) — the rest of this section cannot assert anything about the endpoints"
         return 1
@@ -80,7 +92,7 @@ test_authentication() {
     RESPONSE=$(curl -s -c "$COOKIE_FILE" -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d "$LOGIN_JSON")
+        -d "$LOGIN_PAYLOAD")
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)
@@ -113,7 +125,7 @@ test_authentication() {
     RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d "$BAD_LOGIN_JSON")
+        -d "{\"email\":\"$SEC_TEST_EMAIL\",\"password\":\"wrongpassword\"}")
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "401" ] && pass "Invalid login → 401" || fail "Invalid login → Expected 401, got $HTTP_CODE"
     
