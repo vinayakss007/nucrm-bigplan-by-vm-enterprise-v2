@@ -488,6 +488,17 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
   it('is the seventh step of the local pre-merge screen', () => {
     const pre = read('scripts/pre-merge-check.sh');
     expect(pre).toContain('npm run guard:destructive-gate');
-    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // The ordinal is pinned, the denominator is read: #3298 appended an eighth step
+    // and a literal `/7` went red on a screen that had not changed its gate at all.
+    const labels = [...pre.matchAll(/▶ (\d+)\/(\d+)/g)];
+    const totals = new Set(labels.map((m) => Number(m[2])));
+    expect(totals.size, `the screen labels its steps with more than one total: ${[...totals]}`).toBe(1);
+    const total = [...totals][0];
+    expect(labels.map((m) => Number(m[1]))).toEqual(Array.from({ length: total }, (_, i) => i + 1));
+    const gate = pre
+      .split('\n')
+      .find((l) => l.startsWith('run_step') && l.includes('npm run guard:destructive-gate'));
+    expect(gate).toBeDefined();
+    expect(Number(/▶ (\d+)\//.exec(gate!)![1])).toBe(7);
   });
 });
