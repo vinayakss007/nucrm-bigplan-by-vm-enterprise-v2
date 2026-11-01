@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { hasTlsEntry, poolSites } from '../../scripts/check-pool-tls-policy.mts';
 
 const ROOT = join(import.meta.dirname!, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'check-pool-tls-policy.mts');
@@ -53,11 +54,20 @@ function run(root: string, ...args: string[]) {
   });
 }
 
-/** The screen's own verdict on one source file, as {count, offenders}. */
+/** The screen's own verdict on one source text, per site. The CLI aggregates per
+ *  file, which is right for a report and wrong for a test that names the shape. */
 function one(source: string) {
-  const res = run(fixture({ 'scripts/one.ts': source }), '--json');
-  const out = JSON.parse(res.stdout);
-  return { code: res.status, sites: out.poolSites, offenders: out.withoutTlsPolicy };
+  const sites = poolSites(source);
+  return {
+    sites: sites.length,
+    offenders: sites
+      .filter((s) => !s.hasTls)
+      .map((s) => ({
+        form: s.kind,
+        name: s.name,
+        detail: s.problem ?? 'pool options carry no TLS entry',
+      })),
+  };
 }
 
 afterAll(() => {
@@ -69,12 +79,13 @@ describe('the screen fails what #3381 is about', () => {
     const r = one(`export const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });\n`);
     expect(r.sites).toBe(1);
     expect(r.offenders).toHaveLength(1);
-    expect(r.offenders[0].detail).toContain('no ssl entry');
+    expect(r.offenders[0].detail).toContain('no TLS entry');
   });
 
   it('fails a pool built with no options object at all', () => {
     const r = one('const pool = new Pool();\n');
-    expect(r.offenders[0].form).toBe('empty');
+    expect(r.offenders[0].form).toBe('unresolved');
+    expect(r.offenders[0].detail).toContain('no options object');
   });
 
   it('fails an `ssl` that is only some other key’s value', () => {
@@ -83,8 +94,9 @@ describe('the screen fails what #3381 is about', () => {
 
   it('fails a PoolConfig variable that has no literal in this file to read', () => {
     const r = one('export function make(cfg: PoolConfig) { return new Pool(cfg); }\n');
-    expect(r.offenders[0].form).toBe('identifier');
-    expect(r.offenders[0].detail).toContain('no object literal in this file');
+    expect(r.offenders[0].form).toBe('unresolved');
+    expect(r.offenders[0].name).toBe('cfg');
+    expect(r.offenders[0].detail).toContain('no object-literal declaration in this file');
   });
 
   it('fails a spread, because the screen cannot see what the spread contributes', () => {
@@ -94,7 +106,11 @@ describe('the screen fails what #3381 is about', () => {
       'export const pool = new Pool(poolConfig);',
       '',
     ].join('\n'));
-    expect(r.offenders[0].detail).toContain('spread');
+    expect(r.offenders).toHaveLength(1);
+    // The rule is stated where it is decided: `...ssl` earns no credit, because
+    // what a spread carries is a decision made somewhere else.
+    expect(hasTlsEntry('{ ...ssl }')).toBe(false);
+    expect(hasTlsEntry('{ ...base, ssl: pgSslConfig() }')).toBe(true);
   });
 
   it('names the file, not a line a later `ssl:` insert would move', () => {
@@ -140,7 +156,7 @@ describe('the screen passes the forms a grep gets wrong', () => {
       '',
     ].join('\n'));
     expect(r.sites).toBe(0);
-    expect(r.code).toBe(0);
+    expect(r.offenders).toHaveLength(0);
   });
 });
 
@@ -150,27 +166,52 @@ describe('the real tree arrives clean (#3381 ask 1)', () => {
     expect(res.status, res.stderr.slice(0, 2000)).toBe(0);
     const out = JSON.parse(res.stdout);
     // 11 sites fixed here, backup-verify's by #3382, the rest already on the policy.
-    expect(out.poolSites).toBeGreaterThan(25);
-    expect(out.withoutTlsPolicy).toEqual([]);
+    expect(out.sites).toBeGreaterThan(25);
+    expect(out.findings).toEqual([]);
+    expect(out.stale).toEqual([]);
   });
 
   it('is the same answer the alias prints, since ci.yml runs it and not this file', () => {
     const res = run(ROOT);
     expect(res.status).toBe(0);
-    expect(res.stdout).toMatch(/OK — \d+ pg\.Pool site\(s\) across \d+ file\(s\), every one declares a TLS entry\./);
+    expect(res.stdout).toMatch(/OK — \d+ Pool site\(s\) across \d+ file\(s\): every one passes/);
+  });
+
+  it('scans the root it is handed, not the tree it happens to live in', () => {
+    // main() once dropped its positional root, so every fixture case was really
+    // scanning the repo — the bug this assertion exists to make impossible.
+    const res = run(fixture({ 'scripts/two.ts': 'const a = new Pool({ ssl: pgSslConfig() });\nconst b = new Pool({ connectionString: u });\n' }), '--json');
+    const out = JSON.parse(res.stdout);
+    expect(out.scanned).toBe(1);
+    expect(out.sites).toBe(2);
+    expect(out.findings).toHaveLength(1);
   });
 });
 
-describe('#3381 the screen walks the .mjs ops scripts too', () => {
+describe('#3381 the screen walks every extension first-party source is written in', () => {
   it('fails a bare .mjs pool, the shape provision-app-role.mjs shipped', () => {
     const res = run(fixture({ 'scripts/ops.mjs': 'const pool = new Pool({ connectionString: u, max: 1 });\n' }), '--json');
     const out = JSON.parse(res.stdout);
-    expect(out.poolSites).toBe(1);
-    expect(out.withoutTlsPolicy).toHaveLength(1);
+    expect(out.sites).toBe(1);
+    expect(out.findings).toHaveLength(1);
+  });
+
+  it('fails a pool in a .js or .cjs file too, so trimming the walk is caught here', () => {
+    const out = JSON.parse(run(fixture({
+      'scripts/a.js': 'const pool = new Pool({ connectionString: u });\n',
+      'scripts/b.cjs': 'const pool = new Pool({ connectionString: u });\n',
+    }), '--json').stdout);
+    expect(out.sites).toBe(2);
+    expect(out.findings).toHaveLength(2);
   });
 
   it('arms provision-app-role.mjs with the shared policy', () => {
     const src = readFileSync(join(ROOT, 'scripts/provision-app-role.mjs'), 'utf8');
+    expect(src).toMatch(/ssl:\s*pgSslConfig\(\)/);
+  });
+
+  it('arms the byte-ceiling audit, the .mjs pool that walked free since #3283', () => {
+    const src = readFileSync(join(ROOT, 'scripts/audit-jsonb-byte-overage.mjs'), 'utf8');
     expect(src).toMatch(/ssl:\s*pgSslConfig\(\)/);
   });
 });
