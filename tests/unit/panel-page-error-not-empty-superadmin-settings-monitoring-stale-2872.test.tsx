@@ -592,7 +592,7 @@ describe('the ratchet (#2872)', () => {
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stdout, 'a fixed page must be deleted from the baseline, not left stale')
       .not.toContain('no longer offends');
-    const size = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const size = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/superadmin/monitoring/page.tsx', 'app/superadmin/settings/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(size.status, size.stdout + size.stderr).toBe(0);
   });
 

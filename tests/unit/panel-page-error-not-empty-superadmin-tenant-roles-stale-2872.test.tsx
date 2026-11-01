@@ -453,7 +453,9 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(files.length, 'the panel guard baseline grew').toBeLessThanOrEqual(3);
     expect(files, `${ROLES_FILE} belongs in a page, not in the baseline`).not.toContain(ROLES_FILE);
     for (const script of ['check-panel-error-state.mjs', 'check-file-size.mjs', 'check-any-suppressions.mjs', 'check-catch-empty.mjs']) {
-      const res = spawnSync('node', [`scripts/${script}`], { cwd: ROOT, encoding: 'utf8' });
+      // #3400: scoped, so an overage in someone else's file cannot fail this one.
+      const scope = script === 'check-file-size.mjs' ? ['--only', ROLES_FILE] : [];
+      const res = spawnSync('node', [`scripts/${script}`, ...scope], { cwd: ROOT, encoding: 'utf8' });
       expect(res.status, `${script}: ${res.stdout}${res.stderr}`).toBe(0);
     }
     const guard = spawnSync('node', ['scripts/check-panel-error-state.mjs'], { cwd: ROOT, encoding: 'utf8' });
@@ -501,7 +503,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     // caveat are what crossed it from main's 395, so a fifth sentence here needs to be said
     // shorter, not added.
     expect(lines, `${ROLES_FILE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/superadmin/tenants/[id]/roles/page.tsx', 'lib/query/client.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

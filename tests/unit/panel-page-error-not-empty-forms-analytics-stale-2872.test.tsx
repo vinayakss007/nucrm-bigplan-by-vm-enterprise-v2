@@ -370,7 +370,7 @@ describe('form analytics: source ratchets', () => {
   });
 
   it('stays inside the line ceiling the page is allowed', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: process.cwd(), encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/forms/[id]/analytics/page.tsx'], { cwd: process.cwd(), encoding: 'utf8' });
     expect(res.stdout + res.stderr).toContain('OK');
     expect(res.status).toBe(0);
     expect(srcOf(PAGE).split('\n').length).toBeLessThan(500);

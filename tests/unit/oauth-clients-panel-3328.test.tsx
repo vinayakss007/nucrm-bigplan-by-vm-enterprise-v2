@@ -312,7 +312,7 @@ describe('source shape', () => {
     expect(src(PAGE).split('\n').length).toBeLessThanOrEqual(500);
     const guard = spawnSync('node', ['scripts/check-panel-error-state.mjs'], { cwd: ROOT, encoding: 'utf8' });
     expect(guard.status, guard.stdout + guard.stderr).toBe(0);
-    const size = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const size = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/oauth-clients/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(size.status, size.stdout + size.stderr).toBe(0);
   });
 });

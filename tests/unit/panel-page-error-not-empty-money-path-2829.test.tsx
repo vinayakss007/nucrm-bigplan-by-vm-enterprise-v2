@@ -406,7 +406,7 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
   });
 
   it('does not push a fixed page over a size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/contracts/page.tsx', 'app/tenant/follow-ups/page.tsx', 'app/tenant/invoices/page.tsx', 'app/tenant/offers/page.tsx', 'app/tenant/orders/page.tsx', 'app/tenant/quotes/page.tsx', 'app/tenant/subscriptions/page.tsx', 'app/tenant/tickets/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

@@ -611,7 +611,15 @@ describe('the guard still ratchets, and this slice decays honestly', () => {
   });
 
   it('does not push a fixed page over a size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    // #3400: the pages this sweep touched, named. Before the scope existed this
+    // asserted the repo-wide exit code, so an overage in any file under app/,
+    // lib/ or components/ failed it — which is how one landing page put 88
+    // suites red on `main`.
+    const pages = [
+      ...PANELS.map((panel) => `app/tenant/settings/${panel.key}/page.tsx`),
+      ...['chat', 'emails', 'pipelines'].map((done) => `app/tenant/${done}/page.tsx`),
+    ];
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', ...pages], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

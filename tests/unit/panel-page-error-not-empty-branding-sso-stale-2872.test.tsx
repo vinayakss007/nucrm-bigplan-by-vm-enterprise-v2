@@ -549,7 +549,7 @@ describe('the ratchet these two slices are measured by (#2872)', () => {
       const lines = srcOf(file).split('\n').length - 1;
       expect(lines, `${file} crossed MAX_LINES`).toBeLessThanOrEqual(500);
     }
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/branding/page.tsx', 'app/tenant/settings/rbac/page.tsx', 'app/tenant/settings/sso/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

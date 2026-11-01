@@ -251,7 +251,10 @@ describe('integrations: the shape these assertions hold', () => {
 
   it('keeps the guards green with this slice in place', () => {
     for (const script of ['scripts/check-panel-error-state.mjs', 'scripts/check-file-size.mjs', 'scripts/check-catch-empty.mjs']) {
-      const res = spawnSync('node', [script], { cwd: ROOT, encoding: 'utf8' });
+      // #3400: scoped, so an overage in a file this suite does not own cannot
+      // fail it. The repo-wide exit code was everybody's arithmetic.
+      const scope = script === 'scripts/check-file-size.mjs' ? ['--only', 'app/tenant/settings/integrations/page.tsx'] : [];
+      const res = spawnSync('node', [script, ...scope], { cwd: ROOT, encoding: 'utf8' });
       expect(res.status, `${script}: ${res.stdout}${res.stderr}`).toBe(0);
     }
     const files = Object.keys(JSON.parse(readFileSync(join(ROOT, 'scripts/panel-error-state-baseline.json'), 'utf8')).files);

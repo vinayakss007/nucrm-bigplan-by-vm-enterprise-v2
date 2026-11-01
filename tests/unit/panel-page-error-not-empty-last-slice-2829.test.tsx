@@ -382,7 +382,7 @@ describe('the ratchet this slice closes (#2829)', () => {
     expect(lines, 'this page is 500 lines or under — the baseline entry can go').toBeLessThanOrEqual(500);
     const base = JSON.parse(readFileSync(join(ROOT, 'scripts/file-size-baseline.json'), 'utf8'));
     expect(base, 'still exempt, so the shrink is not counted').not.toHaveProperty('app/tenant/pipelines/page.tsx');
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/api/tenant/email/tracking/route.ts', 'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx', 'app/tenant/pipelines/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stdout, 'a file that dropped under the ceiling should be off the list').not.toContain('remove them from the baseline');
   });

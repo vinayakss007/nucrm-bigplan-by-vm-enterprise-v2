@@ -338,7 +338,7 @@ describe('the guard cannot see this class, so these assertions do (#2872)', () =
 
   it('keeps the file inside the size ceiling', () => {
     expect(src().split('\n').length, 'past the 500-line ceiling').toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/api/public/offers/[publicToken]/accept/route.ts', 'app/tenant/offers/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

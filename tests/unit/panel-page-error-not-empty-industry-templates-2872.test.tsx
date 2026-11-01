@@ -241,7 +241,11 @@ describe('#2872 industry-templates keeps a refused refresh off the "no templates
 
     it('passes the panel error-state, file-size and empty-catch guards', () => {
       for (const script of ['check-panel-error-state.mjs', 'check-file-size.mjs', 'check-catch-empty.mjs']) {
-        const r = spawnSync('node', [`scripts/${script}`], { encoding: 'utf8' });
+        // #3400: the size ratchet is repo-wide unless the caller scopes it, and
+        // this suite owns one page. Asserting the repo-wide exit made every
+        // unrelated overage in the tree fail this file.
+        const scope = script === 'check-file-size.mjs' ? ['--only', 'app/tenant/settings/industry-templates/page.tsx'] : [];
+        const r = spawnSync('node', [`scripts/${script}`, ...scope], { encoding: 'utf8' });
         expect(r.status, `${script}: ${r.stderr}`).toBe(0);
       }
     });

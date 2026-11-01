@@ -310,7 +310,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     const res = spawnSync('node', ['scripts/check-panel-error-state.mjs'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stdout).not.toContain('no longer offends');
-    const size = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const size = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/reports/scheduled/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(size.status, size.stdout + size.stderr).toBe(0);
     const lines = src().split('\n').length - 1;
     expect(lines, `${PAGE} crossed MAX_LINES`).toBeLessThanOrEqual(500);

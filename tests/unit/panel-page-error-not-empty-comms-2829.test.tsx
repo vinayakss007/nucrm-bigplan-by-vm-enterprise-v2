@@ -593,7 +593,7 @@ describe('the ratchet decayed by exactly these four (#2829)', () => {
   });
 
   it('keeps every file it touches inside the size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/activities/page.tsx', 'app/tenant/email-templates/page.tsx', 'app/tenant/forms/page.tsx', 'app/tenant/sms/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

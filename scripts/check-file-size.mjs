@@ -15,15 +15,27 @@
  *
  * As large files get refactored below 500 lines, delete their entries from
  * scripts/file-size-baseline.json so the ceiling tightens over time.
+ *
+ * `--only <file>` scopes the report to the named files (#3400). Until then a
+ * suite that meant "my panel stays under its ceiling" could only say it by
+ * shelling out to this repo-wide guard and asserting exit 0, so it inherited
+ * everybody's arithmetic: the landing page running 16 lines over its baseline
+ * failed 88 suites at once, and `main` measured 100 failed files for one JSON
+ * number. The scope is validated rather than assumed — a name that is not a
+ * .ts/.tsx under app, lib or components, that climbs out of the tree, or that
+ * does not exist is a failure, because an `--only` typo that scanned nothing
+ * would report OK and the guard would be gone while still looking green.
+ *
+ * Usage: node scripts/check-file-size.mjs [--only <file>[,<file>…]] [--json]
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const MAX_LINES = 500;
-const ROOTS = ['app', 'lib', 'components'];
-const baseline = JSON.parse(readFileSync('scripts/file-size-baseline.json', 'utf8'));
+export const MAX_LINES = 500;
+export const ROOTS = ['app', 'lib', 'components'];
+export const BASELINE = 'scripts/file-size-baseline.json';
 
-function walk(dir) {
+export function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -34,7 +46,7 @@ function walk(dir) {
   return out;
 }
 
-function lineCount(file) {
+export function lineCount(file) {
   const src = readFileSync(file, 'utf8');
   // match `wc -l` semantics (count newlines)
   let n = 0;
@@ -42,53 +54,171 @@ function lineCount(file) {
   return n;
 }
 
-const files = ROOTS.flatMap(walk);
-const newOffenders = [];
-const grownOffenders = [];
-const shrunk = [];
+export function loadBaseline() {
+  return JSON.parse(readFileSync(BASELINE, 'utf8'));
+}
 
-for (const file of files) {
-  const lines = lineCount(file);
-  const base = baseline[file];
-  if (base === undefined) {
-    if (lines > MAX_LINES) newOffenders.push({ file, lines });
-  } else {
-    if (lines > base) grownOffenders.push({ file, lines, base });
-    else if (lines <= MAX_LINES) shrunk.push({ file, lines });
+/**
+ * Refuses anything it does not understand: a misspelled `--onlyy path` that
+ * fell back to the repo-wide walk would let a scoped suite pass while checking
+ * a thousand files it has no opinion about.
+ */
+export function parseArgs(argv) {
+  const only = [];
+  let json = false;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--json') json = true;
+    else if (arg.startsWith('--only=')) only.push(...arg.slice('--only='.length).split(','));
+    else if (arg === '--only') {
+      // `--only a b c` and `--only a,b` both mean the same three files; the
+      // argv-array form is what a spawnSync caller writes naturally.
+      let taken = 0;
+      while (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        only.push(...argv[++i].split(','));
+        taken++;
+      }
+      if (taken === 0) throw new Error('--only needs a file path');
+    } else throw new Error(`unknown argument ${JSON.stringify(arg)} — expected --only <file> or --json`);
   }
+  return { only: [...new Set(only.filter((p) => p !== '').map(normalize))], json };
 }
 
-if (shrunk.length > 0) {
-  console.log(
-    `\n\u001b[36mℹ ${shrunk.length} grandfathered file(s) are now ≤ ${MAX_LINES} lines — remove them from the baseline to tighten the ratchet:\u001b[0m\n` +
-      shrunk.map((s) => `    - ${s.file} (${s.lines})`).join('\n'),
-  );
+function normalize(p) {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
-let failed = false;
-
-if (newOffenders.length > 0) {
-  failed = true;
-  console.error(
-    `\n\u001b[31m✖ New file(s) exceed ${MAX_LINES} lines (#1843/#422):\u001b[0m\n` +
-      newOffenders.map((o) => `    - ${o.file} (${o.lines})`).join('\n') +
-      `\n\n  Split into smaller modules, or (if unavoidable) add an entry to\n` +
-      `  scripts/file-size-baseline.json with a justification in review.\n`,
-  );
+/**
+ * Why this scoped name cannot be checked — empty means it can. Every reason is
+ * a defect in the caller, not in the tree, so they are reported together.
+ */
+export function scopeProblems(file) {
+  if (file.startsWith('/') || file.split('/').includes('..')) {
+    return [`${file} is outside the repository root`];
+  }
+  const problems = [];
+  if (!ROOTS.some((root) => file.startsWith(`${root}/`))) {
+    problems.push(`${file} is not under ${ROOTS.join(', ')} — the ratchet has no opinion about it`);
+  }
+  if (!/\.(ts|tsx)$/.test(file)) problems.push(`${file} is not a .ts/.tsx source file`);
+  if (problems.length) return problems;
+  if (!existsSync(file)) return [`${file} does not exist`];
+  if (!statSync(file).isFile()) return [`${file} is not a file`];
+  return problems;
 }
 
-if (grownOffenders.length > 0) {
-  failed = true;
-  console.error(
-    `\n\u001b[31m✖ Grandfathered file(s) grew past their baseline (#1843/#422):\u001b[0m\n` +
-      grownOffenders.map((o) => `    - ${o.file} (${o.lines} > baseline ${o.base})`).join('\n') +
-      `\n\n  These files are supposed to shrink, not grow. Refactor, or lower other\n` +
-      `  code — do not raise the baseline without review.\n`,
-  );
+/** The one-file verdict: an offender record, or null when the file complies. */
+export function verdict(file, lines, baseline) {
+  const base = baseline[file];
+  if (base === undefined) return lines > MAX_LINES ? { file, lines, base: null, kind: 'new' } : null;
+  return lines > base ? { file, lines, base, kind: 'grown' } : null;
 }
 
-if (failed) process.exit(1);
+export function analyze(files, baseline) {
+  const rows = files.map((file) => ({ file, lines: lineCount(file), base: baseline[file] ?? null }));
+  const offenders = [];
+  const shrunk = [];
+  for (const row of rows) {
+    const bad = verdict(row.file, row.lines, baseline);
+    if (bad) offenders.push(bad);
+    else if (row.base !== null && row.lines <= MAX_LINES) shrunk.push({ file: row.file, lines: row.lines });
+  }
+  return { rows, offenders, shrunk };
+}
 
-console.log(
-  `[check-file-size] OK — ${files.length} files scanned; no new >${MAX_LINES}-line files, no grandfathered file grew.`,
-);
+export function run(argv = process.argv.slice(2)) {
+  const { only, json } = parseArgs(argv);
+  const baseline = loadBaseline();
+  const problems = only.flatMap(scopeProblems);
+  const scoped = only.length > 0;
+  const files = scoped ? only : ROOTS.flatMap(walk);
+  // A bad scope never reaches the walk, so it cannot be rescued by a clean
+  // answer about some other file.
+  const { rows, offenders, shrunk } = problems.length ? { rows: [], offenders: [], shrunk: [] } : analyze(files, baseline);
+  return { scoped, scope: only, maxLines: MAX_LINES, files, rows, offenders, shrunk, problems, json };
+}
+
+/** Failures go to stderr and the ratchet hint to stdout, exactly as the
+ *  repo-wide report always did — suites quote both, and some quote one. */
+export function format(result) {
+  const error = [];
+  const log = [];
+  if (result.problems.length > 0) {
+    error.push(
+      `\n\u001b[31m✖ The --only scope names nothing the ratchet can check (#3400):\u001b[0m\n` +
+        result.problems.map((p) => `    - ${p}`).join('\n') +
+        `\n\n  A scoped run that checked no file MUST NOT report OK — that is a guard\n` +
+        `  that stopped guarding. Name a real .ts/.tsx file under ${ROOTS.join(', ')}.\n`,
+    );
+    return { log, error, exit: 1 };
+  }
+
+  if (result.shrunk.length > 0) {
+    log.push(
+      `\n\u001b[36mℹ ${result.shrunk.length} grandfathered file(s) are now ≤ ${MAX_LINES} lines — remove them from the baseline to tighten the ratchet:\u001b[0m\n` +
+        result.shrunk.map((s) => `    - ${s.file} (${s.lines})`).join('\n'),
+    );
+  }
+
+  let failed = false;
+  for (const kind of ['new', 'grown']) {
+    const list = result.offenders.filter((o) => o.kind === kind);
+    if (list.length === 0) continue;
+    failed = true;
+    if (kind === 'new') {
+      error.push(
+        `\n\u001b[31m✖ New file(s) exceed ${MAX_LINES} lines (#1843/#422):\u001b[0m\n` +
+          list.map((o) => `    - ${o.file} (${o.lines})`).join('\n') +
+          `\n\n  Split into smaller modules, or (if unavoidable) add an entry to\n` +
+          `  ${BASELINE} with a justification in review.\n`,
+      );
+    } else {
+      error.push(
+        `\n\u001b[31m✖ Grandfathered file(s) grew past their baseline (#1843/#422):\u001b[0m\n` +
+          list.map((o) => `    - ${o.file} (${o.lines} > baseline ${o.base})`).join('\n') +
+          `\n\n  These files are supposed to shrink, not grow. Refactor, or lower other\n` +
+          `  code — do not raise the baseline without review.\n`,
+      );
+    }
+  }
+
+  if (failed) return { log, error, exit: 1 };
+  const scanned = result.scoped ? `${result.files.length} file(s) scanned (scoped to --only)` : `${result.files.length} files scanned`;
+  log.push(`[check-file-size] OK — ${scanned}; no new >${MAX_LINES}-line files, no grandfathered file grew.`);
+  return { log, error, exit: 0 };
+}
+
+function main() {
+  let result;
+  try {
+    result = run();
+  } catch (err) {
+    console.error(`[check-file-size] ${err.message}`);
+    process.exit(1);
+  }
+  if (result.json) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          scoped: result.scoped,
+          scope: result.scope,
+          maxLines: result.maxLines,
+          scanned: result.files.length,
+          files: result.rows,
+          offenders: result.offenders,
+          shrunk: result.shrunk,
+          scopeProblems: result.problems,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    process.exit(result.offenders.length + result.problems.length > 0 ? 1 : 0);
+  }
+  const { log, error, exit } = format(result);
+  for (const line of log) console.log(line);
+  for (const line of error) console.error(line);
+  process.exit(exit);
+}
+
+if (process.argv[1]?.includes('check-file-size')) main();
