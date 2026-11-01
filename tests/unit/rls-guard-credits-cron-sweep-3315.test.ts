@@ -40,8 +40,6 @@ const BASELINE_PATH = join(ROOT, 'scripts', 'rls-preauth-baseline.json');
 const CONTRACT = 'app/api/cron/contract-renewal-check/route.ts';
 const SUBSCRIPTION = 'app/api/cron/subscription-renewal-check/route.ts';
 const SLA = 'app/api/cron/sla-check/route.ts';
-const SCIM_LIST = 'app/api/scim/v2/Users/route.ts';
-const SCIM_ITEM = 'app/api/scim/v2/Users/[id]/route.ts';
 const CRON_ROUTES = [CONTRACT, SUBSCRIPTION, SLA];
 
 const baseline = readBaseline(BASELINE_PATH);
@@ -66,12 +64,11 @@ describe('the guard credits a cron sweep as the context it is (#3315)', () => {
     });
   }
 
-  it('leaving the two SCIM handlers as the only anonymous-surface sites', () => {
-    // Nothing else moved: the fusion in #3303 still reports exactly those ten, so
-    // this cannot be the exemption swallowing a real finding somewhere else.
-    const files = [...new Set(raw.hits.map((h) => h.file))].sort();
-    expect(files).toEqual([SCIM_ITEM, SCIM_LIST].sort());
-    expect(raw.hits).toHaveLength(10);
+  it('leaving nothing on the anonymous surface, now that #3303 contextualised SCIM too', () => {
+    // #3315 could only report that the two SCIM handlers were the sites left
+    // standing; #3303 moved them under `withScimTenantContext`, so the fusion
+    // finding nowhere is the proof the cron exemption swallowed nothing real.
+    expect(raw.hits).toEqual([]);
   });
 
   it('and the baseline carries no allowance for a site that is not a finding', () => {
@@ -82,7 +79,7 @@ describe('the guard credits a cron sweep as the context it is (#3315)', () => {
     // An entry left behind after its site stopped being a finding is
     // `BASELINE_STALE`, so the run being clean is itself the proof.
     expect(current.findings).toEqual([]);
-    expect(current.allowed).toBe(raw.hits.length);
+    expect(current.allowed).toBe(0);
   });
 });
 

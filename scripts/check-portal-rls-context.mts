@@ -116,6 +116,10 @@ export const CONTEXT_HELPERS = [
   'withWhatsAppIntegrationLookupContext',
   'withSsoDomainLookupContext',
   'withSsoProviderLookupContext',
+  // #3303: the SCIM routes' tenant context. It opens `withTenantContext` itself
+  // and adds app.scim_tenant, so a route (or lib) file that queries through it is
+  // as bound to a context as one that spells `withTenantContext` directly.
+  'withScimTenantContext',
 ];
 
 /**

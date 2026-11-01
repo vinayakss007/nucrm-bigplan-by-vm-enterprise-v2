@@ -118,6 +118,10 @@ function fakeSelect(tables: (object | undefined)[]) {
 
 vi.mock('@/drizzle/db', () => ({
   db: {
+    // The routes reach the pool through `withScimTenantContext` (#3303), which
+    // runs on a transaction and sets its GUCs on it — so the double has to look
+    // like a connection, not only like a query builder.
+    execute: async () => ({ rows: [] }),
     select: (projection?: unknown) => {
       void projection;
       return fakeSelect([]);
@@ -126,6 +130,7 @@ vi.mock('@/drizzle/db', () => ({
     delete: () => ({ where: async () => [] }),
     insert: () => ({ values: async () => [] }),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
+      execute: async () => ({ rows: [] }),
       select: () => fakeSelect([]),
       update: () => ({ set: () => ({ where: () => ({ returning: async () => [] }) }) }),
       delete: () => ({ where: async () => [] }),
