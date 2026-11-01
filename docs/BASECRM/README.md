@@ -248,3 +248,15 @@ entries over **290** `.sql` files — 145 forward, 145 `.down.sql` — and the t
 GUCs, and `app/api/webhooks` plus the ten `lib/` files #3312 pinned leave **107** reads
 in **4** counted deferrals across a **120**-file anonymous walk (the guard re-derives
 all four). The migrations remain UNAPPLIED with the rest of the backlog (#2537).
+
+**Re-counted again 2026-10-31 for #3303's SCIM context.** Three numbers moved with
+one migration: `app.scim_tenant` (0143) is the **twentieth** name on both reset
+lists, the journal carries **146** entries over **292** `.sql` files — 146 forward,
+146 `.down.sql` — and the tree holds **1003** `*.test.*` files. The SCIM routes now
+run inside `withScimTenantContext`, so `scripts/rls-preauth-baseline.json` has no
+entries left: the ten statements it counted are gone rather than excused. Rule 1 of
+`scripts/check-rls-route-coverage.mjs` also learned the tenant-naming mechanisms
+(`verifySCIMToken`, `resolveApiKey`): a route that proves a workspace through one of
+them is now asked the same wrapping question `requireAuth` answers, while a
+signature-only webhook still only proves the sender. 0143 lands UNAPPLIED with the
+rest of the backlog (#2537).
