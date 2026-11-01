@@ -15,10 +15,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Side-effect mocks ────────────────────────────────────────────────────────
-const sendEmail = vi.fn().mockResolvedValue(undefined);
+// sendEmail never rejects: every provider path resolves a SendResult (#3408), so
+// a mock that resolves `undefined` models a contract the real helper does not
+// have — and hides the branch that reads the result.
+const sendEmail = vi.fn().mockResolvedValue({ success: true, provider: 'unit-test' });
 const createNotification = vi.fn().mockResolvedValue(undefined);
+const logError = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/lib/email/service', () => ({ sendEmail: (...a: unknown[]) => sendEmail(...a) }));
+vi.mock('@/lib/errors-server', () => ({ logError: (...a: unknown[]) => logError(...a) }));
 vi.mock('@/lib/notifications', () => ({ createNotification: (...a: unknown[]) => createNotification(...a) }));
 
 // ── DB mock (used by lead-assignment + follow-up handlers via dynamic import) ─
@@ -129,6 +134,26 @@ describe('welcome-email execute', () => {
     });
     const arg = sendEmail.mock.calls[0]![0] as { html: string };
     expect(arg.html).toContain('there');
+  });
+
+  it('reports a non-delivery instead of swallowing it (#3408)', async () => {
+    sendEmail.mockResolvedValueOnce({ success: false, error: 'SMTP auth failed' });
+    await exec('welcome-email', {
+      contact: { email: 'new@acme.com', first_name: 'Ada' },
+      tenant: { name: 'Acme' },
+    });
+    expect(logError).toHaveBeenCalledTimes(1);
+    const opts = logError.mock.calls[0]![0] as { error: Error; context: string };
+    expect(opts.error.message).toContain('SMTP auth failed');
+    expect(opts.context).toBe('automation/welcome-email-action');
+  });
+
+  it('stays quiet when the send succeeds', async () => {
+    await exec('welcome-email', {
+      contact: { email: 'new@acme.com', first_name: 'Ada' },
+      tenant: { name: 'Acme' },
+    });
+    expect(logError).not.toHaveBeenCalled();
   });
 });
 
