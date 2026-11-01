@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { alertSuperAdmin } from './service';
+import type { SendResult } from './service';
 
-export async function sendAlertEmail(subject: string, message: string) {
-  await alertSuperAdmin(subject, message);
+export async function sendAlertEmail(subject: string, message: string): Promise<SendResult> {
+  return alertSuperAdmin(subject, message);
 }

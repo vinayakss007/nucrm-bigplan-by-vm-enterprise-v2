@@ -331,16 +331,21 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
     if (offsiteError && offsiteExpected) {
       // Off-site storage is configured but did not accept the upload, which
       // means the retention guarantee is currently broken. Tell an operator.
-      await alertSuperAdmin(
+      const alerted = await alertSuperAdmin(
         'WARNING: Database backup did not reach off-site storage',
         `Backup ${filename} completed locally but could not be uploaded.\n\n` +
         `Error: ${offsiteError}\n\n` +
         `The only copy is at ${localPath} on the application host and will be ` +
         `lost if the container is replaced. Investigate S3/R2 credentials and ` +
         `re-run the backup.`
-      ).catch((err) => {
-        logger.error('[backup-service] Failed to send off-site failure alert', { error: err instanceof Error ? err.message : String(err) });
-      });
+      );
+      // #3408: sendEmail resolves {success:false} rather than rejecting, so the
+      // .catch() this call ended with could never fire. The result is the signal.
+      if (!alerted.success) {
+        logger.error('[backup-service] Failed to send off-site failure alert', {
+          error: alerted.error ?? 'provider failure',
+        });
+      }
     }
 
     return {

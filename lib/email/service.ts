@@ -334,11 +334,23 @@ export function renderTemplateHtml(template: string, vars: Record<string, string
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(vars[key] ?? ''));
 }
 
-/** Send super admin alert for cron job failures */
-export async function alertSuperAdmin(subject: string, message: string) {
+/**
+ * Send super admin alert for cron job failures.
+ *
+ * sendEmail never rejects (#3045): every provider path resolves
+ * `{success:false}`. The `.catch()` this function used to end with therefore
+ * could not fire, so a rejected operator alert — the message that pages someone
+ * about a broken backup — was dropped silently. The result is checked here, at
+ * the one choke point every alert path passes through, and handed back so a
+ * caller that has its own incident trail can record it too (#3408).
+ */
+export async function alertSuperAdmin(subject: string, message: string): Promise<SendResult> {
   const adminEmail = process.env.SUPER_ADMIN_EMAIL;
-  if (!adminEmail) return;
-  await sendEmail({
+  if (!adminEmail) {
+    logger.error('[Email] Super-admin alert has no recipient', { subject, error: 'SUPER_ADMIN_EMAIL is not set' });
+    return { success: false, error: 'SUPER_ADMIN_EMAIL is not set — the alert was not sent to anyone' };
+  }
+  const result = await sendEmail({
     to: adminEmail,
     subject: `[NuCRM Alert] ${subject}`,
     html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
@@ -347,7 +359,11 @@ export async function alertSuperAdmin(subject: string, message: string) {
       <p style="color:#9ca3af;font-size:12px;margin-top:16px">Sent from NuCRM monitoring</p>
     </div>`,
     text: `${subject}\n\n${message}`,
-  }).catch((e) => logger.error('[Email] Failed to send admin alert', { error: e instanceof Error ? e.message : String(e) }));
+  });
+  if (!result.success) {
+    logger.error('[Email] Super-admin alert NOT delivered', { subject, error: result.error ?? 'provider failure' });
+  }
+  return result;
 }
 
 /**

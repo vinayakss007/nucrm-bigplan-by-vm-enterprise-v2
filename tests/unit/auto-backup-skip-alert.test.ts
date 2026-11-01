@@ -31,7 +31,9 @@ vi.mock('@/lib/db/rls', () => ({
   setTenantContext: vi.fn(async () => {}),
 }));
 
-const sendAlertEmailMock = vi.fn(async () => {});
+// #3408: sendAlertEmail now hands back the SendResult the caller branches on,
+// so the fake has to be a send that succeeded rather than `undefined`.
+const sendAlertEmailMock = vi.fn(async () => ({ success: true, provider: 'unit' }));
 vi.mock('@/lib/email/alerts', () => ({
   sendAlertEmail: (subject: string, message: string) => sendAlertEmailMock(subject, message),
 }));

@@ -57,10 +57,16 @@ export async function POST(request: NextRequest) {
       });
       if (!alreadyAlerted) {
         await insertAlert('no_backup', 'No backup has ever been completed');
-        await alertSuperAdmin(
+        const alerted = await alertSuperAdmin(
           'WARNING: No database backup has ever been run',
           'Please configure automated backups immediately.\n\nVisit: /superadmin/backups'
         );
+        return NextResponse.json({
+          ok: false,
+          alert: 'no_backup_ever',
+          alert_delivered: alerted.success,
+          ...(alerted.success ? {} : { alert_error: alerted.error ?? 'provider failure' }),
+        });
       }
       return NextResponse.json({ ok: false, alert: 'no_backup_ever' });
     }
@@ -81,10 +87,18 @@ export async function POST(request: NextRequest) {
           'no_backup',
           `No backup in ${Math.floor(hoursSinceBackup)} hours. Last backup: ${lastBackup.completedAt.toISOString()}`,
         );
-        await alertSuperAdmin(
+        const alerted = await alertSuperAdmin(
           `WARNING: No backup in ${Math.floor(hoursSinceBackup)} hours`,
           `Last successful backup: ${lastBackup.completedAt.toISOString()}\nStorage: ${lastBackup.storagePath}\nSize: ${lastBackup.sizeBytes ? (lastBackup.sizeBytes/1024/1024).toFixed(1)+'MB' : 'unknown'}\n\nPlease check the backup cron job.`
         );
+        if (!alerted.success) {
+          return NextResponse.json({
+            ok: false,
+            hours_since_backup: hoursSinceBackup,
+            alert_delivered: false,
+            alert_error: alerted.error ?? 'provider failure',
+          });
+        }
       }
       return NextResponse.json({ ok: false, hours_since_backup: hoursSinceBackup });
     }
