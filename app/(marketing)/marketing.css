@@ -790,8 +790,8 @@
   --mk-panel: rgba(255, 253, 247, 0.75);
   --mk-panel-hi: #fffdf7;
   --mk-text: #24231e;
-  --mk-muted: #5d5a50;
-  --mk-dim: #777266;
+  --mk-muted: #4f4a40;
+  --mk-dim: #5d574b;
   --mk-violet: #b85837;
   --mk-indigo: #a94d31;
   --mk-cyan: #d4a85f;
@@ -806,8 +806,9 @@
   min-height: 720px;
   padding: 150px 0 74px;
   background:
-    radial-gradient(ellipse at 80% 12%, rgba(202, 156, 91, 0.2), transparent 34%),
-    linear-gradient(180deg, #f8f4eb 0%, #f2eee5 100%);
+    radial-gradient(ellipse at 82% 10%, rgba(218, 160, 88, 0.3), transparent 36%),
+    radial-gradient(ellipse at 12% 78%, rgba(255, 253, 247, 0.8), transparent 46%),
+    linear-gradient(180deg, #fbf7ef 0%, #f4efe5 100%);
 }
 .mk-home-hero::before {
   content: 'NUCRM / CUSTOMER OPERATIONS';
@@ -824,7 +825,7 @@
   height: 560px;
   left: 47%;
   top: 100px;
-  border: 1px solid rgba(175, 112, 67, .13);
+  border: 1px solid rgba(175, 112, 67, 0.18);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -833,7 +834,7 @@
   content: '';
   position: absolute;
   inset: 42px;
-  border: 1px solid rgba(175, 112, 67, .1);
+  border: 1px solid rgba(175, 112, 67, 0.13);
   border-radius: 50%;
 }
 .mk-home-orbit::after { inset: 88px; }
@@ -848,8 +849,8 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: #725842;
-  font: 600 11px/1.2 var(--font-jetbrains-mono), monospace;
+  color: #5e4735;
+  font: 600 11.5px/1.2 var(--font-jetbrains-mono), monospace;
   letter-spacing: .045em;
   text-transform: uppercase;
 }
@@ -876,18 +877,59 @@
   line-height: 1.7;
 }
 .mk-home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 30px; }
-.mk-home-actions .mk-btn-primary { background: #a94f32; box-shadow: 0 8px 22px rgba(132, 63, 40, .18); }
+.mk-home-actions .mk-btn-primary { background: linear-gradient(135deg, #a94f32, #cf7a43); box-shadow: 0 8px 22px rgba(132, 63, 40, .2); }
 .mk-home-actions .mk-btn-ghost { color: #3c392f; background: transparent; border-color: rgba(53, 49, 41, .2); }
 .mk-home-actions .mk-btn-ghost:hover { background: rgba(255, 255, 255, .55); border-color: rgba(53, 49, 41, .36); }
-.mk-home-proof { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 21px; color: #746f63; font-size: 11px; }
+/* Ghost buttons outside the hero sit on the light canvas; the shared style is
+   near-white ink for the dark pages, which made them almost invisible here. */
+.mk-home .mk-btn-ghost {
+  color: #3c392f;
+  background: rgba(255, 255, 255, .52);
+  border-color: rgba(53, 49, 41, .22);
+}
+.mk-home .mk-btn-ghost:hover {
+  background: #fffdf7;
+  border-color: rgba(169, 79, 50, .36);
+  box-shadow: 0 10px 24px rgba(132, 63, 40, .1);
+}
+.mk-home .mk-btn-primary {
+  background: linear-gradient(135deg, #b4532f, #e0a15f);
+  box-shadow: 0 10px 26px -10px rgba(150, 70, 38, .5), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+/* The closing band keeps its dark copper surface, so its ink must stay light
+   even though the rest of the homepage runs a dark-on-light remap. */
+.mk-home .mk-cta-band .text-white,
+.mk-home .mk-cta-band .mk-h2 { color: #fffaf1 !important; }
+.mk-home .mk-cta-band .mk-lead { color: rgba(255, 250, 241, .86); }
+.mk-home .mk-cta-band .mk-tiny { color: rgba(255, 250, 241, .72); }
+.mk-home .mk-cta-band .mk-btn-ghost {
+  color: #fffaf1;
+  border-color: rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .14);
+}
+.mk-home .mk-cta-band .mk-btn-ghost:hover {
+  background: rgba(255, 255, 255, .24);
+  border-color: rgba(255, 255, 255, .6);
+}
+.mk-home-proof { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 21px; color: #5f594d; font-size: 11.5px; }
 .mk-home-proof span { display: inline-flex; align-items: center; gap: 6px; }
 .mk-home-proof svg { width: 13px; height: 13px; color: #8b795d; stroke-width: 2.5; }
-.mk-home-note { display: flex; align-items: center; gap: 11px; margin-top: 42px; color: #777164; font-size: 12px; }
+.mk-home-note { display: flex; align-items: center; gap: 11px; margin-top: 42px; color: #5b554a; font-size: 12.5px; }
 .mk-home-note strong { color: #353229; }
 .mk-home-note-mark { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(169, 79, 50, .26); border-radius: 50%; color: #a94f32; font: 600 13px Georgia, serif; }
-.mk-home-product-wrap { position: relative; min-width: 0; padding: 15px 0 45px; }
-.mk-home-product-label,.mk-home-product-caption { display: flex; justify-content: space-between; gap: 15px; color: #80796b; font: 500 9px/1.4 var(--font-jetbrains-mono), monospace; letter-spacing: .08em; }
-.mk-home-product-label { padding: 0 8px 11px; }
+.mk-home-product-wrap { position: relative; min-width: 0; padding: 15px 0 45px; isolation: isolate; }
+.mk-home-product-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 4% -7% 8% 0;
+  z-index: -1;
+  border-radius: 40px;
+  background: radial-gradient(ellipse at 55% 45%, rgba(205, 142, 78, .26), transparent 66%);
+  filter: blur(28px);
+  pointer-events: none;
+}
+.mk-home-product-label,.mk-home-product-caption { display: flex; justify-content: space-between; gap: 15px; color: #5f594d; font: 500 10px/1.4 var(--font-jetbrains-mono), monospace; letter-spacing: .08em; }
+.mk-home-product-label { position: relative; z-index: 2; padding: 0 8px 11px; }
 .mk-home-product { position: relative; z-index: 1; transform: rotate(1.1deg); border: 1px solid rgba(61, 50, 36, .17); border-radius: 18px; background: #1c1a17; box-shadow: 0 32px 70px -32px rgba(62, 45, 26, .55), 0 4px 14px rgba(58, 44, 29, .13); }
 .mk-home-product::before { content: ''; position: absolute; inset: 12px -12px -12px 12px; z-index: -1; border: 1px solid rgba(168, 95, 55, .25); border-radius: 18px; }
 .mk-home-product .mk-edge::before { display: none; }
@@ -897,19 +939,41 @@
 .mk-home-float-icon svg { width: 15px; height: 15px; }
 .mk-home-float-card strong,.mk-home-float-card small { display: block; }
 .mk-home-float-card strong { font-size: 11px; }
-.mk-home-float-card small { margin-top: 3px; color: #837d71; font-size: 9px; }
+.mk-home-float-card small { margin-top: 3px; color: #665f53; font-size: 10px; }
 .mk-home-float-arrow { width: 14px; height: 14px; margin-left: 8px; color: #a94f32; }
-.mk-home-product-caption { position: relative; z-index: 2; margin-top: 25px; padding: 0 6px; color: #797467; font-family: inherit; font-size: 11px; letter-spacing: 0; }
+.mk-home-product-caption { position: relative; z-index: 2; margin-top: 25px; padding: 0 6px; color: #5f594d; font-family: inherit; font-size: 11.5px; letter-spacing: 0; }
 
 /* Light surfaces and readable ink, scoped to this route only. */
 .mk-home .mk-card { border-color: rgba(49, 45, 37, .12); background: rgba(255, 253, 247, .68); box-shadow: 0 10px 30px rgba(53, 46, 35, .035); backdrop-filter: none; }
 .mk-home .mk-card-hover:hover { border-color: rgba(160, 91, 54, .34); background: #fffdf7; box-shadow: 0 18px 36px rgba(53, 46, 35, .08); }
-.mk-home .mk-chip { border-color: rgba(56, 49, 39, .14); background: rgba(255,255,255,.46); color: #655e51; }
+/* Integration wall: each tile carries a pale category tint so the logos read
+   as a colourful product family instead of one grey block. */
+.mk-home .mk-logo-tile {
+  background: var(--logo-wash, rgba(255, 253, 247, .68));
+  border-color: var(--logo-line, rgba(49, 45, 37, .12));
+  box-shadow: 0 8px 22px rgba(53, 46, 35, .035);
+}
+.mk-home .mk-logo-tile:hover {
+  background: var(--logo-wash-strong, #fffdf7);
+  border-color: var(--logo-ink, rgba(160, 91, 54, .34));
+  box-shadow: 0 16px 32px -18px rgba(53, 46, 35, .32);
+}
+.mk-home .mk-logo-tile .mk-logo-orb { background: var(--logo-orb, rgba(169, 79, 50, .1)); }
+.mk-home .mk-logo-tile .mk-logo-ink { color: var(--logo-ink, #a94f32); }
+.mk-home .mk-logo-tile .mk-logo-label { color: #4f493e; }
+/* The homepage previously inherited the dark-site 12/13.5px muted scale, which
+   left supporting copy hard to read on the warm paper background. Nudge the
+   small sizes up and darken the ink without touching the display hierarchy. */
+.mk-home .mk-tiny { font-size: 13px; line-height: 1.55; }
+.mk-home .mk-small { font-size: 14.5px; line-height: 1.62; }
+.mk-home .mk-body { font-size: 15.5px; }
+.mk-home .mk-eyebrow { font-size: 12px; }
+.mk-home .mk-chip { border-color: rgba(56, 49, 39, .14); background: rgba(255,255,255,.5); color: #4f4a40; font-size: 12.5px; }
 .mk-home .text-white { color: #2d2a23 !important; }
 .mk-home [class*='text-slate-100'], .mk-home [class*='text-slate-200'], .mk-home [class*='text-slate-300'] { color: #454137 !important; }
-.mk-home [class*='text-slate-400'] { color: #625d52 !important; }
-.mk-home [class*='text-slate-500'] { color: #777164 !important; }
-.mk-home [class*='text-slate-600'] { color: #8e8779 !important; }
+.mk-home [class*='text-slate-400'] { color: #4b463c !important; }
+.mk-home [class*='text-slate-500'] { color: #544e43 !important; }
+.mk-home [class*='text-slate-600'] { color: #5d574b !important; }
 .mk-home [class*='text-sky-'], .mk-home [class*='text-blue-'], .mk-home [class*='text-cyan-'] { color: #a94f32 !important; }
 /* #2601 — .mk-home-product is a deliberately dark (#1c1a17) workspace mock,
    but the ink remap above is a descendant selector, so it recoloured the
@@ -929,23 +993,58 @@
 .mk-home [class*='to-blue-'], .mk-home [class*='to-sky-'], .mk-home [class*='to-cyan-'], .mk-home [class*='to-indigo-'], .mk-home [class*='to-violet-'] { --tw-gradient-to: #d0a261 var(--tw-gradient-to-position) !important; }
 .mk-home section[id] { scroll-margin-top: 88px; }
 .mk-home section[id] .mk-h2, .mk-home section[id] .mk-h3, .mk-home section[id] .mk-h4 { color: #2d2a23; }
-.mk-home section:nth-of-type(even) { background-color: rgba(221, 212, 196, .25); }
-.mk-home .mk-grad, .mk-home .mk-grad-violet { background-image: linear-gradient(100deg, #403b31, #a94f32 72%, #bd8850); }
+.mk-home section:nth-of-type(even) {
+  background-color: rgba(226, 217, 201, .38) !important;
+  background-image:
+    radial-gradient(ellipse 55% 75% at 6% 0%, rgba(202, 146, 84, .12), transparent 62%),
+    radial-gradient(ellipse 50% 70% at 94% 100%, rgba(202, 146, 84, .08), transparent 62%);
+  background-repeat: no-repeat;
+}
+.mk-home .mk-grad, .mk-home .mk-grad-violet { background-image: linear-gradient(100deg, #3b362c, #b85837 62%, #d7a25d); }
 .mk-home .mk-link { color: #a94f32; }
-.mk-home .mk-table thead th { background: #e9e2d6; color: #5f594d; }
+.mk-home .mk-table { font-size: 14.5px; }
+.mk-home .mk-table thead th { background: #e9e2d6; color: #4f4a40; font-size: 12.5px; }
 .mk-home .mk-table thead th.mk-col-own { background: #efe1d2; color: #743e2b; }
 .mk-home .mk-table .mk-col-own { background: rgba(184, 91, 55, .07); border-color: rgba(184, 91, 55, .2); color: #743e2b; }
 .mk-home .mk-table td { border-color: rgba(49, 45, 37, .1); }
 .mk-home > :last-child { color: inherit; }
 .mk-root:has(.mk-home) > header.mk-glass { background: rgba(248, 244, 235, .94); border-color: rgba(49,45,37,.1); box-shadow: 0 4px 18px rgba(52,43,30,.04); }
-.mk-root:has(.mk-home) > header .text-slate-400,.mk-root:has(.mk-home) > header .text-slate-300 { color: #625d52; }
+.mk-root:has(.mk-home) > header .text-slate-400,.mk-root:has(.mk-home) > header .text-slate-300 { color: #544e43; }
 .mk-root:has(.mk-home) > header .text-white { color: #26251f; }
 .mk-root:has(.mk-home) > header .border-white\/\[0\.1\] { border-color: rgba(49,45,37,.16); }
-.mk-root:has(.mk-home) > footer { border-color: rgba(49,45,37,.14); background: #e9e2d6; color: #514c41; }
-.mk-root:has(.mk-home) > footer [class*='text-slate-'] { color: #625d52 !important; }
+.mk-root:has(.mk-home) > footer {
+  --mk-text: #26251f;
+  --mk-muted: #4b463c;
+  --mk-dim: #5b554a;
+  border-color: rgba(49,45,37,.14);
+  background: #e9e2d6;
+  color: #3f3b32;
+}
+.mk-root:has(.mk-home) > footer .text-white { color: #26251f !important; }
+.mk-root:has(.mk-home) > footer [class*='text-slate-'] { color: #4b463c !important; }
+.mk-root:has(.mk-home) > footer .mk-eyebrow { color: #3f3b32 !important; font-size: 12px; }
+.mk-root:has(.mk-home) > footer nav a { font-size: 13.5px; }
+.mk-root:has(.mk-home) > footer .mk-btn-ghost {
+  color: #3c392f;
+  border-color: rgba(53, 49, 41, .22);
+  background: rgba(255, 255, 255, .55);
+}
+.mk-root:has(.mk-home) > footer .mk-btn-ghost:hover {
+  background: #fffdf7;
+  border-color: rgba(169, 79, 50, .35);
+}
+.mk-root:has(.mk-home) > footer .mk-chip {
+  color: #4b463c;
+  background: rgba(255, 255, 255, .5);
+  border-color: rgba(49, 45, 37, .14);
+}
+.mk-root:has(.mk-home) > footer .mk-chip svg { color: #0f9f6e; }
+/* The oversized watermark is white-on-dark by default; on the light footer it
+   was invisible. Flip it to a warm ink wash instead of removing it. */
+.mk-root:has(.mk-home) > footer .mk-footer-wordmark { color: rgba(38, 37, 31, .075); }
 .mk-root:has(.mk-home) > footer [class*='border-white/'] { border-color: rgba(49,45,37,.12) !important; }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .mk-home-hero { padding: 130px 0 58px; }
   .mk-home-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 34px; }
   .mk-home-copy { max-width: 700px; padding-bottom: 0; }

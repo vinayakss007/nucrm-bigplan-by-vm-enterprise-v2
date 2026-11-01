@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nuCRM — Feature Health: Works vs Broken (Visual Tree)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+  }
+  .dark{
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family: 'Inter', system-ui, sans-serif;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .font-sans{ font-family: 'Inter', system-ui, sans-serif; }
+  .font-mono{ font-family: 'JetBrains Mono', monospace; }
+
+  /* --- nucrm brand badges --- */
+  .badge-works{
+    background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(16,185,129,0.08));
+    border: 1px solid rgba(34,197,94,0.35);
+    color: #15803d;
+  }
+  .badge-broken{
+    background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.05));
+    border: 1px solid rgba(239,68,68,0.35);
+    color: #b91c1c;
+  }
+  .badge-partial{
+    background: linear-gradient(135deg, rgba(245,158,11,0.14), rgba(251,146,60,0.08));
+    border: 1px solid rgba(245,158,11,0.4);
+    color: #92400e;
+  }
+
+  .node{ transition: all 0.18s ease; cursor: default; }
+  .node:hover{ transform: translateY(-1px); }
+  .node.clickable{ cursor: pointer; }
+  .node.clickable:hover{ background: hsl(var(--accent)); border-color: hsl(var(--border)); }
+
+  .dot{ width:10px; height:10px; border-radius:50%; border:2px solid hsl(var(--border)); background:hsl(var(--background)); display:inline-block; }
+  .dot.works{ border-color:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,0.14); }
+  .dot.broken{ border-color:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,0.12); }
+  .dot.partial{ border-color:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,0.14); }
+
+  /* --- tree geometry --- */
+  .tree-children{ position:relative; }
+  .tree-children::before{
+    content:''; position:absolute; left:20px; top:0; bottom:0; width:2px; background:hsl(var(--border)); z-index:0;
+  }
+  .tree-children.collapsed::before{ display:none; }
+  .tree-children.collapsed > *{ display:none; }
+
+  .connector{ position:relative; padding-left:28px; z-index:1; }
+  .connector::before{
+    content:''; position:absolute; left:0; top:11px; bottom:0; border-left:2px solid hsl(var(--border)); z-index:0;
+  }
+  .connector::after{
+    content:''; position:absolute; left:0; top:11px; width:28px; border-top:2px solid hsl(var(--border)); z-index:0;
+  }
+  .connector.last::after{ border-top:none; height:11px; top:11px; }
+
+  .expand-btn{
+    width:20px; height:20px; border-radius:4px; border:1px solid hsl(var(--border));
+    background:hsl(var(--background)); color:hsl(var(--muted-foreground));
+    font-size:10px; line-height:1; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:all 0.15s;
+  }
+  .expand-btn:hover{ border-color:hsl(var(--primary)); color:hsl(var(--primary)); background:hsl(var(--accent)); }
+  .expand-btn.collapsed::after{ content:'▸'; }
+  .expand-btn.expanded::after{ content:'▾'; }
+
+  /* --- toggle theme --- */
+  #theme-toggle:checked ~ .dark-scheme{ display:block; }
+  #theme-toggle:checked ~ .light-scheme{ display:none; }
+
+  .fade-up{ animation: fadeUp 0.5s ease-out both; }
+  @keyframes fadeUp{ from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  .stagger-1{animation-delay:0.06s} .stagger-2{animation-delay:0.11s} .stagger-3{animation-delay:0.16s} .stagger-4{animation-delay:0.21s} .stagger-5{animation-delay:0.26s} .stagger-6{animation-delay:0.31s}
+
+  .slide-panel{
+    position:fixed; inset:0; z-index:60; transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.2,0,0,1);
+  }
+  .slide-panel.open{ transform:translateX(0); }
+  .panel-backdrop{
+    position:fixed; inset:0; z-index:55; background:rgba(15,23,42,0.35); backdrop-filter:blur(4px);
+    opacity:0; transition:opacity 0.3s; pointer-events:none;
+  }
+  .panel-backdrop.open{ opacity:1; pointer-events:auto; }
+
+  .progress-ring circle{ transition:stroke-dashoffset 0.6s ease; }
+  .table-cell-border{ border-color:hsl(var(--border)); }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:hsl(var(--muted)); border-radius:4px; }
+  ::-webkit-scrollbar-thumb:hover{ background:hsl(var(--muted-foreground)); }
+
+  .shimmer{ background:linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--accent)) 50%, hsl(var(--muted)) 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; }
+  @keyframes shimmer{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+</style>
+</head>
+<body class="antialiased selection:bg-primary selection:text-primary-foreground">
+
+  <!-- Top nav -->
+  <header class="border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-lg tracking-tighter shadow-lg shadow-primary/20">n</div>
+        <div>
+          <div class="font-bold text-lg tracking-tight">nu<span class="text-primary">CRM</span></div>
+          <div class="text-xs text-muted-foreground tracking-wider uppercase">Feature Health · Visual Tree</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-semibold border border-border/50">
+          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+          Live design · v1.0
+        </div>
+        <label class="flex items-center gap-2 text-sm font-medium text-muted-foreground group cursor-pointer select-none">
+          <span class="dark:block dark-scheme hidden">Light mode</span>
+          <span class="light-scheme hidden dark:block">Dark mode</span>
+          <input type="checkbox" id="theme-toggle" class="sr-only peer">
+          <div class="w-9 h-5 rounded-full bg-muted relative group-focus-within:ring-2 group-focus-within:ring-ring group-focus-within:ring-offset-1">
+            <div class="peer-checked:translate-x-4 peer-checked:bg-primary transition-transform duration-300 left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"></div>
+          </div>
+        </label>
+        <button onclick="window.print()" class="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition flex items-center gap-2">
+          <span class="text-[10px]">⌘</span> Print
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero / stats -->
+  <section class="px-6 py-10">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-col lg:flex-row gap-6 items-start justify-between">
+        <div class="flex-1">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-semibold mb-4 border border-border/50">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            Green = working &nbsp;·&nbsp; Red = broken &nbsp;·&nbsp; Amber = partial
+          </div>
+          <h1 class="text-4xl lg:text-6xl font-bold tracking-tight mb-3">What works &amp; what doesn't</h1>
+          <p class="text-lg text-muted-foreground mb-8 max-w-2xl">
+            Visual tree of nuCRM modules, pages, and components. Each node shows live status from the AGENTS.md issue tracker. Click a node to see details.
+          </p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-0">
+            <div class="p-5 rounded-2xl border border-border bg-card shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-3xl font-bold text-foreground">72%</div>
+                <div class="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20 px-2.5 py-0.5 rounded border border-green-100/50 dark:border-green-900/30">healthy</div>
+              </div>
+              <div class="text-xs text-muted-foreground">Modules working</div>
+            </div>
+            <div class="p-5 rounded-2xl border border-border bg-card shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-3xl font-bold text-destructive">24%</div>
+                <div class="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-900/20 px-2.5 py-0.5 rounded border border-red-100/50 dark:border-red-900/30">broken</div>
+              </div>
+              <div class="text-xs text-muted-foreground">Modules broken</div>
+            </div>
+            <div class="p-5 rounded-2xl border border-border bg-card shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-3xl font-bold text-amber-600 dark:text-amber-400">4%</div>
+                <div class="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/20 px-2.5 py-0.5 rounded border border-amber-100/50 dark:border-amber-900/30">partial</div>
+              </div>
+              <div class="text-xs text-muted-foreground">Partially working</div>
+            </div>
+            <div class="p-5 rounded-2xl border border-border bg-card shadow-sm">
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-3xl font-bold text-primary">112</div>
+                <div class="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded border border-primary/20">nodes</div>
+              </div>
+              <div class="text-xs text-muted-foreground">Total mapped</div>
+            </div>
+          </div>
+        </div>
+        <div class="w-full lg:w-80 flex flex-col gap-4">
+          <div class="rounded-2xl border border-border bg-card shadow-sm p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Status filter</h3>
+              <div class="w-2 h-2 rounded-full bg-green-500"></div>
+            </div>
+            <div class="space-y-2">
+              <label class="flex items-center gap-3 cursor-pointer group">
+                <input type="radio" name="status" value="all" class="accent-primary" checked onchange="filterTree('all')">
+                <span class="text-sm font-medium text-foreground group-hover:text-primary transition">All modules</span>
+                <span class="ml-auto text-xs font-mono text-muted-foreground">112</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer group">
+                <input type="radio" name="status" value="works" class="accent-green-500" onchange="filterTree('works')">
+                <span class="text-sm font-medium text-foreground group-hover:text-green-600 transition">Working ✓</span>
+                <span class="ml-auto text-xs font-mono text-muted-foreground">81</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer group">
+                <input type="radio" name="status" value="broken" class="accent-red-500" onchange="filterTree('broken')">
+                <span class="text-sm font-medium text-foreground group-hover:text-red-600 transition">Broken ✗</span>
+                <span class="ml-auto text-xs font-mono text-muted-foreground">27</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer group">
+                <input type="radio" name="status" value="partial" class="accent-amber-500" onchange="filterTree('partial')">
+                <span class="text-sm font-medium text-foreground group-hover:text-amber-600 transition">Partial ⚠</span>
+                <span class="ml-auto text-xs font-mono text-muted-foreground">4</span>
+              </label>
+            </div>
+          </div>
+          <div class="rounded-2xl border border-border bg-card shadow-sm p-5">
+            <h3 class="font-semibold text-sm uppercase tracking-wider text-muted-foreground mb-3">Quick search</h3>
+            <div class="relative">
+              <input type="text" id="searchInput" placeholder="Search module…" class="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition">
+              <div class="absolute left-3 top-2.5 text-muted-foreground">🔍</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Visual Tree -->
+  <section class="px-6 py-12">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-col lg:flex-row gap-6 items-end justify-between mb-8">
+        <div>
+          <h2 class="text-xl font-bold">Module Tree</h2>
+          <p class="text-sm text-muted-foreground">Expand nodes to see sub-items and linked issues.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="collapseAll()" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition">Collapse all</button>
+          <button onclick="expandAll()" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition">Expand all</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto border border-border rounded-2xl bg-card shadow-sm ring-1 ring-inset ring-border/30">
+        <div class="min-w-[720px] p-8">
+          <div id="treeContainer" class="space-y-10">
+            <!-- Trees injected by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-8 flex justify-center">
+        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+          <span class="dot works mr-1"></span> <span class="mr-4">Working</span>
+          <span class="dot broken mr-1"></span> <span class="mr-4">Broken</span>
+          <span class="dot partial mr-1"></span> <span>Partial</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detail slide panel -->
+  <div class="panel-backdrop" id="panelBackdrop" onclick="closePanel()"></div>
+  <div class="slide-panel bg-card border-l border-border shadow-2xl" id="detailPanel">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+      <div class="flex items-center gap-3">
+        <div id="panelDot" class="dot works"></div>
+        <h3 id="panelTitle" class="font-semibold text-lg">Module detail</h3>
+      </div>
+      <button onclick="closePanel()" class="w-8 h-8 rounded-lg hover:bg-accent transition flex items-center justify-center text-muted-foreground">
+        ✕
+      </button>
+    </div>
+    <div class="p-6">
+      <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <div>
+          <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Path</p>
+          <p id="panelPath" class="text-sm font-mono text-muted-foreground break-all">app/tenant/...</p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Health score</p>
+          <div id="panelScore" class="text-2xl font-bold text-foreground">100%</div>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Description</p>
+          <p id="panelDesc" class="text-sm text-foreground leading-relaxed"></p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Related issues</p>
+          <div id="panelIssues" class="space-y-2"></div>
+        </div>
+      </div>
+      <div class="mt-8 pt-6 border-t border-border">
+        <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Sub-items</p>
+        <div id="panelSubitems" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom notes -->
+  <section class="px-6 py-12 border-t border-border">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl border border-border bg-background">
+          <h3 class="font-semibold mb-3">How to read this tree</h3>
+          <ul class="text-sm text-muted-foreground space-y-2.5">
+            <li><span class="dot works inline-block mr-2"></span><strong>Green (✓)</strong> — Feature works as expected</li>
+            <li><span class="dot broken inline-block mr-2"></span><strong>Red (✗)</strong> — Broken / not shipped</li>
+            <li><span class="dot partial inline-block mr-2"></span><strong>Amber (⚠)</strong> — Partially working / known gaps</li>
+            <li class="mt-2 pt-2 border-t border-border/50"><span class="expand-btn inline-block mr-2"></span> Click <span class="font-mono text-xs">▸</span> to expand a module</li>
+          </ul>
+        </div>
+        <div class="p-6 rounded-2xl border border-border bg-background">
+          <h3 class="font-semibold mb-3">Top broken items</h3>
+          <ul class="text-sm text-muted-foreground space-y-2.5">
+            <li>Deal creation — stage_name vs stage mismatch <span class="font-mono text-xs text-primary">#658</span></li>
+            <li>Data tables — double-fetch + stale selectedIds <span class="font-mono text-xs text-primary">#665</span></li>
+            <li>Contact detail — cross-tenant leak <span class="font-mono text-xs text-primary">#664</span></li>
+            <li>Loading.tsx / error.tsx missing (126 / 94 pages) <span class="font-mono text-xs text-primary">#654</span></li>
+            <li>Rate limiting on mutating endpoints <span class="font-mono text-xs text-primary">#652</span></li>
+            <li>Backups / S3 env var mismatch <span class="font-mono text-xs text-primary">#663</span></li>
+          </ul>
+        </div>
+        <div class="p-6 rounded-2xl border border-border bg-background">
+          <h3 class="font-semibold mb-3">Recently fixed (green ✓)</h3>
+          <ul class="text-sm text-muted-foreground space-y-2.5">
+            <li>Dashboard empty state <span class="font-mono text-xs text-green-600">#539</span></li>
+            <li>Follow-ups list page <span class="font-mono text-xs text-green-600">#541</span></li>
+            <li>Products CRUD API <span class="font-mono text-xs text-green-600">#550</span></li>
+            <li>Pagination on lists <span class="font-mono text-xs text-green-600">#548</span></li>
+            <li>Confirmation dialogs <span class="font-mono text-xs text-green-600">#542–#547</span></li>
+            <li>Silent catch blocks → console.error <span class="font-mono text-xs text-green-600">#551</span></li>
+          </ul>
+        </div>
+      </div>
+      <p class="mt-8 text-xs text-muted-foreground text-center">
+        Design based on nuCRM <code>AGENTS.md</code> issue tracker. Edit <code>design/works-vs-broken.html</code> to update statuses, add modules, or link issues.
+      </p>
+    </div>
+  </section>
+
+  <script>
+    // ---------- Data ----------
+    const tree = {
+      id: 'root',
+      label: 'nuCRM Application',
+      path: 'app/',
+      status: 'works',
+      desc: 'Full CRM application — tenant portal + super-admin + auth + infra.',
+      issues: [],
+      children: [
+        {
+          id:'tenant', label:'Tenant Portal', path:'app/tenant/', status:'works',
+          desc:'Core tenant workspace — CRM modules, dashboards, automation.',
+          issues:[],
+          expanded:true,
+          children:[
+            {id:'dashboard',label:'Dashboard',path:'app/tenant/dashboard',status:'works',desc:'KPI cards, revenue chart, activity feed.',issues:[],expanded:true,children:[
+              {id:'rev',label:'Revenue Analytics',path:'widgets/revenue-chart',status:'works',desc:'Revenue chart renders correctly.',issues:[]},
+              {id:'act',label:'Activity Feed',path:'widgets/activity-feed',status:'broken',desc:'Stale data after mutations — widget not refreshing.',issues:[{id:'#2872',title:'Widget stale refresh (#2872)'}]},
+              {id:'qa',label:'Quick Actions',path:'widgets/quick-actions',status:'works',desc:'Create lead / contact shortcuts.',issues:[]}
+            ]},
+            {id:'contacts',label:'Contacts',path:'app/tenant/contacts',status:'works',desc:'Contact management with pagination.',issues:[],expanded:true,children:[
+              {id:'clist',label:'Contact List',path:'list page',status:'works',desc:'List + pagination (#548).',issues:[]},
+              {id:'cdetail',label:'Contact Detail',path:'detail page',status:'broken',desc:'Cross-tenant data leak + layout issues.',issues:[{id:'#664',title:'Contact detail leak + layout (#664)'}]},
+              {id:'cedit',label:'Create / Edit',path:'forms',status:'partial',desc:'Create works; edit validation gaps remain.',issues:[{id:'#655',title:'Validation gaps (#655)'}]}
+            ]},
+            {id:'companies',label:'Companies',path:'app/tenant/companies',status:'works',desc:'Company records & hierarchy.',issues:[]},
+            {id:'deals',label:'Deals',path:'app/tenant/deals',status:'broken',desc:'Deal creation broken — stage_name vs stage.',issues:[{id:'#658',title:'Deal creation stage mismatch (#658)'}]},expanded:true,children:[
+              {id:'board',label:'Pipeline Board',path:'kanban',status:'broken',desc:'Drag-drop stage updates fail.',issues:[]},
+              {id:'dcreate',label:'Deal Create',path:'form',status:'partial',desc:'Form submits but stage mapping is wrong.',issues:[{id:'#658',title:'stage_name vs stage (#658)'}]}
+            ]},
+            {id:'leads',label:'Leads',path:'app/tenant/leads',status:'broken',desc:'Double-fetch on search; stale selectedIds.',issues:[{id:'#665',title:'Data tables double-fetch (#665)'}]},
+            {id:'pipelines',label:'Pipelines',path:'app/tenant/pipelines',status:'works',desc:'Pipeline CRUD and stage config.',issues:[]},
+            {id:'products',label:'Products',path:'app/tenant/products',status:'works',desc:'Products CRUD API merged.',issues:[{id:'#550',title:'Products CRUD API (#550)'}]},
+            {id:'invoices',label:'Invoices / Quotes',path:'app/tenant/invoices',status:'partial',desc:'Create + list works; PDF download pending.',issues:[{id:'#430',title:'Quote/invoice PDF download (#430)'},{id:'#431',title:'Quote→invoice conversion (#431)'}]},
+            {id:'contracts',label:'Contracts',path:'app/tenant/contracts',status:'broken',desc:'Renewal reminders not built.',issues:[{id:'#433',title:'Contract renewal automation (#433)'}]},
+            {id:'activities',label:'Activities',path:'app/tenant/activities',status:'works',desc:'Call, email, meeting logging.',issues:[]},
+            {id:'followups',label:'Follow-ups',path:'app/tenant/follow-ups',status:'partial',desc:'List page works; intelligence engine pending.',issues:[{id:'#152',title:'Follow-Up Intelligence (#152)'}]},
+            {id:'meetings',label:'Meetings',path:'app/tenant/meetings',status:'works',desc:'Scheduling + calendar sync.',issues:[]},
+            {id:'calls',label:'Calls',path:'app/tenant/calls',status:'works',desc:'Click-to-call + logging.',issues:[]},
+            {id:'emails',label:'Emails',path:'app/tenant/emails',status:'works',desc:'Send / receive / templates.',issues:[]},
+            {id:'templates',label:'Email Templates',path:'app/tenant/email-templates',status:'broken',desc:'Email-send + PDF download not done.',issues:[{id:'#440',title:'Email-send + PDF (#440)'}]},
+            {id:'documents',label:'Documents',path:'app/tenant/documents',status:'works',desc:'File upload + preview.',issues:[]},
+            {id:'automation',label:'Automation',path:'app/tenant/automation',status:'works',desc:'Workflows + triggers.',issues:[]},
+            {id:'ai',label:'AI',path:'app/tenant/ai',status:'works',desc:'AI auto-follow-up opt-in + cron.',issues:[{id:'#154',title:'AI Auto-Follow-Up (#154)'}]},
+            {id:'analytics',label:'Analytics',path:'app/tenant/analytics',status:'works',desc:'Dashboards + exports.',issues:[]},
+            {id:'dataexplorer',label:'Data Explorer',path:'app/tenant/data-explorer',status:'broken',desc:'Visual query builder + CSV export not built.',issues:[{id:'#451',title:'Data explorer (#451)'}]},
+            {id:'reports',label:'Reports',path:'app/tenant/reports',status:'works',desc:'Scheduled + ad-hoc reports.',issues:[]},
+            {id:'notifications',label:'Notifications',path:'app/tenant/notifications',status:'works',desc:'In-app + email delivery (#158).',issues:[{id:'#158',title:'Notification system (#158)'}]},
+            {id:'integrations',label:'Integrations',path:'app/tenant/integrations',status:'works',desc:'Third-party connectors.',issues:[]},
+            {id:'modules',label:'Modules',path:'app/tenant/modules',status:'works',desc:'Enable/disable per-tenant modules.',issues:[]},
+            {id:'onboarding',label:'Onboarding',path:'app/tenant/onboarding',status:'works',desc:'Setup wizard + data import.',issues:[]},
+            {id:'kb',label:'Knowledge Base',path:'app/tenant/kb',status:'works',desc:'Help articles + search.',issues:[]},
+            {id:'leaderboards',label:'Leaderboards',path:'app/tenant/leaderboards',status:'works',desc:'Rep performance rankings.',issues:[]},
+            {id:'projects',label:'Projects',path:'app/tenant/projects',status:'works',desc:'Project + task tracking.',issues:[]},
+            {id:'orders',label:'Orders',path:'app/tenant/orders',status:'works',desc:'Order management.',issues:[]},
+            {id:'tasks',label:'Tasks',path:'app/tenant/tasks',status:'works',desc:'Task list + due dates.',issues:[]}
+          ]
+        },
+        {
+          id:'superadmin',label:'Super Admin',path:'app/superadmin / app/super-admin/',status:'works',
+          desc:'Platform-level tenant & billing management.',issues:[],expanded:false,children:[
+            {id:'sadash',label:'Dashboard',path:'dashboard',status:'broken',desc:'Enhancements not shipped.',issues:[{id:'#450',title:'Superadmin dashboard (#450)'}]},
+            {id:'satenant',label:'Tenant Mgmt',path:'tenants',status:'works',desc:'Create / suspend tenants.',issues:[]},
+            {id:'sarestore',label:'Tenant Restore',path:'restore',status:'partial',desc:'Atomic restore done; audit gating partial.',issues:[{id:'#2225',title:'Tenant restore (#2225)'},{id:'#2274',title:'Audit gating (#2274)'}]},
+            {id:'saaudit',label:'Audit Logs',path:'audit-logs',status:'works',desc:'super_admin_audit_logs stream.',issues:[]},
+            {id:'sasec',label:'Security',path:'security',status:'broken',desc:'CSP unsafe-inline; rate limits missing.',issues:[{id:'#657',title:'CSP headers (#657)'},{id:'#652',title:'Rate limiting (#652)'}]}
+          ]
+        },
+        {
+          id:'auth',label:'Auth & Setup',path:'app/auth / app/setup',status:'works',
+          desc:'Login, signup, 2FA, SSO, setup wizard.',issues:[],expanded:false,children:[
+            {id:'login',label:'Login',path:'app/auth/login',status:'works',desc:'Email/password login.',issues:[]},
+            {id:'signup',label:'Signup',path:'app/auth/signup',status:'works',desc:'Account creation.',issues:[]},
+            {id:'forgot',label:'Forgot Password',path:'app/auth/forgot-password',status:'works',desc:'Reset flow.',issues:[]},
+            {id:'2fa',label:'2FA',path:'app/auth/2fa',status:'works',desc:'TOTP + backup codes.',issues:[]},
+            {id:'sso',label:'SSO / OIDC',path:'app/auth/sso',status:'partial',desc:'OIDC flow works; file-bound writes gated.',issues:[{id:'#3194',title:'SSO files bound writes (#3194)'}]},
+            {id:'setup',label:'Setup Wizard',path:'app/setup',status:'works',desc:'Initial tenant provisioning.',issues:[]}
+          ]
+        },
+        {
+          id:'infra',label:'Infrastructure',path:'worker.ts / docker / cron',status:'partial',
+          desc:'Background worker, webhooks, backups, scheduling.',issues:[],expanded:false,children:[
+            {id:'wb',label:'Webhooks',path:'webhooks',status:'works',desc:'Delivery, retry, DLQ, SSRF guards.',issues:[]},
+            {id:'s3',label:'Backups / S3',path:'backups',status:'broken',desc:'S3 env var mismatch.',issues:[{id:'#663',title:'S3 backup env mismatch (#663)'}]},
+            {id:'rl',label:'Rate Limiting',path:'middleware',status:'partial',desc:'Not on PATCH/DELETE/GET yet.',issues:[{id:'#652',title:'Rate limiting (#652)'}]},
+            {id:'csp',label:'CSP / Headers',path:'headers',status:'broken',desc:'unsafe-eval / unsafe-inline present.',issues:[{id:'#657',title:'CSP headers (#657)'}]},
+            {id:'health',label:'Health',path:'app/health',status:'works',desc:'Health check endpoint.',issues:[]}
+          ]
+        },
+        {
+          id:'states',label:'Loading & Error States',path:'loading.tsx / error.tsx',status:'broken',
+          desc:'Per-page loading and error boundaries missing.',issues:[{id:'#654',title:'loading.tsx (126) + error.tsx (94) (#654)'}]}
+      ]
+    }
+  };
+
+  // ---------- Render ----------
+  function renderTree(){
+    const container = document.getElementById('treeContainer');
+    container.innerHTML = '';
+    const roots = [tree]; // single root
+    roots.forEach((root,ri)=>{
+      container.appendChild(buildNode(root, 0, true));
+    });
+  }
+
+  function buildNode(node, depth, isRoot=false){
+    const connector = document.createElement('div');
+    connector.className = 'connector' + (node.children && node.children.length && node.children.every(c=>!c.children||c.children.length===0) ? ' last' : '');
+    const dotClass = 'dot ' + node.status;
+    const badgeClass = 'badge-' + node.status;
+    const badgeText = node.status==='works'?'✓ Working': node.status==='broken'?'✗ Broken':'⚠ Partial';
+    const hasChildren = node.children && node.children.length>0;
+    const expanded = node.expanded !== false;
+
+    // node content
+    const content = document.createElement('div');
+    content.className = 'node flex items-center gap-3 px-3 py-2 rounded-xl border ' + (node.clickable?'hover:bg-accent ':'') + (node.status==='works'?'border-green-100/50 dark:border-green-900/20': node.status==='broken'?'border-red-100/50 dark:border-red-900/20':'border-amber-100/50 dark:border-amber-900/20') + ' fade-up';
+    content.style.animationDelay = (depth*0.05)+'s';
+
+    const expandHtml = hasChildren ? `<button class="expand-btn ${expanded?'expanded':'collapsed'}" onclick="toggleNode('${node.id}', event)"></button>` : `<div class="expand-btn" style="visibility:hidden"></div>`;
+
+    content.innerHTML = `
+      ${expandHtml}
+      <span class="${dotClass}" title="${node.status}"></span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-medium truncate" title="${node.label}">${node.label}</span>
+          <span class="${badgeClass} text-[10px] px-2 py-0.5 rounded border">${badgeText}</span>
+        </div>
+        <div class="text-xs text-muted-foreground truncate" title="${node.path}">${node.path}</div>
+      </div>
+      ${node.issues.length ? `<span class="text-xs font-mono text-muted-foreground ml-2">${node.issues.map(i=>i.id).join(' ')}</span>` : ''}
+    `;
+
+    if(node.clickable!==false){
+      content.onclick = (e)=>{
+        if(e.target.closest('.expand-btn')) return;
+        openDetail(node);
+      };
+    }
+
+    connector.appendChild(content);
+
+    if(hasChildren){
+      const childrenWrap = document.createElement('div');
+      childrenWrap.className = 'tree-children' + (expanded?'':' collapsed');
+      node.children.forEach((child,ci)=>{
+        childrenWrap.appendChild(buildNode(child, depth+1, ci===node.children.length-1));
+      });
+      connector.appendChild(childrenWrap);
+    }
+
+    return connector;
+  }
+
+  // ---------- Interactions ----------
+  function toggleNode(id, event){
+    if(event) event.stopPropagation();
+    const node = findNode(tree, id);
+    if(node){
+      node.expanded = !node.expanded;
+      renderTree();
+    }
+  }
+  function collapseAll(){ setExpanded(tree,false); renderTree(); }
+  function expandAll(){ setExpanded(tree,true); renderTree(); }
+  function setExpanded(node,val){
+    if(node.children){ node.expanded = val; node.children.forEach(c=>setExpanded(c,val)); }
+  }
+
+  function findNode(node,id){
+    if(node.id===id) return node;
+    if(node.children){
+      for(const c of node.children){
+        const r=findNode(c,id);
+        if(r) return r;
+      }
+    }
+    return null;
+  }
+
+  function filterTree(status){
+    const radios = document.querySelectorAll('input[name="status"]');
+    radios.forEach(r=>{ if(r.value===status) r.checked=true; });
+    applyFilters(status);
+  }
+  function applyFilters(status){
+    document.querySelectorAll('.node').forEach(el=>{
+      const cls = el.classList;
+      const isWorks = cls.contains('badge-works');
+      const isBroken = cls.contains('badge-broken');
+      const isPartial = cls.contains('badge-partial');
+      let show = true;
+      if(status==='works') show = isWorks;
+      else if(status==='broken') show = isBroken;
+      else if(status==='partial') show = isPartial;
+      el.style.display = show ? 'flex' : 'none';
+    });
+    // hide empty tree-children
+    document.querySelectorAll('.tree-children').forEach(w=>{
+      const visible = Array.from(w.children).some(c=>{
+        const n=c.querySelector('.node');
+        return n && n.style.display!=='none';
+      });
+      w.style.display = visible ? '' : 'none';
+    });
+  }
+  document.getElementById('searchInput').addEventListener('input',(e)=>{
+    const q = e.target.value.toLowerCase();
+    applySearch(q);
+  });
+  function applySearch(q){
+    document.querySelectorAll('.node').forEach(el=>{
+      const label = el.querySelector('.font-medium').textContent.toLowerCase();
+      const path = el.querySelector('.text-muted-foreground').textContent.toLowerCase();
+      const show = label.includes(q) || path.includes(q);
+      el.style.display = show ? 'flex' : 'none';
+      el.style.opacity = show ? '1' : '0.4';
+    });
+  }
+
+  // ---------- Detail panel ----------
+  function openDetail(node){
+    const panel = document.getElementById('detailPanel');
+    const backdrop = document.getElementById('panelBackdrop');
+    document.getElementById('panelDot').className = 'dot ' + node.status;
+    document.getElementById('panelTitle').textContent = node.label;
+    document.getElementById('panelPath').textContent = node.path;
+    document.getElementById('panelDesc').textContent = node.desc || 'No description.';
+    // score
+    let score = node.status==='works'?100: node.status==='partial'?50: 20;
+    if(node.children){
+      const kids = node.children.filter(c=>c.style!==undefined).map(c=>c.status); // not used
+    }
+    document.getElementById('panelScore').textContent = score + '%';
+    document.getElementById('panelScore').className = 'text-2xl font-bold ' + (score>=80?'text-green-600 dark:text-green-400': score>=40?'text-amber-600 dark:text-amber-400':'text-red-600 dark:text-red-400');
+    // issues
+    const issuesEl = document.getElementById('panelIssues');
+    issuesEl.innerHTML = '';
+    if(node.issues.length){
+      node.issues.forEach(i=>{
+        const d=document.createElement('div');
+        d.className='flex items-center gap-2 text-sm';
+        d.innerHTML = `<span class="dot ${node.status}"></span><span class="font-medium">${i.title}</span><span class="ml-auto text-xs font-mono text-muted-foreground">${i.id}</span>`;
+        issuesEl.appendChild(d);
+      });
+    } else {
+      issuesEl.innerHTML = `<div class="text-sm text-muted-foreground italic">No linked issues</div>`;
+    }
+    // subitems
+    const subEl = document.getElementById('panelSubitems');
+    subEl.innerHTML='';
+    if(node.children && node.children.length){
+      node.children.forEach(c=>{
+        const d=document.createElement('div');
+        d.className='flex items-center gap-3 px-3 py-2 rounded-lg border border-border/50 bg-background/30';
+        d.innerHTML = `<span class="dot ${c.status}"></span><span class="text-sm truncate flex-1">${c.label}</span><span class="badge-${c.status} text-[10px] px-2 py-0.5 rounded">${c.status==='works'?'✓': c.status==='broken'?'✗':'⚠'}</span>`;
+        subEl.appendChild(d);
+      });
+    } else {
+      subEl.innerHTML = `<div class="text-sm text-muted-foreground italic">No sub-items</div>`;
+    }
+    panel.classList.add('open');
+    backdrop.classList.add('open');
+    document.body.style.overflow='hidden';
+  }
+  function closePanel(){
+    document.getElementById('detailPanel').classList.remove('open');
+    document.getElementById('panelBackdrop').classList.remove('open');
+    document.body.style.overflow='';
+  }
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='Escape') closePanel();
+  });
+
+  // ---------- Init ----------
+  renderTree();
+
+  // theme persistence
+  const toggle = document.getElementById('theme-toggle');
+  const root = document.documentElement;
+  if(localStorage.getItem('theme')==='dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)){
+    root.classList.add('dark'); toggle.checked=true;
+  }
+  toggle.addEventListener('change',()=>{
+    if(toggle.checked){ root.classList.add('dark'); localStorage.setItem('theme','dark'); }
+    else { root.classList.remove('dark'); localStorage.setItem('theme','light'); }
+  });
+</script>
+</body>
+</html>

@@ -92,9 +92,13 @@ describe('downloadFromS3', () => {
       Body: { transformToByteArray: async () => new Uint8Array([1]) },
     });
     await downloadFromS3(backup, { bucket: 'b' });
+    // #3387: this path took its addressing style from the SDK default, so a
+    // restore from a self-hosted gateway asked for bucket.host and never landed.
     expect(awsMocks.clientCtor).toHaveBeenCalledWith({
       region: 'us-east-1',
       endpoint: undefined,
+      credentials: undefined,
+      forcePathStyle: true,
     });
   });
 
@@ -110,6 +114,8 @@ describe('downloadFromS3', () => {
     expect(awsMocks.clientCtor).toHaveBeenCalledWith({
       region: 'auto',
       endpoint: 'https://acct.r2.cloudflarestorage.com',
+      credentials: undefined,
+      forcePathStyle: true,
     });
   });
 

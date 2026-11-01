@@ -33,6 +33,7 @@ How NuCRM backs up data, how to restore it, and how to recover from disasters.
 | `S3_BUCKET` | Files, and backups when `BACKUP_BUCKET` is unset. |
 | `BACKUP_BUCKET` | Dedicated backup bucket (recommended). |
 | `S3_ENDPOINT` / `S3_REGION` | Provider endpoint (e.g. Cloudflare R2) and region. |
+| `S3_FORCE_PATH_STYLE` | Bucket addressing (#3387). Unset = path style, which is what MinIO and SeaweedFS require; set `false` only for an endpoint that refuses it. |
 
 S3 lifecycle guidance: [`docs/infra/s3-backup-lifecycle.md`](../infra/s3-backup-lifecycle.md).
 

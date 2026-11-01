@@ -77,7 +77,7 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5425` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule), re-pinned by **PP-076**, after
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5627` (re-pinned 2026-11-01 from `:5498`: the merge grew the file above it) (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, and from `:5425` by **PP-079** for the same three additions), re-pinned by **PP-076**, after
 **PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
 The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
 inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the
@@ -124,21 +124,21 @@ statement that nobody has checked, not a verdict that they are wrong.
 ## How current is "current"?
 
 Every count came from these commands. Run them before quoting a number, including these.
-Re-run 2026-10-26 against `main = f054c6e95` plus #3246 steps 2 and 3. Unchanged: `app/tenant` and
+Re-run 2026-10-26 against `main = f054c6e95` plus #3246 step 2. Unchanged: `app/tenant` and
 `app/superadmin` pages, schema files, the version, the Radix count, the `.spec.ts` count.
 Each number that moved is corrected below and says what the file had been quoting.
 
 ```sh
 cd /srv/nucrm
-find app/api -name route.ts | wc -l                       # 514 API routes (was 507)
-find app/tenant -name page.tsx | wc -l                    # 149 tenant pages
+find app/api -name route.ts | wc -l                       # 519 API routes (was 507; the merge's oauth-client registration surface adds four, #3303's SCIM work none)
+find app/tenant -name page.tsx | wc -l                    # 150 tenant pages
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 1002 (was 919 on `54be92020`; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 1009 (was 919 on `54be92020`; the merge brings #3328's three and #3303's three; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 290 total .sql (was 277; #3284 added 0036's down, and the four 0140–0142 up-migrations that a merge dropped from the journal are now paired with it)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 145 up-migrations (was 139), each with a `.down.sql` since #3284
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 145 journal entries (was 139)
-node -pe "Object.keys(require('./package.json').scripts).length"               # 122 scripts (was 96; #3284 added guard:rollback-coverage)
+ls drizzle/migrations/*.sql | wc -l                       # 292 total .sql (was 277; #3284 added 0036's down, the four 0140–0142 up-migrations that a merge dropped from the journal are now paired with it, and #3303 adds the 0143 pair)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 146 up-migrations (was 139), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 146 journal entries (was 139)
+node -pe "Object.keys(require('./package.json').scripts).length"               # 133 scripts (was 96; #3284 added guard:rollback-coverage)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13
 # distinct declared table names; plain grep -o misses one multi-line declaration:

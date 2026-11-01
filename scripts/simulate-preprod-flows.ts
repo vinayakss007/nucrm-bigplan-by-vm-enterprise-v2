@@ -53,6 +53,7 @@ import { pgSslConfig } from '../lib/db/ssl-config';
 // the CommonJS module, so it must be erased for `node --experimental-strip-types`.
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 // ── Scenario plumbing ─────────────────────────────────────────────────────
 

@@ -19,18 +19,14 @@ import {
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import { getS3Config } from './s3-config';
+import { s3ClientOptions } from './s3-client';
 
 // Resolved through getS3Config() so that S3_ACCESS_KEY / S3_SECRET_KEY (the
 // names docker-compose exports) are honoured as well as the AWS-style
 // S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY.
 const s3Config = getS3Config();
 
-const s3Client = new S3Client({
-  region: s3Config.region,
-  endpoint: s3Config.endpoint, // For R2: https://xxx.r2.cloudflarestorage.com
-  credentials: s3Config.credentials,
-  forcePathStyle: true,
-});
+const s3Client = new S3Client(s3ClientOptions(s3Config));
 
 const BUCKET = s3Config.backupBucket || 'nucrm-backups';
 const BACKUP_PREFIX = 'backups/';

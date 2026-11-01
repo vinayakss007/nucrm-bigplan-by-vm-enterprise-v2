@@ -26,6 +26,7 @@ import { Pool } from 'pg';
 import { pgSslConfig } from '../lib/db/ssl-config';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'drizzle', 'migrations');
 

@@ -10,6 +10,7 @@ import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import { valueIsUnfilledTemplateToken } from '@/lib/env';
 import { createHash, timingSafeEqual } from 'crypto';
 import IORedis from 'ioredis';
+import { logError } from '@/lib/errors-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -283,6 +284,7 @@ export async function GET(request: NextRequest) {
  
  
   } catch (_err) {
+    void logError({ error: _err, context: 'api/metrics GET' });
     return new Response("# ERROR\\n", {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },

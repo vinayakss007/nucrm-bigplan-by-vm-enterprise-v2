@@ -26,7 +26,7 @@
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -158,5 +158,19 @@ describe('the real tree arrives clean (#3381 ask 1)', () => {
     const res = run(ROOT);
     expect(res.status).toBe(0);
     expect(res.stdout).toMatch(/OK — \d+ pg\.Pool site\(s\) across \d+ file\(s\), every one declares a TLS entry\./);
+  });
+});
+
+describe('#3381 the screen walks the .mjs ops scripts too', () => {
+  it('fails a bare .mjs pool, the shape provision-app-role.mjs shipped', () => {
+    const res = run(fixture({ 'scripts/ops.mjs': 'const pool = new Pool({ connectionString: u, max: 1 });\n' }), '--json');
+    const out = JSON.parse(res.stdout);
+    expect(out.poolSites).toBe(1);
+    expect(out.withoutTlsPolicy).toHaveLength(1);
+  });
+
+  it('arms provision-app-role.mjs with the shared policy', () => {
+    const src = readFileSync(join(ROOT, 'scripts/provision-app-role.mjs'), 'utf8');
+    expect(src).toMatch(/ssl:\s*pgSslConfig\(\)/);
   });
 });

@@ -80,7 +80,7 @@ export function SiteFooter() {
         </div>
 
         {/* link columns */}
-        <nav className="grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-6" aria-label="Footer">
+        <nav className="grid gap-8 py-12 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6" aria-label="Footer">
           {FOOTER.map((col) => (
             <div key={col.heading}>
               <div className="mk-eyebrow mb-3.5 text-slate-500">{col.heading}</div>
@@ -141,7 +141,7 @@ export function SiteFooter() {
       {/* oversized wordmark, cropped by the viewport edge */}
       <div className="pointer-events-none select-none overflow-hidden" aria-hidden>
         <div
-          className="whitespace-nowrap text-center font-extrabold leading-[0.78] tracking-tighter text-white/[0.028]"
+          className="mk-footer-wordmark whitespace-nowrap text-center font-extrabold leading-[0.78] tracking-tighter text-white/[0.028]"
           style={{ fontSize: 'clamp(72px, 17vw, 240px)' }}
         >
           nucrm

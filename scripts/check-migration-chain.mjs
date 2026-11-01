@@ -28,6 +28,13 @@
  *   dupIdx    two entries sharing an idx
  *   dupWhen   two entries sharing a when     -> drizzle's folderMillis tiebreak
  *   order     idx not strictly increasing in journal order
+ *   blockingIndex  up-file whose index DDL locks writes out (plain CREATE
+ *                  INDEX, no CONCURRENTLY) -> #3301. drizzle-orm's migrate()
+ *                  puts one transaction around every pending file, so a plain
+ *                  build holds SHARE on its table for the whole backlog apply.
+ *                  New files must build online (applyMigrationFile runs
+ *                  CONCURRENTLY outside its transactions) or be baselined with
+ *                  a reason.
  *
  * Known defects are baselined, like the file-size ratchet, so this can be wired
  * into CI today. Fixing one prints a hint to shrink the baseline.
@@ -36,11 +43,12 @@
  *   node scripts/check-migration-chain.mjs --update
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { hasBlockingIndexBuild } from './migration-index-ddl.mjs';
 
 const MIGRATIONS_DIR = 'drizzle/migrations';
 const JOURNAL = `${MIGRATIONS_DIR}/meta/_journal.json`;
 const BASELINE_PATH = 'scripts/migration-chain-baseline.json';
-const KINDS = ['missing', 'orphans', 'dupIdx', 'dupWhen', 'order'];
+const KINDS = ['missing', 'orphans', 'dupIdx', 'dupWhen', 'order', 'blockingIndex'];
 
 function collect() {
   const files = readdirSync(MIGRATIONS_DIR)
@@ -56,6 +64,15 @@ function collect() {
     dupIdx: [],
     dupWhen: [],
     order: [],
+    blockingIndex: files
+      .filter((t) => {
+        try {
+          return hasBlockingIndexBuild(readFileSync(`${MIGRATIONS_DIR}/${t}.sql`, 'utf8'));
+        } catch {
+          return false; // reported above as `orphans`/`missing`, not twice
+        }
+      })
+      .map((t) => `blockingIndex:${t}`),
   };
 
   const seenIdx = new Set();
@@ -82,7 +99,7 @@ const flat = KINDS.flatMap((k) => violations[k].map((v) => `${k}|${v}`));
 
 if (process.argv.includes('--update')) {
   const body = {
-    _comment: 'Known migration-chain defects. Shrink this file as they are fixed; the guard fails on any NEW one and hints when one disappears. Regenerate: node scripts/check-migration-chain.mjs --update',
+    _comment: 'Known migration-chain defects. Shrink this file as they are fixed; the guard fails on any NEW one and hints when one disappears. Regenerate: node scripts/check-migration-chain.mjs --update. Every `blockingIndex` entry is history: a plain build that took SHARE on its table, or an `IF NOT EXISTS` shell that builds only where the index is still missing. Both classes are already-applied files (#2537 keeps only the recent backlog pending), and rewriting them is the owner\'s deploy step, not a contributor\'s; the ratchet exists so no NEW file adds either shape — build online instead (#3301).',
     counts,
     violations,
   };
@@ -118,6 +135,18 @@ if (fresh.length > 0) {
   for (const v of fresh) {
     const at = v.indexOf('|');
     console.error(`   x ${v.slice(0, at)}: ${v.slice(at + 1).replace(/^[^:]*:/, '')}`);
+  }
+  if (fresh.some((v) => v.startsWith('blockingIndex|'))) {
+    console.error([
+      '',
+      'A `blockingIndex` defect means the file issues CREATE INDEX without',
+      'CONCURRENTLY: it holds SHARE on its table for the whole build, and',
+      "drizzle-orm's migrate() keeps every pending file inside one transaction,",
+      'so the backlog apply locks writes out. Build online instead —',
+      'scripts/migrate.ts routes a pending set carrying CONCURRENTLY DDL through',
+      'applyMigrationFile, which runs it outside a transaction (#3301) — and',
+      'sweep pg_index.indisvalid shells first if the build can fail, as 0118 does.',
+    ].join('\n'));
   }
   console.error([
     '',

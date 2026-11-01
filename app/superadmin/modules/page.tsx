@@ -10,6 +10,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { clientLogError } from '@/lib/client-logger';
 
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_COLORS: Record<string, string> = {
@@ -137,6 +138,7 @@ export default function SuperAdminModulesPage() {
       }
     } catch (_err) {
       hasError = true;
+      clientLogError('superadmin/modules:fetch-stages', _err);
       toast.error('Error updating modules');
     }
 

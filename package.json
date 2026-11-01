@@ -167,7 +167,8 @@
     "guard:panel-error-state": "node scripts/check-panel-error-state.mjs",
     "guard:seed-credential": "node scripts/check-seed-credentials.mjs",
     "guard:destructive-gate": "node scripts/check-destructive-gate.mjs",
-    "assert:runtime-env": "node scripts/assert-runtime-env.mjs"
+    "assert:runtime-env": "node scripts/assert-runtime-env.mjs",
+    "storage:buckets": "npx tsx --import ./scripts/load-env.mjs scripts/provision-s3-buckets.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

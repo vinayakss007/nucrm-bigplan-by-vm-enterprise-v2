@@ -47,6 +47,7 @@ import { resolveSeedPassword, SEED_PASSWORD_ENV } from './seed/credential';
 import { classify, formatVerdict } from './seed/contents';
 import { refusal, describeTarget, formatTarget, parseFlags, confirmationMatches } from './seed/destructive';
 import { STATE_SQL, readStateCounts } from './seed/state';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 async function main() {
   const flags = parseFlags(process.argv.slice(2));

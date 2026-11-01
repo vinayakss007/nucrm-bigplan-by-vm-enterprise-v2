@@ -252,9 +252,9 @@ export function CtaBand({
   secondary?: { label: string; href: string };
 }) {
   return (
-    <section className="relative overflow-hidden py-20 sm:py-28">
+    <section className="mk-cta-band relative overflow-hidden py-20 sm:py-28">
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,#713f2b_0%,#a85e3c_52%,#bd8451_100%)] opacity-95" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#7d4429_0%,#b96b3e_52%,#d69a55_100%)] opacity-100" />
         <div className="mk-grid-bg absolute inset-0 opacity-60" />
         <div className="mk-aurora absolute -top-24 left-1/4 h-80 w-80 rounded-full bg-white/15 blur-[110px]" />
         <div className="mk-aurora absolute -bottom-20 right-1/5 h-80 w-80 rounded-full bg-amber-200/20 blur-[110px]" style={{ animationDelay: '-11s' }} />

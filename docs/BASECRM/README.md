@@ -252,7 +252,7 @@ all four). The migrations remain UNAPPLIED with the rest of the backlog (#2537).
 **Re-counted again 2026-10-31 for #3303's SCIM context.** Three numbers moved with
 one migration: `app.scim_tenant` (0143) is the **twentieth** name on both reset
 lists, the journal carries **146** entries over **292** `.sql` files — 146 forward,
-146 `.down.sql` — and the tree holds **1003** `*.test.*` files. The SCIM routes now
+146 `.down.sql` — and the tree holds **1009** `*.test.*` files. The SCIM routes now
 run inside `withScimTenantContext`, so `scripts/rls-preauth-baseline.json` has no
 entries left: the ten statements it counted are gone rather than excused. Rule 1 of
 `scripts/check-rls-route-coverage.mjs` also learned the tenant-naming mechanisms

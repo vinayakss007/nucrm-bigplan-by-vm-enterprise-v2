@@ -21,6 +21,7 @@ import { extname } from 'path';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { getS3Config, isS3Configured } from '@/lib/storage/s3-config';
+import { s3ClientOptions } from '@/lib/storage/s3-client';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -29,12 +30,7 @@ function getS3Client() {
   const cfg = getS3Config();
   const bucket = cfg.bucket || 'nucrm-files';
   return {
-    client: new S3Client({
-      region: cfg.region,
-      endpoint: cfg.endpoint,
-      credentials: cfg.credentials,
-      forcePathStyle: true,
-    }),
+    client: new S3Client(s3ClientOptions(cfg)),
     bucket,
   };
 }

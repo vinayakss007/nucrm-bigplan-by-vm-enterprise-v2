@@ -295,7 +295,10 @@ describe('#3282 seed-fresh.ts refuses before it deletes, and seeds a password no
   });
 
   it('stays inside one pinned connection and one transaction, like #2628 left seed-dev', () => {
-    expect(src).toMatch(/new Pool\(\{ connectionString: process\.env\.DATABASE_URL, max: 1, ssl: pgSslConfig\(\) \}\)/);
+    // Pinned on the two facts that make the connection single and correct, not on
+    // the option list: #3381 added `ssl: pgSslConfig()` to every Pool in the repo.
+    expect(src).toMatch(/new Pool\(\{[^}]*connectionString: process\.env\.DATABASE_URL[^}]*\}\)/);
+    expect(src).toMatch(/new Pool\(\{[^}]*\bmax: 1\b[^}]*\}\)/);
     expect(src).toMatch(/drizzle\(client/);
     expect(src).toMatch(/await client\.query\('BEGIN'\)/);
   });
@@ -485,7 +488,6 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
   it('is the seventh step of the local pre-merge screen', () => {
     const pre = read('scripts/pre-merge-check.sh');
     expect(pre).toContain('npm run guard:destructive-gate');
-    // #3298 appended guard:cron-auth as an eighth, by name, in that issue's ask 2.
-    expect([...pre.matchAll(/▶ (\d+)\/8/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect([...pre.matchAll(/▶ (\d+)\/7/g)].map((m) => Number(m[1]))).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 });

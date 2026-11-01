@@ -50,6 +50,8 @@ import { existsSync, mkdtempSync, rmSync, statSync, createReadStream } from 'fs'
 import { tmpdir } from 'os';
 import path from 'path';
 import { createHash } from 'crypto';
+import { pgSslConfig } from '../lib/db/ssl-config';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 interface BackupRow {
   id: string;
@@ -96,8 +98,9 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
   if (!cfg.configured || !cfg.backupBucket) {
     throw new Error('Backup is stored off-site but S3 is not configured locally');
   }
-  const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-  const client = new S3Client({ region: cfg.region, endpoint: cfg.endpoint, credentials: cfg.credentials });
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const { createS3Client } = await import('../lib/storage/s3-client');
+  const client = await createS3Client(cfg);
   const res = await client.send(new GetObjectCommand({ Bucket: cfg.backupBucket, Key: storagePath }));
   if (!res.Body) throw new Error(`Empty body for s3://${cfg.backupBucket}/${storagePath}`);
 

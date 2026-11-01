@@ -95,6 +95,18 @@ vi.mock('@aws-sdk/client-s3', () => ({
   },
   GetObjectCommand: class {},
   DeleteObjectCommand: class {},
+  // #3258: the upload now asks the store whether the bucket exists before it writes,
+  // so the module surface the route imports has to carry the bucket commands.
+  HeadBucketCommand: class HeadBucketCommand {
+    constructor(input: unknown) {
+      Object.assign(this, input);
+    }
+  },
+  CreateBucketCommand: class CreateBucketCommand {
+    constructor(input: unknown) {
+      Object.assign(this, input);
+    }
+  },
 }));
 vi.mock('@aws-sdk/s3-request-presigner', () => ({ getSignedUrl: vi.fn(async () => 'https://s3/signed') }));
 
@@ -287,7 +299,12 @@ describe('POST /api/tenant/files — storageGb gate (#2432)', () => {
     const res = await POST(fileRequest(), undefined as never);
 
     expect(res.status).toBe(201);
-    expect(mockS3Send).toHaveBeenCalledTimes(1);
+    // Two sends, in this order (#3258): HeadBucket for the bucket the object is about
+    // to land in, then the PutObject. A single-send expectation here would accept an
+    // upload that never asked.
+    expect(mockS3Send).toHaveBeenCalledTimes(2);
+    expect((mockS3Send.mock.calls[0]?.[0] as { constructor: { name: string } })?.constructor.name).toBe('HeadBucketCommand');
+    expect((mockS3Send.mock.calls[1]?.[0] as { constructor: { name: string } })?.constructor.name).toBe('PutObjectCommand');
   });
 
   it('keeps the per-file cap in front of the plan read', async () => {

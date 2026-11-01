@@ -108,6 +108,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
  
   } catch (_err) {
+    void logError({ error: _err, context: 'tenant/onboarding/complete GET' });
     return NextResponse.json({ completed: false }); // Don't block on error
   }
 });

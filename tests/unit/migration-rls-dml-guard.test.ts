@@ -33,7 +33,7 @@
  *     `app.current_tenant` whatever a mentioned table reads, and only SQL in the
  *     executable scope counts as a marker at all;
  *   - `orderedCorpus` reads `meta/_journal.json`, because that is the order
- *     `scripts/migrate.ts:143` applies files in and it differs from the sorted
+ *     `scripts/migrate.ts:145` applies files in and it differs from the sorted
  *     filenames at 20 of 126 positions (`0091`/`0092` land after `0112`), which
  *     decides the *last* writer of `deal_stages.tenant_isolation`;
  *   - `createTableTenantNames` must not let *formatting* decide safety. The

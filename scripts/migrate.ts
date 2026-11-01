@@ -10,6 +10,8 @@ import {
   buildLedgerInsert,
   checkBootstrapPrecondition,
   checkFreshBuildFloors,
+  chooseApplyRoute,
+  filesNeedingOnlineApply,
   planMigrations,
   runFreshReplay,
   type FreshReplayStats,
@@ -399,7 +401,7 @@ async function main() {
 
   // ── Fresh migration: replay files + STAMP the ledger (#2254) ───────────
   //
-  // Drizzle's migrate() wraps each migration file in a transaction and stops
+  // Drizzle's migrate() wraps the whole pending set in ONE transaction and stops
   // on the first error. On an empty ledger, later hand-written files (0003+)
   // re-create tables already built by 0000/0002, causing "42P07 relation
   // already exists" inside the tx, which rolls back the entire migration.
@@ -425,14 +427,37 @@ async function main() {
   //     now read as skip-stamped, otherwise the next run would replay and we
   //     exit 1.
   // Incremental migrations (ledger non-empty) keep using drizzle's built-in
-  // migrator unchanged.
-  const freshPath = freshRowCount === 0 && journal.entries.length > 0;
+  // migrator unchanged — EXCEPT when a pending file carries CONCURRENTLY DDL
+  // (#3301), which that migrator's single transaction cannot execute at all
+  // (SQLSTATE 25001). Those runs use this same engine: chooseApplyRoute() is
+  // the decision, and the only difference below is that an incremental apply
+  // must not claim the whole journal is now stamped.
+  const freshPlan = planMigrations(journal.entries, await readLedgerRows(pool), readFileOrNull, statMtimeOrNull);
+  const onlineTags = filesNeedingOnlineApply(
+    freshPlan
+      .filter((p) => p.action === 'replay')
+      .map((p) => ({ tag: p.tag, content: readFileOrNull(p.tag) })),
+  );
+  const route = chooseApplyRoute({
+    ledgerRowCount: freshRowCount,
+    journalEntryCount: journal.entries.length,
+    onlineTags,
+  });
+  const onlineIncremental = route === 'online-incremental';
 
-  if (freshPath) {
-    const freshPlan = planMigrations(journal.entries, await readLedgerRows(pool), readFileOrNull, statMtimeOrNull);
+  if (route !== 'drizzle-incremental') {
     const toReplay = freshPlan.filter((p) => p.action === 'replay').length;
     const alreadyStamped = freshPlan.filter((p) => p.action === 'skip-stamped').length;
-    console.log(`[migrate] Fresh path: ${toReplay} file(s) to replay, ${alreadyStamped} already stamped, ${freshPlan.length} journal entr(ies) total.`);
+    console.log(`[migrate] ${onlineIncremental ? 'Incremental (online)' : 'Fresh'} path: ${toReplay} file(s) to replay, ${alreadyStamped} already stamped, ${freshPlan.length} journal entr(ies) total.`);
+    if (onlineIncremental) {
+      // The drizzle migrator is not an option for these files, so this is not a
+      // preference — say which files forced the route and what changes.
+      console.log(`[migrate] ${onlineTags.length} pending file(s) carry CONCURRENTLY DDL, which cannot run `
+        + `inside the one transaction drizzle-orm's migrate() opens around every pending file: ${onlineTags.join(', ')}`);
+      console.log('[migrate] Applying them with this repo\'s online engine instead (applyMigrationFile): '
+        + 'per-file transactions, CONCURRENTLY builds autocommitted outside any transaction, each file stamped as it '
+        + 'completes — a failure stops the run and the next db:migrate resumes where it stopped.');
+    }
 
     // Newer drizzle-kit versions add an "fk_updates" column to the ledger;
     // include it (=0/false) only when it exists on this DB.
@@ -502,7 +527,7 @@ async function main() {
       console.log(`[migrate] Backfilled ${backfilled} ledger row(s) for entries whose file content duplicates an earlier stamped file`);
     }
 
-    console.log(`[migrate] Fresh migration complete — ${stats.applied} statements applied (${stats.concurrent} CONCURRENTLY outside transactions), ${stats.skipped} skipped (already exists)`
+    console.log(`[migrate] ${onlineIncremental ? 'Online incremental apply' : 'Fresh migration'} complete — ${stats.applied} statements applied (${stats.concurrent} CONCURRENTLY outside transactions), ${stats.skipped} skipped (already exists)`
       + (stats.skippedZeroTableQuirk > 0 ? `, ${stats.skippedZeroTableQuirk} skipped (file-order quirk, zero-table build)` : '')
       + `, ${stats.stampedTags.length} ledger row(s) stamped this run.`);
 
@@ -522,8 +547,8 @@ async function main() {
     }
     console.log(`[migrate] Ledger verified: all ${journal.entries.length} journal entries stamped — subsequent db:migrate runs are no-ops.`);
 
-    // #2450 AC2: a stamped ledger is necessary but not sufficient. The claim a
-    // fresh install needs is "this database is protected and complete", and
+    // #2450 AC2: a stamped ledger is necessary but not sufficient. The claim
+    // this run just made is "this database is protected and complete", and
     // that is only true if the object classes only the journal contributes —
     // RLS policies and SQL functions — are actually in the catalog. Measure it
     // from the catalog, never from the log lines above.
@@ -552,10 +577,12 @@ async function main() {
       await pool.end();
       process.exit(1);
     }
-    console.log(`[migrate] Fresh build verified by query: ${buildShape.policies} RLS policies over ` +
+    console.log(`[migrate] ${onlineIncremental ? 'Database after online apply' : 'Fresh build'} verified by query: ${buildShape.policies} RLS policies over ` +
       `${buildShape.rlsEnabledTables} RLS-enabled tables, every journal headline object present.`);
   } else {
-    console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
+    console.log('[migrate] Applying pending migrations with drizzle-orm migrator '
+      + '(one transaction around the whole pending set — no pending file carries CONCURRENTLY DDL, '
+      + 'which is what #3301 routes through the online engine instead)...');
     await migrate(db, { migrationsFolder: './drizzle/migrations' });
   }
 

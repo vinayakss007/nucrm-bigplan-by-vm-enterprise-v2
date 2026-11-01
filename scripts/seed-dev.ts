@@ -87,6 +87,7 @@ import crypto from 'crypto';
 import * as schema from '../drizzle/schema';
 import { seedCompanies, seedContacts, seedDeals } from './seed';
 import { resolveSeedPassword, probeCounts, classify, refusal, formatVerdict } from './seed';
+import { pgSslConfig } from '../lib/db/ssl-config';
 
 // ============================================================================
 // FIXED UUIDs (for deterministic relationships)

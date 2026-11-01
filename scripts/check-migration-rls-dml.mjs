@@ -92,7 +92,7 @@
  *
  * CORPUS ORDER IS EXECUTION ORDER
  * -------------------------------
- * `scripts/migrate.ts:143` iterates `journal.entries`, not the directory
+ * `scripts/migrate.ts:145` iterates `journal.entries`, not the directory (#3301 moved it from :143)
  * listing, and the two disagree: 20 of 126 journal positions differ from the
  * sorted filenames, because `0091_usage_snapshots_superadmin_bypass` and
  * `0092_metrics_tables_superadmin_bypass` are applied after `0112`. Reading the

@@ -14,6 +14,24 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 ```
 
+## What the app does when the bucket is not there (#3258)
+
+Until #3258 nothing in the repo could create a bucket: `lib/storage/s3.ts`,
+`lib/backups/offsite.ts` and `app/api/tenant/files/route.ts` all wrote objects into a
+name somebody had provisioned out-of-band, so the first upload on a fresh endpoint was a
+bare `NoSuchBucket` — and on the presigned-PUT path the browser was the one that found out.
+
+Every one of those writes now asks first (`lib/storage/ensure-bucket.ts`): `HeadBucket`,
+and on a positive "absent" a `CreateBucket`. The answer is three-valued on purpose, because
+the providers are not uniform: a *refused* `HEAD` is recorded as unverifiable and the write
+proceeds — a role that may `PutObject` but not `HeadBucket` is a normal deployment, and a
+managed provider that refuses `CreateBucket` outright (#2054) must not be turned into a
+broken upload by a helper that reads "I can't tell" as "it is missing".
+
+`npm run storage:buckets` is the operator version of the same question, with a write/read/
+delete round trip so a bucket that exists but rejects your keys is reported as a failure.
+Run it once per environment, after the `aws s3api create-bucket` above or instead of it.
+
 ## Lifecycle Policy
 
 Apply this lifecycle policy to manage costs:
