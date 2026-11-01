@@ -241,9 +241,10 @@ is a plaintext connection against a DSN that looks encrypted. One policy covers 
 app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plaintext only when
 `DATABASE_SSL === 'false'` and verifies the server certificate only in production.
 
-- `npm run guard:pool-tls` is the check: it brace-matches every `new Pool(` under `app/`,
-  `lib/`, `scripts/`, `components/` and `deploy/` and requires an `ssl` **name** in the
-  options, so shorthand and variable forms pass and a `PoolConfig` identifier has to resolve
+- `npm run guard:pool-tls` is the check: it brace-matches every `new Pool(` in the `.ts`,
+  `.mts`, `.mjs`, `.js` and `.cjs` source under `app/`, `lib/`, `scripts/`, `components/`
+  and `deploy/` and requires an `ssl` **name** in the options — quoted or not — so shorthand and
+  variable forms pass and a `PoolConfig` identifier has to resolve
   to a literal in the same file that carries it.
 - Rebuilding this stack on another host: the setting is per-connection, so a `pg_hba` that
   says `trust`/`md5` locally will let an unencrypted pool look healthy forever. That is the
