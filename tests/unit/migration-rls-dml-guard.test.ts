@@ -443,7 +443,7 @@ describe('per-table mitigation (#2516, #2545) — the marker is evidence, not a 
     const upd = gatingPolicies(policyMap, 'users', 'update');
     expect(upd.unknown).toBe(false);
     expect(upd.covering.map((p) => p.name).sort())
-      .toEqual(['users_super_admin_update', 'users_update_own']);
+      .toEqual(['users_super_admin_update', 'users_tenant_scim_update', 'users_update_own']);
     expect(writeIsVisible(policyMap, 'users', 'update', SUPER_ONLY).ok).toBe(true);
     expect(writeIsVisible(policyMap, 'users', 'delete', SUPER_ONLY).ok).toBe(true);
     expect(writeIsVisible(policyMap, 'webhook_events', 'update', SUPER_ONLY).ok).toBe(true);
