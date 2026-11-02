@@ -445,9 +445,12 @@ describe('#3281 the scripts that used to carry the credential now require it', (
     }
   });
 
-  it('security-test.sh builds one payload from two required names, and sends it six times', () => {
+  it('security-test.sh builds one payload from two required names, and sends it from the two sites the relogin helper left', () => {
     expect(sec).toMatch(/LOGIN_PAYLOAD=\$\(printf/);
-    expect((sec.match(/-d "\$LOGIN_PAYLOAD"/g) ?? []).length).toBe(6);
+    // Six while every section re-logged inline; #77 collapsed those into one
+    // `relogin()` helper, so the payload now leaves the script twice — the
+    // helper and test 1.1. The point is that neither site spells the password.
+    expect((sec.match(/-d "\$LOGIN_PAYLOAD"/g) ?? []).length).toBe(2);
     expect(sec).toMatch(/SEC_TEST_PASSWORD are both required/);
     // The one body that is not the real credential is the invalid-login probe, and it
     // is wrong by construction — the app's own policy refuses to make it a login.
@@ -455,7 +458,6 @@ describe('#3281 the scripts that used to carry the credential now require it', (
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain('wrongpassword');
     expect(passwordPolicyError('wrongpassword')).toMatch(/uppercase/);
-    expect((sec.match(/-d "\$LOGIN_PAYLOAD"/g) ?? []).length).toBe(6);
   });
 
   it('start-clean.sh skips the seed rather than inventing a password', () => {
