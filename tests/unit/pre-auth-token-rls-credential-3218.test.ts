@@ -250,6 +250,9 @@ describe('password-reset helper names its credential per flow', () => {
   });
 
   it('resetPassword claims with the credential and retires the rest with the user', async () => {
+    // #3401: the reset re-reads the account inside the claiming transaction, so the
+    // fake needs one to find. Refusing a tombstone there is #3401's file, not this one.
+    H.state.rows.users = [{ id: 'user-1' }];
     const { resetPassword } = await import('@/lib/auth/password-reset');
     const res = await resetPassword(TOKEN, 'StrongPassword123!@#');
     expect(res.success).toBe(true);
@@ -283,6 +286,8 @@ function jsonPost(path: string, body: unknown) {
 
 describe('reset-password route claims the exact token it was given', () => {
   it('names the hash in the claim context', async () => {
+    // #3401: the route re-reads the account after claiming, so the fake has to have one.
+    H.state.rows.users = [{ id: 'user-1' }];
     const { POST } = await import('../../app/api/auth/reset-password/route');
     const res = await POST(jsonPost('/api/auth/reset-password', { token: TOKEN, password: 'StrongPassword123!@#' }));
     expect(res.status).toBe(200);
