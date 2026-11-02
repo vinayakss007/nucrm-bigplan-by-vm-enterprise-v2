@@ -2,7 +2,9 @@
   "_comment": [
     "Files whose pg.Pool sites are exempt from scripts/check-pool-tls-policy.mts,",
     "each with the reason. Shrink-only: an entry whose file stops producing a",
-    "finding fails the screen, so an exemption cannot outlive its code (#3381)."
+    "finding fails the screen, so an exemption cannot outlive its code (#3381).",
+    "Empty since the day its only entry earned it: scripts/verify-backup.ts took",
+    "ssl: pgSslConfig() at both pools in #3382, so the guard reported the exemption stale."
   ],
   "entries": []
 }

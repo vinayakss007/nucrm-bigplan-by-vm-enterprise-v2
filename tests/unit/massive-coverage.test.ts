@@ -496,7 +496,9 @@ describe('email/service - comprehensive', () => {
       process.env.NODE_ENV = 'development';
       const { alertSuperAdmin } = await import('@/lib/email/service');
       
-      await expect(alertSuperAdmin('Critical Alert', 'Database down')).resolves.toBeUndefined();
+      // #3408: the value IS the answer — `undefined` here was the old signature
+      // that said nothing about whether the alert reached anybody.
+      await expect(alertSuperAdmin('Critical Alert', 'Database down')).resolves.toMatchObject({ success: true });
     });
   });
 

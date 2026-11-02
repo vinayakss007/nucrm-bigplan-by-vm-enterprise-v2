@@ -67,6 +67,19 @@ export async function POST(request: NextRequest) {
 
       await setUserContext(reset.userId, tx);
 
+      // #3401: a reset token can outlive the account it was issued to — soft
+      // delete keeps both rows. The claim above still commits: the token burns,
+      // the password does not change, and the caller gets the same 400 an expired
+      // link gets. Without this read, deletedAt was a flag on users and not a
+      // revocation.
+      const [live] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, reset.userId), isNull(users.deletedAt)))
+        .limit(1);
+
+      if (!live) return null;
+
       const sessionToken = await createToken(reset.userId);
       const sessionTokenHash = await hashToken(sessionToken);
 

@@ -19,6 +19,11 @@
  * cron died with "FATAL: CRON_SECRET is required" (5 restarts → "errored") and
  * the worker silently fell back to redis://localhost:6379.
  *
+ * A claim is not a check: until #3251 both `args` carried the bare script path,
+ * so the preload above was intent rather than config.
+ * tests/unit/pm2-sidecar-env-preload-3251.test.ts pins both halves — the
+ * preload on every `tsx` app, and no app advertising a key PM2 ignores.
+ *
  * The exception list (#3271): "Next.js reads .env.local" is true of the file's
  * contents but NOT of a value the deployment must guarantee, because pm2 replays
  * the environment it captured at first `start` — a config-only change reaches the
@@ -137,17 +142,22 @@ module.exports = {
     {
       name: 'worker',
       script: 'node_modules/.bin/tsx',
-      args: 'worker.ts',
+      args: '--import ./scripts/load-env.mjs worker.ts',
       cwd: __dirname,
 
       instances: process.env.NUCRM_WORKER_INSTANCES || 2,
       exec_mode: 'cluster',
 
-      env_file: '.env.local',
       env: {
         NODE_ENV: 'production',
         DATABASE_SSL: 'true',
         DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        // The `--import` preload in `args` makes .env.local reachable, and on this
+        // VM that file carries the Docker names; dotenv will not overwrite what is
+        // already set, so the host-side pair here is what keeps the sidecars
+        // resolvable (#3251).
+        REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
+        S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
       },
 
       // Workers hold more in memory (job payloads).
@@ -172,27 +182,37 @@ module.exports = {
     {
       name: 'cron',
       script: 'node_modules/.bin/tsx',
-      args: 'scripts/cron-scheduler.ts',
+      args: '--import ./scripts/load-env.mjs scripts/cron-scheduler.ts',
       cwd: __dirname,
 
       instances: 1,          // exactly one — prevents duplicate scheduling
       exec_mode: 'fork',
 
-      env_file: '.env.local',
       env: {
         NODE_ENV: 'production',
         DATABASE_SSL: 'true',
         DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        // Same host pair as worker: the preload reaches .env.local here too.
+        REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
+        S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
       },
 
       max_memory_restart: '256M',
       autorestart: true,
-      max_restarts: 5,
+      // 10, not 5, and with a delay: max_restarts resets only on a restart that
+      // survives min_uptime, so a boot that exits non-zero at its config audit
+      // spent the whole allowance in seconds and left cron "errored" for a human.
+      max_restarts: 10,
       min_uptime: '10s',
+      restart_delay: 2000,
 
       out_file: `${LOG_DIR}/cron-out.log`,
       error_file: `${LOG_DIR}/cron-error.log`,
       log_date_format: 'YYYY-MM-DD HH:mm:ss.SSS',
+      // #3253: fork mode appends the process id to the file name unless
+      // merge_logs is set, so without this pm2 writes `cron-out-0.log` and the
+      // path declared above never exists. web and worker already set it.
+      merge_logs: true,
       watch: false,
     },
   ],

@@ -278,6 +278,10 @@ describe('#3075 password reset — one claim retires the token with the reset', 
   beforeEach(() => {
     // The claim's RETURNING yields the userId the reset carries forward.
     H.state.claimRows = [{ userId: 'user-1' }];
+    // #3401: the reset re-reads the account inside the claiming transaction, so the
+    // fake has to have one to find. A tombstone is refused there; #3401's file owns
+    // that case, this one stays the atomic-claim test it was.
+    H.state.rows.users = [{ id: 'user-1' }];
   });
 
   it('claims the token (deleted_at IS NULL + expiry) inside the reset itself', async () => {

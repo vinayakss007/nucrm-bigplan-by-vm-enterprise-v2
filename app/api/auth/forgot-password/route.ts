@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { users, passwordResets } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit, limiters, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -68,11 +68,16 @@ export async function POST(request: NextRequest) {
     // withAuthLookupContext is what the sibling lib/auth/password-reset.ts:68 —
     // which performs the identical read — had already been moved behind (#3218,
     // PP-026). The transaction-locals cannot leak: the privilege ends at COMMIT.
+    //
+    // #3401: `users.email` is UNIQUE and a soft delete keeps the row, so the
+    // tombstone is filtered here rather than by the read missing it. A deleted
+    // account takes the `!user` branch below, which is the same 200 {"ok":true}
+    // an unknown address gets — no reset token, no mail, no enumeration signal.
     const [user] = await withAuthLookupContext(async (tx) =>
       await tx
         .select({ id: users.id, fullName: users.fullName })
         .from(users)
-        .where(eq(sql`lower(${users.email})`, email.toLowerCase().trim()))
+        .where(and(eq(sql`lower(${users.email})`, email.toLowerCase().trim()), isNull(users.deletedAt)))
         .limit(1)
     );
 

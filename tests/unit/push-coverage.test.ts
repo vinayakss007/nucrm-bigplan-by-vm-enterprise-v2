@@ -570,7 +570,7 @@ describe('email/service - sendEmail', () => {
     process.env.SUPER_ADMIN_EMAIL = 'admin@e.com';
     process.env.NODE_ENV = 'development';
     const { alertSuperAdmin } = await import('@/lib/email/service');
-    await expect(alertSuperAdmin('Alert', 'DB down')).resolves.toBeUndefined();
+    await expect(alertSuperAdmin('Alert', 'DB down')).resolves.toMatchObject({ success: true });
   });
 
   it('sendWebhookNotification to Discord', async () => {

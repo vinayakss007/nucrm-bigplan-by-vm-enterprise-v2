@@ -72,9 +72,14 @@ export async function requestPasswordReset(
     
     // Find user by email
     // PP-026: pre-auth lookup by email, so it needs the auth_lookup privilege
-  // (users_auth_lookup). Without it RLS returned zero rows and this function
-  // silently reported success having created no token at all.
-  const [user] = await withAuthLookupContext(async (tx) =>
+    // (users_auth_lookup). Without it RLS returned zero rows and this function
+    // silently reported success having created no token at all.
+    //
+    // #3401: and it must exclude a tombstone — `users.email` is UNIQUE and soft
+    // delete keeps the row, so without the filter a deleted account was issued a
+    // fresh, redeemable reset link. The `!user` branch below is the enumeration-
+    // safe constant, which is the correct answer for a deleted account too.
+    const [user] = await withAuthLookupContext(async (tx) =>
       await tx
       .select({
         id: users.id,
@@ -82,7 +87,7 @@ export async function requestPasswordReset(
         fullName: users.fullName,
       })
       .from(users)
-      .where(eq(users.email, normalizedEmail))
+      .where(and(eq(users.email, normalizedEmail), isNull(users.deletedAt)))
       .limit(1)
     );
 
@@ -208,6 +213,9 @@ export async function verifyResetToken(token: string): Promise<{
     // #3218: the token hash names the one row this read is authorised for; the
     // auth_lookup arm's `token = app.token_credential` replaces 0134's
     // "every live row of a secret-bearing table".
+    //
+    // #3401: the join reaches `users`, so the tombstone costs nothing and a token
+    // belonging to a deleted account stops validating here instead of downstream.
     const [resetRecord] = await withAuthLookupContext(
       async (tx) =>
         await tx
@@ -221,6 +229,7 @@ export async function verifyResetToken(token: string): Promise<{
           .where(and(
             eq(passwordResets.token, tokenHash),
             isNull(passwordResets.deletedAt),
+            isNull(users.deletedAt),
             gt(passwordResets.expiresAt, now)
           ))
           .limit(1),
@@ -238,14 +247,18 @@ export async function verifyResetToken(token: string): Promise<{
       await tx
       .select({ email: users.email })
       .from(users)
-      .where(eq(users.id, resetRecord.userId))
+      .where(and(eq(users.id, resetRecord.userId), isNull(users.deletedAt)))
       .limit(1)
     );
+
+    if (!user) {
+      return { valid: false };
+    }
 
     return {
       valid: true,
       userId: resetRecord.userId,
-      email: user?.email,
+      email: user.email,
     };
 
   } catch (err) {
@@ -317,6 +330,16 @@ export async function resetPassword(
       // just tombstoned, so it cannot cover the by-user sweep.
       await setTokenIssueContext(tx, { retireUser: claimed.userId });
       await setUserContext(claimed.userId, tx);
+
+      // #3401: same rule as app/api/auth/reset-password — the claim commits (the
+      // token is spent) and the password of a soft-deleted account does not change.
+      const [live] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, claimed.userId), isNull(users.deletedAt)))
+        .limit(1);
+
+      if (!live) return null;
 
       await tx
         .update(users)

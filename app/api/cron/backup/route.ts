@@ -164,13 +164,19 @@ export async function POST(request: NextRequest) {
       // Off-site storage is configured but rejected the upload, so the only
       // copy is on an ephemeral host. Page an operator rather than logging and
       // reporting success.
-      await alertSuperAdmin(
+      const offsiteAlerted = await alertSuperAdmin(
         'WARNING: Database backup did not reach off-site storage',
         `Backup ${filename} completed locally but could not be uploaded.\n\n` +
         `Error: ${offsiteError}\n\n` +
         `The only copy is at ${localPath} on the application host and will be ` +
         `lost if the container is replaced. Check S3/R2 credentials and re-run.`
-      ).catch((alertErr) => logError({ error: alertErr, context: 'cron/backup:offsiteAlert' }));
+      );
+      if (!offsiteAlerted.success) {
+        await logError({
+          error: new Error(`Off-site alert not delivered: ${offsiteAlerted.error ?? 'provider failure'}`),
+          context: 'cron/backup:offsiteAlert',
+        });
+      }
     }
 
     console.log(
@@ -213,10 +219,16 @@ export async function POST(request: NextRequest) {
     });
 
     // Alert super admin
-    await alertSuperAdmin(
+    const failedAlerted = await alertSuperAdmin(
       'CRITICAL: Automated Database Backup FAILED',
       `Time: ${new Date().toISOString()}\nError: ${message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
-    ).catch((err) => logError({ error: err, context: 'cron/backup async side-effect' }));
+    );
+    if (!failedAlerted.success) {
+      await logError({
+        error: new Error(`Backup-failure alert not delivered: ${failedAlerted.error ?? 'provider failure'}`),
+        context: 'cron/backup async side-effect',
+      });
+    }
 
     return apiError(err);
   }

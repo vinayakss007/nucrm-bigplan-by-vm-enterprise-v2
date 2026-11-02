@@ -150,9 +150,12 @@ Every environment variable NuCRM uses, grouped by purpose. The authoritative, co
 
 ## Configuration precedence & tips
 
-- Local development reads `.env.local`. Production processes also load `.env.local` (via PM2
-  `env_file`).
-- Restart/reload processes after changing config: `pm2 reload ecosystem.config.cjs`.
+- Local development reads `.env.local`. On the PM2 host, `web` reads it through Next.js and
+  the `worker`/`cron` sidecars through the `--import ./scripts/load-env.mjs` preload named in
+  their `args` — PM2 7.x accepts `env_file` and silently ignores it, so nothing may rely on it
+  (#3251).
+- Reload after changing config with `pm2 reload ecosystem.config.cjs --update-env`: without the
+  flag PM2 replays the environment it captured at first `start` (#3271).
 - Validate the environment with `npm run preflight` / `npm run prod:preflight` before launch.
 
 ---

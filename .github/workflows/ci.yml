@@ -474,6 +474,57 @@ jobs:
       - name: Every Pool's options carry the TLS policy
         run: npm run guard:pool-tls
 
+  # #3253 — a pm2 log path is only real if the app pins `merge_logs`; in fork
+  # mode without it pm2 writes `cron-out-0.log` and the declared
+  # `logs/cron-out.log` never exists. `cron` was undeclared-while-read-by-nothing
+  # for exactly that reason, and the class is wider than the one flag: the
+  # scrapers in deploy/ must tail names some pm2 app declares, which is the
+  # assertion #2602 needed when its `/var/log/app` job shipped nothing and
+  # reported itself as configured.
+  #
+  # Appended as a NEW JOB below every cited coordinate in this file (`:221`,
+  # `:254`, `:401`, `:447`) and above `constraint-vocab`, which #3241 pinned as
+  # the last job. No `npm ci`: the screen `require`s the ecosystem file and
+  # imports node built-ins only, so `npm run` is the whole job (same shape as
+  # rollback-coverage).
+  pm2-log-paths:
+    name: PM2 log-path identity (#3253)
+    if: vars.PM2_LOG_PATHS_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Every declared log path is a path pm2 writes, and every tailed log is declared
+        run: npm run guard:pm-log-paths
+
+      # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24`
+      # adopts: the step above is evidence only once a planted `cron` without
+      # `merge_logs` — the exact #3253 shape — turns it red.
+      - name: Negative control — an app declaring a log path without merge_logs MUST be red
+        run: |
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          cat > "$TMP/ecosystem.config.cjs" <<'ECOFIXTURE'
+          module.exports = {
+            apps: [
+              { name: 'web', out_file: '/logs/web-out.log', error_file: '/logs/web-error.log', merge_logs: true },
+              { name: 'worker', out_file: '/logs/worker-out.log', error_file: '/logs/worker-error.log', merge_logs: true },
+              { name: 'cron', out_file: '/logs/cron-out.log', error_file: '/logs/cron-error.log' },
+            ],
+          };
+          ECOFIXTURE
+          OUT="$(node --input-type=module -e "
+            const { run } = await import('${GITHUB_WORKSPACE}/scripts/check-pm2-log-paths.mjs');
+            const r = run(process.argv[1]);
+            if (r.findings.length === 0) { console.error('the screen passed a cron app with no merge_logs'); process.exit(1); }
+            console.log(r.findings.map((f) => f.problem).join('\n'));
+          " "$TMP")"
+          echo "negative control fired: $OUT"
+
   # #3284 — the rollback path. `db:rollback:coverage` counts whether a `.down.sql`
   # file EXISTS; nothing asked whether it can RUN, or whether it deletes the right
   # things, and `guard:chain` / `guard:migration-redecl` / `guard:migration-rls`

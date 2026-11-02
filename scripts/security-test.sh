@@ -5,10 +5,10 @@
 # Tests: Auth, CRUD, Security, Rate Limits, Data Transmission
 # ═══════════════════════════════════════════════════════════════
 
-BASE_URL="http://localhost:3000"
-COOKIE_FILE="/tmp/nucrm_security_test_cookies.txt"
-RESULTS_DIR="/tmp/nucrm-security-results"
-mkdir -p "$RESULTS_DIR"
+# #77: the origin is a parameter, not a literal. This suite only ever worked
+# against `seed:dev` data, so pointed at any other database every section failed
+# with 401 and the run read like an app outage.
+BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 # ═══════════════════════════════════════════════════════════════
 # Credentials (#3281)
@@ -26,6 +26,20 @@ if [ -z "${SEC_TEST_EMAIL:-}" ] || [ -z "${SEC_TEST_PASSWORD:-}" ]; then
 fi
 LOGIN_PAYLOAD=$(printf '{"email":"%s","password":"%s"}' "$SEC_TEST_EMAIL" "$SEC_TEST_PASSWORD")
 
+# The live session cookie and the freshly minted API keys used to sit at fixed,
+# guessable paths directly under /tmp, readable by any local user.
+# 6.1 greps lib/ and app/ by relative path, so its verdict changed depending on
+# which directory the suite was launched from. Anchor repository greps to the
+# script's own location.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+umask 077
+RESULTS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/nucrm-security-results.XXXXXX")
+COOKIE_FILE="$RESULTS_DIR/cookies.txt"
+# The run leaves its report behind but wipes everything credential-shaped:
+# the live session cookie and the two plaintext API keys it mints.
+trap 'rm -f "$COOKIE_FILE" "$RESULTS_DIR/full_api_key.txt" "$RESULTS_DIR/scoped_api_key.txt"' EXIT
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,6 +56,29 @@ log() { echo -e "${BLUE}[$(date +%H:%M:%S)]${NC} $1"; }
 pass() { echo -e "${GREEN}✅ PASS${NC} - $1"; ((PASS++)); }
 fail() { echo -e "${RED}❌ FAIL${NC} - $1"; ((FAIL++)); }
 warn() { echo -e "${YELLOW}⚠️  WARN${NC} - $1"; ((WARN++)); }
+revoke_test_keys() {
+    local id
+    for name in security-test-key readonly-key; do
+        id=$(curl -s -b "$COOKIE_FILE" "$BASE_URL/api/tenant/api-keys" \
+            | python3 -c "import sys,json
+rows=json.load(sys.stdin); rows=rows.get('data',rows) if isinstance(rows,dict) else rows
+print(next((r['id'] for r in rows if r.get('name')=='$name' and r.get('is_active', True)),''))" 2>/dev/null)
+        [ -n "$id" ] && curl -s -o /dev/null -b "$COOKIE_FILE" -X DELETE \
+            -H "x-csrf-token: $CSRF_TOKEN" "$BASE_URL/api/tenant/api-keys/$id"
+    done
+}
+
+relogin() {
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
+        -H "Content-Type: application/json" -d "$LOGIN_PAYLOAD")
+    if [ "$code" != "200" ]; then
+        fail "re-login refused (HTTP $code) — the rest of this section cannot assert anything about the endpoints"
+        return 1
+    fi
+    CSRF_TOKEN=$(grep -oP 'nucrm_csrf_token\s+\K\S+' "$COOKIE_FILE" 2>/dev/null)
+}
+
 section() { echo -e "\n${CYAN}═══════════════════════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"; }
 
 # ═══════════════════════════════════════════════════════════════
@@ -106,9 +143,7 @@ test_api_keys() {
     section "2. API KEY TESTS"
     
     # Re-login for API key tests
-    curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" > /dev/null
+    relogin || return
     
     CSRF_TOKEN=$(grep -oP 'nucrm_csrf_token\s+\K\S+' "$COOKIE_FILE" 2>/dev/null)
     
@@ -120,7 +155,7 @@ test_api_keys() {
     
     # Test 2.2: Create API key (full access)
     log "2.2 Creating API key with full access..."
-    RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/api-keys" \
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X POST "$BASE_URL/api/tenant/api-keys" \
         -H "Content-Type: application/json" \
         -H "x-csrf-token: $CSRF_TOKEN" \
         -d '{"name":"security-test-key","scopes":["*"],"expires_in_days":1}')
@@ -137,7 +172,7 @@ test_api_keys() {
     
     # Test 2.3: Create scoped API key
     log "2.3 Creating scoped API key (read-only)..."
-    RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/api-keys" \
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X POST "$BASE_URL/api/tenant/api-keys" \
         -H "Content-Type: application/json" \
         -H "x-csrf-token: $CSRF_TOKEN" \
         -d '{"name":"readonly-key","scopes":["contacts:read","deals:read"],"expires_in_days":1}')
@@ -160,6 +195,8 @@ test_api_keys() {
             "$BASE_URL/api/tenant/contacts?limit=1")
         HTTP_CODE=$(echo "$RESPONSE" | tail -1)
         [ "$HTTP_CODE" = "200" ] && pass "Full API key → 200" || fail "Full API key → HTTP $HTTP_CODE"
+    else
+        fail "Full API key test skipped — no key captured, so scope enforcement is unmeasured"
     fi
     
     # Test 2.5: Test scoped API key (read contacts)
@@ -170,6 +207,8 @@ test_api_keys() {
             "$BASE_URL/api/tenant/contacts?limit=1")
         HTTP_CODE=$(echo "$RESPONSE" | tail -1)
         [ "$HTTP_CODE" = "200" ] && pass "Scoped key read contacts → 200" || fail "Scoped key read contacts → HTTP $HTTP_CODE"
+    else
+        fail "Scoped key read skipped — no key captured"
     fi
     
     # Test 2.6: Test scoped API key (write should fail)
@@ -179,9 +218,11 @@ test_api_keys() {
             -H "Authorization: Bearer $SCOPED_API_KEY" \
             -H "Content-Type: application/json" \
             -X POST "$BASE_URL/api/tenant/contacts" \
-            -d '{"firstName":"Test","lastName":"User","email":"test@example.com"}')
+            -d '{"first_name":"Test","last_name":"User","email":"scoped-write-403@example.com"}')
         HTTP_CODE=$(echo "$RESPONSE" | tail -1)
         [ "$HTTP_CODE" = "403" ] && pass "Scoped key write blocked → 403" || warn "Scoped key write → HTTP $HTTP_CODE (expected 403)"
+    else
+        fail "Scoped key write skipped — no key captured, so the 403 path is unmeasured"
     fi
     
     # Test 2.7: Test invalid API key
@@ -200,9 +241,7 @@ test_crud_operations() {
     section "3. CRUD OPERATIONS TEST"
     
     # Re-login
-    curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" > /dev/null
+    relogin || return
     CSRF_TOKEN=$(grep -oP 'nucrm_csrf_token\s+\K\S+' "$COOKIE_FILE" 2>/dev/null)
     
     # Test 3.1: List contacts
@@ -213,10 +252,10 @@ test_crud_operations() {
     
     # Test 3.2: Create contact
     log "3.2 Creating contact..."
-    RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/contacts" \
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X POST "$BASE_URL/api/tenant/contacts" \
         -H "Content-Type: application/json" \
         -H "x-csrf-token: $CSRF_TOKEN" \
-        -d '{"firstName":"Security","lastName":"Test","email":"security.test@example.com","phone":"+1-555-0199"}')
+        -d '{"first_name":"Security","last_name":"Test","email":"security.test@example.com","phone":"+1-555-0199"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)
     
@@ -240,12 +279,12 @@ test_crud_operations() {
         
         # Test 3.4: Update contact
         log "3.4 Updating contact..."
-        RESPONSE=$(curl -s -b "$COOKIE_FILE" -X PUT "$BASE_URL/api/tenant/contacts/$CONTACT_ID" \
+        RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X PATCH "$BASE_URL/api/tenant/contacts/$CONTACT_ID" \
             -H "Content-Type: application/json" \
             -H "x-csrf-token: $CSRF_TOKEN" \
-            -d '{"firstName":"Updated Security"}')
+            -d '{"first_name":"Updated Security"}')
         HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-        [ "$HTTP_CODE" = "200" ] && pass "PUT /contacts/$CONTACT_ID" || fail "PUT /contacts/$CONTACT_ID (HTTP $HTTP_CODE)"
+        [ "$HTTP_CODE" = "200" ] && pass "PATCH /contacts/$CONTACT_ID" || fail "PATCH /contacts/$CONTACT_ID (HTTP $HTTP_CODE)"
         
         # Test 3.5: Delete contact
         log "3.5 Deleting contact..."
@@ -288,13 +327,11 @@ test_security() {
     
     # Test 4.2: CSRF protection (POST without token)
     log "4.2 Testing CSRF protection..."
-    curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" > /dev/null
+    relogin || return
     
-    RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/contacts" \
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X POST "$BASE_URL/api/tenant/contacts" \
         -H "Content-Type: application/json" \
-        -d '{"firstName":"Hacker","lastName":"Test","email":"hacker@test.com"}')
+        -d '{"first_name":"Hacker","last_name":"Test","email":"hacker@test.com"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "403" ] && pass "CSRF protection → 403" || fail "CSRF protection → Expected 403, got $HTTP_CODE"
     
@@ -308,13 +345,21 @@ test_security() {
     
     # Test 4.4: XSS attempt in input
     log "4.4 Testing XSS protection..."
-    RESPONSE=$(curl -s -b "$COOKIE_FILE" -X POST "$BASE_URL/api/tenant/contacts" \
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" -X POST "$BASE_URL/api/tenant/contacts" \
         -H "Content-Type: application/json" \
         -H "x-csrf-token: $CSRF_TOKEN" \
-        -d '{"firstName":"<script>alert(1)</script>","lastName":"Test","email":"xss@test.com"}')
+        -d '{"first_name":"<script>alert(1)</script>","last_name":"Test","email":"xss@test.com"}')
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-    # Should either sanitize or reject
-    [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "400" ] && pass "XSS input handled (HTTP $HTTP_CODE)" || warn "XSS response: HTTP $HTTP_CODE"
+    # Rejecting the payload is the only XSS claim this can actually assert. A 201
+    # means the raw tag was stored; whether that is exploitable depends on output
+    # encoding, which the API does not show, so it is reported as unverified.
+    if [ "$HTTP_CODE" = "400" ] || [ "$HTTP_CODE" = "422" ]; then
+        pass "XSS payload rejected at validation (HTTP $HTTP_CODE)"
+    elif [ "$HTTP_CODE" = "201" ]; then
+        warn "XSS payload stored verbatim (201) — output encoding not observable from the API"
+    else
+        warn "XSS response: HTTP $HTTP_CODE"
+    fi
     
     # Test 4.5: Rate limiting
     log "4.5 Testing rate limiting (10 rapid requests)..."
@@ -358,9 +403,7 @@ test_data_transmission() {
     
     # Test 5.2: Check response content-type
     log "5.2 Checking response content-type..."
-    curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" > /dev/null
+    relogin || return
     
     RESPONSE=$(curl -s -I -b "$COOKIE_FILE" "$BASE_URL/api/tenant/contacts?limit=1")
     echo "$RESPONSE" | grep -qi "content-type: application/json" && pass "JSON content-type" || fail "Invalid content-type"
@@ -397,7 +440,7 @@ test_rate_limit_config() {
     log "6.1 Checking rate limit implementation..."
     
     # Check if rate limits are configurable per plan
-    if grep -r "plan.*rate\|rateLimit.*plan" lib/ app/ --include="*.ts" 2>/dev/null | grep -q "plan"; then
+    if grep -r "plan.*rate\|rateLimit.*plan" "$REPO_DIR/lib" "$REPO_DIR/app" --include="*.ts" 2>/dev/null | grep -q "plan"; then
         pass "Per-plan rate limits configured"
     else
         warn "Rate limits NOT configurable per plan (hardcoded)"
@@ -431,9 +474,7 @@ test_super_admin() {
     section "7. SUPER ADMIN TESTS"
     
     # Re-login
-    curl -s -c "$COOKIE_FILE" -X POST "$BASE_URL/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" > /dev/null
+    relogin || return
     
     # Test 7.1: List tenants
     log "7.1 Listing tenants..."
@@ -443,7 +484,7 @@ test_super_admin() {
     
     # Test 7.2: Health check
     log "7.2 Health check..."
-    RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/superadmin/health")
+    RESPONSE=$(curl -s -b "$COOKIE_FILE" -w "\n%{http_code}" "$BASE_URL/api/superadmin/health")
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     [ "$HTTP_CODE" = "200" ] && pass "GET /superadmin/health" || fail "GET /superadmin/health (HTTP $HTTP_CODE)"
     
@@ -476,6 +517,7 @@ test_security
 test_data_transmission
 test_rate_limit_config
 test_super_admin
+revoke_test_keys
 
 # Summary
 section "TEST SUMMARY"

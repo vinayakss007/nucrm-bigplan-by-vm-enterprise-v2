@@ -47,6 +47,13 @@ Every base table composes these — reuse them verbatim or the constraints drift
   > `git grep -o -E "isNull\\([A-Za-z_.]*\\.deletedAt\\)" origin/main -- app lib | wc -l`;
   > the 403 this line carried was measured before #3227/#3229 landed. See README
   > invariant and 06 Phase 6.
+  >
+  > **One exception, and it is `users`:** `users.email` is UNIQUE and a soft delete
+  > keeps the row, so the signup duplicate check and SSO's subject match must *see*
+  > the tombstone — filtering them answers `409`/a denial today and a `23505` in the
+  > insert tomorrow. #3401 added the filter to the three pre-auth email reads that
+  > lacked it (`POST_login`, both forgot-password copies) and to the two reset
+  > redemptions, and deliberately left these two unfiltered.
 
 - `audit()` — lifecycle + `createdBy` / `updatedBy` / `deletedBy` → `users.id`
   set-null (`utils.ts:77-82`).

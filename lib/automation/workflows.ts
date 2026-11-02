@@ -11,6 +11,7 @@
 
 import { Workflow, WorkflowEventData } from './types';
 import { sendEmail } from '@/lib/email/service';
+import { logError } from '@/lib/errors-server';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 
@@ -31,7 +32,7 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
           if (!to) return;
           const tenantName = escapeHtml(String(data.tenant?.name ?? ''));
           const firstName = escapeHtml(String(data.contact?.first_name || 'there'));
-          await sendEmail({
+          const sent = await sendEmail({
             to,
             subject: `Welcome to ${data.tenant?.name ?? ''}!`,
             html: `
@@ -42,6 +43,15 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
               <p>Best regards,<br/>${tenantName} Team</p>
             `
           });
+          // #3408: a provider rejection resolves {success:false} rather than
+          // throwing, so an undelivered welcome email has to be read off the
+          // result — nothing downstream can tell a send from a shrug otherwise.
+          if (!sent.success) {
+            void logError({
+              error: new Error(`Welcome email not delivered: ${sent.error ?? 'provider failure'}`),
+              context: 'automation/welcome-email-action',
+            });
+          }
         }
       }
     ],
