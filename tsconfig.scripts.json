@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./lib/server-only-shim.ts"]
+    },
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts/**/*.ts", "scripts/**/*.mts"],
+  "exclude": ["node_modules", ".next"]
+}
