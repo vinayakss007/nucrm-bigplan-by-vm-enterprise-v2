@@ -193,6 +193,10 @@ module.exports = {
       out_file: `${LOG_DIR}/cron-out.log`,
       error_file: `${LOG_DIR}/cron-error.log`,
       log_date_format: 'YYYY-MM-DD HH:mm:ss.SSS',
+      // #3253: fork mode appends the process id to the file name unless
+      // merge_logs is set, so without this pm2 writes `cron-out-0.log` and the
+      // path declared above never exists. web and worker already set it.
+      merge_logs: true,
       watch: false,
     },
   ],
