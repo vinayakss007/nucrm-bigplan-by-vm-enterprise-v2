@@ -375,12 +375,22 @@ export async function POST(request: NextRequest) {
       // Through recordFailure rather than a bare insert, so a verification that
       // fails every night for a month stays one open incident, not thirty (#2600).
       await recordFailure('verify_failed', failures.join(' | '));
-      await alertSuperAdmin(
+      // #3408: alertSuperAdmin cannot reject (sendEmail resolves {success:false}),
+      // so the .catch() this call used to end with was a handler for a throw that
+      // never happens. Read the result instead — an undelivered CRITICAL alert is
+      // itself an incident.
+      const alerted = await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         `Backup ${backup.id} (${backup.backupType}, ${backup.completedAt?.toISOString()}) failed verification:\n\n` +
         failures.map((f) => `  - ${f}`).join('\n') +
         '\n\nAn unrestorable backup is not a backup. Investigate immediately.'
-      ).catch((err) => logError({ error: err, context: 'backup-verify:alert-resolve-best-effort' }));
+      );
+      if (!alerted.success) {
+        await logError({
+          error: new Error(`Verification alert not delivered: ${alerted.error ?? 'provider failure'}`),
+          context: 'backup-verify:alert-resolve-best-effort',
+        });
+      }
     } else {
       // A passing restore is the evidence that closes the alert trail.
       await resolveVerifyAlerts();
@@ -410,10 +420,16 @@ export async function POST(request: NextRequest) {
     if (failures.length > 0) {
       // We have specific diagnostics — return them even on a throw.
       await recordFailure('verify_failed', failures.join(' | '));
-      await alertSuperAdmin(
+      const alerted = await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         failures.map((f) => `  - ${f}`).join('\n')
-      ).catch((err) => logError({ error: err, context: 'backup-verify:alert-fail' }));
+      );
+      if (!alerted.success) {
+        await logError({
+          error: new Error(`Verification alert not delivered: ${alerted.error ?? 'provider failure'}`),
+          context: 'backup-verify:alert-fail',
+        });
+      }
       return NextResponse.json({ ok: false, failures }, { status: 500 });
     }
     // An unexpected throw here used to leave no trace beyond the 500 that

@@ -1260,7 +1260,9 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
   panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
-  inserts into. `app/api/cron/auto-backup/route.ts:261` writes **`tenant_backup_records`** with raw
+  inserts into. `app/api/cron/auto-backup/route.ts:270` (re-pinned 2026-11-01: **#3408** bound the
+  skip-alert result 9 lines above it, which moved this INSERT off `:261`) writes
+  **`tenant_backup_records`** with raw
   SQL. Nothing joins the two.
 - **Measured.** `backup_records` = 4 rows, `status` all `failed`, 0 `completed`;
   `tenant_backup_records` = 144 rows, 138 `completed`. The nightly run therefore produces 138

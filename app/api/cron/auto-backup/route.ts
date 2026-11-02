@@ -197,7 +197,16 @@ async function runScheduledBackups() {
     const detail = `Tenants skipped by auto-backup (no owner and no active members — their data is NOT in this run's backups):\n${skippedTenants.map(t => `- ${t}`).join('\n')}`;
     void logError({ error: new Error('auto-backup skipped tenants'), context: 'cron/auto-backup', level: 'warning', metadata: { skippedTenants } });
     try {
-      await sendAlertEmail(`Auto-backup incomplete: ${skippedTenants.length} tenant(s) skipped`, detail);
+      const alerted = await sendAlertEmail(`Auto-backup incomplete: ${skippedTenants.length} tenant(s) skipped`, detail);
+      // #3408: the send resolves {success:false} instead of throwing, so the
+      // catch below cannot see a rejected alert — the result has to be read.
+      if (!alerted.success) {
+        void logError({
+          error: new Error(`Skip-alert email not delivered: ${alerted.error ?? 'provider failure'}`),
+          context: 'cron/auto-backup skip-alert email',
+          level: 'warning',
+        });
+      }
     } catch (err) {
       void logError({ error: err, context: 'cron/auto-backup skip-alert email', level: 'warning' });
     }
@@ -296,10 +305,17 @@ async function backupSingleTenant(
     try {
       const tenantInfo = await db.execute(sql`SELECT name FROM tenants WHERE id = ${tenantId}`);
       const tenantName = (tenantInfo.rows[0] as { name: string | null } | undefined)?.name || tenantId;
-      await sendAlertEmail(
+      const alerted = await sendAlertEmail(
         `Backup Failed: ${tenantName}`,
         `Backup failed for tenant ${tenantName}: ${errorMessage}`,
       );
+      if (!alerted.success) {
+        void logError({
+          error: new Error(`Backup-failure email not delivered for ${tenantName}: ${alerted.error ?? 'provider failure'}`),
+          context: 'cron/auto-backup email alert',
+          level: 'warning',
+        });
+      }
     } catch (err) {
       void logError({ error: err, context: 'cron/auto-backup email alert', level: 'warning' });
     }
