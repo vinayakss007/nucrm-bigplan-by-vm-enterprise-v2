@@ -8,13 +8,13 @@
 
 /**
  * v11 retired `sendDefaultPii` and replaced it with `dataCollection` — whose
- * defaults are all ON. Measured against the installed @sentry/core 11.1.0:
+ * defaults are all ON. Measured against the installed @sentry/core 11.10.0:
  * `resolveDataCollectionOptions({})` returns
  * `userInfo: true · cookies: true · httpHeaders: {request: true, response: true}
  * · httpBodies: incoming+outgoing request AND response · urlQueryParams: true
  * · graphQL: {document: true, variables: true} · genAI: {inputs: true, outputs: true}
- * · databaseQueryData: true · queues: true · stackFrameVariables: true
- * · frameContextLines: 5`.
+ * · mcp: {inputs: true, outputs: true} · databaseQueryData: true · queues: true
+ * · stackFrameVariables: true · frameContextLines: 5`.
  *
  * So omitting the option is the *maximum*-PII setting. The old comment in these
  * files ("anything other than an explicit opt-in is off") described v10 and is
@@ -36,6 +36,8 @@ export const DATA_COLLECTION = {
   urlQueryParams: false,
   graphQL: { document: false, variables: false },
   genAI: { inputs: false, outputs: false },
+  // MCP tool-call payloads — prompts and results, added by @sentry/core 11.10.0.
+  mcp: { inputs: false, outputs: false },
   // Bound parameters and returned rows of DB queries — customer records.
   databaseQueryData: false,
   queues: false,
