@@ -51,8 +51,8 @@ vi.mock('next/dynamic', () => ({
   },
 }));
 
-function guard(args: string[]) {
-  const res = spawnSync('node', ['scripts/check-file-size.mjs', ...args], { cwd: ROOT, encoding: 'utf8' });
+function guard(scope: string[]) {
+  const res = spawnSync('node', ['scripts/check-file-size.mjs', ...scope], { cwd: ROOT, encoding: 'utf8' });
   return { code: res.status, out: `${res.stdout ?? ''}${res.stderr ?? ''}` };
 }
 
@@ -83,8 +83,29 @@ describe('#3429 — the landing page leaves the ratchet', () => {
     expect(res.code, res.out).toBe(0);
   });
 
-  it('leaves the repo-wide guard green — the extraction created no new oversized file', () => {
-    const res = guard([]);
+  // The files the page got shorter by. Each is scoped with `--only` rather
+  // than folded into a repo-wide run: #3400 exists because a per-file question
+  // was asked of the whole tree, and this suite has no opinion about anybody
+  // else's ceiling.
+  const EXTRACTED = [
+    'components/marketing/home/hero.tsx',
+    'components/marketing/home/module-marquee.tsx',
+    'components/marketing/home/the-stack.tsx',
+    'components/marketing/home/stats.tsx',
+    'components/marketing/home/bento.tsx',
+    'components/marketing/home/tour.tsx',
+    'components/marketing/home/industries.tsx',
+    'components/marketing/home/integrations.tsx',
+    'components/marketing/home/security.tsx',
+    'components/marketing/home/compare-teaser.tsx',
+    'components/marketing/home/pricing.tsx',
+    'components/marketing/home/faq.tsx',
+    'lib/marketing/home.ts',
+    'lib/marketing/tour.ts',
+  ];
+
+  it.each(EXTRACTED)('created no oversized file: %s', (file) => {
+    const res = guard(['--only', file]);
     expect(res.code, res.out).toBe(0);
   });
 });
