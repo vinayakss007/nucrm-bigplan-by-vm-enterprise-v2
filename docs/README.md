@@ -19,6 +19,9 @@ Ordered. Each row says what you get from the file.
 | 5   | [`docs/migration-chain-state.md`](./migration-chain-state.md)               | The five migration-chain defects and their baseline                |
 | 6   | [`docs/infra/PREPROD-ISSUE-REGISTER.md`](./infra/PREPROD-ISSUE-REGISTER.md) | Every open defect with its evidence, numbered PP-nnn               |
 | 7   | [`docs/adr/README.md`](./adr/README.md)                                     | Decisions taken, and the ruling on the 0001–0006 collisions        |
+| 8   | [`docs/architecture/SYSTEM-MAP.md`](./architecture/SYSTEM-MAP.md)            | The whole system as it runs, layer by layer, with the nine defect families overlaid |
+| 9   | [`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) | Why the same bugs keep returning — H1–H9, each with reproducible evidence |
+| 10  | [`docs/reports/FIX-PLAN-2026-11-01.md`](./reports/FIX-PLAN-2026-11-01.md)     | Those nine families as 22 single-issue PRs, ordered, with proof and rollback |
 
 ## Living reference
 
@@ -37,8 +40,18 @@ the tree and the live preprod database — not the date it was written.
 | [`docs/reference/data-model.md`](./reference/data-model.md)                 | 2026-10-04                                |
 | [`docs/admin/architecture.md`](./admin/architecture.md)                     | 2026-10-04, counts only — see Known-stale |
 | [`docs/infra/PREPROD-ISSUE-REGISTER.md`](./infra/PREPROD-ISSUE-REGISTER.md) | 2026-10-04                                |
+| [`docs/architecture/SYSTEM-MAP.md`](./architecture/SYSTEM-MAP.md)           | 2026-11-01, re-measured 2026-11-03        |
+| [`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) | 2026-11-01, re-measured 2026-11-03 |
+| [`docs/reports/FIX-PLAN-2026-11-01.md`](./reports/FIX-PLAN-2026-11-01.md)   | 2026-11-01, re-measured 2026-11-03 — the roadmap; issues #3401–#3413 filed from it |
 
-Those ten were re-measured against `package.json`, `drizzle/schema/`, `drizzle/migrations/` and the
+The last three were measured against the tree on 2026-11-01 and re-measured against
+`origin/main` on 2026-11-03, not against the preprod database, so their counts are
+reproducible with the commands in
+[`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) §8. Three of the
+findings they describe are already fixed on `main` (#3401 via #3417, #3403 via #3436, #3413 via #3430)
+— the docs record that instead of re-prescribing it.
+
+The first ten were re-measured against `package.json`, `drizzle/schema/`, `drizzle/migrations/` and the
 preprod database on 2026-10-04. The numbers they carry are reproducible by the commands in
 "How current is 'current'?" below.
 
