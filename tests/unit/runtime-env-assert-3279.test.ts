@@ -26,7 +26,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readdirSync, mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -427,10 +427,14 @@ describe('the command an operator runs', () => {
     // process.cwd(). `.env.local` is untracked and per-worktree, so a developer's dev
     // file (http://localhost origins) decided this assertion's exit code — red in every
     // worktree that has one, green in CI, no code change between them. The sandbox fixes
-    // the input set without weakening the claim: the ecosystem is the repo's own file
-    // through a symlink, and no env file exists, which is exactly the tree CI sees.
+    // the input set without weakening the claim: the ecosystem is a byte copy of the repo's
+    // own file and no env file exists, which is exactly the tree CI sees.
     const dir = mkdtempSync(join(tmpdir(), 'nucrm-eco-'));
-    symlinkSync(join(ROOT, 'ecosystem.config.cjs'), join(dir, 'ecosystem.config.cjs'));
+    // A copy rather than a symlink, for a reason worth keeping: #2875's screen reads a write
+    // call's first argument, so `symlinkSync(join(ROOT, …), …)` is reported as a fixture
+    // planted in the working tree even though the link lands in the scratch dir. Copying says
+    // what the case means — read this repository's file in, write only into a temp path.
+    writeFileSync(join(dir, 'ecosystem.config.cjs'), readFileSync(join(ROOT, 'ecosystem.config.cjs')));
     try {
       const { code, out } = cli(['--expect-production'], {}, dir);
       // #3271 landed 2df376e97, so `ecosystem.config.cjs` now supplies TRUST_PROXY for
