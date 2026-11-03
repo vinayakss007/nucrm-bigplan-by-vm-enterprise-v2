@@ -8,6 +8,12 @@ import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWeb
 import { db, type DbClient } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import {
+  applyTenantBillingPatch,
+  billingWebhookTenant,
+  createBillingWebhookReporter,
+  withBillingWebhookContext,
+} from '@/lib/db/billing-webhook-context';
 import { syncSubscriptionRow, markSubscriptionCanceled } from '@/lib/stripe-subscription-sync';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
@@ -175,12 +181,20 @@ export async function POST(request: NextRequest) {
 
 // ── Event Handlers ───────────────────────────────────────────────────────────
 
+/**
+ * #3403: every write below used to be a `db.update(tenants)` on the bare pool, where
+ * `lib/db/pool.ts` has already normalised `app.current_user` to '' — so the statement matched zero
+ * rows, zero rows is not an error, and the route returned the 200 that tells Stripe to stop
+ * redelivering. The reporter opens the payload's own workspace and treats a write that moved
+ * nothing as news; `lib/db/billing-webhook-context.ts` says why that context and not
+ * `app.is_super_admin`. Reads of `tenants` stay on the pool: `tenants_read_all` (0054:147) is
+ * `USING (true)`, so finding out whose event this is needs no privilege — only writing does.
+ */
+const billing = createBillingWebhookReporter({ provider: '[Stripe]', source: 'webhooks/stripe' });
+
 async function handleCheckoutCompleted(session: StripeSessionLike) {
-  const tenantId = session.metadata?.tenant_id;
-  if (!tenantId) {
-    console.warn('[Stripe] Checkout completed but no tenant_id in metadata');
-    return;
-  }
+  const tenantId = billing.eventTenant(session.metadata?.tenant_id, 'Checkout completed');
+  if (!tenantId) return;
 
   const customerId = session.customer;
   const subscriptionId = typeof session.subscription === 'string'
@@ -192,20 +206,20 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
   // session — is mapped against the env STRIPE_PRICE_* catalog. There is no
   // amount heuristic and no `|| 'starter'` default: an unknown/unmapped price
   // must NEVER activate a tenant with a guessed tier.
+  // Resolved OUTSIDE the context: it may retrieve from Stripe's API, and a
+  // network call does not belong inside a transaction holding SET LOCAL.
   const resolution = await resolveCheckoutPlan(session as CheckoutSessionLike);
 
   if (!resolution.ok) {
     // Record the billing identifiers so ops can reconcile, but keep the tenant
     // in the non-entitled 'past_due' state (never 'active', planId untouched).
-    await db.update(tenants)
-      .set({
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        status: 'past_due',
-        billingType: 'stripe',
-        updatedAt: new Date(),
-      })
-      .where(eq(tenants.id, tenantId));
+    await billing.patchTenant(tenantId, {
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId,
+      status: 'past_due',
+      billingType: 'stripe',
+      updatedAt: new Date(),
+    }, 'checkout.session.completed (fail closed)');
 
     const detail = resolution.priceId
       ? `price '${resolution.priceId}' is not in the STRIPE_PRICE_* catalog`
@@ -230,16 +244,14 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
     return;
   }
 
-  await db.update(tenants)
-    .set({
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscriptionId,
-      planId: resolution.planId,
-      status: 'active',
-      billingType: 'stripe',
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  await billing.patchTenant(tenantId, {
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    planId: resolution.planId,
+    status: 'active',
+    billingType: 'stripe',
+    updatedAt: new Date(),
+  }, 'checkout.session.completed');
 
   logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${resolution.planId} (price ${resolution.priceId}, source ${resolution.source})`);
 }
@@ -310,10 +322,11 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
     // tenant's plan moved, and the billing row reflects it". Committed
     // separately, a throw below left the tenant moved with a stale
     // `subscriptions` row, which is the permanent drift #2228 exists to remove.
-    await db.transaction(async (tx) => {
-      await tx.update(tenants)
-        .set({ planId: planId || undefined, updatedAt: new Date() })
-        .where(eq(tenants.id, tenantId));
+    // #3403: that one statement also has to name a workspace, because neither
+    // table moves on the bare pool.
+    await withBillingWebhookContext(tenantId, async (tx) => {
+      billing.report(tenantId, 'customer.subscription.updated (terminal)',
+        await applyTenantBillingPatch(tx, tenantId, { planId: planId || undefined, updatedAt: new Date() }));
       // #2228: still reconcile the subscriptions ROW from Stripe truth (the
       // tenant-level terminal guard above is about ACCESS, not about the
       // billing record), otherwise the row stays on the pre-upgrade plan
@@ -324,14 +337,13 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   }
 
   // #2530: same pair, same reason — see the comment above.
-  await db.transaction(async (tx) => {
-    await tx.update(tenants)
-      .set({
+  await withBillingWebhookContext(tenantId, async (tx) => {
+    billing.report(tenantId, 'customer.subscription.updated',
+      await applyTenantBillingPatch(tx, tenantId, {
         planId: planId || undefined,
         status: nuCrmStatus,
         updatedAt: new Date(),
-      })
-      .where(eq(tenants.id, tenantId));
+      }));
 
     // #2228: the subscriptions row used to be touched ONLY by app routes — the
     // webhook synced tenants.status/planId but never subscriptions, so any
@@ -356,17 +368,18 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   // #2530: the downgrade and the row retirement commit together, or a throw
   // between them leaves the tenant on 'free' with a `subscriptions` row still
   // saying otherwise — which is what the upgrade/cancel routes then read.
-  await db.transaction(async (tx) => {
+  // #3403: together, and inside the workspace the event names — on the bare
+  // pool both halves moved nothing and the route still acked 200.
+  await withBillingWebhookContext(tenantId, async (tx) => {
     // Downgrade to free plan
-    await tx.update(tenants)
-      .set({
+    billing.report(tenantId, 'customer.subscription.deleted',
+      await applyTenantBillingPatch(tx, tenantId, {
         planId: 'free',
         status: 'active', // Don't suspend — just downgrade
         stripeSubscriptionId: null,
         billingType: 'trial',
         updatedAt: new Date(),
-      })
-      .where(eq(tenants.id, tenantId));
+      }));
 
     // #2228: close the loop — the subscriptions row must reach 'canceled' too,
     // otherwise the upgrade/cancel routes keep operating on a stale row.
@@ -397,10 +410,9 @@ async function handlePaymentSucceeded(invoice: StripeInvoiceLike) {
   });
 
   if (tenant) {
-    // Ensure status is active after successful payment
-    await db.update(tenants)
-      .set({ status: 'active', updatedAt: new Date() })
-      .where(eq(tenants.id, tenant.id));
+    // Ensure status is active after successful payment. The lookup above is a
+    // context-free read (`tenants_read_all` is USING(true)); the write is not.
+    await billing.patchTenant(tenant.id, { status: 'active', updatedAt: new Date() }, 'invoice.payment_succeeded');
 
     // #1909: normalize Stripe's smallest-unit amount to decimal before
     // emitting to webhooks/automations, and include the real currency.
@@ -444,9 +456,7 @@ async function handlePaymentFailed(invoice: StripeInvoiceLike) {
   });
 
   if (tenant) {
-    await db.update(tenants)
-      .set({ status: 'past_due', updatedAt: new Date() })
-      .where(eq(tenants.id, tenant.id));
+    await billing.patchTenant(tenant.id, { status: 'past_due', updatedAt: new Date() }, 'invoice.payment_failed');
 
     logger.warn(`[Stripe] Payment failed for tenant ${tenant.id} — marked as past_due`);
 
@@ -470,8 +480,12 @@ async function handlePaymentFailed(invoice: StripeInvoiceLike) {
  * Returns null only when NEITHER metadata NOR the customer lookup resolves.
  */
 async function resolveTenantId(subscription: StripeSubscriptionLike): Promise<string | null> {
-  const metadataTenantId = subscription.metadata?.tenant_id;
-  if (metadataTenantId) return metadataTenantId;
+  // #3403: the metadata value is a claim until it is a uuid. Every policy downstream casts
+  // it, so a stray string here would either abort the statement (22P02) or, once it reaches
+  // `app.current_tenant`, name no workspace at all. Falling through to the customer lookup
+  // keeps a genuine event alive when Stripe echoes back something we did not put there.
+  const fromMetadata = billingWebhookTenant(subscription.metadata?.tenant_id);
+  if (fromMetadata) return fromMetadata;
 
   // `subscription.customer` is a string id, or an expanded object with `.id`.
   const rawCustomer = subscription.customer;
@@ -482,5 +496,5 @@ async function resolveTenantId(subscription: StripeSubscriptionLike): Promise<st
     where: eq(tenants.stripeCustomerId, customerId),
     columns: { id: true },
   });
-  return tenant?.id ?? null;
+  return billingWebhookTenant(tenant?.id);
 }

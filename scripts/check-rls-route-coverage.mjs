@@ -80,6 +80,34 @@
  * table joins the screen the day it is declared — a hand-kept list is how `lead_warming_messages`
  * stayed invisible here.
  *
+ * RULE 4 (#3403) — the callback surface rule 1 hands over and rule 2 cannot see.
+ *
+ * A provider webhook authenticates by HMAC over the raw body. Rule 1's gate is `requireAuth(`, so
+ * such a file is not an offender and lands in `skippedAuthenticators` instead: a signature proves
+ * the SENDER, and the workspace has to be read out of the payload afterwards, so there genuinely
+ * is no tenant to open with before the first statement. What that exemption must NOT imply is that
+ * the file is then free to write. Razorpay and Stripe did exactly that — eight `db.update(tenants)`
+ * on the cleared pool, and `tenants_authenticated_update` (0054:151) opens on a non-empty
+ * `app.current_user`, so each one matched zero rows and the route answered the 200 that stops the
+ * provider retrying. Rule 2 cannot see it either way: `tenants` and `subscriptions` are not
+ * identity tables, and both files were exempted from rule 2 for the same reason SCIM was #3303 —
+ * the exemption is a file-level judgement about *authentication*, while the write is a per-statement
+ * fact about *context*.
+ *
+ * THE RULE: inside `app/api/webhooks/**`, in a file that opens no request-scoped context (rule 2's
+ * `CONTEXT_ESTABLISHED_RE`: nothing pinned a connection and adopted a tenant for it), any WRITE
+ * whose receiver is the bare pool and whose target is a table whose policies need a context is a
+ * finding. Receiver, not file: `withTenantContext(` somewhere in the file proves nothing about the
+ * statement on the line below it, which is #3403's ask 2 ("count a file covered only when a context
+ * helper wraps the call") and the same test rule 2 and rule 3 already use. Reads stay out —
+ * `tenants_read_all` (0054:147) is USING(true), so a callback may always ask whose event it got;
+ * writing is what needs inviting in.
+ *
+ * Scope note: #3403 ask 2 also asks for `app/api/**`, server actions, `lib/**` and cron targets.
+ * That widening is #3312's (the guard stops at the route file), and it is not free — rule 1's whole
+ * exemption list is currently file-level. This rule takes the webhook surface, where the class was
+ * measured, and leaves the rest to the issue that owns it.
+ *
  * Usage:
  *   node scripts/check-rls-route-coverage.mjs
  *   node scripts/check-rls-route-coverage.mjs --json
@@ -203,6 +231,30 @@ const IDENTITY_TABLES = [
 
 /** The pool, under any of the three names this repository binds it to. */
 const BARE_POOL_RE = /\b(?:db|database|pool)\s*\.\s*(?:query|select|insert|update|delete|execute)\b/g;
+
+/**
+ * Rule 4 (#3403): the same receiver, narrowed to writes. A SELECT is what a callback uses to find
+ * out whose event it is, and `tenants_read_all` (0054:147) is `USING (true)` — the read needs no
+ * context and forbidding it would push every handler into opening one before it knows a tenant to
+ * name. An INSERT/UPDATE/DELETE on that receiver runs with the GUCs `lib/db/pool.ts` cleared.
+ *
+ * `execute` is on the list because drizzle is not the only way to write: `db.execute(sql\`UPDATE
+ * tenants …\`)` moves the same row on the same cleared connection. What decides is
+ * `writtenTenantTables`, whose raw arm looks for `into|update <table>` — so a read issued as SQL
+ * (`SELECT … FROM tenants`) stays allowed exactly as the chained read does.
+ */
+const BARE_POOL_WRITE_RE = /\b(?:db|database|pool)\s*\.\s*(?:insert|update|delete|execute)\b/g;
+
+/**
+ * Rule 4 (#3403): the tables that are not tenant-scoped by column and so are absent from
+ * `tenantScopedTables`, yet still refuse a context-less write. `tenants` is the one: it IS the
+ * workspace, so it has no `tenant_id` to compare, and its access rule is the GUC test in
+ * `tenants_authenticated_update` — `current_setting('app.current_user', true) != ''`
+ * (drizzle/migrations/0054_rls_phase0.sql:151-153). `tests/unit/
+ * rls-guard-webhook-billing-writes-3403.test.ts` re-reads that migration and fails if the arm ever
+ * stops being a context test, so this name is pinned to the SQL rather than to somebody's memory.
+ */
+const CONTEXT_KEYED_PLATFORM_TABLES = ['tenants'];
 
 /**
  * Full-line comments describe code; they are not code, and a comment can never be a
@@ -335,6 +387,17 @@ function tenantTablesIn(statement, tables) {
   for (const sqlName of tables) {
     const chain = new RegExp(`(?:\\.from|\\.insert|\\.update|\\.delete)\\s*\\(\\s*${camelIdent(sqlName)}\\b`);
     const raw = new RegExp(`\\b(?:from|into|update|join)\\s+${sqlName}\\b`, 'i');
+    if (chain.test(statement) || raw.test(statement)) out.push(sqlName);
+  }
+  return out;
+}
+
+/** Rule 4 (#3403): the same match, writes only — `.from(...)` and `from <table>` are how a callback learns whose event arrived, and that is allowed. */
+function writtenTenantTables(statement, tables) {
+  const out = [];
+  for (const sqlName of tables) {
+    const chain = new RegExp(`(?:\\.insert|\\.update|\\.delete)\\s*\\(\\s*${camelIdent(sqlName)}\\b`);
+    const raw = new RegExp(`\\b(?:into|update)\\s+${sqlName}\\b`, 'i');
     if (chain.test(statement) || raw.test(statement)) out.push(sqlName);
   }
   return out;
@@ -486,6 +549,47 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
     }
   }
 
+  // ── Rule 4 (#3403): a provider callback writing a context-keyed table on the pool ──
+  //
+  // `app/api/webhooks/**` is the surface rule 1 exempts on purpose (a signature names a sender,
+  // not a tenant) and rule 2 misses on purpose (business tables, not identity tables). That left
+  // Razorpay and Stripe free to `db.update(tenants)` with both GUCs cleared: zero rows, no error,
+  // a 200 that stops the retry. Files that DID adopt a request scope — `inbound`, which pins one
+  // connection with `withTenantScope` and sets the GUCs on it in `resolveApiKey` — are exempt on
+  // the same grounds rule 2 exempts a swept cron file, and for the same caveat: the exemption is
+  // whole-file, so a write outside the pinned scope inside such a file is invisible to this rule.
+  // The webhook surface is small enough to read by eye; #3312 is the issue that makes that
+  // unnecessary.
+  const WEBHOOK_PREFIX = ['app', 'api', 'webhooks'].join('/');
+  const CALLBACK_TABLES = new Set([...TENANT_TABLES, ...CONTEXT_KEYED_PLATFORM_TABLES]);
+  for (const file of files) {
+    const rel = relative(root, file).split('\\').join('/');
+    if (!rel.startsWith(WEBHOOK_PREFIX)) continue;
+    const text = readFileSync(file, 'utf8');
+    if (CONTEXT_ESTABLISHED_RE.test(text)) continue;
+    const stripped = stripComments(text).split('\n');
+    const { lines, origStart } = fuseChains(stripped);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+      BARE_POOL_WRITE_RE.lastIndex = 0;
+      let m;
+      while ((m = BARE_POOL_WRITE_RE.exec(line)) !== null) {
+        const at = origStart[i];
+        for (const table of writtenTenantTables(statementAt(lines, i, m.index), CALLBACK_TABLES)) {
+          hits.push({
+            check: 'CALLBACK_UNCONTEXTED_WRITE',
+            file: rel,
+            line: at,
+            detail: `${table} written from a callback that opens no context — the pool arrives with every app.* GUC cleared, so the row-level UPDATE policy matches nothing, changes zero rows, and the route still answers 200 (#3403)`,
+            source: stripped[at - 1].trim().slice(0, 160),
+          });
+        }
+        if (m.index === BARE_POOL_WRITE_RE.lastIndex) BARE_POOL_WRITE_RE.lastIndex += 1;
+      }
+    }
+  }
+
   const findings = [];
   let allowed = 0;
   // The allowance is a COUNT, not a flag: a file tolerated at 1 that grows a second
@@ -565,9 +669,18 @@ const EXPLAIN = `rls route-coverage screen (#1838 + #3288) — what each check a
                              withTenantContext/set_config turns it into a check.
   ENTRYPOINT_SCREEN_BLIND     rule 3 could not read a single tenant-scoped table out of
                              drizzle/schema/** — it refuses to report OK on a screen that is blind.
+  CALLBACK_UNCONTEXTED_WRITE (rule 4) a WRITE to a context-keyed table through the bare pool inside
+                             app/api/webhooks/**, in a file that opens no request scope. A provider
+                             callback authenticates a sender, not a workspace, so rules 1 and 2 both
+                             hand it over — and it then wrote anyway: the row-level UPDATE policy
+                             needs app.current_user (0054:151) or app.current_tenant (0031), the pool
+                             arrives with both cleared, so the statement changed zero rows and the
+                             route answered the 200 that stops the retry (#3403). Writes only: a
+                             SELECT is how the callback learns whose event this is, and
+                             tenants_read_all is USING (true).
   BASELINE_STALE             an allowance with no matching site left — shrink-only ratchet
   BASELINE_UNREASONED        an allowance with no reason recorded in "_reasons"
-The receiver decides rules 2 and 3: db. is the pool with every app.* GUC cleared, tx. is a transaction
+The receiver decides rules 2, 3 and 4: db. is the pool with every app.* GUC cleared, tx. is a transaction
 someone opened a privilege inside of. The test is per statement, not per file, because the dead
 forgot-password route already contained withTokenIssueContext two lines below the broken SELECT.
 The receiver is a property of the statement, not of one source line: a chain whose pool name sits

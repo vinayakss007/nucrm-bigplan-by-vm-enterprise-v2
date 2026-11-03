@@ -123,8 +123,10 @@ vi.mock('@/lib/errors-server', () => ({ logError: vi.fn() }));
 import { POST } from '@/app/api/webhooks/stripe/route';
 
 const CUSTOMER = 'cus_mapped_123';
-const RESOLVED_TENANT = 'tenant-from-customer';
-const METADATA_TENANT = 'tenant-from-metadata';
+// #3403: both ids are uuids now, because the callback validates the shape before it opens a
+// context — `tenants.id` is a uuid, and a payload value that is not one names no workspace.
+const RESOLVED_TENANT = '20000000-0000-4000-8000-000000000002';
+const METADATA_TENANT = '30000000-0000-4000-8000-000000000003';
 
 function makeRequest(event: unknown) {
   const body = JSON.stringify(event);

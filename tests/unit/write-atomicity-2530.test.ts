@@ -71,6 +71,16 @@ vi.mock('@/drizzle/db', () => {
       limit: () => rows,
     });
 
+  // #3403: a write statement's answer is the command tag, not a row list —
+  // node-postgres resolves `UPDATE … WHERE …` to `{ rowCount, rows }`, and the new
+  // billing helper reads `rowCount` to tell a landed write from one RLS refused with
+  // 0 rows. Resolving to `[]` here would model the driver wrongly and make every
+  // contextualised write look like the silence this issue is about.
+  const writeResult = () =>
+    Object.assign(Promise.resolve({ rowCount: 1, rows: [] }), {
+      returning: async () => [] as unknown[],
+    });
+
   // Rejected, but still a drizzle-shaped builder: awaiting the chain, or the
   // `.returning()` on it, must surface the injected failure rather than a
   // TypeError about a missing method.
@@ -92,7 +102,7 @@ vi.mock('@/drizzle/db', () => {
           where: (whereClause: unknown) => {
             const stmt: Stmt = { conn, op: 'update', table: H.tableOf(table), set: values, raw: whereClause };
             const failed = record(stmt);
-            return failed ?? settle([]);
+            return failed ?? writeResult();
           },
         }),
       }),
@@ -426,8 +436,10 @@ describe('#2530 Stripe subscription webhooks — tenant and billing row together
 
     expect(res.status).toBe(500);
     // The drift #2228 exists to remove: on the base revision the tenant had
-    // already committed before the billing row could fail.
-    expect(H.state.discarded.map((s) => s.table)).toEqual(['tenants', 'subscriptions']);
+    // already committed before the billing row could fail. The `sql` entry is
+    // #3403's SET LOCAL: the context is part of the transaction, so it vanishes
+    // with it — a context that survived a rollback would be the leak #2446 is about.
+    expect(H.state.discarded.map((s) => s.table)).toEqual(['sql', 'tenants', 'subscriptions']);
     expect(H.state.committed.filter((s) => s.conn === 'db' && s.op === 'update')).toEqual([]);
   });
 

@@ -11,12 +11,12 @@ import {
   RazorpaySignatureError,
   normalizeRazorpayPlan,
 } from '@/lib/razorpay';
-import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
 import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/lib/webhooks/idempotency';
+import { createBillingWebhookReporter } from '@/lib/db/billing-webhook-context';
 
 /** Idempotency window: how long a processed event id blocks re-processing. */
 const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
@@ -162,28 +162,33 @@ export async function POST(request: NextRequest) {
 
 // -- Event Handlers -----------------------------------------------------------
 
+/**
+ * #3403: `tenants` is FORCE-RLS (0088:70) and its only UPDATE arm opens on a non-empty
+ * `app.current_user` (0054:151). All four handlers below used to `db.update(tenants)` on the bare
+ * pool, where both reset-list GUCs are '', so each one matched zero rows, logged nothing, and
+ * answered the 200 that stops Razorpay retrying — a `payment.captured` that activated nobody. The
+ * reporter travels through the workspace this event names and reports a write that moved nothing
+ * instead of assuming it; `lib/db/billing-webhook-context.ts` holds the reason for that context.
+ */
+const billing = createBillingWebhookReporter({ provider: '[Razorpay]', source: 'webhooks/razorpay' });
+
 async function handlePaymentCaptured(payload: RazorpayPayloadLike | null | undefined) {
   const payment = payload?.payment?.entity;
   if (!payment) return;
 
-  const tenantId = payment.notes?.tenant_id;
-  if (!tenantId) {
-    console.warn('[Razorpay] payment.captured but no tenant_id in notes');
-    return;
-  }
+  const tenantId = billing.eventTenant(payment.notes?.tenant_id, 'payment.captured');
+  if (!tenantId) return;
 
   // #1210: map Razorpay plan name (growth/scale) to the canonical id
   // (pro/enterprise) so plan limits match the paid plan.
   const planId = normalizeRazorpayPlan(payment.notes?.plan_id);
 
-  await db.update(tenants)
-    .set({
-      planId,
-      status: 'active',
-      billingType: 'razorpay',
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  await billing.patchTenant(tenantId, {
+    planId,
+    status: 'active',
+    billingType: 'razorpay',
+    updatedAt: new Date(),
+  }, 'payment.captured');
 
   console.log(`[Razorpay] Tenant ${tenantId} activated with plan ${planId}`);
 }
@@ -192,24 +197,19 @@ async function handleSubscriptionActivated(payload: RazorpayPayloadLike | null |
   const subscription = payload?.subscription?.entity;
   if (!subscription) return;
 
-  const tenantId = subscription.notes?.tenant_id;
-  if (!tenantId) {
-    console.warn('[Razorpay] subscription.activated but no tenant_id in notes');
-    return;
-  }
+  const tenantId = billing.eventTenant(subscription.notes?.tenant_id, 'subscription.activated');
+  if (!tenantId) return;
 
   // #1210: normalize Razorpay plan name to the canonical app plan id.
   const planId = normalizeRazorpayPlan(subscription.notes?.plan_id);
 
-  await db.update(tenants)
-    .set({
-      planId,
-      status: 'active',
-      billingType: 'razorpay',
-      subscriptionId: subscription.id ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  await billing.patchTenant(tenantId, {
+    planId,
+    status: 'active',
+    billingType: 'razorpay',
+    subscriptionId: subscription.id ?? null,
+    updatedAt: new Date(),
+  }, 'subscription.activated');
 
   console.log(`[Razorpay] Tenant ${tenantId} subscription activated: plan=${planId}`);
 }
@@ -218,25 +218,20 @@ async function handleSubscriptionCancelled(payload: RazorpayPayloadLike | null |
   const subscription = payload?.subscription?.entity;
   if (!subscription) return;
 
-  const tenantId = subscription.notes?.tenant_id;
-  if (!tenantId) {
-    console.warn('[Razorpay] subscription.cancelled but no tenant_id in notes');
-    return;
-  }
+  const tenantId = billing.eventTenant(subscription.notes?.tenant_id, 'subscription.cancelled');
+  if (!tenantId) return;
 
   // Downgrade to free plan and mark the subscription cancelled.
   // NOTE: tenants has no dedicated cancelled_at column, so the timestamp is
   // recorded under metadata.cancelled_at (tenants.status becomes 'cancelled').
-  await db.update(tenants)
-    .set({
-      planId: 'free',
-      status: 'cancelled',
-      subscriptionId: null,
-      billingType: 'trial',
-      updatedAt: new Date(),
-      metadata: sql`COALESCE(${tenants.metadata}, '{}'::jsonb) || ${JSON.stringify({ cancelled_at: new Date().toISOString() })}::jsonb`,
-    })
-    .where(eq(tenants.id, tenantId));
+  await billing.patchTenant(tenantId, {
+    planId: 'free',
+    status: 'cancelled',
+    subscriptionId: null,
+    billingType: 'trial',
+    updatedAt: new Date(),
+    metadata: sql`COALESCE(${tenants.metadata}, '{}'::jsonb) || ${JSON.stringify({ cancelled_at: new Date().toISOString() })}::jsonb`,
+  }, 'subscription.cancelled');
 
   console.log(`[Razorpay] Tenant ${tenantId} subscription cancelled - downgraded to free`);
 }
@@ -245,18 +240,13 @@ async function handlePaymentFailed(payload: RazorpayPayloadLike | null | undefin
   const payment = payload?.payment?.entity;
   if (!payment) return;
 
-  const tenantId = payment.notes?.tenant_id;
-  if (!tenantId) {
-    console.warn('[Razorpay] payment.failed but no tenant_id in notes');
-    return;
-  }
+  const tenantId = billing.eventTenant(payment.notes?.tenant_id, 'payment.failed');
+  if (!tenantId) return;
 
-  await db.update(tenants)
-    .set({
-      status: 'past_due',
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  await billing.patchTenant(tenantId, {
+    status: 'past_due',
+    updatedAt: new Date(),
+  }, 'payment.failed');
 
   console.log(`[Razorpay] Payment failed for tenant ${tenantId} - marked as past_due`);
 }
