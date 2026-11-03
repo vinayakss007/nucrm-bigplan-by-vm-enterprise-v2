@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NuCRM — System Architecture Map</title>
+<meta name="color-scheme" content="dark light" />
+<style>
+  :root {
+    --bg: #0b0f14; --bg2: #0d1218; --panel: #11171f; --panel2: #151c25;
+    --ink: #e8eef6; --muted: #93a1b3; --faint: #66758a;
+    --line: #1e2833; --line2: #2a3746;
+    --accent: #5ac8fa; --accent2: #7c9cff; --warn: #f0b429; --bad: #ff6b5f; --ok: #4ac77f;
+    --ring: rgba(90, 200, 250, .22);
+    --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -18px rgba(0,0,0,.8);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="light"] {
+    --bg: #f7f9fc; --bg2: #ffffff; --panel: #ffffff; --panel2: #f2f5f9;
+    --ink: #0f1720; --muted: #5a6879; --faint: #8a97a8;
+    --line: #e3e9f0; --line2: #d3dce7;
+    --accent: #0a7cc4; --accent2: #4a63d8; --warn: #9a6700; --bad: #cf2b21; --ok: #12743a;
+    --ring: rgba(10, 124, 196, .18);
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 12px 28px -22px rgba(16,24,40,.35);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+  body {
+    margin: 0; color: var(--ink); background:
+      radial-gradient(1200px 520px at 12% -8%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 60%),
+      radial-gradient(900px 460px at 92% -14%, color-mix(in srgb, var(--accent2) 10%, transparent), transparent 62%),
+      var(--bg);
+    font: 15px/1.62 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  #bar { position: fixed; inset: 0 auto auto 0; height: 2px; width: 0; z-index: 50;
+         background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: 40px 36px 30px; border-bottom: 1px solid var(--line); position: relative; }
+  .eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 12px;
+             font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+                  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
+  header.hero h1 { margin: 0 0 10px; font-size: clamp(28px, 4.4vw, 44px); line-height: 1.06;
+                   font-weight: 700; letter-spacing: -.03em;
+                   background: linear-gradient(180deg, var(--ink), color-mix(in srgb, var(--ink) 62%, var(--muted)));
+                   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  header.hero p.lede { margin: 0; color: var(--muted); max-width: 74ch; font-size: 15.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 18px 0 0; }
+  .chip { font: 500 11.5px/1 var(--mono); color: var(--muted); background: var(--panel);
+          border: 1px solid var(--line); border-radius: 999px; padding: 6px 11px; }
+  .chip b { color: var(--ink); font-weight: 700; }
+  #theme { position: absolute; top: 34px; right: 36px; background: var(--panel); color: var(--ink);
+           border: 1px solid var(--line2); border-radius: 999px; padding: 8px 14px; cursor: pointer;
+           font: 600 12px/1 var(--mono); letter-spacing: .02em; transition: .18s; }
+  #theme:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+
+  /* ---------- shell ---------- */
+  .wrap { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 34px;
+          max-width: 1500px; margin: 0 auto; padding: 0 36px; }
+  nav { position: sticky; top: 22px; align-self: start; padding: 26px 0 40px; max-height: 100vh; overflow: auto;
+        scrollbar-width: thin; }
+  nav .grp { margin: 18px 12px 6px; font: 600 10px/1 var(--mono); text-transform: uppercase;
+             letter-spacing: .14em; color: var(--faint); }
+  nav a { display: flex; align-items: center; gap: 9px; color: var(--muted); text-decoration: none;
+          padding: 7px 12px; border-radius: 9px; font-size: 13.5px; border-left: 2px solid transparent;
+          transition: .14s; }
+  nav a .k { font: 600 10px/1 var(--mono); color: var(--faint); min-width: 22px; }
+  nav a:hover { background: var(--panel); color: var(--ink); }
+  nav a.on { background: var(--panel); color: var(--ink); border-left-color: var(--accent);
+             box-shadow: inset 0 0 0 1px var(--line); }
+  nav a.on .k { color: var(--accent); }
+  main { padding: 8px 0 100px; min-width: 0; }
+
+  /* ---------- sections ---------- */
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+            padding: 24px 26px 20px; margin: 20px 0; box-shadow: var(--shadow); }
+  h2 { display: flex; align-items: center; gap: 12px; font-size: 19px; margin: 2px 0 4px;
+       letter-spacing: -.015em; font-weight: 700; }
+  h2 .lay { flex: none; display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 10px;
+            font: 700 11px/1 var(--mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+            border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+  .sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; max-width: 96ch; }
+  h3 { font-size: 14px; letter-spacing: -.01em; margin: 22px 0 6px; }
+  ol, ul { padding-left: 22px; margin: 4px 0 10px; }
+  ol li, ul li { margin: 7px 0; }
+  ol li::marker { color: var(--accent); font-family: var(--mono); font-size: 13px; }
+
+  /* ---------- figures ---------- */
+  figure.dgm { margin: 6px 0 16px; border: 1px solid var(--line2); border-radius: 14px;
+               background: var(--bg2); overflow: hidden; }
+  figure.dgm > figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+               padding: 9px 14px; border-bottom: 1px solid var(--line);
+               font: 600 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint);
+               background: var(--panel2); }
+  figure.dgm .zoom { cursor: zoom-in; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 11px; }
+  .mermaid { padding: 20px 16px; overflow: auto; }
+  .mermaid svg { max-width: 100%; height: auto; }
+
+  /* ---------- cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 12px; margin: 4px 0 6px; }
+  .card { position: relative; overflow: hidden; background: var(--panel2); border: 1px solid var(--line);
+          border-radius: 13px; padding: 15px 16px 14px; transition: .18s; }
+  .card:hover { transform: translateY(-2px); border-color: var(--line2); box-shadow: var(--shadow); }
+  .card .n { font-size: 27px; font-weight: 700; letter-spacing: -.035em; line-height: 1.05;
+             font-variant-numeric: tabular-nums; }
+  .card .l { margin-top: 5px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .card.bad .n { color: var(--bad); }
+  .card.warn .n { color: var(--warn); }
+  .card.ok .n { color: var(--ok); }
+  .card.bad::after, .card.warn::after, .card.ok::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; }
+  .card.bad::after { background: var(--bad); }
+  .card.warn::after { background: var(--warn); }
+  .card.ok::after { background: var(--ok); }
+
+  /* ---------- notes, tables, code ---------- */
+  .note { border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 7%, var(--panel2));
+          padding: 12px 15px; border-radius: 0 11px 11px 0; margin: 14px 0; font-size: 13.5px; color: var(--ink); }
+  .note b { color: var(--warn); }
+  .note.info { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel2)); }
+  .note.info b { color: var(--accent); }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13.3px; margin: 8px 0 4px;
+          border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) td, tr:nth-child(even) td { background: color-mix(in srgb, var(--panel2) 55%, transparent); }
+  th { color: var(--faint); background: var(--panel2); font: 700 10.5px/1.2 var(--mono);
+       text-transform: uppercase; letter-spacing: .09em; }
+  td code, p code, li code, div code { background: var(--panel2); border: 1px solid var(--line);
+       border-radius: 6px; padding: 1.5px 6px; font: 500 12.2px/1.4 var(--mono); color: var(--accent2); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .pill { display: inline-block; font: 600 10.5px/1 var(--mono); padding: 3px 8px; border-radius: 999px;
+          border: 1px solid var(--line2); color: var(--muted); }
+  .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+              background: color-mix(in srgb, var(--bad) 9%, transparent); }
+  .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+               background: color-mix(in srgb, var(--warn) 9%, transparent); }
+  .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+             background: color-mix(in srgb, var(--ok) 9%, transparent); }
+
+  /* ---------- lightbox ---------- */
+  #box { position: fixed; inset: 0; z-index: 60; display: none; background: color-mix(in srgb, var(--bg) 88%, #000);
+         backdrop-filter: blur(6px); padding: 34px; }
+  #box.open { display: grid; place-items: center; }
+  #box > div { max-width: 100%; max-height: 100%; overflow: auto; background: var(--bg2);
+               border: 1px solid var(--line2); border-radius: 16px; padding: 26px; box-shadow: 0 30px 80px -30px rgba(0,0,0,.7); }
+  #box img, #box svg { max-width: none; }
+
+  footer { max-width: 1500px; margin: 0 auto; padding: 26px 36px 60px; color: var(--faint);
+           font: 500 12px/1.6 var(--mono); border-top: 1px solid var(--line); }
+  @media (max-width: 1080px) { .wrap { grid-template-columns: 1fr; gap: 0; padding: 0 18px; }
+    nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; overflow-x: auto; padding: 10px 0;
+          max-height: none; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--line); scrollbar-width: none; }
+    nav::-webkit-scrollbar { display: none; }
+    nav .grp { display: none; }
+    nav a { flex: none; border: 1px solid var(--line); border-left-width: 1px; border-radius: 999px; padding: 6px 12px; }
+    nav a.on { border-color: var(--accent); }
+    nav a .k { min-width: 0; }
+    html { scroll-padding-top: 62px; }
+    header.hero { padding: 26px 18px 20px; } #theme { position: static; margin-bottom: 14px; }
+    section { padding: 20px 16px 16px; border-radius: 14px; } }
+  @media print { nav, #bar, #theme, .zoom { display: none !important; }
+    body { background: #fff; color: #000; } section { break-inside: avoid; border-color: #bbb; box-shadow: none; } }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<header class="hero">
+  <button id="theme">◐&nbsp; Theme</button>
+  <div class="eyebrow"><span class="dot"></span> NuCRM · architecture recon · measured 2026-10-31</div>
+  <h1>The system, as it actually runs</h1>
+  <p class="lede">Ten views of a 519-handler Next.js 16 monolith, drawn from the repository rather than
+     from its prose. Every count is reproducible (§00). Nine structural fix families, mapped onto the
+     layers they break. Mermaid 11 is MIT-licensed and loaded from CDN — this file needs no build and
+     no server; open it in any browser.</p>
+  <div class="chips">
+    <span class="chip"><b>519</b> API handlers</span>
+    <span class="chip"><b>226</b> tables</span>
+    <span class="chip"><b>146</b> migrations</span>
+    <span class="chip"><b>231</b> pages</span>
+    <span class="chip"><b>37</b> guards</span>
+    <span class="chip"><b>22</b> cron routes</span>
+    <span class="chip"><b>9</b> fix families</span>
+    <span class="chip"><b>2 × P0</b> · <b>6 × P1</b> · <b>1 × P2</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+<nav>
+  <div class="grp">Orientation</div>
+  <a href="#verdict"><span class="k">→</span>Verdict</a>
+  <a href="#inventory"><span class="k">00</span>Measured inventory</a>
+  <div class="grp">Views</div>
+  <a href="#l0"><span class="k">L0</span>Context &amp; trust</a>
+  <a href="#l1"><span class="k">L1</span>Runtime topology</a>
+  <a href="#l2"><span class="k">L2</span>Request lifecycle</a>
+  <a href="#l3"><span class="k">L3</span>Tenancy &amp; RLS</a>
+  <a href="#l4"><span class="k">L4</span>Data layer</a>
+  <a href="#l5"><span class="k">L5</span>Async &amp; realtime</a>
+  <a href="#l6"><span class="k">L6</span>Domain surface</a>
+  <a href="#l7"><span class="k">L7</span>Control plane</a>
+  <div class="grp">Findings</div>
+  <a href="#hotspots"><span class="k">H1‑9</span>Hotspots</a>
+  <a href="#drift"><span class="k">10</span>Drift ledger</a>
+  <a href="#report"><span class="k">↗</span>Full report</a>
+</nav>
+
+<main>
+<section id="verdict">
+  <h2><span class="lay">→</span>Verdict in five lines</h2>
+  <p class="sub">The codebase is disciplined; the failures are structural and silent. Fix these in order.</p>
+  <ol>
+    <li><b>Tombstoned users can reset their password</b> and mint a session. Smallest security fix in the report (design report P0.4).</li>
+    <li><b>Pool mode and tenant context disagree.</b> Session pooling is the only mode the RLS design works under; webhooks still need an explicit system context (P0.1, P0.2).</li>
+    <li><b>Two cron routes are scheduled nowhere, and production omits recurring invoices and lead warming.</b> One manifest, one parity check, persisted run records (H7).</li>
+    <li><b>A Redis blip can route jobs to pg-boss, which no process consumes.</b> Delete the fallback; make “queued” mean a consumer exists (H8).</li>
+    <li><b>Authorization is optional.</b> 66 of 248 mutating tenant routes check nothing beyond “logged in”, the role catalog and the strings routes check are different vocabularies, and <code>record_permissions</code> has zero enforcement readers (H9).</li>
+  </ol>
+  <div class="note">Full evidence, severity ranking, and reproduction commands: <a href="../reports/DESIGN-ISSUES-2026-10-31.md">../reports/DESIGN-ISSUES-2026-10-31.md</a>.</div>
+</section>
+
+<section id="inventory">
+  <h2><span class="lay">00</span>Measured inventory</h2>
+  <p class="sub">Reproducible counts from the working tree. These are the numbers the diagrams are built on.</p>
+  <div class="cards">
+    <div class="card"><div class="n">519</div><div class="l">API route handlers</div></div>
+    <div class="card"><div class="n">423</div><div class="l">routes using withApiRoute</div></div>
+    <div class="card"><div class="n">231</div><div class="l">pages (page.tsx)</div></div>
+    <div class="card"><div class="n">226</div><div class="l">tables (pgTable)</div></div>
+    <div class="card"><div class="n">146</div><div class="l">migrations (292 .sql)</div></div>
+    <div class="card"><div class="n">63</div><div class="l">schema modules (46 + 17 registry)</div></div>
+    <div class="card"><div class="n">430</div><div class="l">lib TypeScript files</div></div>
+    <div class="card"><div class="n">524</div><div class="l">files importing a DB client</div></div>
+    <div class="card"><div class="n">37</div><div class="l">guard scripts</div></div>
+    <div class="card"><div class="n">7</div><div class="l">CI workflows</div></div>
+    <div class="card"><div class="n">22</div><div class="l">cron routes</div></div>
+    <div class="card warn"><div class="n">20/22</div><div class="l">cron routes scheduled by any source</div></div>
+    <div class="card bad"><div class="n">0/22</div><div class="l">cron routes writing a health record</div></div>
+    <div class="card bad"><div class="n">66/248</div><div class="l">mutating tenant routes with no permission check</div></div>
+    <div class="card bad"><div class="n">21&nbsp;+&nbsp;16</div><div class="l">permission ids: checked-but-ungrantable, plus advertised-but-never-checked</div></div>
+    <div class="card bad"><div class="n">0</div><div class="l">production importers of <code>record-permissions</code></div></div>
+    <div class="card warn"><div class="n">30/326</div><div class="l">tenant routes enforcing field permissions</div></div>
+    <div class="card bad"><div class="n">7/10</div><div class="l">queue job types with a producer</div></div>
+    <div class="card"><div class="n">6</div><div class="l">compose variants</div></div>
+    <div class="card ok"><div class="n">0</div><div class="l">TODO / FIXME markers in the tree</div></div>
+  </div>
+</section>
+
+<section id="l0">
+  <h2><span class="lay">L0</span>System context and trust boundaries</h2>
+  <p class="sub">Five untrusted actor classes converge on one nginx edge. Everything below the proxy is one Next.js process plus two side processes (worker, realtime).</p>
+  <pre class="mermaid">
+flowchart TB
+  subgraph ACTORS["Untrusted actors"]
+    TU["Tenant user / PWA"]
+    SA["Platform super admin"]
+    CP["Portal customer"]
+    PV["Public visitor / embedded form"]
+    WH["Third-party webhooks"]
+  end
+  subgraph EDGE["Edge zone"]
+    NGX["nginx: TLS, routing, static"]
+  end
+  subgraph APP["Application zone: Node, Next 16.4.2"]
+    PX["proxy.ts: JWT verify cache, CSRF, edge rate limit"]
+    RSC["React Server Components: 231 pages"]
+    API["App Router API: 519 handlers"]
+    WRK["worker.ts: BullMQ consumers"]
+    RT["realtime.ts: socket.io + Redis adapter"]
+    CRN["cron runner: 22 HTTP cron routes"]
+  end
+  subgraph DATA["Data zone"]
+    PGB["pgbouncer: transaction pooling + DISCARD ALL"]
+    PG[("PostgreSQL external/managed: 226 tables, RLS")]
+    RDS[("Redis: cache, locks, queues, pub/sub")]
+    S3[("MinIO: object storage")]
+  end
+  subgraph EXT["External services"]
+    MAIL["Email: Mailgun / Resend / SendGrid"]
+    PAY["Payments: Stripe / Razorpay"]
+    CHAT["Chat: Slack / Telegram / WhatsApp"]
+    AI["AI: OpenAI-compatible gateway"]
+    SEN["Sentry"]
+  end
+  TU --> NGX
+  SA --> NGX
+  CP --> NGX
+  PV --> NGX
+  WH --> NGX
+  NGX --> PX
+  PX --> RSC
+  PX --> API
+  API --> PGB
+  WRK --> PGB
+  CRN --> API
+  PGB --> PG
+  API --> RDS
+  WRK --> RDS
+  RT --> RDS
+  RSC --> API
+  API --> S3
+  WRK --> MAIL
+  WRK --> CHAT
+  API --> PAY
+  API --> AI
+  API --> SEN
+  </pre>
+  <div class="note"><b>Boundary of note.</b> The proxy JWT cache is 10 seconds. A revoked session can pass the edge gate for up to 10 s; the route layer verifies independently, so revocation is still enforced there.</div>
+</section>
+
+<section id="l1">
+  <h2><span class="lay">L1</span>Runtime topology and deploy variants</h2>
+  <p class="sub">Two different shapes share one repository. Docker on this host; pm2 on the production VM. Postgres is external in both.</p>
+  <pre class="mermaid">
+flowchart LR
+  subgraph HOST1["This host: Docker compose"]
+    C_NGX["nucrm-nginx"]
+    C_APP["nucrm-app"]
+    C_PGB["nucrm-pgbouncer"]
+    C_WRK["worker"]
+    C_CRN["cron"]
+    C_RDS["redis"]
+    C_MIN["minio"]
+    C_MON["prometheus, grafana, loki, promtail, alertmanager, exporters"]
+  end
+  subgraph HOST2["Production VM: pm2"]
+    PM2["nucrm-prod: next start on :3099"]
+  end
+  EXTDB[("Managed PostgreSQL")]
+  CI["GitHub Actions: 7 workflows"]
+  SEC["DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY"]
+  CI --> SEC
+  SEC -->|"SSH: checkout, build, pm2 restart, health gate"| PM2
+  PM2 --> EXTDB
+  C_NGX --> C_APP
+  C_APP --> C_PGB
+  C_PGB --> EXTDB
+  C_APP --> C_RDS
+  C_WRK --> C_RDS
+  C_WRK --> C_PGB
+  C_CRN --> C_APP
+  C_APP --> C_MIN
+  C_MON --> C_APP
+  </pre>
+  <div class="note"><b>Drift surface.</b> Six compose variants exist: <code>docker-compose.yml</code>, <code>.scale</code>, <code>.slim</code>, <code>.secrets</code>, <code>deploy/docker-compose.production.yml</code>, <code>deploy/docker-compose.preprod.yml</code>. A change applied to one silently misses the others.</div>
+  <h3 style="font-size:14px;margin:18px 0 0">Database connection shapes</h3>
+  <table>
+    <tr><th>Environment</th><th>URL target</th><th>PGBOUNCER_ENABLED</th><th>POOL_MODE</th><th>GUC reset</th></tr>
+    <tr><td>Root compose</td><td>localhost:5432 (direct)</td><td>commented out</td><td>transaction (unused)</td><td>app on release</td></tr>
+    <tr><td>.env.example</td><td>host:5432 (direct)</td><td><b class="pill bad">true</b></td><td>n/a</td><td><b>skipped</b></td></tr>
+    <tr><td>Preprod overlay</td><td>pgbouncer:6432</td><td>true</td><td><b>session</b></td><td>pgbouncer DISCARD ALL</td></tr>
+    <tr><td>Production compose + .env.production</td><td>postgres:5432 (direct)</td><td>false</td><td>transaction (unused)</td><td>app on release</td></tr>
+    <tr><td>deploy/pgbouncer/pgbouncer.ini</td><td>—</td><td>—</td><td><b class="pill bad">transaction</b></td><td><b>inert</b></td></tr>
+  </table>
+  <div class="note"><b>Security-relevant contradiction.</b> ADR-0003 calls <code>server_reset_query = DISCARD ALL</code> load-bearing, but the preprod overlay correctly notes pgbouncer does not run it in transaction mode. The shipped ini and production compose both say <code>transaction</code>, and <code>.env.example</code> enables the pooler code path while pointing at a direct <code>:5432</code> URL — which turns off the app's own release reset.</div>
+</section>
+
+<section id="l2">
+  <h2><span class="lay">L2</span>Request lifecycle: the tenant data path</h2>
+  <p class="sub">The canonical path. One pinned connection carries a session-scoped tenant GUC; pgbouncer's DISCARD ALL is what keeps that GUC from reaching the next request.</p>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant N as nginx
+  participant P as proxy.ts
+  participant R as route.ts
+  participant W as withApiRoute
+  participant A as requireAuth
+  participant S as lib domain
+  participant G as pgbouncer
+  participant DB as PostgreSQL RLS
+  B->>N: HTTPS
+  N->>P: /api/tenant/*
+  P->>P: JWT verify 10s cache, CSRF, rate bucket
+  P->>R: forward + x-request-id
+  R->>W: handler request
+  W->>G: checkout one pinned connection
+  W->>DB: set_config app.current_tenant, is_local=false
+  W->>A: authenticate, load membership
+  A-->>W: ctx userId tenantId role
+  W->>R: handler request ctx
+  R->>R: Zod validate
+  R->>S: business logic
+  S->>DB: SELECT/UPDATE WHERE tenant_id = ctx.tenantId
+  G->>DB: DISCARD ALL on return
+  DB-->>S: rows filtered by app filter AND policy
+  S-->>R: typed rows
+  R-->>B: data envelope
+  W->>G: release connection
+  </pre>
+  <div class="note"><b>Authorization is voluntary on this path (H9).</b> After <code>requireAuth</code>, a route may call <code>can(ctx, …)</code>, check <code>ctx.isAdmin</code>, run <code>enforceFieldRead/Write</code> — or nothing. 66 of 248 mutating tenant routes do the last. Identity is a choke point; authority is four parallel mechanisms with no rule saying which handler owes which.</div>
+</section>
+
+<section id="l3">
+  <h2><span class="lay">L3</span>Multi-tenancy and RLS state model</h2>
+  <p class="sub">Two isolation layers: application filters are primary, RLS is the backstop. Correctness of the backstop depends on three settings that only work together.</p>
+  <pre class="mermaid">
+flowchart TB
+  REQ["Request arrives"] --> WRAP{"withApiRoute?"}
+  WRAP -->|"yes: 423"| PIN["Pin connection, set tenant GUC"]
+  WRAP -->|"no: 96"| HAND["Hand-rolled context adapters: portal, form, plugin, token, unsubscribe, worker, cron"]
+  PIN --> Q["Query"]
+  HAND --> Q
+  Q --> POL{"RLS policy: tenant_id = NULLIF(current_setting, empty)::uuid"}
+  POL -->|match| ROWS["Rows visible"]
+  POL -->|empty or unset GUC| DENY["No rows: fail closed"]
+  POL -->|table owner| OWNER["Owner bypass: FORCE RLS is OFF"]
+  </pre>
+  <table>
+    <tr><th>Invariant</th><th>Where</th><th>Breaks as</th></tr>
+    <tr><td>Session-scoped GUC when no transaction</td><td>ADR-0003, <code>lib/db/rls.ts</code></td><td>Context evaporates before the query runs</td></tr>
+    <tr><td>pgbouncer <code>server_reset_query = DISCARD ALL</code></td><td><code>deploy/pgbouncer/pgbouncer.ini</code></td><td>Cross-tenant GUC leak on a reused connection</td></tr>
+    <tr><td>Policies fail closed, not with an error</td><td>migration 0045</td><td>Outage instead of denial</td></tr>
+    <tr><td><code>FORCE ROW LEVEL SECURITY</code> off</td><td>every tenant table</td><td>Owner bypass, so RLS is decorative for the app role</td></tr>
+  </table>
+</section>
+
+<section id="l4">
+  <h2><span class="lay">L4</span>Data layer map</h2>
+  <p class="sub">46 schema modules + 17 under registry/ = 63 files, 226 tables, 146 migrations (292 .sql with downs). One file per domain, re-exported from <code>drizzle/schema/index.ts</code>.</p>
+  <pre class="mermaid">
+flowchart LR
+  subgraph CORE["Identity and tenancy"]
+    core["core, security, tokens, infra"]
+    platform["platform, modules, usage"]
+  end
+  subgraph CRM["CRM"]
+    crm["crm, activity, tasks, projects"]
+    seg["segments, territories, hierarchy"]
+    custom["custom-entities, record-links"]
+  end
+  subgraph REV["Revenue"]
+    bill["billing, financial, products"]
+    esig["esignature, documents, templates"]
+  end
+  subgraph COMMS["Comms and marketing"]
+    comm["comm, sms, email-tracking"]
+    mkt["marketing, forms, knowledge"]
+  end
+  subgraph AUTO["Automation and insight"]
+    auto["automation, cadence, lead-warming"]
+    ai["ai, lead-scoring, analytics, dashboard"]
+  end
+  subgraph OPS["Ops and support"]
+    sup["support, sla, compliance"]
+    misc["plugins, analytics-views, visitors, backups"]
+  end
+  core --> crm
+  core --> REV
+  core --> COMMS
+  core --> AUTO
+  core --> OPS
+  crm --> AUTO
+  REV --> AUTO
+  COMMS --> AUTO
+  </pre>
+</section>
+
+<section id="l5">
+  <h2><span class="lay">L5</span>Async work and realtime</h2>
+  <p class="sub">Producers negotiate a backend; only one backend has a consumer. Realtime fan-out is a separate process sharing rooms through the Redis adapter.</p>
+  <pre class="mermaid">
+flowchart LR
+  APIT["API routes"] --> QSRV["lib/queue/index.ts<br/>Redis then pg-boss then memory<br/>choice cached per process"]
+  CRONR["22 cron routes, separate container"] --> QSRV
+  INB["Inbound webhooks: Stripe, email, chat"] --> QSRV
+  QSRV --> BULL["BullMQ queues"]
+  QSRV -.->|"Redis blip at first call"| PGBS["pg-boss queues"]
+  BULL --> WK["worker.ts: 10 BullMQ workers"]
+  PGBS -.->|"no consumer exists"| LOST["jobs accepted, never delivered"]
+  WK --> RAD["Redis adapter: shared rooms"]
+  APIT --> RAD
+  RAD --> SOCK["realtime.ts socket.io"]
+  </pre>
+  <div class="note"><b>Design note.</b> <code>lib/queue/index.ts</code> can select pg-boss, but the only consumer in the repo is <code>worker.ts</code> (BullMQ). A Redis failure at the first call is cached for the process lifetime, so later jobs are accepted into a queue nothing reads (#401).</div>
+  <table>
+    <tr><th>Scheduler</th><th>Jobs</th><th>Routes missing from it</th></tr>
+    <tr><td><code>deploy/cron/crontab</code> — production Docker / pm2 VM</td><td>17</td><td><code>backup</code>, <code>lead-warming</code>, <code>process-lead-scoring</code>, <b><code>recurring-invoice-generator</code></b>, <code>sla-check</code></td></tr>
+    <tr><td><code>vercel.json</code></td><td>18</td><td><code>backup</code>, <code>lead-warming</code>, <code>process-lead-scoring</code>, <code>sla-check</code></td></tr>
+    <tr><td><code>scripts/cron-scheduler.ts</code> — in-process</td><td>18</td><td><code>process-lead-scoring</code>, <code>sla-check</code>, <code>scheduled-report-delivery</code>, <code>subscription-renewal-check</code></td></tr>
+  </table>
+  <div class="note"><b>Two routes are in no schedule at all:</b> <code>process-lead-scoring</code> and <code>sla-check</code>. <code>check-cron-lock.mjs</code> tracks the crontab gaps as debt and stays green; <code>/api/system/cron-health</code> reads an in-memory registry that <b>0 of 22</b> routes write, so it reports <code>healthy</code> with <code>totalJobs: 0</code>.</div>
+</section>
+
+<section id="l6">
+  <h2><span class="lay">L6</span>Domain and feature surface</h2>
+  <p class="sub">44 tenant areas, 31 platform-admin pages, a 9-page customer portal, and a public surface. Three admin API namespaces coexist.</p>
+  <pre class="mermaid">
+flowchart TB
+  subgraph TENANT["Tenant app: 44 areas"]
+    T1["CRM core: contacts, companies, leads, deals, pipelines"]
+    T2["Revenue: quotes, invoices, orders, products, subscriptions, offers"]
+    T3["Comms: emails, templates, sms, chat, calls, meetings, calendar"]
+    T4["Automation: automation, workflows, sequences, follow-ups, cadence"]
+    T5["Data: analytics, reports, segments, data-explorer, leaderboards, search"]
+    T6["Admin: settings, modules, plugins, integrations, users, teams"]
+  end
+  subgraph ADMIN["Platform admin: 31 pages"]
+    S1["tenants, users, billing, revenue, monetisation"]
+    S2["health, monitoring, logs, errors, rate-limits, backups"]
+    S3["audit, token-control, selective-restore, templates, announcements"]
+  end
+  subgraph PORTAL["Customer portal: 9 pages"]
+    P1["tickets, invoices, KB, quotes"]
+  end
+  subgraph PUB["Public surface"]
+    U1["marketing, forms, embed widget, lead-capture, unsubscribe, track"]
+  end
+  </pre>
+  <table>
+    <tr><th>Namespace</th><th>routes</th><th>Namespace</th><th>routes</th></tr>
+    <tr><td><code>tenant</code></td><td>326</td><td><code>superadmin</code></td><td>55</td></tr>
+    <tr><td><code>cron</code></td><td>22</td><td><code>auth</code></td><td>21</td></tr>
+    <tr><td><code>super-admin</code></td><td>16</td><td><code>public</code></td><td>14</td></tr>
+    <tr><td><code>v1</code></td><td>11</td><td><code>user</code></td><td>7</td></tr>
+    <tr><td><code>webhooks</code></td><td>7</td><td><code>system</code></td><td>7</td></tr>
+    <tr><td><code>dev</code></td><td>4</td><td><code>admin</code></td><td>3</td></tr>
+  </table>
+</section>
+
+<section id="l7">
+  <h2><span class="lay">L7</span>Control plane: how the architecture is enforced</h2>
+  <p class="sub">37 bespoke guard scripts — none parses an AST. 36 of the 37 do run in some workflow (ci.yml covers 33: 30 by alias, 3 by bare <code>node scripts/…</code>), and the local pre-merge script runs 4 while nothing calls it. The census is ungrepable: grepping <code>npm run guard:</code> cannot see a bare invocation.</p>
+  <pre class="mermaid">
+flowchart LR
+  DEV["Developer"] --> PRE["pre-merge gate<br/>8 steps · 4 guards"]
+  PRE --> G1["37 guard scripts<br/>36 wired · 0 parse ASTs"]
+  PRE --> TC["typecheck, lint, unit tests"]
+  G1 --> CI
+  TC --> CI
+  CI["GitHub Actions: ci, schema-drift, workflow-lint, nightly-soak, backup-drill, release, deploy"]
+  CI --> DEP["deploy.yml: build, pm2, health gate, rollback"]
+  REG["docs register: pinned file:line citations"] -.-> PRE
+  </pre>
+  <table>
+    <tr><th>Family</th><th>Examples</th><th>Detection</th></tr>
+    <tr><td>Tenant / RLS</td><td><code>guard:rls</code>, <code>guard:portal-rls-context</code>, <code>guard:app-role-counts</code></td><td>route coverage + live DB</td></tr>
+    <tr><td>Data safety</td><td><code>guard:chain</code>, <code>guard:migration-rls</code>, <code>guard:rollback-coverage</code>, <code>guard:counters</code></td><td>migration parsing + live DB</td></tr>
+    <tr><td>Surface safety</td><td><code>guard:csrf</code>, <code>guard:public-ratelimit</code>, <code>guard:raw-sql</code>, <code>guard:semgrep</code></td><td>grep / semgrep</td></tr>
+    <tr><td>Hygiene</td><td><code>guard:filesize</code>, <code>guard:any-suppressions</code>, <code>guard:register-drift</code>, <code>guard:coords</code></td><td>regex</td></tr>
+  </table>
+</section>
+
+<section id="hotspots">
+  <h2><span class="lay">H1‑9</span>Hotspots: where issues keep arising</h2>
+  <p class="sub">Nine recurring fix families, mapped to the layers above. Each is a structural gap, not a one-off bug.</p>
+  <pre class="mermaid">
+flowchart TB
+  subgraph H1["H1 Tenant context (RLS)"]
+    A1["Every new entry point must remember to open a context"]
+  end
+  subgraph H2["H2 Soft-delete (tombstone)"]
+    A2["deletedAt filtered per query, not by view or policy"]
+  end
+  subgraph H3["H3 Lifecycle state"]
+    A3["Status transitions written ad hoc, CAS re-added per route"]
+  end
+  subgraph H4["H4 Result contracts"]
+    A4["success:false helpers ignored, failed vs stale vs empty conflated"]
+  end
+  subgraph H5["H5 Counters and quotas"]
+    A5["Denormalised counters mutated by many call sites"]
+  end
+  subgraph H6["H6 Enforcement drift"]
+    A6["Guards and doc register pinned to line numbers, re-pin churn"]
+  end
+  subgraph H7["H7 Scheduled work"]
+    A7["Three schedule files, two routes in none, health registry has no writer"]
+  end
+  subgraph H8["H8 Background delivery"]
+    A8["Producer may pick pg-boss; only BullMQ has a consumer"]
+  end
+  subgraph H9["H9 Authorization"]
+    A9["66/248 mutating routes check nothing; catalog and checks disagree; record_permissions unread"]
+  end
+  A1 --> L2["L2 request path"]
+  A2 --> L4["L4 data layer"]
+  A3 --> L4
+  A4 --> L2
+  A5 --> L4
+  A6 --> L7["L7 control plane"]
+  A7 --> L5["L5 async and realtime"]
+  A8 --> L5
+  A9 --> L2
+  A9 --> L7
+  </pre>
+  <p class="sub">Full evidence and remediation: <a href="../reports/DESIGN-ISSUES-2026-10-31.md">../reports/DESIGN-ISSUES-2026-10-31.md</a></p>
+</section>
+
+<section id="drift">
+  <h2><span class="lay">10</span>Drift ledger</h2>
+  <p class="sub">Where prose docs disagree with the code. Every row is a maintenance trap for the next agent.</p>
+  <table>
+    <tr><th>Claim</th><th>Prose says</th><th>Code says</th><th>File</th></tr>
+    <tr><td>API endpoints</td><td>507</td><td><b>519</b> route.ts</td><td>ARCHITECTURE.md</td></tr>
+    <tr><td>Tables</td><td>~215 / 224</td><td><b>226</b> pgTable</td><td>PROJECT_MAP.md, ARCHITECTURE.md</td></tr>
+    <tr><td>Process manager</td><td>"pm2 in production"</td><td>Docker on this host; pm2 only on VM</td><td>PROJECT_MAP.md vs AGENTS.md</td></tr>
+    <tr><td>ADR numbering</td><td>unique</td><td><b>collisions</b>: 0001–0006 twice, 0011 twice</td><td>docs/adr/</td></tr>
+    <tr><td>Queue tech</td><td>BullMQ</td><td>BullMQ <b>and</b> pg-boss; only BullMQ consumed</td><td>lib/queue/index.ts, worker.ts</td></tr>
+    <tr><td>Cron schedules</td><td>one source of truth</td><td><b>three files</b> (17 / 18 / 18); two routes in none</td><td>deploy/cron/crontab, vercel.json, scripts/cron-scheduler.ts</td></tr>
+    <tr><td>Cron health</td><td>dead-man switch</td><td>registry has <b>no writer</b> in any route</td><td>lib/cron/health.ts</td></tr>
+    <tr><td>Role permissions</td><td>one 66-id catalog drives the Roles UI</td><td>routes check <b>74</b> strings; <b>21</b> un-grantable, <b>16</b> never checked</td><td>lib/permissions/definitions.ts vs app/api</td></tr>
+    <tr><td>Record permissions</td><td>per-record grants with expiry</td><td><b>0</b> production importers — rows change nothing</td><td>lib/rbac/record-permissions.ts</td></tr>
+    <tr><td>Field permissions</td><td>hide/show fields per role</td><td>enforced in <b>30 of 326</b> tenant routes</td><td>lib/rbac/enforce.ts</td></tr>
+  </table>
+</section>
+<section id="report">
+  <h2><span class="lay">↗</span>Where the evidence lives</h2>
+  <p class="sub">This page is the picture. The document behind it carries the file:line evidence, the severity ranking, and the commands that regenerate every number above.</p>
+  <table>
+    <tr><th>Artifact</th><th>Path</th><th>What it answers</th></tr>
+    <tr><td>Design-issue report</td><td><code>docs/reports/DESIGN-ISSUES-2026-10-31.md</code></td><td>Why the same bugs keep returning; nine families H1–H9; P0→P3 roadmap; §8 reproduction commands</td></tr>
+    <tr><td>System map (Markdown)</td><td><code>docs/architecture/SYSTEM-MAP.md</code></td><td>The same ten views as Mermaid that renders inline on GitHub</td></tr>
+    <tr><td>This viewer</td><td><code>docs/architecture/system-map.html</code></td><td>Interactive: themes, expandable diagrams, scroll-spy, printable</td></tr>
+  </table>
+  <div class="note info"><b>Re-measure it.</b> Every count is a command, not a claim — <code>grep</code>/<code>comm</code> over <code>app/api</code>, the three schedule files, and <code>lib/permissions/definitions.ts</code>. §8 of the report lists them verbatim.</div>
+</section>
+</main>
+</div>
+<footer>
+  NuCRM — System Architecture Map · generated from the repository on 2026-10-31 · branch <code>fix/operational-pool-tls-3381</code> ·
+  Mermaid 11 (MIT) from CDN · press <code>T</code> to switch theme · click any diagram to expand
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const root = document.documentElement;
+  const stored = localStorage.getItem('nucrm-map-theme');
+  root.dataset.theme = stored || 'dark';
+
+  // Wrap every diagram in a figure with a caption bar + click-to-zoom.
+  const figures = [];
+  document.querySelectorAll('pre.mermaid').forEach((pre, i) => {
+    pre.dataset.src = pre.textContent;
+    const title = pre.closest('section')?.querySelector('h2')?.innerText.replace(/\s+/g, ' ').trim() || 'diagram';
+    const fig = document.createElement('figure');
+    fig.className = 'dgm';
+    const cap = document.createElement('figcaption');
+    cap.innerHTML = `<span>${title}</span><span class="zoom">⤢ expand</span>`;
+    const parent = pre.parentNode;
+    const next = pre.nextSibling;
+    parent.removeChild(pre);
+    fig.append(cap, pre);
+    parent.insertBefore(fig, next);
+    figures.push(fig);
+  });
+
+  function paint() {
+    const dark = root.dataset.theme !== 'light';
+    document.querySelectorAll('pre.mermaid').forEach((pre) => { pre.textContent = pre.dataset.src; });
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: dark ? 'dark' : 'default',
+      themeVariables: {
+        fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+        fontSize: '13.5px',
+        background: dark ? '#0d1218' : '#ffffff',
+        primaryColor: dark ? '#15202b' : '#eef4fb',
+        primaryTextColor: dark ? '#e8eef6' : '#0f1720',
+        primaryBorderColor: dark ? '#2a3746' : '#c9d6e5',
+        secondaryColor: dark ? '#1b2430' : '#f2f5f9',
+        tertiaryColor: dark ? '#11171f' : '#fafbfc',
+        clusterBkg: dark ? '#0f1620' : '#f5f8fc',
+        clusterBorder: dark ? '#2a3746' : '#c9d6e5',
+        edgeLabelBackground: dark ? '#11171f' : '#ffffff',
+        tertiaryBorderColor: dark ? '#2a3746' : '#d3dce7',
+        lineColor: dark ? '#4aa8d8' : '#3f6f96',
+      },
+      flowchart: { curve: 'basis', padding: 14, useMaxWidth: true, nodeSpacing: 46, rankSpacing: 62 },
+      sequence: { useMaxWidth: true, wrap: true, actorMargin: 42, boxMargin: 12, noteMargin: 10 },
+    });
+    mermaid.run({ querySelector: 'pre.mermaid' });
+  }
+  paint();
+
+  // lightbox
+  const box = document.createElement('div'); box.id = 'box'; box.innerHTML = '<div></div>';
+  document.body.appendChild(box);
+  document.addEventListener('click', (e) => {
+    const fig = e.target.closest('figure.dgm');
+    if (fig) { box.firstElementChild.innerHTML = fig.querySelector('.mermaid').innerHTML; box.classList.add('open'); }
+    else if (e.target.closest('#box')) box.classList.remove('open');
+  });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') box.classList.remove('open');
+    if (e.key.toLowerCase() === 't' && !e.metaKey && !e.ctrlKey) toggle();
+  });
+
+  function toggle() {
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+    localStorage.setItem('nucrm-map-theme', root.dataset.theme);
+    paint();
+  }
+  document.getElementById('theme').addEventListener('click', toggle);
+
+  // scroll progress + nav scroll-spy
+  const bar = document.getElementById('bar');
+  const links = [...document.querySelectorAll('nav a[href^="#"]')];
+  const secs = links.map((a) => document.getElementById(a.getAttribute('href').slice(1))).filter(Boolean);
+  const spy = new IntersectionObserver(() => {
+    let best = secs[0], top = -Infinity;
+    for (const s of secs) { const y = s.getBoundingClientRect().top;
+      if (y - 120 <= 0 && y > top) { top = y; best = s; } }
+    links.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === `#${best.id}`));
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = `${h > 0 ? (scrollY / h) * 100 : 0}%`;
+  }, { threshold: [0, 0.1, 0.25, 0.5, 1] });
+  secs.forEach((s) => spy.observe(s));
+  addEventListener('scroll', () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = `${h > 0 ? (scrollY / h) * 100 : 0}%`;
+  }, { passive: true });
+</script>
+</body>
+</html>
