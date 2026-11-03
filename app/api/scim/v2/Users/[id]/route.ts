@@ -17,99 +17,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
-import { db, type DbClient } from '@/drizzle/db';
-import { users, tenantMembers, sessions } from '@/drizzle/schema';
+import { type DbClient } from '@/drizzle/db';
+import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import {
   toSCIMUser,
   fromSCIMUser,
   generateSCIMError,
-  verifySCIMToken,
   type SCIMUser,
 } from '@/lib/scim';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { isEntityId } from '@/lib/id';
-
-/**
- * #2787 — the not-found answer, in the envelope every reader here has to return: SCIM clients
- * parse `application/scim+json`, and the row-missing body is deliberately what a malformed id
- * gets too, so the status cannot be used to ask whether a user exists.
- */
-function scimUserNotFound(): NextResponse {
-  return NextResponse.json(
-    generateSCIMError('User not found', 404),
-    { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
-  );
-}
-
-// ── Session revocation helper ─────────────────────────────────────────────────
-
-/**
- * Revoke a user's login sessions on SCIM deactivate/delete — but ONLY when the
- * user has no OTHER active tenant membership.
- *
- * `sessions` are per-user and NOT tenant-scoped (the active tenant is resolved
- * per-request from membership). A blanket `DELETE FROM sessions WHERE user_id`
- * on a single-tenant deactivate therefore logs the user out of EVERY other
- * workspace they belong to — a cross-tenant denial of service triggered by one
- * tenant's IdP. We only clear sessions when this was their last active
- * workspace; otherwise their remaining workspaces keep them signed in and the
- * per-request membership check already denies access to the deactivated tenant.
- *
- * @param tx    the active transaction (or db)
- * @param userId  the user being deactivated
- * @param tenantId  the tenant that just deactivated them (excluded from the check)
- */
-async function revokeSessionsIfLastActiveTenant(
-  tx: DbClient,
-  userId: string,
-  tenantId: string,
-): Promise<void> {
-  // Any active membership in a DIFFERENT tenant means we must keep the user's
-  // sessions (the deactivated tenant is already denied per-request).
-  const otherActive = await tx
-    .select({ id: tenantMembers.id })
-    .from(tenantMembers)
-    .where(and(
-      eq(tenantMembers.userId, userId),
-      eq(tenantMembers.status, 'active'),
-      ne(tenantMembers.tenantId, tenantId),
-    ))
-    .limit(1);
-
-  if ((otherActive as Array<{ id: string }>).length === 0) {
-    await tx.delete(sessions).where(eq(sessions.userId, userId));
-  }
-}
-
-// ── Auth Helper ──────────────────────────────────────────────────────────────
-
-async function authenticateSCIM(
-  request: NextRequest
-): Promise<{ tenantId: string } | NextResponse> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      generateSCIMError('Bearer token required', 401),
-      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
-    );
-  }
-
-  const token = authHeader.slice(7);
-  // Accept tenant ID from header as fallback for v1 tokens;
-  // v2 tokens embed the tenant ID and ignore the header value.
-  const headerTenantId = request.headers.get('x-tenant-id') ?? '';
-
-  const result = await verifySCIMToken(token, headerTenantId);
-  if (!result) {
-    return NextResponse.json(
-      generateSCIMError('Invalid or expired SCIM token', 401),
-      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
-    );
-  }
-
-  return { tenantId: result.tenantId };
-}
+import {
+  inScimTransaction,
+  withScimEmailLookup,
+  withScimTenantContext,
+  withScimUserIdentity,
+} from '@/lib/db/scim-context';
+import {
+  authenticateSCIMRequest,
+  revokeSessionsIfLastActiveTenant,
+  scimUserNotFound,
+} from '@/lib/scim/user-route-support';
 
 // ── GET: Retrieve User ───────────────────────────────────────────────────────
 
@@ -117,7 +46,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await authenticateSCIM(request);
+  const authResult = await authenticateSCIMRequest(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
   const { id } = await params;
@@ -127,19 +56,23 @@ export async function GET(
   if (!isEntityId(id)) return scimUserNotFound();
 
   try {
-    const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        memberStatus: tenantMembers.status,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
+    const user = await withScimTenantContext(tenantId, async (tx) => {
+      const [row] = await tx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          memberStatus: tenantMembers.status,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+        .limit(1);
+
+      return row ?? null;
+    });
 
     if (!user) return scimUserNotFound();
 
@@ -194,7 +127,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await authenticateSCIM(request);
+  const authResult = await authenticateSCIMRequest(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
   const { id } = await params;
@@ -204,216 +137,230 @@ export async function PATCH(
   if (!isEntityId(id)) return scimUserNotFound();
 
   try {
-    // Verify user exists and belongs to tenant
-    const [existingUser] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        updatedAt: users.updatedAt,
-        memberId: tenantMembers.id,
-        memberStatus: tenantMembers.status,
-        memberUpdatedAt: tenantMembers.updatedAt,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
+    const outcome = await withScimTenantContext(tenantId, async (ctx) => {
+      // Verify user exists and belongs to tenant
+      const [existingUser] = await ctx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          updatedAt: users.updatedAt,
+          memberId: tenantMembers.id,
+          memberStatus: tenantMembers.status,
+          memberUpdatedAt: tenantMembers.updatedAt,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+        .limit(1);
 
-    if (!existingUser) return scimUserNotFound();
+      if (!existingUser) return scimUserNotFound();
 
-    const parsedBody = scimPatchRequestSchema.safeParse(await readJsonBody(request));
-    if (!parsedBody.success) {
-      return NextResponse.json(
-        generateSCIMError('Invalid SCIM PatchOp payload', 400),
-        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
-    const body: SCIMPatchRequest = parsedBody.data;
+      const parsedBody = scimPatchRequestSchema.safeParse(await readJsonBody(request));
+      if (!parsedBody.success) {
+        return NextResponse.json(
+          generateSCIMError('Invalid SCIM PatchOp payload', 400),
+          { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+        );
+      }
+      const body: SCIMPatchRequest = parsedBody.data;
 
-    if (!body.schemas?.includes('urn:ietf:params:scim:api:messages:2.0:PatchOp')) {
-      return NextResponse.json(
-        generateSCIMError('Invalid schema. Expected urn:ietf:params:scim:api:messages:2.0:PatchOp', 400),
-        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
+      if (!body.schemas?.includes('urn:ietf:params:scim:api:messages:2.0:PatchOp')) {
+        return NextResponse.json(
+          generateSCIMError('Invalid schema. Expected urn:ietf:params:scim:api:messages:2.0:PatchOp', 400),
+          { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+        );
+      }
 
-    const userUpdates: Record<string, unknown> = {};
-    let deactivate = false;
-    let activate = false;
+      const userUpdates: Record<string, unknown> = {};
+      let deactivate = false;
+      let activate = false;
 
-    for (const op of body.Operations ?? []) {
-      const path = op.path?.toLowerCase();
+      for (const op of body.Operations ?? []) {
+        const path = op.path?.toLowerCase();
 
-      if (op.op === 'replace' || op.op === 'add') {
-        if (path === 'active') {
-          const active = op.value === true || op.value === 'true';
-          if (!active) {
+        if (op.op === 'replace' || op.op === 'add') {
+          if (path === 'active') {
+            const active = op.value === true || op.value === 'true';
+            if (!active) {
+              deactivate = true;
+            } else {
+              activate = true;
+            }
+          } else if (path === 'name.givenname' || path === 'name.firstname') {
+            // Will reconstruct full name below
+            userUpdates['givenName'] = String(op.value ?? '');
+          } else if (path === 'name.familyname' || path === 'name.lastname') {
+            userUpdates['familyName'] = String(op.value ?? '');
+          } else if (path === 'displayname' || path === 'name.formatted') {
+            userUpdates['fullName'] = String(op.value ?? '');
+          } else if (path === 'username' || path === 'emails[type eq "work"].value') {
+            userUpdates['email'] = String(op.value ?? '');
+          } else if (!path && typeof op.value === 'object' && op.value !== null) {
+            // Bulk replace without path - treat value as partial SCIM user
+            const partial = fromSCIMUser(op.value as SCIMUser);
+            if (partial.fullName) userUpdates['fullName'] = partial.fullName;
+            if (partial.email) userUpdates['email'] = partial.email;
+            if (partial.active === false) deactivate = true;
+            if (partial.active === true) activate = true;
+          }
+        } else if (op.op === 'remove') {
+          if (path === 'active') {
             deactivate = true;
-          } else {
-            activate = true;
-          }
-        } else if (path === 'name.givenname' || path === 'name.firstname') {
-          // Will reconstruct full name below
-          userUpdates['givenName'] = String(op.value ?? '');
-        } else if (path === 'name.familyname' || path === 'name.lastname') {
-          userUpdates['familyName'] = String(op.value ?? '');
-        } else if (path === 'displayname' || path === 'name.formatted') {
-          userUpdates['fullName'] = String(op.value ?? '');
-        } else if (path === 'username' || path === 'emails[type eq "work"].value') {
-          userUpdates['email'] = String(op.value ?? '');
-        } else if (!path && typeof op.value === 'object' && op.value !== null) {
-          // Bulk replace without path - treat value as partial SCIM user
-          const partial = fromSCIMUser(op.value as SCIMUser);
-          if (partial.fullName) userUpdates['fullName'] = partial.fullName;
-          if (partial.email) userUpdates['email'] = partial.email;
-          if (partial.active === false) deactivate = true;
-          if (partial.active === true) activate = true;
-        }
-      } else if (op.op === 'remove') {
-        if (path === 'active') {
-          deactivate = true;
-        }
-      }
-    }
-
-    // Build full name from parts if individual name components were updated
-    if (userUpdates['givenName'] || userUpdates['familyName']) {
-      const given = (userUpdates['givenName'] as string) ?? '';
-      const family = (userUpdates['familyName'] as string) ?? '';
-      userUpdates['fullName'] = [given, family].filter(Boolean).join(' ');
-      delete userUpdates['givenName'];
-      delete userUpdates['familyName'];
-    }
-
-    // Use client-provided If-Match header (SCIM versioning convention) for
-    // concurrency check.  The IdP sends the ETag it last saw; we compare
-    // against the DB snapshot.  If absent, fall back to the DB snapshot
-    // (backward-compatible, but two concurrent PATCHes can both pass).
-    const ifMatch = request.headers.get('if-match');
-    const expectedUserUpdatedAt = ifMatch
-      ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')  // strip weak-etag prefix/quotes
-      : existingUser.updatedAt;
-    const expectedMemberUpdatedAt = ifMatch
-      ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')
-      : existingUser.memberUpdatedAt;
-
-    // Apply user record updates
-    const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-    if (userUpdates['fullName']) dbUpdates['fullName'] = userUpdates['fullName'];
-
-    // Email is a GLOBAL, cross-tenant identity (users.email is unique and one
-    // user can belong to many tenants). A SCIM email change from one tenant's
-    // IdP would silently rewrite the user's login identity in every OTHER
-    // tenant they're a member of, and breaks SSO email-matching there.
-    if (userUpdates['email']) {
-      const newEmail = String(userUpdates['email']).toLowerCase().trim();
-      if (newEmail && newEmail !== existingUser.email.toLowerCase()) {
-        // Refuse to rename a user who belongs to more than just this tenant.
-        const [elsewhere] = await db
-          .select({ id: tenantMembers.id })
-          .from(tenantMembers)
-          .where(and(eq(tenantMembers.userId, id), ne(tenantMembers.tenantId, tenantId)))
-          .limit(1);
-        if (elsewhere) {
-          return NextResponse.json(
-            generateSCIMError(
-              'Cannot change the email of a user who belongs to other workspaces — email is a shared account identity.',
-              409,
-            ),
-            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
-          );
-        }
-        // Reject a collision cleanly instead of surfacing a raw 500 from the
-        // unique constraint.
-        const [conflict] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.email, newEmail), ne(users.id, id)))
-          .limit(1);
-        if (conflict) {
-          return NextResponse.json(
-            generateSCIMError('Email address is already in use', 409),
-            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
-          );
-        }
-        dbUpdates['email'] = newEmail;
-      }
-      // else: email unchanged — do not include it in the update.
-    }
-
-    // Handle activation/deactivation
-    const memberUpdates: { table: typeof tenantMembers; id: string; status: string } | null =
-      deactivate
-        ? { table: tenantMembers, id: existingUser.memberId, status: 'inactive' }
-        : activate
-          ? { table: tenantMembers, id: existingUser.memberId, status: 'active' }
-          : null;
-
-    // Wrap user + member updates in a transaction to avoid partial writes
-    const hasUserUpdates = Object.keys(dbUpdates).length > 1;
-    if (hasUserUpdates || memberUpdates) {
-      await db.transaction(async (tx) => {
-        if (hasUserUpdates) {
-          const guard = await concurrencyGuard(db, users, id, tenantId, expectedUserUpdatedAt);
-          if (guard) throw guard;
-          const [updated] = await tx
-            .update(users)
-            .set(dbUpdates)
-            .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUserUpdatedAt as string | Date))))
-            .returning({ id: users.id });
-          if (!updated) throw NextResponse.json(
-            generateSCIMError('Stale data — record was modified. Please refresh.', 409),
-            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
-          );
-        }
-
-        if (memberUpdates) {
-          const guard = await concurrencyGuard(db, tenantMembers, memberUpdates.id, tenantId, expectedMemberUpdatedAt);
-          if (guard) throw guard;
-          const [updatedMember] = await tx
-            .update(tenantMembers)
-            .set({ status: memberUpdates.status, updatedAt: new Date() })
-            .where(and(
-              eq(tenantMembers.id, memberUpdates.id),
-              eq(tenantMembers.updatedAt, new Date(expectedMemberUpdatedAt as string | Date)),
-            ))
-            .returning({ id: tenantMembers.id });
-          if (!updatedMember) throw NextResponse.json(
-            generateSCIMError('Stale data — record was modified. Please refresh.', 409),
-            { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
-          );
-
-          // Revoke sessions for a deactivated user — but only if this was
-          // their last active workspace (avoid cross-tenant logout DoS).
-          if (deactivate) {
-            await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
           }
         }
-      });
-    }
+      }
 
-    // Fetch updated user
-    const [updatedUser] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        memberStatus: tenantMembers.status,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
+      // Build full name from parts if individual name components were updated
+      if (userUpdates['givenName'] || userUpdates['familyName']) {
+        const given = (userUpdates['givenName'] as string) ?? '';
+        const family = (userUpdates['familyName'] as string) ?? '';
+        userUpdates['fullName'] = [given, family].filter(Boolean).join(' ');
+        delete userUpdates['givenName'];
+        delete userUpdates['familyName'];
+      }
 
-    if (!updatedUser) {
-      return NextResponse.json(
-        generateSCIMError('User not found after update', 500),
-        { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
+      // Use client-provided If-Match header (SCIM versioning convention) for
+      // concurrency check.  The IdP sends the ETag it last saw; we compare
+      // against the DB snapshot.  If absent, fall back to the DB snapshot
+      // (backward-compatible, but two concurrent PATCHes can both pass).
+      const ifMatch = request.headers.get('if-match');
+      const expectedUserUpdatedAt = ifMatch
+        ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')  // strip weak-etag prefix/quotes
+        : existingUser.updatedAt;
+      const expectedMemberUpdatedAt = ifMatch
+        ? ifMatch.replace(/^W\//, '').replace(/^"|"$/g, '')
+        : existingUser.memberUpdatedAt;
+
+      // Apply user record updates
+      const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+      if (userUpdates['fullName']) dbUpdates['fullName'] = userUpdates['fullName'];
+
+      // Email is a GLOBAL, cross-tenant identity (users.email is unique and one
+      // user can belong to many tenants). A SCIM email change from one tenant's
+      // IdP would silently rewrite the user's login identity in every OTHER
+      // tenant they're a member of, and breaks SSO email-matching there.
+      if (userUpdates['email']) {
+        const newEmail = String(userUpdates['email']).toLowerCase().trim();
+        if (newEmail && newEmail !== existingUser.email.toLowerCase()) {
+          // Refuse to rename a user who belongs to more than just this tenant.
+          // Other-tenant memberships are invisible under app.scim_tenant on
+          // purpose, so this question is asked with the user's own identity.
+          const [elsewhere] = await withScimUserIdentity(ctx, id, () =>
+            ctx
+              .select({ id: tenantMembers.id })
+              .from(tenantMembers)
+              .where(and(eq(tenantMembers.userId, id), ne(tenantMembers.tenantId, tenantId)))
+              .limit(1)
+          );
+          if (elsewhere) {
+            return NextResponse.json(
+              generateSCIMError(
+                'Cannot change the email of a user who belongs to other workspaces — email is a shared account identity.',
+                409,
+              ),
+              { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+            );
+          }
+          // Reject a collision cleanly instead of surfacing a raw 500 from the
+          // unique constraint. The other account may live in another workspace,
+          // so the check borrows the pre-auth lookup window.
+          const [conflict] = await withScimEmailLookup(ctx, () =>
+            ctx
+              .select({ id: users.id })
+              .from(users)
+              .where(and(eq(users.email, newEmail), ne(users.id, id)))
+              .limit(1)
+          );
+          if (conflict) {
+            return NextResponse.json(
+              generateSCIMError('Email address is already in use', 409),
+              { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+            );
+          }
+          dbUpdates['email'] = newEmail;
+        }
+        // else: email unchanged — do not include it in the update.
+      }
+
+      // Handle activation/deactivation
+      const memberUpdates: { table: typeof tenantMembers; id: string; status: string } | null =
+        deactivate
+          ? { table: tenantMembers, id: existingUser.memberId, status: 'inactive' }
+          : activate
+            ? { table: tenantMembers, id: existingUser.memberId, status: 'active' }
+            : null;
+
+      // Wrap user + member updates in a transaction to avoid partial writes
+      const hasUserUpdates = Object.keys(dbUpdates).length > 1;
+      if (hasUserUpdates || memberUpdates) {
+        await inScimTransaction(ctx, async (tx) => {
+          if (hasUserUpdates) {
+            const guard = await concurrencyGuard(tx as unknown as DbClient, users, id, tenantId, expectedUserUpdatedAt);
+            if (guard) throw guard;
+            const [updated] = await tx
+              .update(users)
+              .set(dbUpdates)
+              .where(and(eq(users.id, id), eq(users.updatedAt, new Date(expectedUserUpdatedAt as string | Date))))
+              .returning({ id: users.id });
+            if (!updated) throw NextResponse.json(
+              generateSCIMError('Stale data — record was modified. Please refresh.', 409),
+              { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+            );
+          }
+
+          if (memberUpdates) {
+            const guard = await concurrencyGuard(tx as unknown as DbClient, tenantMembers, memberUpdates.id, tenantId, expectedMemberUpdatedAt);
+            if (guard) throw guard;
+            const [updatedMember] = await tx
+              .update(tenantMembers)
+              .set({ status: memberUpdates.status, updatedAt: new Date() })
+              .where(and(
+                eq(tenantMembers.id, memberUpdates.id),
+                eq(tenantMembers.updatedAt, new Date(expectedMemberUpdatedAt as string | Date)),
+              ))
+              .returning({ id: tenantMembers.id });
+            if (!updatedMember) throw NextResponse.json(
+              generateSCIMError('Stale data — record was modified. Please refresh.', 409),
+              { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+            );
+
+            // Revoke sessions for a deactivated user — but only if this was
+            // their last active workspace (avoid cross-tenant logout DoS).
+            if (deactivate) {
+              await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
+            }
+          }
+        });
+      }
+
+      // Fetch updated user
+      const [updatedUser] = await ctx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          memberStatus: tenantMembers.status,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+        .limit(1);
+
+      if (!updatedUser) {
+        return NextResponse.json(
+          generateSCIMError('User not found after update', 500),
+          { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+        );
+      }
+
+      return { user: updatedUser };
+    });
+
+    if (outcome instanceof NextResponse) return outcome;
+    const { user: updatedUser } = outcome;
 
     const url = new URL(request.url);
     const baseUrl = `${url.protocol}//${url.host}/api`;
@@ -434,6 +381,9 @@ export async function PATCH(
       headers: { 'Content-Type': 'application/scim+json' },
     });
   } catch (error) {
+    // A guard inside the transaction throws the response it wants returned;
+    // without this the 404/409 it built would be re-labelled 500 below.
+    if (error instanceof NextResponse) return error;
     if (error instanceof InvalidJsonBodyError) {
       return NextResponse.json(
         generateSCIMError('Invalid JSON body', 400),
@@ -454,7 +404,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await authenticateSCIM(request);
+  const authResult = await authenticateSCIMRequest(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
   const { id } = await params;
@@ -464,30 +414,36 @@ export async function DELETE(
   if (!isEntityId(id)) return scimUserNotFound();
 
   try {
-    // Verify user exists and belongs to tenant
-    const [existingUser] = await db
-      .select({
-        id: users.id,
-        memberId: tenantMembers.id,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
+    const existed = await withScimTenantContext(tenantId, async (ctx) => {
+      // Verify user exists and belongs to tenant
+      const [existingUser] = await ctx
+        .select({
+          id: users.id,
+          memberId: tenantMembers.id,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
+        .limit(1);
 
-    if (!existingUser) return scimUserNotFound();
+      if (!existingUser) return false;
 
-    await db.transaction(async (tx) => {
-      // Soft-delete: set THIS tenant's membership to inactive
-      await tx.update(tenantMembers)
-        .set({ status: 'inactive', updatedAt: new Date() })
-        .where(eq(tenantMembers.id, existingUser.memberId));
+      await inScimTransaction(ctx, async (tx) => {
+        // Soft-delete: set THIS tenant's membership to inactive
+        await tx.update(tenantMembers)
+          .set({ status: 'inactive', updatedAt: new Date() })
+          .where(eq(tenantMembers.id, existingUser.memberId));
 
-      // Revoke sessions only if the user has no other active workspace —
-      // sessions are per-user (not tenant-scoped), so a blanket delete would
-      // log them out of every other tenant (cross-tenant DoS).
-      await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
+        // Revoke sessions only if the user has no other active workspace —
+        // sessions are per-user (not tenant-scoped), so a blanket delete would
+        // log them out of every other tenant (cross-tenant DoS).
+        await revokeSessionsIfLastActiveTenant(tx, id, tenantId);
+      });
+
+      return true;
     });
+
+    if (!existed) return scimUserNotFound();
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

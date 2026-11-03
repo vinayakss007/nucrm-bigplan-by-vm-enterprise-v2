@@ -68,8 +68,13 @@ if [ "$BRANCH" != "main" ]; then
   # a missing module was left to the pipeline's status by accident.
   while read -r mod; do
     [ -z "$mod" ] && continue
+    # A directory barrel resolves too: `@/lib/scim` is lib/scim/index.ts as much
+    # as lib/scim.ts is, and a gate that knows only the file form stops a PR for
+    # an import TypeScript is happy with (#3303 hit this by moving, not adding).
     if [ -f "lib/${mod}.ts" ]; then
       echo "   ✅ lib/${mod}.ts exists"
+    elif [ -f "lib/${mod}/index.ts" ]; then
+      echo "   ✅ lib/${mod}/index.ts exists"
     else
       MISSING="${MISSING} lib/${mod}.ts"
     fi

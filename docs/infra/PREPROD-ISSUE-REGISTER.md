@@ -4,7 +4,19 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
+> - **Last updated:** 2026-11-01 (UTC) — **PP-080**: **#3303**, and a numbering collision resolved the only honest
+> way. `GET /api/scim/v2/Users` answered **200 with an empty directory** to a correctly-authenticated IdP: `verifySCIMToken`
+> is an HMAC over `tenantId:expiry`, so it names a workspace and sets no `app.*` GUC, while every `users` arm keys on
+> `app.current_user` — and `scripts/check-rls-route-coverage.mjs`'s rule 1 never opened the file, because its first test
+> was *does this route spell its authentication* `requireAuth`. Fix half privilege (`lib/db/scim-context.ts` + migration
+> **0143**, `app.scim_tenant`, which joins both reset lists and makes them **20** long), fix half screen (rule 1 now asks
+> the same question of every tenant-naming mechanism, and rule 2's `fuseChains` stops crediting a bare-pool read whose
+> receiver is built one statement earlier). **0143 lands UNAPPLIED** with **#2537**'s backlog, so against today's
+> database SCIM still answers zero rows — fail-closed, never a leak. This entry arrived as **PP-079** on its own branch
+> and moves here because the merge brought **#3328**'s PP-079 in underneath it: two agents, one number, and the published
+> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** on this merged tree
+> (from 5627 the same day). Re-measured 2026-11-02 on the merge of `ea108e4bc`: `guard:rls` **519** routes and **0** tolerated, `scripts/rls-preauth-baseline.json` still empty, **146** up-migrations against **146** journal entries with `0143` among them unapplied, and the SCIM suites at **21** + **12** — **80** green over the five SCIM-facing files, both numbers re-derived from the 20/12/75-over-four this cell and this bullet had carried off the pre-merge tree. The line recording this re-pin is itself the one line of growth it reports.
+> - **Previous:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
 > its handler runs, and it still answered `invalid_client` at every caller on a fresh database, because `oauth_clients`
 > has **no writer anywhere in the application** — measured in tree (**0** `insert(oauthClients)` across `app`/`lib`/`scripts`
 > on `main`), not on the host, which remains undeployed (**PP-060**). Closed by the registration surface in **#3328**,
@@ -373,7 +385,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-046 | S3  | CHECK vs code               | The compliance dropdown offered `notes` and `tasks` as retention entity types; the table's CHECK accepts five values and neither of those, so two options could never be saved                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED IN TREE · enforcement is the open half (#60)                                                                                                                                                   |
 | PP-047 | S2  | Auth context + panel        | The platform account has no workspace, so `ctx.tenantId` is the nil-UUID sentinel and ~120 insert routes answer `400 Invalid reference` instead of a reason — and the route that fixes it (`join-tenant`) has no UI caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: guard in `withApiRoute` or give the account a workspace                                                                                                                    |
 | PP-048 | S1  | Security / RLS boundary     | Tenant isolation rests on `app.is_super_admin`, a placeholder GUC any session can `SET`: a leaked `DATABASE_URL` opens 49 tables / 60 policies cross-tenant (measured 191 users, 162 contacts) — no HTTP path can reach it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: role-based policies or per-purpose GUCs                                                                                                                                    |
-| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock (`LOCK_FAIL_OPEN` is honoured on that path too, since #2373)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🔧 FIXED in this PR (#2539) — `lib/cron/cron-lock.ts` is the central site, all 22 routes answer `423 { ok:false }`, `guard:cron-lock` runs at `ci.yml:84-85` (un-moved 2026-10-16: **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards while `:85` still runs `guard:cron-lock`). **Still open:** the additive `outcome: 'held' \| 'unavailable'` split (a refusal cannot yet tell Redis-down from held) and the 5 routes with no crontab line, both owner decisions |
+| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock (`LOCK_FAIL_OPEN` is honoured on that path too, since #2373)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🔧 FIXED in this PR (#2539) — `lib/cron/cron-lock.ts` is the central site, all 22 routes answer `423 { ok:false }`, `guard:cron-lock` runs at `ci.yml:84-85` (un-moved 2026-10-16: **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards while `:85` still runs `guard:cron-lock`; **#3298** then extended the `:84` step name to `Cron lock, cron auth + field-permission wiring guards (#2539, #2597, #3298)`, adding the cron-auth screen without moving a line). **Still open:** the additive `outcome: 'held' \| 'unavailable'` split (a refusal cannot yet tell Redis-down from held) and the 5 routes with no crontab line, both owner decisions |
 | PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen                                                                                                                  |
 | PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                                                                                                                           |
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency                                                                                                         |
@@ -403,6 +415,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-077 | S2  | Compliance / data integrity | **#2530**'s two compliance routes still had a path that never resolves: `POST` writes a `processing` row, does the work, then writes a terminal marker, and anything dying between those writes — SIGTERM past the drain (**PP-029**), an OOM kill, a redeploy, or the marker `UPDATE` itself throwing — left the row saying `processing` forever. Because the marker sat *inside* the work `try` whose `catch` writes the *other* marker, the failure was not a stuck row but a false record: an Article 17 erasure that ran, and whose `completed` write threw, was logged as `failed`. **2** sites in `app/` mint `processing` and nothing else in the tree writes the table | 🔧 FIXED in this PR (**#2578**): `lib/compliance/request-lifecycle.ts` — `isStaleProcessing` (a `processing` row strictly older than 15 min, sized from **8** parallel SELECTs + **5** sequential UPDATEs at **PP-028**'s ~200 ms/statement) · `reapStaleProcessing` answers it as `failed` + `stale`/`staleReason` and best-effort persists behind a CAS `WHERE id AND tenant_id AND status='processing'` · both markers moved out of the work `try` and return `false` instead of throwing, surfaced as `recordUpdateFailed` · deliberately **not** part 1's transaction (a rollback deletes the evidence that the erasure was attempted), **not** a new status (**0050**'s `chk_compliance_requests_status` is closed), `completed_at` never minted, reap-on-read not cron (**PP-051**/**PP-049**) · `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests, **8** of them red with the routes at `11802dcc` · how many rows are stuck today is **not** measured here |
 | PP-078 | S2  | Backup / restore readiness | **The nightly backup has been answering 200 and doing nothing, and what it ever wrote sits inside the database it is supposed to protect.** Measured 2026-10-12 on the host and in the live DB: the retained `nucrm-cron` log (2026-09-15 → 2026-10-12) records `backup-verify` **CRON FAILED on 28 of 28 nights** (every one an `HTTP/1.1 500` from the deployed build, i.e. **#49**'s bug still live) and `auto-backup` **8** failures, `process-sequences` 15, `retry-webhooks` 5, `detect-missed-followups` 4, `task-reminders` 3, `ai-auto-followup` 2, `usage-snapshot` 1, `backup-health` 1 — but `run-cron.sh` is `wget -q -O /dev/null … \|\| echo "[date] CRON FAILED: $JOB" >&2`, so **a 200 that did zero work emits no line at all**, and that is the whole reason the outage was invisible: `tenant_backup_records` has written **0 rows since 2026-10-03T09:26:50Z** (nine nights; only three days ever have rows — 09-25, 10-02, 10-03). The two surfaces disagree exactly as **#79** describes, now quantified: `backup_records` = **4** rows, all `status=failed`, `storage_type=local`, `size_bytes=0`, `storage_path` NULL on all four (the **#50** signature: no `pg_dump` in the image); `tenant_backup_records` = **144** rows, **138** `completed`, all `initiated_auto`, summing **2,150,042 B** of inline `backup_data` (max payload 60,523 B, `sum(data_size)` 1,986,199 B) and it has **no `storage_path`/`storage_type` column at all**, so a nightly backup cannot be pointed off-box even in principle. Payloads are honest where they exist (`rows_actually_stored` == `record_count`, 16–19 rows for a tenant whose live tables hold 1 contact + 1 activity), so the cap **#71** describes is not truncating anything — there is simply almost nothing to back up here, and none of it leaves the machine: `nucrm-minio` holds two buckets (`nucrm-backups`, `nucrm-documents`), created 2026-09-14, **both empty**. `nucrm-app` is image `nucrm-app:preprod`, built **2026-10-03T15:43:25Z** and started 16:03Z — so everything merged after that timestamp (**#49**, **#51**/**#52**, **#139**) is undeployed, and this is **PP-060**'s deploy gap observed on the one surface where it costs data rather than features | 🚨 OPEN · **owner decision**: an off-box destination for either table (and a `storage_path` on the nightly one), plus one *restored* artifact before **#2540** can be called satisfied · the runner's silence is fixable in-repo (`run-cron.sh` should assert the response body, which is also **#77**/PP-049's `ok:true` masking) · no endpoint, credential or bucket key is recorded here — the object-store pair lives in one mode-600 file on the host being decommissioned (**#2585** §2 + addendum) and is an owner custody action, not a repo one |
 | PP-079 | S2  | Edge / auth surface | **`POST /api/auth/oauth/token` answered `invalid_client` at every caller on a fresh database — byte-identical to a wrong secret — because nothing in the application writes an `oauth_clients` row.** `git grep -nE "insert\(oauthClients\)" origin/main -- app lib scripts` → **0 hits**; the only INSERT anywhere is `scripts/simulate-preprod-flows.ts:283` (re-pinned from `:282` on 2026-10-30, **#3381**'s ssl-config import added a line above it)'s isolation probe, which writes `redirect_uris = '[]'` into the comma-delimited column the authorize matcher splits | 🔧 FIXED in this PR (**#3328**): the registration surface — `app/api/tenant/oauth-clients/` (list, `[id]`, `[id]/rotate`), `app/tenant/settings/oauth-clients/page.tsx`, `lib/auth/oauth-client.ts`, `lib/api/schemas/oauth-clients.ts` · **no migration**: `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:93`'s `tenant_isolation` `FOR ALL` arm already admits the INSERT, and `tests/integration/oauth-client-registration-3328.test.ts` proves register → authorize → token as the RLS-bound probe role · **78** tests green · **not measured live**, the host is undeployed (**PP-060**) |
+| PP-080 | S2  | RLS / inbound machine-auth surface | **#3303**: `GET /api/scim/v2/Users` answered `200 {"totalResults": 0, "Resources": []}` to a correctly-authenticated IdP against a tenant that has users, and `PATCH`/`DELETE /api/scim/v2/Users/:id` updated zero rows while reporting success — `verifySCIMToken` is an HMAC over `tenantId:expiry`: it names a workspace and sets no `app.*` GUC, while every `users` SELECT/UPDATE arm (0088, 0089) keys on `app.current_user`. Both routes were invisible to the screen built to catch exactly this: rule 1 of `scripts/check-rls-route-coverage.mjs` gated on `requireAuth|requireTenantCtx`, so a route authenticating by any other mechanism was never read. Fails closed — availability/correctness, not a leak, which is why it survived review | 🔧 FIXED in this PR (**#3303**). Guard half: rule 1 now asks the same wrapping question of every tenant-naming mechanism (`TENANT_NAMING_MECHANISM_RE`, `:150` — `verifySCIMToken` \| `resolveApiKey` \| `authenticateSCIMRequest`), and rule 2's `fuseChains` stops crediting a bare-pool read whose receiver is built elsewhere. Privilege half: `lib/db/scim-context.ts` (new) — `withScimTenantContext` (`:48`) = `withTenantContext(tenant, NO_USER_SENTINEL)` + `app.scim_tenant`; `withScimUserIdentity` (`:77`) borrows **one** user's own identity for the two cross-tenant questions through 0127/0088 arms, no new policy; `withScimEmailLookup` (`:99`) opens `users_auth_lookup` (0088:359) for one statement; `inScimTransaction` (`:65`) + a pre-generated `randomUUID()` so `INSERT…RETURNING` satisfies its own `WITH CHECK`. `0143` adds `users_tenant_scim_read`/`users_tenant_scim_update` — permissive, `EXISTS` on an **active** `tenant_members` row in the claimed workspace, deliberately **not** keyed on `app.current_tenant` (that would hand the directory to the anonymous public routes, **#3163**) · `app.scim_tenant` joins both reset lists, now **20** · `scripts/rls-preauth-baseline.json` retires its last **10** allowances and is empty · `tests/unit/scim-tenant-context-3303.test.ts` **21** + `rls-guard-split-chain-receiver-3303.test.ts` **12**, **80** green over the five SCIM-facing files (re-counted 2026-11-02 on the merged tree, where this cell read 20/12/75 over four) | `npm run guard:rls` → **519** routes, **0** tolerated · baseline empty and non-stale · **0143 LANDS UNAPPLIED** with **PP-057**'s backlog (**#2537** is the owner's apply step): until then the app sets a GUC no policy reads, so SCIM still answers zero rows — fail-closed, never a leak · **#3303**'s third route, `app/api/webhooks/inbound/route.ts`, was already contextualised by **#3246** (`withTenantScope` `:866`/`:1135`; `setTenantContext` inside `resolveApiKey`, `lib/webhooks/inbound-auth.ts:71`) |
 
 ## Sentry issues → register entries
 
@@ -985,7 +998,7 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
 - **Fix (applied, deployed).** `exitProcess: false` **and** `endPool: false` at the one
   instrumentation call site, plus `stop_grace_period: 120s` on the `app` service. `endPool` is a
   new option, defaulting to `true` so the polite close survives for any caller that owns its whole
-  process (today `worker.ts:739` (re-pinned 2026-10-27 from `:716`: #3299 wrapped the two tenant-URL POSTs in `postToTenantUrl`, which is 12 lines of import and helper above the shutdown block; the earlier re-pin from `:676` was #3290 giving every job handler its own `withTenantContext`) and `realtime.ts:198` (re-pinned 2026-10-27 from `:224`: #3289 lifted the handshake resolution out of `realtime.ts` into `lib/realtime/handshake.ts`, which removed the `db`/`tenantMembers`/`eq`/`and` imports and the cookie helper above the handler block) install their own handlers and never call
+  process (today `worker.ts:739` (re-pinned 2026-10-27 from `:716`: #3299 wrapped the two tenant-URL POSTs in `postToTenantUrl`, which is 12 lines of import and helper above the shutdown block; the `:676` this entry carried until the merge was where `63a5ea25` (#2998)'s 13 lines had put it, and #3290's per-handler `withTenantContext` sat between the two) and `realtime.ts:198` (re-pinned 2026-10-31 from `:224`: #3319's tenant resolution above the handshake moved the two installs up; #3289 had earlier lifted the handshake resolution out of `realtime.ts` into `lib/realtime/handshake.ts`, removing the `db`/`tenantMembers`/`eq`/`and` imports and the cookie helper above the handler block) install their own handlers and never call
   this module, so nothing depends on that default). It also skips the drain wait: with the exit
   handed to Next.js, waiting on a counter this process provably cannot see is latency for no
   safety.
@@ -1116,7 +1129,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   (GET + DELETE), `backups/[id]/download/route.ts` and `restore/route.ts` (GET + POST).
   Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
   statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
-  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:103 (re-pinned 2026-10-24: **#3163** extended the list; same day **#3102** appended its tenth reset, app.token_issue; 2026-10-25: **#3218** appended an eleventh and twelfth — which moved the definition off :94 — and **#3225** a thirteenth, app.oauth_client_id; again 2026-10-25: **#3237** appended a fourteenth, app.unsubscribe_contact, and its rationale block moved the definition `:101` → `:103`; 2026-10-25 **#3246** appended a fifteenth, app.plugin_webhook_id, in place)`, one statement of fifteen `set_config`s) clears `app.is_super_admin` on
+  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:103 (re-pinned 2026-10-24: **#3163** extended the list; same day **#3102** appended its tenth reset, app.token_issue; 2026-10-25: **#3218** appended an eleventh and twelfth — which moved the definition off :94 — and **#3225** a thirteenth, app.oauth_client_id; again 2026-10-25: **#3237** appended a fourteenth, app.unsubscribe_contact, and its rationale block moved the definition `:101` → `:103`; 2026-10-25 **#3246** appended a fifteenth, app.plugin_webhook_id, in place; 2026-10-26 **#3246 step 3** appended a sixteenth and a seventeenth, app.sso_lookup_domain and app.sso_provider_id, in place; 2026-10-31 **#3246 steps 4c/4d** appended app.quote_webhook_id and app.whatsapp_phone_number_id (0141/0142) *ahead* of the SSO pair, so those two are now eighteenth and nineteenth; 2026-11-01 **#3303** appended a twentieth, app.scim_tenant (0143), in place)`, one statement of twenty `set_config`s) clears `app.is_super_admin` on
   release — and since **#2446**, the three `app.portal_lookup_*` GUCs too, same statement — which is what makes the wider scope safe. It also reaches helpers that take `db`
   itself (`concurrencyGuard` in PATCH), which a `tx` would not.
 - **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
@@ -1851,7 +1864,7 @@ inferred.
   ```
   One row out of 226. The README's "277 policies on **225** tables" is 226 minus this table; that number
   was this entry's tell.
-- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:96` (re-pinned from `:95` on 2026-10-30, **#3381**):
+- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:96` (re-pinned 2026-10-31 from `:95`: #3381's pool-policy edit added a line above):
   `const tenantScoped = rows.filter((r) => r.tenant_id_type !== null)`. Every subsequent check —
   RLS enabled, forced, policy present, NULL-tenant leak — derives from `tenantScoped`. A table with no
   `tenant_id` column is never examined. PP-013's sweep was "RLS disabled on a table **with** `tenant_id`"
@@ -2009,8 +2022,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   items, and the six types the same endpoint lists (`TRASH_TABLES`: contact, deal, task, company,
   **lead**, **project**) meant two of them were never purged by it at all. The confirm dialog's promise
   ("permanently purge **all** trash items older than 30 days") was wider than the code behind it.
-- **The leads half was already partly handled.** `app/api/cron/cleanup/route.ts:151` deletes >30-day
-  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:377 (re-pinned 2026-10-28: **#3348** added five lines above it)`),
+- **The leads half was already partly handled.** `app/api/cron/cleanup/route.ts:157` (re-pinned 2026-10-31 from `:151`: **#3298**'s `verifyCronSecret` call added six lines above the sweep) deletes >30-day
+  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:374`, re-pinned 2026-11-01 from this merge's two sides — #3348's five lines and #3298's six put the `it(...)` one line off each),
   so nightly retention does cover leads. The manual "purge now" path did not — which is the path an admin
   reaches for when they want the trash gone _now_, and the path that reports the number.
 - **Accumulation measured, and it is latent, not live.** Under `app.is_super_admin='true'`
@@ -2239,7 +2252,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   the literals `'true'`/`'false'` (`lib/db/rls.ts:171` `setSuperAdminContext`, `:219` `setImpersonationContext` — both re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above them, `:169`/`:217` → `:171`/`:219`. tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
   proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
-  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth, and **#3225** its thirteenth, `app.oauth_client_id`; again 2026-10-25 **#3237** its fourteenth, `app.unsubscribe_contact`, and **#3246** its fifteenth, `app.plugin_webhook_id` — the line itself did not move in any of them)`, `lib/db/request-connection.ts:103 (2026-10-24: **#3102** extended this list the same way, the line did not move; 2026-10-25: **#3218** and **#3225** extended it again, and **#3218**'s doc block landed above the definition, `:94` → `:101`; **#3237** extended it a fourteenth time and its own block moved the definition `:101` → `:103`, and **#3246** a fifteenth in place) — both
+  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth, and **#3225** its thirteenth, `app.oauth_client_id`; again 2026-10-25 **#3237** its fourteenth, `app.unsubscribe_contact`, and **#3246** its fifteenth, `app.plugin_webhook_id`, then its sixteenth and seventeenth, `app.sso_lookup_domain` and `app.sso_provider_id` (**#3246 step 3**, 2026-10-26) — the line itself did not move in any of them; 2026-10-31 **#3246 steps 4c/4d** inserted `app.quote_webhook_id` and `app.whatsapp_phone_number_id` (0141/0142) ahead of the SSO pair, which is why that pair reads eighteenth and nineteenth here rather than sixteenth and seventeenth; 2026-11-01 **#3303** appended its twentieth, `app.scim_tenant` (0143), the line unmoved in all of them)`, `lib/db/request-connection.ts:103 (2026-10-24: **#3102** extended this list the same way, the line did not move; 2026-10-25: **#3218** and **#3225** extended it again, and **#3218**'s doc block landed above the definition, `:94` → `:101`; **#3237** extended it a fourteenth time and its own block moved the definition `:101` → `:103`, and **#3246** a fifteenth, then a sixteenth and a seventeenth for the two SSO lookups, in place; **#3246 steps 4c/4d** (2026-10-31) two more for 0141/0142 ahead of the SSO pair, and **#3303** (2026-11-01) a twentieth for `app.scim_tenant`/0143, the definition unmoved in every one) — both
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
@@ -2277,7 +2290,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   minted, no HTTP write of any kind, no row values read — counts and catalog metadata only.
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
-- **Files (all read-only):** `lib/db/rls.ts:140,167-191,208-223` (re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above all three ranges; were `:138,165-189,206-221`), `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** two more and **#3225** a thirteenth, and **#3237** a fourteenth, `app.unsubscribe_contact`, and **#3246** a fifteenth, `app.plugin_webhook_id`, the line unmoved in every one of them)` (the same fifteen-`set_config` reset),
+- **Files (all read-only):** `lib/db/rls.ts:140,167-191,208-223` (re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above all three ranges; were `:138,165-189,206-221`), `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** two more and **#3225** a thirteenth, and **#3237** a fourteenth, `app.unsubscribe_contact`, and **#3246** a fifteenth, `app.plugin_webhook_id`, then **#3246 step 3** a sixteenth and a seventeenth, `app.sso_lookup_domain` and `app.sso_provider_id`, the line unmoved in every one of them; **#3246 steps 4c/4d** (2026-10-31) put `app.quote_webhook_id` and `app.whatsapp_phone_number_id` ahead of that pair, so it is now eighteenth and nineteenth, and **#3303** (2026-11-01) a twentieth, `app.scim_tenant` (0143))` (the same twenty-`set_config` reset),
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
@@ -2288,7 +2301,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 
 **Found:** 2026-10-04 (UTC), verifying PP-030 against the tree before implementing its fix as a narrow behaviour change.
 **Status:** 🔧 FIXED IN THIS PR (#2539, 2026-10-10 UTC) — one shared refusal site (`lib/cron/cron-lock.ts`), all **22** routes
-converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` — un-moved 2026-10-16, **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards — + `package.json:"guard:cron-lock"` (keyed 2026-10-24 by **#3201** to the alias itself rather than to the line holding it, from `:70`; `:70` was itself re-pinned 2026-10-24 from `:69`: **#3178** added the `guard:override-ranges` script line above, which pushed every `guard:*` line below it down one; `:69` was itself re-pinned 2026-10-15 from `:68`: script lines above it grew since #2539)) and 48 refusal tests. The
+converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` — un-moved 2026-10-16, **#2655** folded `guard:field-permissions` into that same step line-count-neutrally, so `:84` now names both guards; **#3298** extended that step name to `Cron lock, cron auth + field-permission wiring guards (#2539, #2597, #3298)` without moving the line — + `package.json:"guard:cron-lock"` (keyed 2026-10-24 by **#3201** to the alias itself rather than to the line holding it, from `:70`; `:70` was itself re-pinned 2026-10-24 from `:69`: **#3178** added the `guard:override-ranges` script line above, which pushed every `guard:*` line below it down one; `:69` was itself re-pinned 2026-10-15 from `:68`: script lines above it grew since #2539)) and 48 refusal tests. The
 **200 `ok:true` mask is gone from the tree**: a held lock is now `423 { ok:false }`. _Written 2026-10-04 as:_ 🚨 OPEN —
 defect re-confirmed with two corrections; **no code shipped**, because the honest fix spans 23 files, which is a design
 decision (a shared skip site), not an edit.
@@ -2584,7 +2597,7 @@ entry ships nothing.
   "kept in sync with vercel.json crons" and states the #1422 policy: exactly ONE source active per environment. It is not in
   sync: `vercel.json` lists **18** paths, the crontab's 17 plus `recurring-invoice-generator`. (2) `vercel.json` `crons` —
   inert here (nothing runs on Vercel). (3) `scripts/cron-scheduler.ts` — **18** jobs (`:39-56`), described in its own header as
-  "a single PM2 process" and wired only to `ecosystem.config.cjs:175` (re-pinned 2026-10-29 from `:157`: **#3271** put `TRUST_PROXY` in the `web` env block and its header note above this app). PM2's God daemon is alive (PID 1892010) but manages
+  "a single PM2 process" and wired only to `ecosystem.config.cjs:185` (re-pinned 2026-10-29 from `:157`: **#3271** put `TRUST_PROXY` in the `web` env block and its header note above this app; and from `:175` on 2026-11-02, when **#3253**'s `load-env.mjs` preload and its note grew the cron app itself). PM2's God daemon is alive (PID 1892010) but manages
   **nothing**: `/root/.pm2/pids/` and `/root/.pm2/logs/` are empty, `dump.pm2` was last written 2026-09-22, and no
   `cron-scheduler` process exists. Its last attempted run is recorded in-repo at `logs/cron-error-5.log`:
   `[cron-scheduler] FATAL: CRON_SECRET is required` ×12 on 2026-09-20. The host's own crontab holds nothing nucrm-related
@@ -2658,15 +2671,15 @@ which Postgres ignores for such a role` at 07:13, 09:58 and again 2026-10-03 05:
   printed (host portion only, length reported).
 - **Verified:** `docker exec nucrm-cron crontab -l` → 17 lines and their job names; `ls -d app/api/cron/*/` → 22 dirs;
   `docker inspect nucrm-cron` → `["crond","-f","-l","2"]`, started 2026-09-14T16:05:29Z; `pgrep -af cron-scheduler` → none,
-  `/root/.pm2/{pids,logs}` empty, `dump.pm2` dated 2026-09-22; `vercel.json` 18 `crons` paths, `scripts/cron-scheduler.ts:39-56`
-  18 jobs, `ecosystem.config.cjs:175` (re-pinned 2026-10-29 from `:157`, same **#3271** growth); the `pg_stat_user_tables` counts (`backup_records=4, tenant_backup_records=144,
+  `/root/.pm2/{pids,logs}` empty, `dump.pm2` dated 2026-09-22; `vercel.json` 18 `crons` paths, `scripts/cron-scheduler.ts:40-57` (re-pinned 2026-10-31 from `:39-56`: **#3298** inserted `const JOBS: CronJob[] = [` above the list)
+  18 jobs, `ecosystem.config.cjs:185` (re-pinned 2026-10-29 from `:157`, same **#3271** growth, and 2026-11-02 from `:175` by **#3253**'s preload lines inside this app); the `pg_stat_user_tables` counts (`backup_records=4, tenant_backup_records=144,
 backup_schedules=0, invoices=12, sla_breaches=0, contact_scores=0, lead_warming_events=0, tenants=183`); the four
   `backup_records` rows' `status`/`storage_type`/`initiated_auto`/error text; the rolled-back per-tenant invoice loop
   (`LOOP DONE tenants_scanned=183`, twelve `1|0|0` lines); `61|0|0|183` re-probe; and each `route.ts` docstring quoted above.
 - **Files:** none changed. Evidence read: `deploy/cron/crontab` (incl. its #1422 header), `deploy/cron/run-cron.sh`
   (`APP_URL=${APP_URL:-http://app:3000}` — cron reaches the app directly, so no nginx access log records it, and Next.js logs
   no request line: 0 `api/cron` mentions in 72 h of app logs, which is why the evidence here is cadence and side effects, not
-  request logs), `vercel.json`, `scripts/cron-scheduler.ts`, `ecosystem.config.cjs:168-193` (both ends re-pinned 2026-10-29 from `:150-175`: the **#3271** `web` env block and header note grew above this app),
+  request logs), `vercel.json`, `scripts/cron-scheduler.ts`, `ecosystem.config.cjs:178-217` (both ends re-pinned 2026-10-29 from `:150-175`: the **#3271** `web` env block and header note grew above this app; again on 2026-11-02 to these, which is where **#3253**'s `merge_logs`/`watch` keys and the `load-env.mjs` preload leave the cron app),
   `app/api/cron/{backup,auto-backup,sla-check,lead-warming,process-lead-scoring,recurring-invoice-generator}/route.ts`,
   `lib/lead-warming/{engine.ts:154,index.ts:29}`, `lib/ai/scoring.ts:127-147`, `lib/sla.ts`,
   `lib/backups/backup-service.ts:121,234-248`, `lib/backups/script-backup-record.ts:61`, `tests/unit/contract-renewal.test.ts`,
@@ -3221,7 +3234,7 @@ not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sit
     `journalEntryCount` and every string that called it "pending" now says what it is
     (`117 journal entr(ies); the ledger decides which are outstanding`), including both confirm prompts.
     Scope stated honestly: on the unusable host URL the run dies **earlier** than this catch — at
-    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:215`, re-pinned from `:201` on 2026-10-08 — **#2450** inserted lines above it here), which
+    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:217`, re-pinned from `:201` on 2026-10-08 — **#2450** inserted lines above it here — and from `:215` on 2026-11-01, when **#3386**'s two `#3301` imports landed above it), which
     exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
     quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
     search_path), and the old handler answered "everything is pending". There is no read-only way to
@@ -3325,9 +3338,9 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   `drizzle.__drizzle_migrations` counts + newest `created_at`, `42P01` on `public.__drizzle_migrations`,
   `_journal.json` (116 entries on `673eecf2`, 117 on `310129bf`) vs `git ls-tree origin/main:drizzle/migrations`
   (matching `.sql` file counts, 0 unjournalised on both),
-  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:132-142` (journal-count headline),
-  `:177-186` (prompts), `:233-279` (the `catch` that meant "fresh DB"), `:215` (where the host URL actually
-  dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved), `lib/db/ssl-config.ts:33-41`,
+  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:134-144` (journal-count headline),
+  `:175-196` (prompts), `:280-313` (the `catch` that meant "fresh DB"), `:217` (where the host URL actually
+  dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved, and again on 2026-11-01 from `:132-142`, `:177-186`, `:233-279` and `:215`, which **#3386**'s two `#3301` import lines moved), `lib/db/ssl-config.ts:33-41`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
   `relrowsecurity/relforcerowsecurity/relowner` for 4 tables, `pg_get_viewdef('deals_by_win_probability')`,
   `pg_roles.rolbypassrls`. Related: **#43** (the same drift, 11 deep in September), **#46**, **#56**,
@@ -3402,8 +3415,8 @@ INDEX` would otherwise abort the whole run" — and that measurement is not repr
   therefore either taken against a different database or taken in the same blind context the migration itself
   will run in; on this database it does not reproduce. Two consequences the header does not state: the dedupe
   is not "expected to be a no-op", it is a **4-row mutation of historical (trashed) records** that will execute
-  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:429` (re-pinned from `:376` on 2026-10-08, **#2450**) takes the
-  **incremental** path (`drizzle`'s built-in migrator, now at line 559), which wraps each file in one transaction and
+  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:441` (re-pinned from `:376` on 2026-10-08 by **#2450**, and from `:429` on 2026-11-01 by **#3386** — the `freshPath` boolean is a `chooseApplyRoute()` call now) takes the
+  **incremental** path (`drizzle`'s built-in migrator, now at line 586), which wraps each file in one transaction and
   stops on the first error: the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
   cannot be advanced past 0113 without changing something.**
 
@@ -3474,10 +3487,10 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
   standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
   exactly one file. `npm run db:status` on this tree → `Applied: 99 / Pending: 21 / Total: 120`, `0114` pending.
-- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
+- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:31,200-201,402-441,586` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved, and on 2026-11-01 from 29, 198-199, 402-429 and 559, which **#3386** moved),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
-  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth and **#3225** its thirteenth and **#3237** its fourteenth, then **#3246** its fifteenth, `app.plugin_webhook_id`, the line unmoved in all of them)` (text extended by **#2446**'s
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:241 (re-pinned 2026-10-12: **#2573** keepAlive lines shifted it; 2026-10-24: **#3163** appended its ninth reset, `app.form_lookup_id`; same day **#3102** its tenth, `app.token_issue`; 2026-10-25: **#3218** its eleventh and twelfth and **#3225** its thirteenth and **#3237** its fourteenth, then **#3246** its fifteenth, `app.plugin_webhook_id`, then **#3246 step 3** its sixteenth and seventeenth, `app.sso_lookup_domain` and `app.sso_provider_id` (migration 0140, 2026-10-26), the line unmoved in all of them; **#3246 steps 4c/4d** (2026-10-31) inserted `app.quote_webhook_id` and `app.whatsapp_phone_number_id` (0141/0142) ahead of the SSO pair — so it is now eighteenth and nineteenth — and **#3303** (2026-11-01) appended a twentieth, `app.scim_tenant` (0143), the line still unmoved)` (text extended by **#2446**'s
   `app.portal_lookup_*` reset names, construct unchanged), `pg_class`, `pg_policy`, `pg_roles`.
   <!-- coordinate corrections for #2456 (2026-10-08): seven sentences in this register — four in PP-058
        (this section's three, plus its row in the Summary table above), two in PP-057, one in PP-041 — cited
@@ -3634,10 +3647,8 @@ database`, and exactly two FAILs:
   `app/api/tenant/invoices/[id]/route.ts:141` (re-pinned 2026-10-22 from `:139`: `d78d7698` (#2973) added 2 lines above the mutable list) includes `status` in its mutable field list and `:166`
   validates the incoming value _against that same constant_, so `{"status":"void"}` clears validation and
   reaches the UPDATE. On the enrollment side the writes are literal: `app/api/unsubscribe/route.ts:67` (re-pinned 2026-10-25 from `:56`: **#3237**'s claim transaction re-flowed the function above it) and
-  `lib/email/resend-event-handlers.ts:91` and `:272` each set `status: 'cancelled'` — both re-pinned on
-  2026-10-27 from `:261`/`:435` in the route, which **#3246 step 4b** moved when it extracted the write
-  paths out of it; those were re-pinned on 2026-10-08 from `:212`/`:368`,
-  which **#2425**'s tenant attribution moved out from under this entry —
+  `lib/email/resend-event-handlers.ts:91` and `:272` each set `status: 'cancelled'` (re-pinned 2026-10-31 from the route's old `:261`/`:435`, which **#3246 step 4b**'s handler split moved into the lib; those in turn re-pinned on
+  2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
   and since **#2392** the
   shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:100`, writing at `:114`, `:377`, `:386` — re-pinned
   2026-10-17 from 74/88/340/349, which **#2796**'s `stepDelayMs` helper pushed down by 26; those were the 2026-10-09 re-pin of 64/78/330/339, moved by **#2473**'s `SequenceStepRow` block)
@@ -3685,7 +3696,7 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87` — re-pinned in prose 2026-10-28 by **#3280**, which joined `guard:app-role-counts` to that same step line-count-neutrally, so `:86` names both guards and `:87` runs both: the numbers hold, the content those two lines carry does not, which is the distinction `check-register-drift` exists to make.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
+  own coordinates are `ci.yml:86-87 (re-pinned 2026-11-01: **#3381**'s pool-TLS guard joined that step's run: line on 2026-10-30 and the step was renamed in place to "Raw-SQL + un-armed RLS read + pool TLS policy guards (#2528, #3280, #3381)" — same two lines, new label; the two commands the sentence names are still there)`.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
   **#2829**'s `guard:panel-error-state` the next day, both read the source tree rather than this file, and both are
   wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
   the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the
@@ -3770,7 +3781,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   `drizzle/migrations/0120_sequence_enrollments_cancelled_status.sql`. Evidence read: `pg_constraint`
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:141,166` (the first re-pinned 2026-10-22 from `:139`, same #2973 shift),
-  `app/api/unsubscribe/route.ts:42-67,132-134` (the first range re-pinned 2026-10-25 from `:42-56` and the second from `:121-123`, both for **#3237**'s claim transaction), `lib/email/resend-event-handlers.ts:91,272` (re-pinned 2026-10-27 from the route's `:261,435`, which **#3246 step 4b**'s extraction moved out of the route),
+  `app/api/unsubscribe/route.ts:42-67,132-134` (the first range re-pinned 2026-10-25 from `:42-56` and the second from `:121-123`, both for **#3237**'s claim transaction), `lib/email/resend-event-handlers.ts:91,272` (re-pinned 2026-10-31 from the route's old `:261,435` after **#3246** split the handlers into the lib),
   `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:145` (re-pinned 2026-10-24 from `:123` for **#3193**'s 22-line grow above the call; `:123` from `:126` 2026-10-18 for **#2740**/**#2813**),
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,
@@ -5052,7 +5063,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   everywhere except `:568` / `:578` — and those interpolate `tokenHash`, a `sha256…digest('hex')`, so
   quoting cannot break a hex string and it is written here only so the pattern is not copied into
   server code. The other **9** are constants in their own file: `REQUIRED_EXTENSIONS` at
-  `scripts/migrate.ts:328` plus four static strings at `:364-394`, the literal `idx.sql` array at
+  `scripts/migrate.ts:330` (re-pinned from `:328` on 2026-11-01, **#3386**'s imports above it) plus four static strings at `:366-396`, the literal `idx.sql` array at
   `scripts/add-indexes.ts:57`, and the three `…IN (${list})` checks built from module-level arrays at
   `drizzle/schema/record-links.ts:117-119`.
 - **What this does NOT do.** It is not **#683**'s per-table column allowlist. `password_hash`,
@@ -5492,6 +5503,124 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   — all new — plus the nav and schema-registration mirrors and the three test files.
 - **Related:** **PP-061** ("opening the path was necessary, not sufficient"), **#3324** (the matcher the
   column has to satisfy), **#3328**, and `docs/BASECRM/03` § #3328 for the rule.
+## PP-080 — 🔧 **#3303**: a SCIM bearer token proves *which workspace* and nothing about *who*, so every `users` statement behind it ran on the bare pool and answered zero rows — `GET /api/scim/v2/Users` returned a **200 with an empty directory** to a correctly-authenticated IdP — and the screen whose whole job is to catch a context-less identity read **never opened the file**, because its first test is `does this route spell its authentication requireAuth?` _(S2 · RLS / inbound machine-auth surface · **issue #3303**)_
+
+- **Found by** reading **#3303**'s report against the tree rather than against its own numbers. The
+  report's shape is right and one of its three routes was already fixed by other work:
+  `app/api/webhooks/inbound/route.ts` now runs inside `withTenantScope`
+  (`app/api/webhooks/inbound/route.ts:866`, `:1135`, imported at `:9`) and adopts the workspace
+  inside its authenticator (`setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)` at
+  `lib/webhooks/inbound-auth.ts:71`). **That is the pattern #3303 asked for, already live.** What
+  was left is the two SCIM routes and the guard blind spot, and the blind spot is the load-bearing
+  half: a route fix with a screen that cannot see the route is a fix only until the next agent edits
+  the file.
+- **The blind spot, exactly.** Rule 1 of `scripts/check-rls-route-coverage.mjs` gated on
+  `AUTH_RE = /\b(requireAuth|requireTenantCtx)\s*\(/` (`:118`) — a file that failed it was skipped
+  entirely. `verifySCIMToken` (`lib/scim/index.ts:275`) is an HMAC over `tenantId:expiry`: no
+  database read, no GUC, and it *does* name the tenant. So the two routes that query `users`
+  hardest were outside the screen's population by construction, and the ten bare-pool identity reads
+  they did make sat in `scripts/rls-preauth-baseline.json` as tolerated findings.
+- **The correction.** `TENANT_NAMING_MECHANISM_RE = /\b(?:verifySCIMToken|resolveApiKey|authenticateSCIMRequest)\s*\(/`
+  (`:150`) puts those authenticators into scope, and a file in scope must also show a context call
+  (`CONTEXT_CALL_RE`, `:159`) or it is an offender (`:386-393`) — the same question the screen
+  already asks of `requireAuth`. A mechanism that names *neither* a tenant nor a user stays in
+  `skippedAuthenticators`, which is honest reporting rather than a pass: **5** such routes remain
+  (`oauth/token`, `metrics`, `razorpay`, `stripe`, `telegram`).
+- **Rule 2's half of the same lie.** The bare-pool screen matched `db.select…from(users)`
+  lexically, so a read whose receiver was built one statement earlier (`const tx = …; tx.select(…)`)
+  was either miscounted as un-contexted or not seen at all. `fuseChains`
+  (`scripts/check-rls-route-coverage.mjs:260`, applied at `:413` and `:467`) joins a split chain
+  back to its receiver before the regex runs — which is what let the three cron sweeps in **#3315**
+  be credited by what they *call* instead of by nesting, and let the SCIM sites be counted before
+  being fixed. Proven by fixtures, not by the tree:
+  `tests/unit/rls-guard-split-chain-receiver-3303.test.ts` (**12** tests) builds one-route
+  repositories, because a rule that only ever sees clean code is unfalsifiable.
+- **Why the fix is a new GUC and not an existing one.** `users` is shared across workspaces
+  (membership is a `tenant_members` row), so an arm keyed on `app.current_tenant` would admit the
+  directory to every body that already sets a tenant context — including the anonymous public routes
+  **#3163** catalogued. `app.scim_tenant` is set only by `withScimTenantContext`
+  (`lib/db/scim-context.ts:48`, which opens `withTenantContext(tenantId, NO_USER_SENTINEL)` —
+  `lib/db/rls.ts:120` — and then adds the workspace claim), is cleared on every checkout like every
+  other privilege GUC (**both** reset lists now carry **20**: `lib/db/pool.ts:241`,
+  `lib/db/request-connection.ts:104`), and is admitted by exactly two permissive arms
+  (`drizzle/migrations/0143_scim_users_tenant_context.sql:48-84`) whose predicate is an `EXISTS` over
+  an **active** `tenant_members` row in the claimed workspace — so the claim cannot widen past a
+  workspace the reader does not belong to.
+- **Rejected, and why in one line each.** `withSecurityContext` sets `app.is_super_admin`, which
+  flips a large body of policies across the schema to grant one integration a directory; a new arm on
+  `sessions`, `refresh_tokens` or `tenant_members` would either be blind to the *other* tenancies
+  (which is the question SCIM asks) or widen those tables for every request that names a tenant. So
+  SCIM's two cross-tenant questions are answered **as the user**: `withScimUserIdentity`
+  (`lib/db/scim-context.ts:77`) temporarily adopts one `app.current_user` and lets 0127's
+  `tenant_members_self_read` (`drizzle/migrations/0127_membership_self_scoped_select.sql:50`) and
+  0088's `sessions_user_own` (`drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:437`) do the
+  work, and the one global email probe runs inside `withScimEmailLookup`
+  (`lib/db/scim-context.ts:99`), which opens `users_auth_lookup`
+  (`drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:359`) for exactly one statement.
+  The provision insert pre-generates its `randomUUID()` and adopts that id as `app.current_user`,
+  because `INSERT … RETURNING` is judged against a row the caller could not otherwise name
+  (`users_insert_auth`, `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:351`).
+- **Where each read now lives.** `app/api/scim/v2/Users/route.ts:105` (the list and its `count(*)`)
+  and `:210`/`:244`/`:266`/`:229` (provision, its nested write, the adopted-identity insert, the
+  email probe); `app/api/scim/v2/Users/[id]/route.ts:59` (GET), `:140` (PATCH), `:417`/`:431`
+  (DELETE) and `:249` (the "does this user work elsewhere" read). The bare `db` import is gone from
+  both files, and the helpers the item route carried moved out once wrapping it pushed the file past
+  **#1843**'s 500-line ceiling (541 at the first draft, **456** now): `authenticateSCIMRequest`
+  (`lib/scim/user-route-support.ts:29`), `scimUserNotFound` (`:61`) and
+  `revokeSessionsIfLastActiveTenant` (`:89`, its identity window opening at `:94`) — which the two
+  `Users` routes had each been carrying a private copy of. Because that copy is what rule 1 keyed on,
+  `TENANT_NAMING_MECHANISM_RE` names the wrapper as well: a screen that stops seeing a route because
+  the route got tidier is the same blind spot, re-earned.
+- **A pre-existing defect found on the way, fixed in the same place.** `PATCH`'s guards `throw` a
+  `NextResponse` (404/409) from inside the transaction; the handler's `catch` then turned that into a
+  **500**, so an IdP updating to an email already taken was told the server had failed. The catch now
+  returns `NextResponse` instances untouched. That is **#2787**'s class of bug in a branch that
+  #2787's central remedy does not reach.
+- **Measured:** `npx vitest run tests/unit/scim-tenant-context-3303.test.ts
+  tests/unit/rls-guard-split-chain-receiver-3303.test.ts
+  tests/unit/scim-user-id-swallowed-500-2787.test.ts tests/unit/scim.test.ts` → **75 passed (75)**,
+  of which **20** are this entry's driver suite; the migration's own claim matrix (0 rows with no
+  GUC, 1 row with the claim, 0 rows for a workspace the reader is not in, an unchanged row when the
+  UPDATE arm is handed another tenant) is recorded in `0143`'s header as measured on the dev database
+  inside `begin … rollback`; the six neighbouring RLS/guard suites
+  (`rls-guard-credits-cron-sweep-3315`, `basecrm-citation-drill-3244`,
+  `rls-unsubscribe-contact-guc-3237`, both `pre-auth-*-3246` files) are **100 passed (100)** with the
+  reset-list counts re-derived from the source rather than typed. `npm run guard:rls` → **519**
+  routes, **0** tolerated; `npm run guard:portal-rls-context` → **120** files, **107** reads in **4**
+  counted deferrals; chain **146** up / **146** journal, rollback coverage clean, redeclarations
+  clean, raw-sql clean, any-suppressions clean; `guard:coords` and `guard:register-drift` both
+  **OK** — the latter only after this entry re-pinned the three `lib/db/pool.ts:241` cites and the
+  `ci.yml:86-87` cite that **#3246 steps 4c/4d** and **#3381** had moved out from under the prose;
+  `npm run typecheck` and `npx eslint app/api/scim lib/scim lib/db scripts tests/unit` exit **0**, and
+  `npm run guard:filesize` exits **0** — the item route came in at **541** with the wrapping and is at
+  **456** after the extraction, against **#1843**'s 500-line ceiling for a new-or-growing file.
+- **The honest gap, stated instead of buried:** **0143 lands UNAPPLIED**, with the rest of
+  **#2537**/**PP-057**'s backlog — applying it is the owner's deploy step (**PP-060**), not this PR's.
+  Against a database without it the app sets a GUC that no policy reads, so SCIM keeps answering zero
+  rows: **fail-closed, never a leak**, and no cross-tenant read becomes possible either way. Also
+  unaddressed here and deliberately so: `SCIM_ALLOW_V1_TOKENS` (`lib/scim/index.ts:325`) still
+  accepts non-expiring v1 bearers when an operator turns it on, and **#2787**'s residual (the lenient
+  shared id guard admitting a structured `ORG-XX-…` value to a `uuid` column) is pinned in that suite
+  rather than narrowed here.
+- **Files:** `lib/db/scim-context.ts` (new), `lib/scim/user-route-support.ts` (new),
+  `drizzle/migrations/0143_scim_users_tenant_context.sql` + `.down.sql` (new),
+  `app/api/scim/v2/Users/route.ts`, `app/api/scim/v2/Users/[id]/route.ts`,
+  `scripts/check-rls-route-coverage.mjs`, `scripts/check-portal-rls-context.mts` (`:122`),
+  `scripts/rls-preauth-baseline.json` (its last **10** allowances retired — the file is now empty and
+  the shrink-only ratchet still holds), `lib/db/pool.ts`, `lib/db/request-connection.ts`,
+  `drizzle/migrations/meta/_journal.json` (**146** entries),
+  `tests/unit/scim-tenant-context-3303.test.ts` (new),
+  `tests/unit/rls-guard-split-chain-receiver-3303.test.ts`,
+  `tests/unit/rls-guard-credits-cron-sweep-3315.test.ts`,
+  `tests/unit/scim-user-id-swallowed-500-2787.test.ts`,
+  `tests/unit/basecrm-citation-drill-3244.test.ts`, `docs/BASECRM/README.md`,
+  `docs/BASECRM/02-DATA-MODEL.md`, `docs/BASECRM/03-RBAC-AUTHZ.md`.
+- **Related:** **#3303** (the report), **#3246** (the `withTenantScope` + `resolveApiKey` precedent
+  this entry points at rather than re-does), **#3315**/**#3312** (rule 2's cron credits and the
+  `lib/` walk), **#2787**/**#2781** (the swallowed-500 family), **#3163** and **PP-048** (why an
+  `app.current_tenant` arm on a shared table is the wrong privilege),
+  **#2537**/**PP-057**/**PP-060** (why 0143 is unapplied), **PP-027** (the pinned carrier that makes a
+  per-request GUC mean something).
 
 ## How to maintain this file
 

@@ -9,9 +9,16 @@
  * GET  /api/scim/v2/Users  - List/search users (with filter, pagination)
  * POST /api/scim/v2/Users  - Create (provision) a user from the IdP
  *
+ * #3303 — every query below runs inside `withScimTenantContext`, so the
+ * policies that gate `users` and `tenant_members` have a tenant to answer for.
+ * The two windows that need more than the token's tenant — a global email
+ * lookup and a brand-new user's own INSERT…RETURNING row — borrow exactly one
+ * identity each and hand it back; see lib/db/scim-context.ts.
+ *
  * @see https://datatracker.ietf.org/doc/html/rfc7644#section-3.4
  */
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
@@ -19,7 +26,8 @@ import { RateLimiter } from '@/lib/rate-limit';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { clampInt } from '@/lib/api/query-params';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
-import { db } from '@/drizzle/db';
+import { inScimTransaction, withScimEmailLookup, withScimTenantContext, withScimUserIdentity } from '@/lib/db/scim-context';
+import { authenticateSCIMRequest } from '@/lib/scim/user-route-support';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, ilike, sql } from 'drizzle-orm';
 import {
@@ -28,7 +36,6 @@ import {
   fromSCIMUser,
   generateSCIMResponse,
   generateSCIMError,
-  verifySCIMToken,
   scimUserSchema,
   type SCIMUser,
 } from '@/lib/scim';
@@ -46,37 +53,14 @@ const provisionLimiter = new RateLimiter({ max: 30, window: 60 });
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
-async function authenticateSCIM(
-  request: NextRequest
-): Promise<{ tenantId: string } | NextResponse> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      generateSCIMError('Bearer token required', 401),
-      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
-    );
-  }
-
-  const token = authHeader.slice(7);
-  // Accept tenant ID from header as fallback for v1 tokens;
-  // v2 tokens embed the tenant ID and ignore the header value.
-  const headerTenantId = request.headers.get('x-tenant-id') ?? '';
-
-  const result = await verifySCIMToken(token, headerTenantId);
-  if (!result) {
-    return NextResponse.json(
-      generateSCIMError('Invalid or expired SCIM token', 401),
-      { status: 401, headers: { 'Content-Type': 'application/scim+json' } }
-    );
-  }
-
-  return { tenantId: result.tenantId };
-}
+// `authenticateSCIMRequest` lives in `lib/scim/user-route-support.ts` (#3303): it is the same
+// gate this file and `.../Users/[id]/route.ts` were each carrying a private copy of, and the
+// item route had outgrown #1843's ceiling by the time the context wrapping landed.
 
 // ── GET: List/Search Users ───────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  const authResult = await authenticateSCIM(request);
+  const authResult = await authenticateSCIMRequest(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
 
@@ -118,33 +102,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get total count
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(...conditions));
+    const { totalResults, rows } = await withScimTenantContext(tenantId, async (tx) => {
+      // Get total count
+      const [countResult] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(...conditions));
 
-    const totalResults = Number(countResult?.count ?? 0);
+      // Fetch paginated results
+      const offset = startIndex - 1; // SCIM is 1-indexed
+      const page = await tx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(...conditions))
+        .limit(count)
+        .offset(offset);
 
-    // Fetch paginated results
-    const offset = startIndex - 1; // SCIM is 1-indexed
-    const results = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(...conditions))
-      .limit(count)
-      .offset(offset);
+      return { totalResults: Number(countResult?.count ?? 0), rows: page };
+    });
 
     const baseUrl = `${url.protocol}//${url.host}/api`;
-    const scimUsers: SCIMUser[] = results.map((user) =>
+    const scimUsers: SCIMUser[] = rows.map((user) =>
       toSCIMUser(
         {
           id: user.id,
@@ -176,7 +162,7 @@ export async function GET(request: NextRequest) {
 // ── POST: Create (Provision) User ────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const authResult = await authenticateSCIM(request);
+  const authResult = await authenticateSCIMRequest(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
 
@@ -221,118 +207,135 @@ export async function POST(request: NextRequest) {
     // (which captures it) keeps the non-undefined type after the guard above.
     const email = internalUser.email;
 
-    // #1171: users are shared across tenants (membership lives in
-    // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
-    // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
-    // tenant first: only a user who is already a member here may have their
-    // profile (name) updated. A globally-existing but non-member account is
-    // re-used by id for the membership row below, but is never mutated.
-    const [existingMemberUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.email, email), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
-
-    const [existingGlobalUser] = existingMemberUser
-      ? [existingMemberUser]
-      : await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, email))
-          .limit(1);
-
-    // #685 (HIGH #7): the user upsert and the tenant_members upsert write two
-    // distinct tables and MUST be atomic. Previously a fresh `users` INSERT
-    // that succeeded followed by a failing `tenant_members` INSERT left an
-    // ORPHANED global user row with no membership — which SCIM's later unscoped
-    // email lookup would then silently re-use across tenants. Wrap the whole
-    // provisioning write (user + membership, and the role lookup they depend
-    // on) in one transaction so a failure rolls the user creation back too.
-    const provisionResult = await db.transaction(async (tx): Promise<{ userId: string; isNew: boolean }> => {
-      let uid: string;
-      let created = false;
-
-      if (existingMemberUser) {
-        uid = existingMemberUser.id;
-        // Safe to update: this user is a member of the requesting tenant.
-        if (internalUser.fullName) {
-          await tx.update(users)
-            .set({ fullName: internalUser.fullName, updatedAt: new Date() })
-            .where(eq(users.id, uid));
-        }
-      } else if (existingGlobalUser) {
-        // Account exists but is NOT a member of this tenant — re-use the id for
-        // the membership, but do NOT modify the foreign user's profile.
-        uid = existingGlobalUser.id;
-      } else {
-        // Create new user
-        const [createdUser] = await tx.insert(users).values({
-          email,
-          fullName: internalUser.fullName ?? email,
-          emailVerified: true,
-          lastTenantId: tenantId,
-        }).returning({ id: users.id });
-
-        if (!createdUser) {
-          // Returning a NextResponse from inside the tx lets us abort without
-          // committing a half-provisioned state; the throw rolls it back.
-          throw new Error('scim-provision:user-create-failed');
-        }
-        uid = createdUser.id;
-        created = true;
-      }
-
-      // Ensure tenant membership exists
-      const [existingMember] = await tx
-        .select({ id: tenantMembers.id })
-        .from(tenantMembers)
-        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, uid)))
+    const outcome = await withScimTenantContext(tenantId, async (ctx) => {
+      // #1171: users are shared across tenants (membership lives in
+      // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
+      // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
+      // tenant first: only a user who is already a member here may have their
+      // profile (name) updated. A globally-existing but non-member account is
+      // re-used by id for the membership row below, but is never mutated.
+      const [existingMemberUser] = await ctx
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.email, email), eq(tenantMembers.tenantId, tenantId)))
         .limit(1);
 
-      if (!existingMember) {
-        // SECURITY: pick a LEAST-PRIVILEGE default role. The previous fallback was
-        // an unordered `roles ... limit(1)`, which could return the tenant's
-        // `admin` role — silently provisioning an IdP-managed user as admin.
-        // selectLeastPrivilegeRole never returns admin/super_admin.
-        const tenantRoles = await tx
-          .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
-          .from(roles)
-          .where(eq(roles.tenantId, tenantId));
+      // A non-member account may live in another workspace, so finding its id is
+      // a cross-tenant question and runs through the same one-statement
+      // `users_auth_lookup` window login uses.
+      const [existingGlobalUser] = existingMemberUser
+        ? [existingMemberUser]
+        : await withScimEmailLookup(ctx, () =>
+            ctx
+              .select({ id: users.id })
+              .from(users)
+              .where(eq(users.email, email))
+              .limit(1)
+          );
 
-        const roleToAssign = selectLeastPrivilegeRole(tenantRoles);
+      // #685 (HIGH #7): the user upsert and the tenant_members upsert write two
+      // distinct tables and MUST be atomic. Previously a fresh `users` INSERT
+      // that succeeded followed by a failing `tenant_members` INSERT left an
+      // ORPHANED global user row with no membership — which SCIM's later unscoped
+      // email lookup would then silently re-use across tenants. Wrap the whole
+      // provisioning write (user + membership, and the role lookup they depend
+      // on) in one transaction so a failure rolls the user creation back too.
+      const provisionResult = await inScimTransaction(ctx, async (tx): Promise<{ userId: string; isNew: boolean }> => {
+        let uid: string;
+        let created = false;
 
-        await tx.insert(tenantMembers).values({
-          tenantId,
-          userId: uid,
-          ...(roleToAssign ? { roleId: roleToAssign.id, roleSlug: roleToAssign.slug } : { roleSlug: 'member' }),
-          status: 'active',
-          joinedAt: new Date(),
-        });
-      } else {
-        // Reactivate if inactive
-        await tx.update(tenantMembers)
-          .set({ status: 'active', updatedAt: new Date() })
-          .where(eq(tenantMembers.id, existingMember.id));
-      }
+        if (existingMemberUser) {
+          uid = existingMemberUser.id;
+          // Safe to update: this user is a member of the requesting tenant.
+          if (internalUser.fullName) {
+            await tx.update(users)
+              .set({ fullName: internalUser.fullName, updatedAt: new Date() })
+              .where(eq(users.id, uid));
+          }
+        } else if (existingGlobalUser) {
+          // Account exists but is NOT a member of this tenant — re-use the id for
+          // the membership, but do NOT modify the foreign user's profile.
+          uid = existingGlobalUser.id;
+        } else {
+          // Create new user. The id is chosen before the INSERT so the row's own
+          // RETURNING read is visible: the `users` policies admit a row only to
+          // its own app.current_user, so we adopt the new uuid for the duration
+          // of the insert. Nothing else runs inside that window.
+          uid = randomUUID();
+          const [createdUser] = await withScimUserIdentity(tx, uid, () =>
+            tx.insert(users).values({
+              id: uid,
+              email,
+              fullName: internalUser.fullName ?? email,
+              emailVerified: true,
+              lastTenantId: tenantId,
+            }).returning({ id: users.id })
+          );
 
-      return { userId: uid, isNew: created };
+          if (!createdUser) {
+            // Throwing rolls the whole provisioning write back, so a failure
+            // here cannot leave a half-provisioned user behind.
+            throw new Error('scim-provision:user-create-failed');
+          }
+          created = true;
+        }
+
+        // Ensure tenant membership exists
+        const [existingMember] = await tx
+          .select({ id: tenantMembers.id })
+          .from(tenantMembers)
+          .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, uid)))
+          .limit(1);
+
+        if (!existingMember) {
+          // SECURITY: pick a LEAST-PRIVILEGE default role. The previous fallback was
+          // an unordered `roles ... limit(1)`, which could return the tenant's
+          // `admin` role — silently provisioning an IdP-managed user as admin.
+          // selectLeastPrivilegeRole never returns admin/super_admin.
+          const tenantRoles = await tx
+            .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
+            .from(roles)
+            .where(eq(roles.tenantId, tenantId));
+
+          const roleToAssign = selectLeastPrivilegeRole(tenantRoles);
+
+          await tx.insert(tenantMembers).values({
+            tenantId,
+            userId: uid,
+            ...(roleToAssign ? { roleId: roleToAssign.id, roleSlug: roleToAssign.slug } : { roleSlug: 'member' }),
+            status: 'active',
+            joinedAt: new Date(),
+          });
+        } else {
+          // Reactivate if inactive
+          await tx.update(tenantMembers)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(eq(tenantMembers.id, existingMember.id));
+        }
+
+        return { userId: uid, isNew: created };
+      });
+
+      // Read the created/updated user back while the context that admits
+      // `users` is still in force.
+      const { userId, isNew } = provisionResult;
+      const [finalUser] = await ctx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      return { userId, isNew, finalUser };
     });
 
-    const { userId, isNew } = provisionResult;
-
-    // Fetch the created/updated user to return
-    const [finalUser] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const { userId, isNew, finalUser } = outcome;
 
     if (!finalUser) {
       return NextResponse.json(

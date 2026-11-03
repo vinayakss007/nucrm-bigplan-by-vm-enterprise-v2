@@ -128,6 +128,37 @@ const BARE_EXPORT_RE = /export\s+async\s+function\s+(GET|POST|PATCH|PUT|DELETE)\
 const AUTH_MECHANISM_RE = /\b(?:verifySCIMToken|verifyWebhookSignature|verifyApiKey|verifySignature|resolveApiKey|timingSafeEqual|createHmac|scryptSync)\b/g;
 
 /**
+ * #3303 — the mechanisms whose token NAMES A TENANT, and which are therefore
+ * answerable to rule 1's question the moment it is verified: does every query
+ * below it run inside a context? A SCIM bearer embeds `tenantId:expiry:hmac`
+ * and an inbound API key resolves to a row carrying `tenantId`; neither carries
+ * an `app.current_tenant`, which is what the reads and writes behind them need.
+ *
+ * Deliberately not every name on the list above: a webhook signature proves the
+ * SENDER, and the workspace is derived from the payload afterwards, so there is
+ * no tenant to open with before the first statement. Those stay named in
+ * `skippedAuthenticators` where rule 2 and the shrink-only baseline account for
+ * them (#3246).
+ *
+ * `authenticateSCIMRequest` is on the list because #3303 moved the SCIM bearer
+ * gate into `lib/scim/user-route-support.ts` — the two `Users` routes were each
+ * carrying a private copy, and the item route had outgrown #1843's ceiling. A
+ * screen keyed on the innermost call would have stopped seeing those routes the
+ * day the copy was deleted, which is the blind spot this rule exists to close;
+ * the wrapper returns `{ tenantId }`, so it names the tenant just the same.
+ */
+const TENANT_NAMING_MECHANISM_RE = /\b(?:verifySCIMToken|resolveApiKey|authenticateSCIMRequest)\s*\(/;
+
+/**
+ * A context helper CALLED — not imported. The mechanisms above wrap their work
+ * either by exporting through `withApiRoute`/`withTenantScope` or by opening a
+ * tenant/lookup context inside the handler; `withScimTenantContext` is the one
+ * this check made necessary, and `with*Context` names are the family the rest of
+ * the tree already uses (lib/db/*-context.ts).
+ */
+const CONTEXT_CALL_RE = /\b(?:withApiRoute|withTenantScope|withTenantContext|withSecurityContext|withUserContext|with[A-Z]\w*Context|with[A-Z]\w*LookupContext)\s*\(/;
+
+/**
  * Rule 2's file-level scope: a route is on the anonymous surface when nothing in it
  * establishes a session or a tenant. Anything else is rule 1's territory, where a
  * bare `db` inside a wrapped handler already runs on a pinned, contextualised
@@ -345,13 +376,18 @@ export function analyse({ root = DEFAULT_ROOT, baseline = {} } = {}) {
   // authenticates by a mechanism the gate does not know was not merely not-an-offender — it was
   // invisible. SCIM's HMAC bearer check and the Stripe/Razorpay webhook signature are real
   // authenticators; what they are not is an RLS context, which is why #3303's two SCIM routes could
-  // sit on the bare pool unread. The gate stays as it is (only a session read off `app.current_user`
-  // can be judged for wrapping), but the routes it steps over are now named.
+  // sit on the bare pool unread. The gate stays as it is for the SESSION question, but a mechanism
+  // that names a tenant is asked the wrapping question too: if it never calls a context helper it is
+  // an offender, exactly like a `requireAuth(` route that exports a bare handler.
   const skippedAuthenticators = [];
   for (const file of files) {
     const src = readFileSync(file, 'utf8');
     if (!DB_RE.test(src)) continue;
     if (!AUTH_RE.test(src)) {
+      if (TENANT_NAMING_MECHANISM_RE.test(src)) {
+        if (!CONTEXT_CALL_RE.test(src)) offenders.push(relative(root, file).split('\\').join('/'));
+        continue;
+      }
       const mechanisms = [...new Set(src.match(AUTH_MECHANISM_RE) ?? [])].sort();
       if (mechanisms.length > 0) {
         skippedAuthenticators.push({ file: relative(root, file).split('\\').join('/'), mechanisms });
