@@ -41,6 +41,11 @@ DB_NAME=${DB_NAME:-nucrm_db}
 DB_HOST=${DB_HOST:-127.0.0.1}
 DB_PORT=${DB_PORT:-5432}
 OWNER_ROLE=${OWNER_ROLE:-postgres}
+# Not an operator secret and not something a fresh VM has: under `set -u` a bare
+# ${REDIS_URL} in the heredoc aborts the write, which is how #3278's own test passed
+# at home (a shell that had it exported) and failed on a clean runner. This is the
+# value ecosystem.config.cjs:114 pins for all three apps, so the two sources agree.
+REDIS_URL=${REDIS_URL:-redis://127.0.0.1:6379}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:3000/api/health}
 HEALTH_TRIES=${HEALTH_TRIES:-60}
 REQUIRED_NODE_MAJOR=22

@@ -66,7 +66,13 @@ function spawn(args: string[], env: Record<string, string | undefined>): Run {
   const r = spawnSync('bash', [SCRIPT, ...args], {
     cwd: ROOT,
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    // Not `...process.env`: this file used to inherit the developer's shell, and a
+    // host-side REDIS_URL is what let #3278's own env-file write pass here while the
+    // same run died with `unbound variable` on a clean runner. A test whose exit
+    // code depends on which shell started it cannot show a defect either way. Keys
+    // set to `undefined` are dropped by Node, which is how the missing-credential
+    // cases below reach the script as genuinely unset.
+    env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: process.env.HOME ?? '', ...env },
   });
   return { status: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}`, err: r.stderr ?? '' };
 }
@@ -170,6 +176,10 @@ describe('deploy-vm.sh --env-only writes the file the app will accept', () => {
     // Stated deliberately rather than left unset: anything but true/false reads
     // as false, and a TRANSACTION-mode pooler leaks app.* RLS GUCs (lib/db/pool.ts).
     expect(keys.PGBOUNCER_ENABLED).toBe('false');
+    // The one value in this file that is neither derived nor operator-supplied.
+    // Written bare under `set -u` it aborted the whole write on a host that had not
+    // exported it — invisible at home, fatal on a clean runner (#3432's CI run).
+    expect(keys.REDIS_URL).toBe('redis://127.0.0.1:6379');
   });
 
   it('clears lib/env.ts floors for the secrets it generates itself', () => {
