@@ -7,11 +7,11 @@
  * Row Level Security (RLS) Helper
  * Sets tenant context for database-enforced isolation
  *
- * IMPORTANT: PgBouncer is configured in transaction mode (pool_mode = transaction).
- * - When a `tx` is provided: uses is_local=true (transaction-scoped, clears at COMMIT)
- * - When no `tx` is provided: uses is_local=false (session-scoped, persists on the
- *   connection until PgBouncer reclaims it). PgBouncer's server_reset_query = 'DISCARD ALL'
- *   clears the GUC when the connection returns to the pool.
+ * IMPORTANT: the pooler is declared in SESSION mode (`POOL_MODE=session` +
+ * `SERVER_RESET_QUERY=DISCARD ALL`), and #3404 pins that invariant structurally
+ * (`npm run guard:pool-mode`). With a `tx`: is_local=true, scoped to that transaction.
+ * With no `tx`: is_local=false — the GUC persists on the server connection this client
+ * holds, and DISCARD ALL clears it on release. Under transaction pooling it would leak.
  *
  * This ensures the tenant GUC survives across multiple statements within one request
  * while never leaking to another request's connection checkout.
@@ -79,8 +79,8 @@ export async function setTenantContext(tenantId: string, userId: string, tx?: Rl
     const client = tx || db;
     if (isMockClient(client)) return;
     // PP-027: stash the proven identity so bare `db.transaction()` calls later
-    // in this request can re-apply it transaction-scoped (session GUCs do not
-    // survive PgBouncer transaction pooling — see lib/db/tenant-carrier.ts).
+    // in this request re-apply it transaction-scoped — which holds whatever mode
+    // the pooler runs in, and #3404 pinned that mode to session (tenant-carrier.ts).
     setTenantCarrier(tenantId, userId);
     // When tx is provided: is_local=true scopes to that transaction.
     // When tx is absent: is_local=false keeps the GUC for the connection's checkout.

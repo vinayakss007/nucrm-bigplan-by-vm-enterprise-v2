@@ -123,8 +123,8 @@ export function withApiRoute<C = unknown>(
     let metricStatus = 500;
     try {
       // PP-027: tenant-carrier scope wraps the pinned connection so the identity
-      // requireAuth() proves stays visible to bare db.transaction() calls under
-      // PgBouncer transaction pooling (no-op cost without PgBouncer).
+      // requireAuth() proves stays visible to bare db.transaction() calls whatever
+      // mode the pooler runs in (no-op cost without PgBouncer; #3404 pins session).
       const response = await runWithHttpMethod(metricMethod, () =>
         runWithTenantCarrier(() =>
           withPinnedConnection(async () => handler(request, context))

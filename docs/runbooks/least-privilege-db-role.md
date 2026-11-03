@@ -86,8 +86,15 @@ The tenant scope is carried in a session GUC (`app.current_tenant`) set by
 `setTenantContext()` — see the comment in `app/superadmin/layout.tsx` ("PgBouncer
 session pooling the GUC left by middleware can mask that…") and
 `docs/adr/0003-rls-session-scoped-guc-with-pgbouncer.md`. `deploy/pgbouncer/pgbouncer.ini`
-runs `pool_mode = transaction`, so a GUC set on one checkout can otherwise be
-seen by the next request that reuses that server connection.
+said `pool_mode = transaction` — on a file no compose service mounts, which is how the
+wrong mode kept being true on paper while the live overlay ran `session`.
+
+#3404 resolved the disagreement by making the mode an enforced invariant: every declared
+pooler now states `POOL_MODE=session` with `SERVER_RESET_QUERY=DISCARD ALL`, the ini says
+the same, and `npm run guard:pool-mode` parses all of them and fails the build on a drift.
+A GUC set on one checkout therefore cannot be seen by a later request that lands on a
+different server connection — under transaction pooling, where the reset query is inert by
+design, it could.
 
 The pooler mitigates this with `server_reset_query = DISCARD ALL`, which clears
 `app.current_tenant` when a server connection is returned to the pool.

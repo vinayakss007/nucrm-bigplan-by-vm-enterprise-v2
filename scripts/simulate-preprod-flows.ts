@@ -22,9 +22,9 @@
  *
  * SAFETY — it never commits.
  *   Every scenario runs inside one explicit transaction that ends in ROLLBACK.
- *   PgBouncer runs in transaction pooling mode, so `BEGIN ... ROLLBACK` pins
- *   one server connection for the scenario's lifetime and `set_config(..., true)
- *   ` is transaction-local; nothing can leak to another client. The tenant GUC
+ *   `BEGIN ... ROLLBACK` pins one server connection for the scenario, and that pin — not
+ *   the pooler's mode, which #3404 pinned to session — is what keeps every `set_config`
+ *   transaction-local and leaks nothing to another client. The tenant GUC
  *   is re-set between visibility checks inside the same transaction, so all
  *   contexts observe the same uncommitted snapshot (a transaction always sees
  *   its own writes), and the whole thing disappears on rollback.
