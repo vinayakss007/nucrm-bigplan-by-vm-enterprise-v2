@@ -58,6 +58,8 @@ describe('Sentry dataCollection opt-out', () => {
         'graphQL.variables',
         'genAI.inputs',
         'genAI.outputs',
+        'mcp.inputs',
+        'mcp.outputs',
         'databaseQueryData',
         'queues',
         'stackFrameVariables',
