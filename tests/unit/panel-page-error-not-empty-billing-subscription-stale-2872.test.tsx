@@ -304,7 +304,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(lines, `${PAGE} is past the 500-line ceiling (${lines})`).toBeLessThanOrEqual(500);
     const baseline = JSON.parse(readFileSync(join(ROOT, 'scripts/file-size-baseline.json'), 'utf8'));
     expect(baseline[PAGE], 'a grandfathered ceiling that has been shed must come off the list').toBeUndefined();
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/health/page.tsx', 'app/tenant/ai/page.tsx', 'app/tenant/ai/summarize/page.tsx', 'app/tenant/settings/billing/page.tsx', 'app/tenant/settings/billing/subscription/page.tsx', 'components/tenant/billing/subscription-cancel-dialog.tsx', 'components/tenant/billing/subscription-plan-comparison.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stdout, 'the ratchet hint should have been acted on').not.toContain('remove them from the baseline');
     for (const extracted of [

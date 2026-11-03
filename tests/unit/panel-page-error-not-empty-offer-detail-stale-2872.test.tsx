@@ -467,7 +467,7 @@ describe('the guard cannot see this class, so these assertions do (#2872)', () =
   it('stays inside the line ceiling the page is allowed', () => {
     const lines = src().split('\n').length - 1;
     expect(lines, `${FILE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/offers/[id]/page.tsx', 'lib/query/client.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

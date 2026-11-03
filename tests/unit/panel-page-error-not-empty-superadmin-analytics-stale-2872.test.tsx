@@ -436,7 +436,7 @@ describe('the source carries the split, and the guard cannot see this class (#28
 
   it('keeps the page inside the size ceiling', () => {
     expect(src().split('\n').length, 'past the 500-line ceiling').toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/superadmin/analytics/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

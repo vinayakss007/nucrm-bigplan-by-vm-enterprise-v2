@@ -551,7 +551,7 @@ describe('the guard cannot see this class, so these assertions do (#2872)', () =
     for (const f of FILES) {
       expect(src(f).split('\n').length, `${f} is past the ceiling`).toBeLessThanOrEqual(500);
     }
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/assignment-rules/page.tsx', 'app/tenant/settings/canned-responses/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

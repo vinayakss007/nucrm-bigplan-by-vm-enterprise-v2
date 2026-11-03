@@ -305,7 +305,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     // blocked at 502/502. Asserting the ceiling keeps that from being a surprise.
     const lines = readFileSync(join(ROOT, 'app/tenant/settings/webhooks/page.tsx'), 'utf8').split('\n').length - 1;
     expect(lines).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/webhooks/dlq/page.tsx', 'app/tenant/settings/webhooks/logs/page.tsx', 'app/tenant/settings/webhooks/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

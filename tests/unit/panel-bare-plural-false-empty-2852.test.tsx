@@ -364,7 +364,7 @@ describe('why the screen cannot be the thing that keeps these honest (#2852)', (
   });
 
   it('does not push a fixed page over a size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/industries/page.tsx', 'app/tenant/integrations/page.tsx', 'app/tenant/segments/page.tsx', 'app/tenant/settings/territories/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

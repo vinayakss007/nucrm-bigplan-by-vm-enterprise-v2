@@ -381,7 +381,7 @@ describe('the ratchet this slice closes (#2872)', () => {
       .not.toContain('no longer offends');
     const lines = src().split('\n').length - 1;
     expect(lines, `${FILE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const size = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const size = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/superadmin/adoption/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(size.status, size.stdout + size.stderr).toBe(0);
   });
 });

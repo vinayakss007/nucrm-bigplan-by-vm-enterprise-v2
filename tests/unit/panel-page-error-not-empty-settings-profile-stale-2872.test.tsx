@@ -286,7 +286,7 @@ describe('profile: the editor that made an outage look like a load that never fi
 
   it('stays inside the line ceiling the page is allowed', () => {
     expect(src().split('\n').length - 1, `${PAGE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/profile/page.tsx', 'lib/query/client.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

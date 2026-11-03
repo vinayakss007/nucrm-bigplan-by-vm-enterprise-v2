@@ -509,7 +509,7 @@ describe('the superadmin health board — the source stays in this shape', () =>
   });
 
   it('stays inside the line ceiling the repo guard enforces', () => {
-    const run = spawnSync(process.execPath, ['scripts/check-file-size.mjs'], { cwd: process.cwd(), encoding: 'utf8' });
+    const run = spawnSync(process.execPath, ['scripts/check-file-size.mjs', '--only', 'app/api/metrics/route.ts', 'app/superadmin/health/page.tsx'], { cwd: process.cwd(), encoding: 'utf8' });
     expect(run.status, run.stdout + run.stderr).toBe(0);
   });
 });

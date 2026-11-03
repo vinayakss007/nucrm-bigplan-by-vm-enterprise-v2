@@ -343,7 +343,7 @@ describe('the ratchet this slice is measured by, and the guard\'s blindness to i
     expect(res.stdout, 'a fixed page must be deleted from the baseline, not left stale')
       .not.toContain('no longer offends');
     expect(src().split('\n').length, 'past the 500-line ceiling').toBeLessThanOrEqual(500);
-    const size = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const size = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/calls/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(size.status, size.stdout + size.stderr).toBe(0);
   });
 });

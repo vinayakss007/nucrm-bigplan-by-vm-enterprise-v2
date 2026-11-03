@@ -400,7 +400,7 @@ describe('#2869 decayed nothing it did not fix, and left no brittle count behind
   });
 
   it('keeps every file it touched inside the size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/kb/categories/page.tsx', 'app/tenant/kb/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

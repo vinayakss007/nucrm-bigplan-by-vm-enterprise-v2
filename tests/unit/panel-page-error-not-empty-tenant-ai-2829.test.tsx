@@ -508,7 +508,10 @@ describe('the baseline decays, and the guards still pass', () => {
   });
 
   it('keeps the file-size guard green', () => {
-    const r = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: root, encoding: 'utf8' });
-    expect(r.status).toBe(0);
+    // #3400: scoped to the five pages this slice reads. The repo-wide exit code
+    // made any unrelated overage in app/, lib/ or components/ fail this file.
+    const pages = ['activity', 'at-risk', 'draft', 'lead-scoring', 'lead-warming'].map((p) => `app/tenant/ai/${p}/page.tsx`);
+    const r = spawnSync('node', ['scripts/check-file-size.mjs', '--only', ...pages], { cwd: root, encoding: 'utf8' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
   });
 });

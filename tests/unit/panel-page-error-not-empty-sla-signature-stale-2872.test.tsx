@@ -338,7 +338,7 @@ describe('the guard cannot see this class, so these assertions do (#2872)', () =
     for (const f of [SLA_FILE, ES_FILE]) {
       expect(src(f).split('\n').length, `${f} is past the ceiling`).toBeLessThanOrEqual(500);
     }
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/esignature/page.tsx', 'app/tenant/settings/sla/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

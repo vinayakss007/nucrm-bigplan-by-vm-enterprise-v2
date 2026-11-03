@@ -455,7 +455,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
   it('stays inside the line ceiling the page is allowed', () => {
     const lines = src().split('\n').length - 1;
     expect(lines, `${FILE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/api/tenant/currency/route.ts', 'app/tenant/settings/currency/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 

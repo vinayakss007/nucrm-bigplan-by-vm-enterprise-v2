@@ -275,7 +275,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
   it('stays inside the line ceiling the page is allowed', () => {
     const lines = readFileSync(join(ROOT, FILE), 'utf8').split('\n').length - 1;
     expect(lines, `${FILE} crossed MAX_LINES`).toBeLessThanOrEqual(500);
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/superadmin/users/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

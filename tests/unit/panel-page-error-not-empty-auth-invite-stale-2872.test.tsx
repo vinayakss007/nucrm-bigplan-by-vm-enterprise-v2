@@ -202,7 +202,9 @@ describe('auth invite — the split stays in the source (#2872)', () => {
 
   it('leaves the repo guards green', () => {
     for (const script of ['check-file-size.mjs', 'check-panel-error-state.mjs', 'check-catch-empty.mjs']) {
-      const r = spawnSync('node', [join('scripts', script)], { encoding: 'utf8' });
+      // #3400: this suite owns PAGE; the repo-wide exit code is everybody's.
+      const scope = script === 'check-file-size.mjs' ? ['--only', PAGE] : [];
+      const r = spawnSync('node', [join('scripts', script), ...scope], { encoding: 'utf8' });
       expect(r.status, `${script} exited ${r.status}: ${r.stderr}`).toBe(0);
     }
   });

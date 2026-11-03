@@ -356,7 +356,7 @@ describe('the #2829 ratchet is one notch tighter for these two', () => {
   });
 
   it('keeps every file it touches inside the size ceiling', () => {
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/kb/categories/page.tsx', 'app/tenant/kb/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 });

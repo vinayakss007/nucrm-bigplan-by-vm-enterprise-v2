@@ -360,7 +360,9 @@ describe('the shape that fixes it, and the screen that cannot see it', () => {
     const baseline = JSON.parse(readFileSync(join(ROOT, 'scripts/panel-error-state-baseline.json'), 'utf8'));
     expect(Object.keys(baseline.files ?? {}), 'a ceiling, not a count').toHaveLength(0);
     for (const script of ['check-panel-error-state.mjs', 'check-file-size.mjs', 'check-catch-empty.mjs', 'check-any-suppressions.mjs']) {
-      const res = spawnSync('node', [`scripts/${script}`], { cwd: ROOT, encoding: 'utf8' });
+      // #3400: this suite owns one settings page; the repo-wide exit is not its business.
+      const scope = script === 'check-file-size.mjs' ? ['--only', 'app/tenant/settings/at-risk-rules/page.tsx'] : [];
+      const res = spawnSync('node', [`scripts/${script}`, ...scope], { cwd: ROOT, encoding: 'utf8' });
       expect(res.status, `${script}: ${res.stdout}${res.stderr}`).toBe(0);
     }
   });

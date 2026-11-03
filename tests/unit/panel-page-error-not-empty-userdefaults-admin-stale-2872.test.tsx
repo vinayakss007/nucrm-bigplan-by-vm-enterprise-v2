@@ -502,7 +502,7 @@ describe('the ratchet these two pages are measured by (#2872)', () => {
       const lines = srcOf(f).split('\n').length - 1;
       expect(lines, `${f} crossed MAX_LINES`).toBeLessThanOrEqual(500);
     }
-    const res = spawnSync('node', ['scripts/check-file-size.mjs'], { cwd: ROOT, encoding: 'utf8' });
+    const res = spawnSync('node', ['scripts/check-file-size.mjs', '--only', 'app/tenant/settings/admin/page.tsx', 'app/tenant/settings/user-defaults/page.tsx'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
   });
 
