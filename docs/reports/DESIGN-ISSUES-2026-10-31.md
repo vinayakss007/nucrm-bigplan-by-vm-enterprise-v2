@@ -20,8 +20,8 @@ Ranked by blast radius:
 
 | # | Issue | Why it recurs | One-line fix |
 | --- | --- | --- | --- |
-| **P0** | **Pooling mode contradicts the RLS design** | ADR-0003 assumes transaction pooling + `DISCARD ALL`; preprod documents that pairing as inert and uses session mode; `.ini` and prod compose still say `transaction` | Make session mode the only accepted mode; assert `SHOW pool_mode` at boot |
-| **P0** | **Code paths depend on RLS being off** | 4 of 6 webhook routes write FORCE-RLS tables with no tenant GUC; `tenants` UPDATE requires `app.current_user` | Give webhooks an explicit system context; make "no context" a type error |
+| **P0** | **Pooling mode contradicts the RLS design** | ADR-0003 assumes transaction pooling + `DISCARD ALL`; preprod documents that pairing as inert and uses session mode; `.ini` and prod compose still say `transaction` — **as of 2026-11-03 this row is the audit's evidence, not the tree: #3404 (PR #3445) made session the declared mode everywhere and added `guard:pool-mode`, which PARSES the compose files; the `SHOW pool_mode` boot assertion is the stated residual** | Make session mode the only accepted mode; assert `SHOW pool_mode` at boot |
+| **P0** | **Code paths depend on RLS being off** | 4 of 6 webhook routes write FORCE-RLS tables with no tenant GUC; `tenants` UPDATE requires `app.current_user` — **all six are wrapped as of `84ae3767` (#3436 billing pair, #3246 the rest); what is left is integration evidence for `payu` and `whatsapp`, and the guard** | Give webhooks an explicit system context; make "no context" a type error |
 | **P1** | **Soft-delete is a convention — and the auth path resurrects tombstoned users** | 200/226 tables carry the column; 0 of 241 policies mention it; ~69% of reads do not filter; password reset ignores it | `deleted_at IS NULL` in every RLS policy + `live()` helper |
 | **P1** | **Status transitions are re-encoded per route** | 134 status writes; only 36 name a from-state; 4 competing concurrency helpers | One `transitionStatus()` + a per-table transition registry |
 | **P1** | **Failure is a value nobody must consume** | `sendEmail` returns `{success:false}`; 3 of 29 callers ignore it; 4 success envelopes; 202 files use raw `fetch` | `Result<T,E>` + one envelope + one typed client |
@@ -142,6 +142,15 @@ connection, while the DB client is a globally importable singleton. Nothing join
   `current_setting('app.current_user') != ''` (`0054_rls_phase0.sql:151-153`),
   and migration `0100` documents this exact failure: *"UPDATE … rowCount = 0
   (silent) … every job logged success while changing nothing."*
+  > **Closed since the audit, and #3403 is closed for it** — `razorpay`/`stripe`
+  > by **#3436** (`lib/db/billing-webhook-context.ts`), `payu`/`whatsapp`/`resend`
+  > by **#3246**. Re-checked 2026-11-03 on `84ae3767`; the residual is *evidence*
+  > (`payu` and `whatsapp` have no integration test that reads the row back) and the
+  > guard at the next bullet, not four unwrapped routes. See FIX-PLAN §3 PR-1B — and
+  > note that the §8 loop below kept reporting `ctx=0` for three already-fixed files,
+  > because a per-file grep of helper *names* cannot see `withTenantScope` and cannot
+  > follow a payload into `lib/whatsapp/webhook-processor.ts`. That is this bullet's
+  > own point, demonstrated on the report that made it.
 - **The guard cannot see this.** `scripts/check-rls-route-coverage.mjs` checks
   identity tables only in a few entry files, exempts any file that merely
   *mentions* a helper, and never scans `app/api` for tenant business tables.
@@ -683,8 +692,8 @@ reviewable, single-issue PR.
 
 | Priority | Work | Closes | Effort |
 | --- | --- | --- | --- |
-| **P0.1** | Make pool mode an invariant: session mode in `.ini` + all compose, boot assertion on `SHOW pool_mode`, correct ADR-0003 | H1 | S |
-| **P0.2** | Give the four context-free webhooks an explicit system context; test them under FORCE RLS | H1 | S |
+| **P0.1** | Make pool mode an invariant: session mode in `.ini` + all compose, boot assertion on `SHOW pool_mode`, correct ADR-0003 — ✅ declared half + ADR + guard landed in PR #3445; 🚧 boot assertion and the `guard:running-config` declared-vs-live diff still open | H1 | S |
+| **P0.2** | Give the four context-free webhooks an explicit system context; test them under FORCE RLS — ✅ contexts landed (#3246 + #3436); 🚧 the FORCE-RLS read-back exists only for razorpay/stripe/resend, not for payu/whatsapp | H1 | S |
 | **P0.3** | Fix B1 + B2 in the #3381 branch before merge | §4 | XS |
 | **P0.4** | Add `deleted_at IS NULL` to the forgot/reset-password user lookup; test that a tombstoned user cannot reset | H2 | XS |
 | **P1.1** | `withTenantDb`/`withSystemDb` + branded types + ban raw client imports | H1 | L |
@@ -727,6 +736,16 @@ for r in razorpay stripe whatsapp payu inbound resend telegram/bot; do
     "$(grep -cE 'withApiRoute|withSystemContext|withBillingWebhookContext|set_config|app\.current' "$f")" \
     "$(grep -cE '\.insert\(|\.update\(|\.delete\(|\.execute\(' "$f")"
 done                                                       # whatsapp/payu/resend: ctx=0
+#   OUTPUT WRONG, RE-MEASURED 2026-11-03 on `84ae3767`: all three are covered. The
+#   alternation never listed `withTenantScope`/`withTenantContext`, which is what
+#   payu (`route.ts:64` → `:156`), resend (`route.ts:85`) and
+#   lib/whatsapp/webhook-processor.ts (`:101`, `:213`) actually call; and `\.update\(`
+#   matches `createHmac().update(rawBody)`, so `whatsapp writes=1` counted a signature
+#   over a route with no DB statement in it — its write lives one import away. Pinned
+#   by tests/unit/{payu,resend-webhook-tenant-adoption,whatsapp}-*-3246.test.ts (97
+#   passed). The finding that survives is the one this loop demonstrates: a per-file
+#   grep cannot enforce an invariant whose fulfilment crosses files. See FIX-PLAN §3
+#   PR-1B and PR-1C.
 
 # lifecycle — method matters: a line-anchored grep sees 57, the same rule over
 # multi-line .set() bodies sees 123. Quote which one you ran.
