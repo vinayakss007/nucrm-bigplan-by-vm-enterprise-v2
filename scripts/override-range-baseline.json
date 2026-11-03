@@ -30,18 +30,11 @@
       "reason": "Deliberate nested override off the deprecated uuid 8.x line. exceljs only uses v4 generation, whose call shape is unchanged in 11.x."
     },
     {
-      "parent": "lighthouse",
-      "name": "ws",
-      "range": "^7.0.0",
-      "forced_by": "\"ws\": \"^8.21.0\"",
-      "reason": "Blanket ws floor set to clear the ws advisory. Both ws-7 consumers are dev-time (lighthouse, bundle analyzer) and use only the default connect/send surface."
-    },
-    {
       "parent": "webpack-bundle-analyzer",
       "name": "ws",
       "range": "^7.3.1",
       "forced_by": "\"ws\": \"^8.21.0\"",
-      "reason": "Same blanket ws floor as above; dev-time ANALYZE build path only."
+      "reason": "Blanket ws floor set to clear the ws advisory. The only consumer it now forces: dev-time ANALYZE build path, default connect/send surface only. (lighthouse declared ws ^7.0.0 until 13.6.0 dropped the dependency, and the guard proved the approval stale.)"
     }
   ]
 }
