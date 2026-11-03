@@ -341,6 +341,20 @@ describe('deploy-vm.sh fails closed on the operator path', () => {
     expect(src).toMatch(/never answered 200[\s\S]{0,300}setup endpoint has not been called/);
   });
 
+  it('classifies a status code, not a curl exit status — including when curl fails', () => {
+    // Measured against a local server: `code=$(curl … -w '%{http_code}' … || echo 000)`
+    // yields "404000" and "000000", because -w has already printed when the ||
+    // branch runs. A two-line $code never equals 200 (so the loop is still correct)
+    // but it also never matches the `000)` arm of the case, which is the one that
+    // tells the operator the public edge is missing rather than the app.
+    const src = readFileSync(SCRIPT, 'utf8');
+    expect(src, 'a curl fallback echoing inside the substitution').not.toMatch(/\|\| echo 000\s*\)/);
+    const captures = src.match(/\) \|\| code=000/g) ?? [];
+    expect(captures, 'curl call sites that do not capture their status with `) || code=000`').toHaveLength(2);
+    // No -f on either probe: it turns an HTTP 4xx into a shell failure.
+    expect(src).not.toMatch(/curl [^\n]*-f[^\n]*'%\{http_code\}'/);
+  });
+
   it('invokes the two .mjs database helpers through tsx, not node', () => {
     // provision-app-role.mjs and check-db-role-privileges.mjs both import
     // lib/db/*.ts; `node scripts/check-db-role-privileges.mjs` cannot load them.

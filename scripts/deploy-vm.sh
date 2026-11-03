@@ -379,7 +379,13 @@ start_app() {
   fi
   local n code=000
   for ((n = 1; n <= HEALTH_TRIES; n++)); do
-    code=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 5 "$HEALTH_URL" 2>/dev/null || echo 000)
+    # Two details that look cosmetic and are not. No -f: on a 404 curl exits 22
+    # *after* -w has already printed 404, so an `|| echo` inside the substitution
+    # appends and the operator reads "last status 404000". Same for a refused
+    # connection, which prints 000 and then 000 again. The fallback is therefore an
+    # assignment outside the substitution — still needed, because under set -e a
+    # failing substitution aborts the script through the assignment's exit status.
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$HEALTH_URL" 2>/dev/null) || code=000
     if [ "$code" = 200 ]; then say "health answered 200 after $n probe(s)"; return 0; fi
     sleep 2
   done
@@ -403,7 +409,7 @@ create_admin() {
   code=$(curl -sS -o "$body" -w '%{http_code}' --max-time 30 -X POST "${APP_URL%/}/api/setup/create-admin" \
     -H 'Content-Type: application/json' \
     -H "X-Setup-Key: $SETUP_KEY" \
-    --data @"$payload" || echo 000)
+    --data @"$payload") || code=000
   rm -f "$payload"
   case "$code" in
     200 | 201) say "platform super admin created" ;;
