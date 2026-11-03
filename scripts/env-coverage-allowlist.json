@@ -76,6 +76,10 @@
       "reason": "Read only by scripts/simulate-basecrm-acceptance.ts to point the live acceptance harness at a dev server (defaults to http://localhost:3100). It is a local test-target override, not a deployment knob; putting it in .env.example would suggest an operator should configure it in production."
     },
     {
+      "name": "POOL_MODE_ALLOW_EMPTY",
+      "reason": "The CLI spelling of --allow-empty for scripts/check-pool-mode-invariant.mjs (#3404): it downgrades exit 2 to a recorded skip when there is no compose file to read at all, which is true of a stripped container-less runner and of nothing that ships. It never silences a finding — R1-R5 still exit 1 — so naming it in .env.example would only suggest a deployment can carry it."
+    },
+    {
       "name": "RUNNING_CONFIG_ALLOW_EMPTY",
       "reason": "Says 'the containers I expect are not up yet' to scripts/check-running-config-drift.mjs. Valid on a machine with no running deployment; documenting it in the app's env file would suggest it is normal to carry."
     },
