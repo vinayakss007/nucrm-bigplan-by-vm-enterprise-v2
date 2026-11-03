@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import { pgSslConfig } from '../lib/db/ssl-config';
-import { runRecoveryStamp, loadProvisioningShape, loadActualState, verifyStampedLedger, formatMissingObjects } from './migrate-recovery';
+import { runRecoveryStamp, loadProvisioningShape, loadActualState, verifyStampedLedger, groupMissingByOwner, formatMissingObjects } from './migrate-recovery';
 import {
   buildLedgerInsert,
   checkBootstrapPrecondition,

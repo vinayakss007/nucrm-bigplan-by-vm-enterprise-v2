@@ -65,9 +65,12 @@ describe('the real tree (#3381)', () => {
     const src = readFileSync(join(ROOT, file), 'utf8');
     expect(analyzeSource(file, src)).toEqual([]);
     for (const site of poolSites(src)) expect(site.hasTls).toBe(true);
-    expect(src).toContain("from '../lib/db/ssl-config'");
-  });
-});
+    // The helper must be imported; which specifier is the file's own style
+    // choice. #3413 deleted `scripts/seed-fresh.ts`'s duplicate import, and the
+    // one that survives is `@/lib/db/ssl-config` because every other import in
+    // that file is aliased. The TLS claim itself is lines 66-67 above.
+    expect(src).toMatch(/from '(?:\.\.\/|@\/)lib\/db\/ssl-config'/);
+  });});
 
 describe('poolSites — the shapes the tree actually uses', () => {
   it('a literal with ssl: pgSslConfig() passes, a literal without it is a finding', () => {

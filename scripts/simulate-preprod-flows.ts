@@ -53,7 +53,6 @@ import { pgSslConfig } from '../lib/db/ssl-config';
 // the CommonJS module, so it must be erased for `node --experimental-strip-types`.
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
-import { pgSslConfig } from '../lib/db/ssl-config';
 
 // ── Scenario plumbing ─────────────────────────────────────────────────────
 
@@ -396,7 +395,7 @@ async function runBootstrapScenario(client: PoolClient): Promise<void> {
 
   await client.query('BEGIN');
   await applyCtx(client, CTX_ADMIN);
-  let boot: { user_id: string } | null = null;
+  let boot: { user_id: string; tenant_id: string } | null = null;
   try {
     boot = await replayBootstrap(client, email);
     record('full bootstrap transaction completes under a security context', true,
