@@ -75,6 +75,13 @@ because `scripts/**` is excluded from typecheck. See [§4](#4-in-flight-branch-3
   invocations, and a `page.tsx$` path glob that counted a component named
   `client-page.tsx` as a page. Both are now §8's problem, not this document's
   numbers — see H6 and the note under `SYSTEM-MAP.md` §Inventory.
+- **And then moved again the same day, by this report's own follow-up work.**
+  #3404 landed `guard:pool-mode`, taking the estate to **38 aliases / 38 distinct
+  scripts / 11,624 lines** with **34 named in `ci.yml`** (31 by alias + 3 bare), so
+  37 run somewhere and `guard:migration-redecl` alone still runs nowhere. H6's numbers
+  above are the 2026-11-03 snapshot and are left as measured; `SYSTEM-MAP.md`, being
+  the living reference, carries the new ones. This is the behaviour the finding asks
+  for — the count is evidence of churn, so quote §8's command, not this bullet.
 - Line numbers drift (that is itself finding H6). Where a number is load-bearing
   the symbol name is given too.
 
@@ -740,7 +747,7 @@ npm run typecheck                                      # now covers scripts/** t
 
 # guard + citation estate — the census MUST resolve aliases to script files, because
 # three guards are invoked as bare `node scripts/…` and are invisible to the naive grep
-node -e "const p=require('./package.json');console.log(Object.keys(p.scripts).filter(k=>k.startsWith('guard:')).length)"   # 37
+node -e "const p=require('./package.json');console.log(Object.keys(p.scripts).filter(k=>k.startsWith('guard:')).length)"   # 37 on 2026-11-03; 38 since #3404 wired guard:pool-mode
 node -e 'const fs=require("fs"),p=require("./package.json");
  const g=Object.entries(p.scripts).filter(([k])=>k.startsWith("guard:"));
  const wfs=fs.readdirSync(".github/workflows").filter(f=>f.endsWith(".yml"));
@@ -749,6 +756,7 @@ node -e 'const fs=require("fs"),p=require("./package.json");
    for(const [f,t] of text) if(t.includes("npm run "+k)||(m&&t.includes(m[0]))) wired.add(k);}
  console.log("wired",wired.size,"of",g.length,"| unwired:",g.map(([k])=>k).filter(k=>!wired.has(k)).join(", "));'
 # → wired 36 of 37 | unwired: guard:migration-redecl   (ci.yml alone covers 33)
+#   re-run 2026-11-03 after #3404: wired 37 of 38, same single unwired alias, ci.yml 34
 grep -c ':[0-9]\+' docs/infra/PREPROD-ISSUE-REGISTER.md   # 747 lines carry a :<digits>
                                                        # (not 511 citations either — H6 has the pattern that counts them)
 
