@@ -404,7 +404,7 @@ flowchart TB
 ```mermaid
 flowchart LR
   DEV["Developer"] --> PRE["pre-merge gate<br/>scripts/pre-merge-check.sh<br/>8 steps · runs 4 guards"]
-  PRE --> G1["guard:* estate<br/>37 scripts · 36 wired somewhere · 0 parse ASTs"]
+  PRE --> G1["guard:* estate<br/>38 scripts · 37 wired somewhere · 0 parse ASTs"]
   PRE --> TC["typecheck · lint · unit tests"]
   G1 --> CI
   TC --> CI
@@ -413,21 +413,24 @@ flowchart LR
   REG["docs register<br/>pinned file:line citations"] -.-> PRE
 ```
 
-**Guard families (37 scripts)** fall into four groups:
+**Guard families (38 scripts)** fall into five groups:
 
 | Family | Examples | Detection style |
 | --- | --- | --- |
 | Tenant/RLS | `guard:rls`, `guard:portal-rls-context`, `guard:app-role-counts` | route coverage + live DB |
 | Data safety | `guard:chain`, `guard:migration-rls`, `guard:rollback-coverage`, `guard:counters` | migration parsing + live DB |
 | Surface safety | `guard:csrf`, `guard:public-ratelimit`, `guard:public-projection`, `guard:raw-sql`, `guard:semgrep` | grep / semgrep |
+| Deploy-config truth | `guard:pool-mode`, `guard:pool-tls`, `guard:running-config`, `guard:pm-log-paths` | parse compose/ini + live container |
 | Hygiene | `guard:filesize`, `guard:any-suppressions`, `guard:vocab`, `guard:register-drift`, `guard:coords` | regex + writable baselines |
 
 > **Design note.** Most invariants are enforced by bespoke scripts rather than by
 > types, DB constraints, or a single choke-point API. A guard that greps for a
-> pattern catches only the spelling it was told about — **none of the 37 parses a
-> TypeScript AST**. Wiring is not the gap either: `ci.yml` covers 33 of the 37 (30 by
+> pattern catches only the spelling it was told about — **none of the 38 parses a
+> TypeScript AST**. `guard:pool-mode` (#3404) is at least the first to parse its inputs
+> structurally at all — compose YAML, not a line pattern — which is the shape the rest
+> of this list needs. Wiring is not the gap either: `ci.yml` covers 34 of the 38 (31 by
 > alias, 3 more invoked as bare `node scripts/…`), `nightly-soak.yml` adds 3, so
-> **36 run in some workflow** and only `guard:migration-redecl` runs nowhere; the
+> **37 run in some workflow** and only `guard:migration-redecl` runs nowhere; the
 > local `pre-merge-check.sh` an agent is told to run invokes 4 while no workflow calls
 > it. So the estate is not under-run — it is under-seeing, and its own census is
 > ungrepable: grepping `npm run guard:[a-z-]+` cannot see a bare invocation, which is
@@ -527,11 +530,11 @@ Measured against the code on 2026-10-31; prose docs currently disagree.
 | `pgTable` declarations | 226 | grep in `drizzle/schema` |
 | Migrations | 146 (up) / 146 (`.down.sql`) / 292 `.sql` total | `node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"` — the journal, not a file glob, is the number |
 | `lib/**/*.ts` | 442 | `find lib -name '*.ts'` |
-| Guard scripts | 37 aliases over 37 distinct files, 11,372 lines; 36 wired somewhere | `node scripts/guard-census.mjs` once PR-7D ships it; until then see §8's design note — re-run it, it moves weekly |
+| Guard scripts | 38 aliases over 38 distinct files, 11,624 lines; 37 wired somewhere | `node scripts/guard-census.mjs` once PR-7D ships it; until then see §8's design note — re-run it, it moves weekly (37→38 the day #3404 landed) |
 
 > **Every number in this table was re-measured against `origin/main` on 2026-11-03.**
 > Four had moved since the 2026-11-01 audit (tenant pages 149→150, migrations
-> 142→146 pairs, `lib/**/*.ts` 430→442, guards 35→37) and not one of those moves was
+> 142→146 pairs, `lib/**/*.ts` 430→442, guards 35→37→38) and not one of those moves was
 > a regression — it is what a living tree does to a document that quotes numbers. Two
 > numbers were also **wrong in this author's own draft**, both from bad commands rather
 > than bad luck: `grep 'page.tsx$'` over paths answered 232 because a component called

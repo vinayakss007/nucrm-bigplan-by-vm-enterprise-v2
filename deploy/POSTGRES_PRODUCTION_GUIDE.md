@@ -39,7 +39,9 @@
 
 - App connects via PgBouncer (port 6432) — not directly to PostgreSQL
 - PgBouncer pools connections to PostgreSQL (port 5432)
-- Max connections: 60 (PostgreSQL) → 120 (PgBouncer transaction mode)
+- Max connections: 60 (PostgreSQL) → the pooler's `MAX_DB_CONNECTIONS` is the real
+  ceiling, because #3404 pins **session** pooling and session mode holds one server
+  connection per client; `MAX_CLIENT_CONN` (120 preprod, 200 elsewhere) only queues.
 - Superuser reserved: 3 connections for emergency admin access
 
 ### Container Names

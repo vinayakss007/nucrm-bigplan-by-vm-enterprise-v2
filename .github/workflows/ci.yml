@@ -754,6 +754,73 @@ jobs:
             }
           done
           echo "OK: five planted credentials turn this screen red, one named rule each, exactly as #3281 requires."
+  # #3404 — `lib/db/rls.ts` sets `app.current_tenant` with
+  # `set_config(..., is_local=false)`: a SESSION-scoped GUC (ADR-0003). It only means
+  # anything if the server connection is not handed to another client before the
+  # tenant's own statements are done, which is exactly what PgBouncer's `pool_mode`
+  # decides. Five places described the mode and none asserted it, and they disagreed:
+  # `docker-compose.yml` and `deploy/docker-compose.production.yml` said
+  # `POOL_MODE=transaction` (prod with NO `server_reset_query` at all — the leak
+  # combination, since the reset is inert in that mode), the preprod overlay said
+  # `session`, `deploy/pgbouncer/pgbouncer.ini` said `transaction` while being mounted
+  # by nothing, and two `lib/db` headers documented opposite configurations. Migration
+  # 0100 already recorded what the mixed state does: `rowCount = 0 (silent) … every job
+  # logged success while changing nothing`.
+  #
+  # This is the first screen in the estate that PARSES the files it checks instead of
+  # grepping them, which is why it is a YAML job rather than a `run: node …` step bolted
+  # onto another one: `npm ci` is required for the `yaml` dependency. Placed as a NEW
+  # JOB below every cited coordinate in this file (`:221`, `:254`, `:401`, `:409`,
+  # `:447`) and above `destructive-gate`, because `prod-seed-refusal-3282.test.ts:445`
+  # pins that job second-to-last while `ci-constraint-vocab-job-3241.test.ts:63` pins
+  # `constraint-vocab` last — one placement satisfies both instead of editing either.
+  pool-mode:
+    name: Pool mode invariant (#3404)
+    if: vars.POOL_MODE_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Every declared pooler is session-mode with its reset query
+        run: npm run guard:pool-mode
+
+      # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopts:
+      # a green run is only evidence once the exact #3404 shape — transaction pooling
+      # with no reset query, in a scratch tree with no annotations file — turns it red.
+      - name: Negative control — the #3404 declaration MUST be red
+        run: |
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          mkdir -p "$TMP/deploy/pgbouncer"
+          cat > "$TMP/docker-compose.yml" <<'POOLFIXTURE'
+          services:
+            pgbouncer:
+              image: edoburu/pgbouncer:v1.23.1-p3
+              environment:
+                - POOL_MODE=transaction
+                - MAX_CLIENT_CONN=100
+                - MAX_DB_CONNECTIONS=50
+          POOLFIXTURE
+          printf '[pgbouncer]\npool_mode = transaction\nlisten_addr = 127.0.0.1\n' > "$TMP/deploy/pgbouncer/pgbouncer.ini"
+          OUT="$(node --input-type=module -e "
+            const { main } = await import('${GITHUB_WORKSPACE}/scripts/check-pool-mode-invariant.mjs');
+            const r = main({ root: process.argv[1] });
+            if (r.code !== 1) { console.error('the screen passed a transaction-mode pooler with no reset query (exit ' + r.code + ')'); process.exit(1); }
+            const rules = r.findings.map((f) => f.rule).sort().join(', ');
+            console.log(rules);
+            for (const want of ['R1 pool_mode declared', 'R2 reset query', 'R4 ini agrees', 'R5 wired honestly']) {
+              if (!r.findings.some((f) => f.rule === want)) { console.error('planted defect went unseen: ' + want); process.exit(1); }
+            }
+          " "$TMP")"
+          echo "negative control fired: $OUT"
+
 
   # #3282 — nothing in this repository could tell that a script was about to destroy a
   # database. `npm run prod:seed` deleted every user, tenant, role, session, pipeline and

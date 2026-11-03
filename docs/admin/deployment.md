@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/setup/create-admin \
 | `worker` | BullMQ background worker |
 | `realtime` | socket.io realtime server |
 | `postgres` | PostgreSQL 16 |
-| `pgbouncer` | Connection pooler (transaction mode) |
+| `pgbouncer` | Connection pooler (**session** mode — `POOL_MODE=session` + `DISCARD ALL`, pinned by `guard:pool-mode`, #3404) |
 | `minio` / `minio-setup` | S3-compatible object storage (files + backups) |
 | `redis` | Cache / queues / socket.io adapter |
 | **Monitoring profile** | `prometheus`, `grafana`, `loki`, `promtail`, `alertmanager`, `node-exporter`, `redis-exporter`, `postgres-exporter` |

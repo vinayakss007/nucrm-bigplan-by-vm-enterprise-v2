@@ -402,7 +402,23 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:-nucrm}
-      - POOL_MODE=transaction
+      # #3404: this service declared POOL_MODE=transaction with NO server_reset_query,
+      # which is the tenant-leak combination twice over — session-scoped
+      # app.current_tenant (ADR-0003) survives the recycle, and the one setting that
+      # could clear it was never declared. Nothing failed only because this file's
+      # DATABASE_URL is operator-supplied: the moment it names `pgbouncer:6432` the
+      # leak is live. `guard:pool-mode` now fails the build on any drift.
+      # Sizing, stated honestly because session pooling changes what the limits mean:
+      # one client holds one server connection, so MAX_DB_CONNECTIONS=50 is the real
+      # concurrency ceiling, and this file's own defaults can exceed it —
+      # DATABASE_POOL_SIZE=20 x NUCRM_WEB_REPLICAS=2 plus worker 20 x 1 = up to 60
+      # clients against 50 (`deploy/postgres/postgresql.conf` max_connections=60, ~3
+      # reserved). Under that load clients queue instead of erroring, so the failure is
+      # latency, not a refused connection — but if prod ever routes through the pooler,
+      # raise MAX_DB_CONNECTIONS with the DB's max_connections or lower the app pools.
+      # `guard:pool-mode` prints this ratio as an advisory on every run.
+      - POOL_MODE=session
+      - SERVER_RESET_QUERY=DISCARD ALL
       - DEFAULT_POOL_SIZE=50
       - MAX_CLIENT_CONN=200
       - MAX_DB_CONNECTIONS=50
