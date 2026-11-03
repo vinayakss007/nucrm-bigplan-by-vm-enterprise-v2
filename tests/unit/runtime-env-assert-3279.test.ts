@@ -26,8 +26,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const ROOT = join(import.meta.dirname!, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'assert-runtime-env.mjs');
@@ -90,9 +91,13 @@ const GOOD: Record<string, string> = {
 function cli(
   args: string[],
   env: Record<string, string> = {},
+  cwd: string = ROOT,
 ): { code: number | null; out: string } {
   const res = spawnSync(process.execPath, [SCRIPT, ...args], {
-    cwd: ROOT,
+    // cwd, not just env: `defaultReadFile` and `defaultLoadEcosystem` both resolve
+    // against process.cwd() (scripts/assert-runtime-env.mjs:429-438), so this is the
+    // knob that decides whether an untracked .env.local gets a vote (#3433).
+    cwd,
     encoding: 'utf8',
     // A minimal, explicit environment: inheriting this shell's would let a stray
     // TRUST_PROXY/NODE_ENV here decide the exit code the test is asserting on.
@@ -418,15 +423,39 @@ describe('the command an operator runs', () => {
   });
 
   it('runs the assertion against the repo own ecosystem config without inventing a pass', () => {
-    const { code, out } = cli(['--expect-production']);
-    // #3271 landed 2df376e97, so `ecosystem.config.cjs` now supplies TRUST_PROXY for
-    // the `web` app and the default reading of this repo's own tree is clean. That is
-    // the outcome to pin, and to pin it *with the source named*: the same
-    // environment read from the shell alone still fails (the --process-only case
-    // above), so a pass here is the config doing its job, not the tool going blind.
-    expect(code).toBe(0);
-    expect(out).toMatch(/ecosystem\.config\.cjs/);
-    expect(out).toMatch(/TRUST_PROXY/);
+    // #3433: this used to run with cwd = the checkout, and the env file is read from
+    // process.cwd(). `.env.local` is untracked and per-worktree, so a developer's dev
+    // file (http://localhost origins) decided this assertion's exit code — red in every
+    // worktree that has one, green in CI, no code change between them. The sandbox fixes
+    // the input set without weakening the claim: the ecosystem is the repo's own file
+    // through a symlink, and no env file exists, which is exactly the tree CI sees.
+    const dir = mkdtempSync(join(tmpdir(), 'nucrm-eco-'));
+    symlinkSync(join(ROOT, 'ecosystem.config.cjs'), join(dir, 'ecosystem.config.cjs'));
+    try {
+      const { code, out } = cli(['--expect-production'], {}, dir);
+      // #3271 landed 2df376e97, so `ecosystem.config.cjs` now supplies TRUST_PROXY for
+      // the `web` app and the default reading of this repo's own tree is clean. That is
+      // the outcome to pin, and to pin it *with the source named*.
+      expect(code).toBe(0);
+      expect(out).toMatch(/ecosystem\.config\.cjs/);
+      expect(out).toMatch(/TRUST_PROXY/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a sandbox without the repo config fails instead of passing quietly', () => {
+    // The counterpart to the case above: if removing the env file alone made this
+    // assertion pass, it would be measuring the tool's default rather than the repo's
+    // configuration. Measured here: exit 1, naming NODE_ENV and TRUST_PROXY.
+    const dir = mkdtempSync(join(tmpdir(), 'nucrm-bare-'));
+    try {
+      const { code, out } = cli(['--expect-production'], {}, dir);
+      expect(code).toBe(1);
+      expect(out).toMatch(/FAIL\s+TRUST_PROXY/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
