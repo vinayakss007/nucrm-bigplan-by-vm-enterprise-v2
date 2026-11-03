@@ -25,8 +25,11 @@
  * `NO_USER_SENTINEL`: non-empty, which is all `tenants_authenticated_update` asks, and
  * matching no `users` row, so every policy keyed on the actor stays closed. `app.current_tenant`
  * is set alongside it because the same transaction writes `subscriptions`, whose 0031
- * isolation arm compares `tenant_id` to that GUC — and it is set to the payload's own
- * workspace, so a payload naming tenant A can move nothing belonging to tenant B.
+ * isolation arm compares `tenant_id` to that GUC: a payload naming tenant A cannot move B's
+ * billing row even if the code asked. `tenants` is not so protected — its UPDATE arm reads the
+ * actor and not the workspace — so the confinement there is this module's own
+ * `WHERE id = <the claimed workspace>`, which is why `applyTenantBillingPatch` takes the id and
+ * the predicate from one argument instead of accepting a `where` from its callers.
  *
  * The claim is transaction-local (`SET LOCAL`) by construction: `withTenantContext` opens one
  * transaction, sets both GUCs inside it, and hands the caller that same handle, which is also
