@@ -106,7 +106,10 @@ vi.mock('@/lib/errors-server', () => ({ logError: (...args: unknown[]) => logErr
 import { POST } from '@/app/api/webhooks/stripe/route';
 import { planFromPriceId } from '@/lib/stripe-plan-resolution';
 
-const TENANT = 'tenant-checkout-1';
+// #3403: the callback now checks that the payload's tenant id is a uuid before opening a
+// context for it — every policy downstream casts the value, so an id shaped like this test's
+// first draft would have been refused rather than written. `tenants.id` is a uuid in the schema.
+const TENANT = '10000000-0000-4000-8000-000000000001';
 const SESSION_ID = 'cs_test_failclosed_1';
 
 const PRICE_ENV: Record<string, string> = {

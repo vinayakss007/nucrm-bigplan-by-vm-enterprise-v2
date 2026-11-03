@@ -4,7 +4,23 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-11-01 (UTC) — **PP-080**: **#3303**, and a numbering collision resolved the only honest
+> - **Last updated:** 2026-11-03 (UTC) — **PP-081**: **#3403**, the billing half of **PP-080**'s surface.
+> `POST /api/webhooks/razorpay` and `POST /api/webhooks/stripe` wrote the **tenant row itself** on the bare pool —
+> **8** context-less `db.update(tenants)` and **3** `db.transaction()` blocks naming no workspace — and because a
+> zero-row `UPDATE` is not an error, both kept answering the **200 that tells the provider to stop retrying** a payment
+> that never landed (`tenants` is `FORCE`-RLS, 0088:70; its only UPDATE arm is the `app.current_user` test at
+> 0054:151-153, which `lib/db/pool.ts:241` has already cleared). The blind spot is the load-bearing half again: rule 1
+> hands a signature-authenticated file to `skippedAuthenticators`, rule 2's table list has no `tenants`, rule 3 screens
+> entry points — so nothing ever read `app/api/webhooks/**`. Fix = `lib/db/billing-webhook-context.ts` (uuid-gated
+> payload tenant, `NO_USER_SENTINEL`, **no** `app.is_super_admin`, `rowCount` split three ways), one reporter shared by
+> both routes, plus **rule 4** `CALLBACK_UNCONTEXTED_WRITE` in `scripts/check-rls-route-coverage.mjs`. Re-measured
+> before fixing, as with **PP-080**: `payu`, `inbound`, `resend` and `telegram/bot` were already covered and `whatsapp`
+> writes nothing itself (**#3312**'s surface). **No migration** — the arm this needs has existed since **0054**, so
+> nothing joins **#2537**/**PP-057**'s unapplied backlog. `guard:rls` **519** routes / **0** tolerated,
+> `guard:filesize` OK (stripe **546 → 500** after the helper extraction), **39** new tests green. This bullet re-pins
+> the keep-the-entry rule's line, now **5761** here: **PP-080**'s cell carried **5630**, and this entry grew the file
+> **131** lines above it — history, not evidence, exactly as lines 27-28 put it.
+> - **Previous:** 2026-11-01 (UTC) — **PP-080**: **#3303**, and a numbering collision resolved the only honest
 > way. `GET /api/scim/v2/Users` answered **200 with an empty directory** to a correctly-authenticated IdP: `verifySCIMToken`
 > is an HMAC over `tenantId:expiry`, so it names a workspace and sets no `app.*` GUC, while every `users` arm keys on
 > `app.current_user` — and `scripts/check-rls-route-coverage.mjs`'s rule 1 never opened the file, because its first test
@@ -14,7 +30,7 @@
 > receiver is built one statement earlier). **0143 lands UNAPPLIED** with **#2537**'s backlog, so against today's
 > database SCIM still answers zero rows — fail-closed, never a leak. This entry arrived as **PP-079** on its own branch
 > and moves here because the merge brought **#3328**'s PP-079 in underneath it: two agents, one number, and the published
-> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** on this merged tree
+> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** [re-pinned 2026-11-03 by **#3403**/**PP-081** → `:5761`: its header bullet, summary row and section grew **131** lines above the rule] on this merged tree
 > (from 5627 the same day). Re-measured 2026-11-02 on the merge of `ea108e4bc`: `guard:rls` **519** routes and **0** tolerated, `scripts/rls-preauth-baseline.json` still empty, **146** up-migrations against **146** journal entries with `0143` among them unapplied, and the SCIM suites at **21** + **12** — **80** green over the five SCIM-facing files, both numbers re-derived from the 20/12/75-over-four this cell and this bullet had carried off the pre-merge tree. The line recording this re-pin is itself the one line of growth it reports.
 > - **Previous:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
 > its handler runs, and it still answered `invalid_client` at every caller on a fresh database, because `oauth_clients`
@@ -416,6 +432,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-078 | S2  | Backup / restore readiness | **The nightly backup has been answering 200 and doing nothing, and what it ever wrote sits inside the database it is supposed to protect.** Measured 2026-10-12 on the host and in the live DB: the retained `nucrm-cron` log (2026-09-15 → 2026-10-12) records `backup-verify` **CRON FAILED on 28 of 28 nights** (every one an `HTTP/1.1 500` from the deployed build, i.e. **#49**'s bug still live) and `auto-backup` **8** failures, `process-sequences` 15, `retry-webhooks` 5, `detect-missed-followups` 4, `task-reminders` 3, `ai-auto-followup` 2, `usage-snapshot` 1, `backup-health` 1 — but `run-cron.sh` is `wget -q -O /dev/null … \|\| echo "[date] CRON FAILED: $JOB" >&2`, so **a 200 that did zero work emits no line at all**, and that is the whole reason the outage was invisible: `tenant_backup_records` has written **0 rows since 2026-10-03T09:26:50Z** (nine nights; only three days ever have rows — 09-25, 10-02, 10-03). The two surfaces disagree exactly as **#79** describes, now quantified: `backup_records` = **4** rows, all `status=failed`, `storage_type=local`, `size_bytes=0`, `storage_path` NULL on all four (the **#50** signature: no `pg_dump` in the image); `tenant_backup_records` = **144** rows, **138** `completed`, all `initiated_auto`, summing **2,150,042 B** of inline `backup_data` (max payload 60,523 B, `sum(data_size)` 1,986,199 B) and it has **no `storage_path`/`storage_type` column at all**, so a nightly backup cannot be pointed off-box even in principle. Payloads are honest where they exist (`rows_actually_stored` == `record_count`, 16–19 rows for a tenant whose live tables hold 1 contact + 1 activity), so the cap **#71** describes is not truncating anything — there is simply almost nothing to back up here, and none of it leaves the machine: `nucrm-minio` holds two buckets (`nucrm-backups`, `nucrm-documents`), created 2026-09-14, **both empty**. `nucrm-app` is image `nucrm-app:preprod`, built **2026-10-03T15:43:25Z** and started 16:03Z — so everything merged after that timestamp (**#49**, **#51**/**#52**, **#139**) is undeployed, and this is **PP-060**'s deploy gap observed on the one surface where it costs data rather than features | 🚨 OPEN · **owner decision**: an off-box destination for either table (and a `storage_path` on the nightly one), plus one *restored* artifact before **#2540** can be called satisfied · the runner's silence is fixable in-repo (`run-cron.sh` should assert the response body, which is also **#77**/PP-049's `ok:true` masking) · no endpoint, credential or bucket key is recorded here — the object-store pair lives in one mode-600 file on the host being decommissioned (**#2585** §2 + addendum) and is an owner custody action, not a repo one |
 | PP-079 | S2  | Edge / auth surface | **`POST /api/auth/oauth/token` answered `invalid_client` at every caller on a fresh database — byte-identical to a wrong secret — because nothing in the application writes an `oauth_clients` row.** `git grep -nE "insert\(oauthClients\)" origin/main -- app lib scripts` → **0 hits**; the only INSERT anywhere is `scripts/simulate-preprod-flows.ts:283` (re-pinned from `:282` on 2026-10-30, **#3381**'s ssl-config import added a line above it)'s isolation probe, which writes `redirect_uris = '[]'` into the comma-delimited column the authorize matcher splits | 🔧 FIXED in this PR (**#3328**): the registration surface — `app/api/tenant/oauth-clients/` (list, `[id]`, `[id]/rotate`), `app/tenant/settings/oauth-clients/page.tsx`, `lib/auth/oauth-client.ts`, `lib/api/schemas/oauth-clients.ts` · **no migration**: `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:93`'s `tenant_isolation` `FOR ALL` arm already admits the INSERT, and `tests/integration/oauth-client-registration-3328.test.ts` proves register → authorize → token as the RLS-bound probe role · **78** tests green · **not measured live**, the host is undeployed (**PP-060**) |
 | PP-080 | S2  | RLS / inbound machine-auth surface | **#3303**: `GET /api/scim/v2/Users` answered `200 {"totalResults": 0, "Resources": []}` to a correctly-authenticated IdP against a tenant that has users, and `PATCH`/`DELETE /api/scim/v2/Users/:id` updated zero rows while reporting success — `verifySCIMToken` is an HMAC over `tenantId:expiry`: it names a workspace and sets no `app.*` GUC, while every `users` SELECT/UPDATE arm (0088, 0089) keys on `app.current_user`. Both routes were invisible to the screen built to catch exactly this: rule 1 of `scripts/check-rls-route-coverage.mjs` gated on `requireAuth|requireTenantCtx`, so a route authenticating by any other mechanism was never read. Fails closed — availability/correctness, not a leak, which is why it survived review | 🔧 FIXED in this PR (**#3303**). Guard half: rule 1 now asks the same wrapping question of every tenant-naming mechanism (`TENANT_NAMING_MECHANISM_RE`, `:150` — `verifySCIMToken` \| `resolveApiKey` \| `authenticateSCIMRequest`), and rule 2's `fuseChains` stops crediting a bare-pool read whose receiver is built elsewhere. Privilege half: `lib/db/scim-context.ts` (new) — `withScimTenantContext` (`:48`) = `withTenantContext(tenant, NO_USER_SENTINEL)` + `app.scim_tenant`; `withScimUserIdentity` (`:77`) borrows **one** user's own identity for the two cross-tenant questions through 0127/0088 arms, no new policy; `withScimEmailLookup` (`:99`) opens `users_auth_lookup` (0088:359) for one statement; `inScimTransaction` (`:65`) + a pre-generated `randomUUID()` so `INSERT…RETURNING` satisfies its own `WITH CHECK`. `0143` adds `users_tenant_scim_read`/`users_tenant_scim_update` — permissive, `EXISTS` on an **active** `tenant_members` row in the claimed workspace, deliberately **not** keyed on `app.current_tenant` (that would hand the directory to the anonymous public routes, **#3163**) · `app.scim_tenant` joins both reset lists, now **20** · `scripts/rls-preauth-baseline.json` retires its last **10** allowances and is empty · `tests/unit/scim-tenant-context-3303.test.ts` **21** + `rls-guard-split-chain-receiver-3303.test.ts` **12**, **80** green over the five SCIM-facing files (re-counted 2026-11-02 on the merged tree, where this cell read 20/12/75 over four) | `npm run guard:rls` → **519** routes, **0** tolerated · baseline empty and non-stale · **0143 LANDS UNAPPLIED** with **PP-057**'s backlog (**#2537** is the owner's apply step): until then the app sets a GUC no policy reads, so SCIM still answers zero rows — fail-closed, never a leak · **#3303**'s third route, `app/api/webhooks/inbound/route.ts`, was already contextualised by **#3246** (`withTenantScope` `:866`/`:1135`; `setTenantContext` inside `resolveApiKey`, `lib/webhooks/inbound-auth.ts:71`) |
+| PP-081 | S2  | RLS / inbound billing surface | **#3403**: `POST /api/webhooks/razorpay` and `POST /api/webhooks/stripe` wrote the **tenant row itself** on the bare pool — **8** context-less `db.update(tenants)` plus **3** `db.transaction()` blocks naming no workspace — and a zero-row `UPDATE` is not an error, so both answered the **200 that stops the provider retrying** a payment that never landed. `tenants` is `FORCE`-RLS (**0088:70**) and its only UPDATE arm is `current_setting('app.current_user','') != ''` (**0054:151-153**), which `lib/db/pool.ts:241` has already cleared. Invisible to the screen by construction: rule 1 hands signature-authenticated files to `skippedAuthenticators`, rule 2's `IDENTITY_TABLES` has no `tenants`, rule 3 is entry points — the callback surface was judged by nobody. Re-measured the other five webhook files first: `payu` (`:156`), `inbound`, `resend` (`:85`) and `telegram/bot` were already covered, `whatsapp` writes nothing itself (**#3312**'s `lib/` surface) | 🔧 FIXED in this PR (**#3403**). Privilege: `lib/db/billing-webhook-context.ts` (new, **187**) — `billingWebhookTenant` (`:61`) uuid-gate (**22P02** before it becomes an infinite retry), `withBillingWebhookContext` (`:71`) = `withTenantContext(claimed, NO_USER_SENTINEL)`, **no `app.is_super_admin`** (the tenant id arrives in a body), `applyTenantBillingPatch` (`:97`) reads `rowCount` and splits applied / `unknown_tenant` (ack + error log) / visible-but-refused (throw → **500** + claim released so the retry is processed), `createBillingWebhookReporter` (`:146`) so the two routes share one copy of that semantics. Screen: **rule 4** `CALLBACK_UNCONTEXTED_WRITE` (`scripts/check-rls-route-coverage.mjs:552`, `BARE_POOL_WRITE_RE:246` incl. `execute`, `CONTEXT_KEYED_PLATFORM_TABLES:257` pinned to 0054 by a test). **#2530** atomicity kept (**one** `BEGIN` per event), **#2228** row sync inside it, **#2303** fail-closed plan resolution untouched · `tests/unit/webhook-billing-tenant-context-3403.test.ts` **23** + `rls-guard-webhook-billing-writes-3403.test.ts` **16**, three pre-existing suites repaired (**39** / **195** green) · `guard:rls` **519** routes / **0** tolerated, `guard:filesize` **OK** (stripe **546 → 500** after the helper extraction) · **no migration** — the arm this needs has existed since **0054**, so nothing joins **PP-057**/**#2537**'s unapplied backlog · **not measured live**, host undeployed (**PP-060**) |
 
 ## Sentry issues → register entries
 
@@ -5621,6 +5638,120 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `app.current_tenant` arm on a shared table is the wrong privilege),
   **#2537**/**PP-057**/**PP-060** (why 0143 is unapplied), **PP-027** (the pinned carrier that makes a
   per-request GUC mean something).
+
+## PP-081 — 🔧 **#3403**: two billing callbacks wrote the *tenant row itself* on a pool whose identity GUCs this repository clears at every checkout — **8** context-less `db.update(tenants)` across Razorpay and Stripe plus **3** `db.transaction()` blocks that named no workspace — and an `UPDATE` that matches zero rows **is not an error**, so both routes kept answering the **200 that tells the provider to stop retrying** _(S2 · RLS / inbound billing surface · **issue #3403**)_
+
+- **Found by** re-measuring **#3403**'s own file list against this tree instead of trusting it, the way
+  **PP-080** did. Seven files sit under `app/api/webhooks/`, and five were already covered:
+  `inbound` adopts the workspace inside its authenticator (`withTenantScope` at
+  `app/api/webhooks/inbound/route.ts:866`/`:1135`, `setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)`
+  at `lib/webhooks/inbound-auth.ts:71`), `payu` already runs **every** write inside
+  `withTenantContext(owner.tenantId, NO_USER_SENTINEL, …)` (`app/api/webhooks/payu/route.ts:156`) — the
+  exact pattern this entry adopts, reached independently by the quote-callback work — `resend` wraps the
+  handler in `withTenantScope` (`app/api/webhooks/resend/route.ts:85`), `telegram/bot` only reads and does
+  it inside `withAuthLookupContext` (`app/api/webhooks/telegram/bot/route.ts:118`, `:142`), and `whatsapp`
+  contains no `db.` write at all in **90** lines: it hands the payload to
+  `lib/whatsapp/webhook-processor.ts`, which is **#3312**'s `lib/` walk, not this rule's surface. That
+  leaves **two** live files, and the part of the report that needed the guard half is that nothing read
+  them.
+- **The mechanism, in the order it fails.** `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:70`
+  puts `tenants` under `FORCE ROW LEVEL SECURITY`, so its rules bind even the connection owner. Its only
+  UPDATE arm, `tenants_authenticated_update` (`drizzle/migrations/0054_rls_phase0.sql:151-153`), opens on
+  `current_setting('app.current_user', true) != ''` — and `lib/db/pool.ts:241` normalises every checkout
+  with that GUC at `''` (one of the **20** this repository resets). So `db.update(tenants)` from a
+  signature-authenticated callback matched nothing, **succeeded**, and the handler logged a success.
+  **0100** wrote this sentence down for the cron paths; #3403 is the same failure on the billing paths,
+  where the silent zero also burns the provider's retry queue — the ack is what stops redelivery.
+- **Why no screen saw it.** Rule 1 of `scripts/check-rls-route-coverage.mjs` deliberately hands a file
+  that authenticates by signature to `skippedAuthenticators` (an HMAC proves the *sender*, and there is no
+  tenant to open with before the first statement) — **PP-080**'s cell records razorpay, stripe and
+  telegram sitting in that list. Rule 2's population is `IDENTITY_TABLES`
+  (`scripts/check-rls-route-coverage.mjs:215-222`): users, sessions, password-resets, oauth,
+  email-verifications — **not** `tenants`. Rule 3 screens process entry points. Between them the callback
+  surface was judged by nobody: a file exempt from the wrapping question, writing a table invisible to
+  the read question. **PP-080**'s correction was about a mechanism the screen did not know named a
+  tenant; this one is about a *surface* the screen hands over on purpose and then never looks at again.
+- **Fix half one — the privilege** (`lib/db/billing-webhook-context.ts`, new, **187** lines).
+  `billingWebhookTenant` (`:61`) accepts the payload's `notes.tenant_id` / `metadata.tenant_id` **only**
+  as a uuid: every policy in this path casts the value, so a non-uuid does not merely match nothing — it
+  aborts with `22P02`, the route 500s, and the provider retries an id that can never name a tenant until
+  the endpoint is disabled. `withBillingWebhookContext` (`:71`) is
+  `withTenantContext(claimed, NO_USER_SENTINEL, …)` (`lib/db/rls.ts:120`, sentinel at `:64`) — `SET LOCAL`
+  inside one transaction, which is also what keeps **#2530**'s tenants+subscriptions pair atomic. It
+  deliberately does **not** set `app.is_super_admin`, as #3403 requires: that GUC opens *every* workspace
+  to a statement whose workspace arrived in a request body. `applyTenantBillingPatch` (`:97`) reads the
+  command tag's `rowCount` and splits the silence three ways — rows moved (`applied`), row not there at
+  all (`unknown_tenant`: a retry cannot conjure it, so ack and log at **error**), and row visible but
+  unmoved (throw, so the route 500s, **releases the idempotency claim and the lock**, and the provider's
+  retry is processed instead of deduped away). The existence read stays context-free on purpose:
+  `tenants_read_all` (`0054:147`) is `USING (true)`, so a callback may always ask whose event this is.
+- **Fix half two — one copy of those semantics.** Both routes had grown private helpers, which is how
+  "0 rows is success" survived two independent reviews. `createBillingWebhookReporter`
+  (`lib/db/billing-webhook-context.ts:146`) is now the single definition, instantiated once per provider
+  (`app/api/webhooks/stripe/route.ts:193`, `app/api/webhooks/razorpay/route.ts:173`), and the stripe
+  route's **3** `db.transaction()` blocks became `withBillingWebhookContext` so the tenant write and
+  `syncSubscriptionRow` / `markSubscriptionCanceled` (**#2228**) still commit or roll back together.
+- **Fix half three — the screen** (`scripts/check-rls-route-coverage.mjs`). New **rule 4**,
+  `CALLBACK_UNCONTEXTED_WRITE` (loop at `:552`): in a file under `app/api/webhooks/` that adopts no
+  request scope, a write on the bare pool handle (`BARE_POOL_WRITE_RE`, `:246`) against a tenant table is
+  a finding. `CONTEXT_KEYED_PLATFORM_TABLES` (`:257`) carries `tenants` by hand because the schema walk
+  cannot see it — `tenantScopedTables` finds a table by its `tenant_id` column, and `tenants` *is* the
+  workspace, so it has none. Reads are excluded by construction: `writtenTenantTables` (`:395`) matches
+  `.insert`/`.update`/`.delete` and the raw `into|update <table>`, so
+  `db.execute(sql\`UPDATE tenants …\`)` is caught while `db.execute(sql\`SELECT … FROM tenants\`)` is not.
+  Files matching `CONTEXT_ESTABLISHED_RE` (`:212`) are exempt **whole-file**, the same caveat rule 2
+  documents for a swept cron file: `inbound`'s pinned connection is genuinely covered (`resolveApiKey`
+  sets the GUCs and `resolveDb` routes bare `db` to the pinned client), but a write outside that scope
+  inside such a file is invisible here. **#3312** is the issue that makes the whole-file exemption
+  unnecessary; this rule does not pretend to be it.
+- **Falsified on shapes, not on the tree.** `tests/unit/rls-guard-webhook-billing-writes-3403.test.ts`
+  (**16**) builds one-callback repositories in a temp root — including a fixture that calls
+  `withTenantContext` for other work and still writes on `db.`, which is #3403's ask-2 case ("covered only
+  when a helper *wraps* the call"), and a schema fixture, because the tenant table set is read off
+  `drizzle/schema` rather than transcribed. It re-reads `0054:151` and `0088:70` each run: if that UPDATE
+  arm ever stops being a `current_setting` test, the hand-maintained `['tenants']` list is a lie and a
+  test fails here instead of the guard quietly going blind again.
+  `tests/unit/webhook-billing-tenant-context-3403.test.ts` (**23**) drives both real handlers through a
+  payu-shaped recorder and asserts the sequence, not just the outcome: one `BEGIN` per event, the context
+  statement **before** every write, `set_config` params `[payload tenant, nil uuid]`, `is_local` true, no
+  `app.is_super_admin` anywhere in the SQL, a non-uuid writing **nothing**, an unknown tenant answering
+  **200 with a log**, and a visible-but-refused row answering **500 with the claim released**.
+- **Three pre-existing suites repaired, and what each repair says.**
+  `tests/unit/write-atomicity-2530.test.ts` mocked an `UPDATE` as `settle([])` — no `rowCount` — so the
+  three-way split correctly read a policy refusal and threw; the mock now models the command tag, which
+  is the real driver shape. `tests/unit/billing/stripe-webhook-plan-fail-closed.test.ts` and
+  `tests/unit/billing/stripe-webhook-subscription-tenant.test.ts` carried **non-uuid** fixture tenant ids
+  (`'tenant-checkout-1'`), which the uuid gate legitimately refuses — and which production would have
+  answered with `22P02`, so those fixtures were asserting a shape the database cannot accept. Both moved
+  to uuids; the guarantees they exist for (fail-closed plan resolution, **#1640**'s metadata-then-customer
+  resolution) are unchanged.
+- **Verification.** `npx vitest run tests/unit/webhook-billing-tenant-context-3403.test.ts
+  tests/unit/rls-guard-webhook-billing-writes-3403.test.ts` → **39** green · the seven billing/guard files
+  → **195** green · `npm run guard:rls` → **519** routes, **0** tolerated, razorpay/stripe still listed as
+  `skippedAuthenticators` (rule 1's exemption is now paired with a rule that reads those files) ·
+  `npm run guard:filesize` **OK** — the stripe route arrived at **546** carrying its own local copies of
+  the helpers and is at **500** after the extraction, against **#1843**/**#422**'s ceiling ·
+  `guard:chain`, `guard:coords`, `guard:register-drift`, `guard:pool-tls` **OK** · `tsc --noEmit` and
+  `eslint --max-warnings=0` on the changed files exit **0** · full suite on the merged branch `npx vitest run` → **1014** files, **16,106** passed / **8** skipped, exit **0**.
+- **No migration, so nothing joins #2537's backlog.** The privilege this fix needs has existed since
+  **0054** (`tenants_authenticated_update`) and the table has been `FORCE`-RLS since **0088**; the bug was
+  that no caller set the GUC the arm reads. Unlike **PP-080**, there is no unapplied DDL here — and
+  applying anything remains the owner's deploy step (**PP-060**, **#2537**/**PP-057**). **Not measured
+  live**: the deployed image predates this branch, as it does every other entry in this file.
+- **Files:** `lib/db/billing-webhook-context.ts` (new), `app/api/webhooks/razorpay/route.ts`,
+  `app/api/webhooks/stripe/route.ts`, `scripts/check-rls-route-coverage.mjs`,
+  `tests/unit/webhook-billing-tenant-context-3403.test.ts` (new),
+  `tests/unit/rls-guard-webhook-billing-writes-3403.test.ts` (new),
+  `tests/unit/write-atomicity-2530.test.ts`, `tests/unit/billing/stripe-webhook-plan-fail-closed.test.ts`,
+  `tests/unit/billing/stripe-webhook-subscription-tenant.test.ts`.
+- **Related:** **#3403** (the report) · **PP-080**/**#3303** (the same surface, the same
+  `NO_USER_SENTINEL` decision, and the screen correction this entry continues) · **#3246** (the
+  `withTenantScope` + `resolveApiKey` precedent `inbound` runs on) · **#2530** (the tenants+subscriptions
+  atomic pair, preserved inside the new context) · **#2228** (the billing-row reconciliation that shares
+  those transactions) · **#2303** (fail-closed plan resolution, untouched) · **#3312** (the `lib/` +
+  server-action + cron walk that would retire rule 4's whole-file exemption) · **PP-027** (the pinned
+  carrier, and why `inbound`'s bare `db` is not a finding) · **#1843**/**#422** (the 500-line ratchet that
+  forced the helper extraction).
 
 ## How to maintain this file
 
