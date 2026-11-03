@@ -3896,9 +3896,13 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   **0**, so the `docker exec nucrm-db` fallback this entry originally cited is gone — #2404 removed it when
   it moved the block into `scripts/deploy-migrate.ts`.
 - **So preprod has no deploy path either.** Measured absences, not inferred: the only deploy-shaped script
-  in the tree, `scripts/deploy-vm.sh`, is a VM bootstrap (`:16` installs `postgresql-15`, `:27` clones a
-  _different_ repository path) that no workflow calls — its only references left are three lines in
-  `docs/archived/ISSUES.md`. This host's automation is one line — `crontab -l` =
+  in the tree, `scripts/deploy-vm.sh`, is a VM bootstrap that no workflow calls — its only references left
+  are three lines in `docs/archived/ISSUES.md`. (Its `:16` `postgresql-15` / `:27` wrong-repository-path
+  pointers were measured against the 65-line script and re-pinned 2026-11-03 by #3278, which rewrote it:
+  `scripts/deploy-vm.sh:30` defaults `REPO_URL` to this repository and `scripts/deploy-vm.sh:263`
+  installs the distribution's own `postgresql`, not a pinned major. Before that rewrite the
+  bootstrap could not produce a running install and printed `=== Done ===` anyway.) This host's
+  automation is one line — `crontab -l` =
   `*/15 * * * * /usr/bin/python3 /root/sentry-watchdog/check.py` — `/etc/cron.d` holds only
   `e2scrub_all`, and the only nucrm systemd unit on the timer list is `nucrm-builder-prune.timer`. (The
   `nucrm-cron` container runs `crond -f -l 2` _inside_ the stack for the app's own routes; it is not a
