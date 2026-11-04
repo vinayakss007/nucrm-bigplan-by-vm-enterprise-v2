@@ -21,7 +21,7 @@ is my acceptance run flaky".
 - **The profile pins one runtime; three are on disk.** `node-v22.23.4-linux-x64` and
   `node-v22.14.0-linux-x64` are still installed but **retired** — their `export` lines
   sit commented directly under the active one (`~/.bashrc:61-62`) and are the rollback.
-  Prepending a retired tree still *works*, which is why it is a trap: it silently
+  Prepending a retired tree still _works_, which is why it is a trap: it silently
   shadows the runtime the suites were verified with, and `node -v` in that same shell
   then disagrees with the login shell. 22.14.0 specifically is dead for this repo —
   jsdom 30.1.3 pulls undici 8.12.2, whose decompress interceptor calls
@@ -34,7 +34,7 @@ is my acceptance run flaky".
   deps are per-platform N-API prebuilds that load on either, so the merge gate cannot
   see a 26-only regression — nor a musl-vs-glibc one, since CI and this host are both
   glibc. Verified on 26.12.1 before the switch: `tsc --noEmit` clean, `eslint .
-  --max-warnings 46` clean, `npm run test:unit` 9378 passing, `next build` exit 0.
+--max-warnings 46` clean, `npm run test:unit` 9378 passing, `next build` exit 0.
 - Package manager: npm; install uses `--legacy-peer-deps` (see Docker issue #656
   in AGENTS.md backlog — the compose build carries the flag).
 
@@ -79,7 +79,7 @@ role password). Symptoms: `password authentication failed for user "nucrm_app"`,
 or migrate fails with `permission denied for schema drizzle` / `permission denied
 to create on database nucrm`.
 
-Recovery (run the password extraction *inside* the command so it never prints —
+Recovery (run the password extraction _inside_ the command so it never prints —
 see § Secrets):
 
 ```sh
@@ -93,7 +93,7 @@ sudo -u postgres psql -d nucrm -c "ALTER SCHEMA drizzle OWNER TO nucrm_app"
 sudo -u postgres psql -d nucrm -c "GRANT CREATE ON DATABASE nucrm TO nucrm_app"
 ```
 
-Then `npm run db:migrate` reports *"All migrations applied successfully"*. On a
+Then `npm run db:migrate` reports _"All migrations applied successfully"_. On a
 fresh DB with an empty `drizzle.__drizzle_migrations` ledger the runner replays
 **every** journal file (0088:52-56) — which is why all policy DDL is written
 DROP-then-CREATE idempotent and a full replay is safe.
@@ -114,7 +114,8 @@ npx tsx scripts/simulate-basecrm-acceptance.ts   # NONCE defaults to a fresh val
 ```
 
 Known traps that made earlier runs flaky (all now handled in the script):
-- **IP-reuse 429s**: brute-force blocks persist 30 min per identifier *and* IP.
+
+- **IP-reuse 429s**: brute-force blocks persist 30 min per identifier _and_ IP.
   The script derives a per-run randomized TEST-NET-2 base
   (`IP_BASE = NONCE%200+20`, `198.51.100.x`) so consecutive runs never inherit a
   prior run's `login_blocks`.
@@ -134,7 +135,7 @@ Known traps that made earlier runs flaky (all now handled in the script):
 ## Secrets & token hygiene
 
 - The GitHub token used by `gh` here is read from a local log file with a `grep`
-  extraction *inline in the command* so the value never appears in a printed
+  extraction _inline in the command_ so the value never appears in a printed
   argument or shell history. **It was leaked into that log at some point — treat
   it as public and rotate it** (owner action, outside this repo).
 - `.env.local` / `DATABASE_URL` contents are never echoed into PR bodies, commit
@@ -259,7 +260,7 @@ protected those two and nothing else, and the 20 others kept answering to a bare
 timing-safe secret compare.
 
 - **Baseline**: `x-cron-secret` vs `CRON_SECRET`, timing-safe. Unset or empty
-  `CRON_SECRET` denies *every* caller — the check fails closed, so a fresh
+  `CRON_SECRET` denies _every_ caller — the check fails closed, so a fresh
   environment with no secret is not an open one.
 - **Layer 1 — `CRON_ALLOWED_IPS`** is only honoured when `TRUST_PROXY=true`
   (`getTrustedIp` returns null otherwise, because `x-forwarded-for` is
@@ -307,33 +308,40 @@ timing-safe secret compare.
 
 ## Background jobs — a queue default is a side-effect decision
 
-`worker.ts` runs one BullMQ `Worker` per job type (the bulk one at `:195`), and
-`getQueueAdapter()` picks a provider in order **Redis → pg-boss → in-memory**. The
-memory adapter registers no handlers, so a job queued there is *discarded* with a
-warning (`lib/queue/index.ts:215`).
+`worker.ts` runs one BullMQ `Worker` per job type (the bulk one at
+`worker.ts:196`), and `getQueueAdapter()` has exactly one provider: Redis.
+**#3411** retired the **Redis → pg-boss → in-memory** negotiation this section
+used to describe. Neither fallback was a queue: the memory adapter registered no
+handlers, so a job queued there was _discarded_ with a warning, and the pg-boss
+branch had no consumer anywhere in the repo — nothing calls `boss.work()` — so a
+job that fell through to it sat in a Postgres table while the route that enqueued
+it returned success, cached for the life of the process by one transient Redis
+blip. Enqueueing is not delivering, so both are refusals now: a missing
+`REDIS_URL` throws (`lib/queue/index.ts:92`) and a Redis that will not answer a
+`PING` throws (`lib/queue/index.ts:129`) after disposing the connection, without
+caching the failure, so the next request tries again.
 
 - **`attempts: 3` is the queue's default, not a per-job decision** —
-  `lib/queue/index.ts:130` (BullMQ) and `:176` (pg-boss `retryLimit`) both fall back
-  to 3 with exponential backoff. Right for a re-runnable computation, wrong for a job
+  `lib/queue/index.ts:142` falls back to 3 with exponential backoff. Right for a re-runnable computation, wrong for a job
   whose work is "mail these people": the bulk processor restarts its recipient list at
-  index 0 (`worker.ts:210`) with no per-recipient claim, and #1292 masks the addresses
+  index 0 (`worker.ts:211`) with no per-recipient claim, and #1292 masks the addresses
   in the result set, so a retry cannot be resumed — it re-sends everyone already
   mailed. `send-bulk-emails` is queued with `attempts: 1` at both enqueue sites
   (`app/api/tenant/email/bulk/route.ts:103`,
   `app/api/tenant/email/templates/bulk-send/route.ts:123`) — **#3293**.
 - **One attempt makes the dead-letter path the report.** `QueueEvents('failed')`
-  alerts only when `attemptsMade >= attempts` (`worker.ts:652`), so a campaign's first
-  job-level failure is the one recorded. Per-recipient failures are still *collected*,
+  alerts only when `attemptsMade >= attempts` (`worker.ts:650`), so a campaign's first
+  job-level failure is the one recorded. Per-recipient failures are still _collected_,
   not raised, so a partially delivered job still reads as completed — surfacing the
   delivered count is the open half of #3293.
 - **`attempts: 0` does not mean "never retry"**: `|| 3` reads 0 as unset and asks for
-  three. One is the floor. Pinned by `tests/unit/bulk-email-single-attempt-3293.test.ts`,
-  along with the pg-boss caveat that `retryLimit` counts *retries*, so `attempts: 1`
-  there still allows one redelivery.
+  three. One is the floor. Pinned by `tests/unit/bulk-email-single-attempt-3293.test.ts`.
+  The retired pg-boss branch had a second trap: its `retryLimit` counts _retries_, so
+  `attempts: 1` there still allowed one redelivery — one reason #3411 is glad to see it go.
 - **The other side-effecting jobs were checked against the same pairing.**
-  `send-lead-warming` claims queued→sending (`worker.ts:379`); `whatsapp-webhook` asks for
+  `send-lead-warming` claims queued→sending (`worker.ts:380`); `whatsapp-webhook` asks for
   `attempts: 5` on top of that claim (`app/api/webhooks/whatsapp/route.ts:62`); a
-  re-run of `contact-import` dedupes through `skipDuplicates` (`worker.ts:612`). The one
+  re-run of `contact-import` dedupes through `skipDuplicates` (`worker.ts:613`). The one
   with neither is lead-warming's `send-email` (`lib/lead-warming/engine.ts:359`) — it
   duplicates a single message per retry, which is a quota annoyance, not a re-mail storm.
 
