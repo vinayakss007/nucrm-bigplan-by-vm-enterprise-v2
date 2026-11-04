@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
     const body = JSON.parse(rawBody);
 
     // #1256: never drop messages on transient failures. Preferred path is the
-    // queue (BullMQ/pg-boss) which retries with exponential backoff. If the
+    // queue (BullMQ; #3411 removed the pg-boss fallback, so an unavailable Redis
+    // now rejects the enqueue rather than parking the job where nobody reads it)
+    // which retries with exponential backoff. If the
     // queue itself is unavailable, process inline; if that also fails, return
     // 500 so Meta redelivers instead of us acknowledging a lost message.
     let enqueued = false;
