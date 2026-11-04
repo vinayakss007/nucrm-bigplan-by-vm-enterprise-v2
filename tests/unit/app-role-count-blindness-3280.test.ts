@@ -334,7 +334,7 @@ describe('#3280 the screen is wired and the census says so', () => {
     const bare = Number(/plus \*\*(\d+)\*\* run as bare commands/.exec(readme)?.[1]);
     const soak = Number(/\*\*(\d+)\*\* more by alias in `nightly-soak.yml`/.exec(readme)?.[1]);
     const exempt = Number(/so exactly \*\*(\d+)\*\* — `guard:[a-z-]+` — has no workflow step/.exec(readme)?.[1]);
-    expect([bare, soak, exempt]).toEqual([3, 3, 1]);
+    expect([bare, soak, exempt]).toEqual([3, 4, 1]);
     expect(total.length).toBe(named.length + bare + soak + exempt);
     expect(readme).toMatch(new RegExp(`defines \\*\\*${total.length}\\*\\* aliases in total`));
   });

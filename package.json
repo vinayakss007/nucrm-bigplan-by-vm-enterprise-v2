@@ -57,6 +57,7 @@
     "guard:rollback-coverage": "node scripts/check-down-migration-coverage.mjs",
     "guard:counters": "node scripts/check-counter-increments.mjs",
     "guard:csv": "node scripts/check-csv-blob.mjs",
+    "guard:compose-ports": "node scripts/check-compose-public-ports.mjs",
     "guard:portal-softdelete": "npx tsx scripts/check-portal-soft-delete.mts",
     "guard:public-ratelimit": "npx tsx scripts/check-public-rate-limit.mts",
     "guard:public-projection": "npx tsx scripts/check-public-row-projection.mts",
