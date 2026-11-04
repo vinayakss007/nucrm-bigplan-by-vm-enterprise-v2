@@ -197,10 +197,6 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return created;
     });
 
-    if (!result) {
-      throw new Error('Failed to create contact');
-    }
-
     // Trigger calculation of formula fields
     await syncCalculatedFields(ctx.tenantId, 'contact', result.id, result);
 
