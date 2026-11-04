@@ -169,6 +169,7 @@ describe('#3411 C — one registry; a type with only one half fails', () => {
 
   it('the adapter opens a BullMQ queue for every declared type', async () => {
     state.builtQueues.length = 0;
+    state.redisWorks = true;
     const { getQueueAdapter, closeQueue, JOB_TYPES } = await import(QUEUE_MODULE) as unknown as {
       getQueueAdapter: () => Promise<{ provider: string }>;
       closeQueue: () => Promise<void>;

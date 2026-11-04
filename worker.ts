@@ -19,6 +19,7 @@ import { logError } from '@/lib/errors-server';
 import { materializeFileSecrets } from '@/lib/secrets-file';
 import { errorText } from '@/lib/error-redaction';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
+import { JOB_TYPES } from '@/lib/queue/index';
 
 // #2123: read bind-mounted secret files into process.env before any config is
 // captured below, so the worker can run without secrets in container metadata.
@@ -630,14 +631,11 @@ const contactImportWorker = new Worker(
 // NO alert — poison messages failed silently. Attach a QueueEvents('failed')
 // listener per queue so a FINAL failure (attemptsMade >= configured attempts)
 // is logged loudly and reported to the error pipeline for alerting.
-const QUEUE_NAMES = [
-  'send-email', 'send-notification', 'send-bulk-emails', 'run-automation',
-  'send-lead-warming', 'whatsapp-webhook', 'webhooks', 'export-csv', 'contact-import',
-  'tenant-cleanup',
-] as const;
-
+// #3411: the names come from the queue's own registry, not a fourth copy kept
+// here. A list maintained per side is how a job type ended up produced on one
+// and consumed on neither.
 const queueEventsList: QueueEvents[] = [];
-for (const name of QUEUE_NAMES) {
+for (const name of JOB_TYPES) {
   const qe = new QueueEvents(name, { connection: createRedisConnection() });
   qe.on('failed', async ({ jobId, failedReason }) => {
     try {
