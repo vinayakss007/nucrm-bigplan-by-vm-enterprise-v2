@@ -60,8 +60,7 @@ census command below and `tests/unit/docs-guard-coverage-counts-3239.test.ts` ma
 `guard:[a-z-]+`, so a `guard:pm2-…` name would be read as `guard:pm` and the paragraph would silently
 disagree with the workflow) — and **#3276** appended the `nginx-fd-limit` job as the last entry in
 `jobs:` rather than chaining a fourth alias onto a cited step line, because three register rows quote
-those step _names_. **#3273** placed `guard:compose-ports` the same way, at the tail of
-`nightly-soak.yml`, which is what leaves it at **31 / 39** now, which is what the command prints.
+those step _names_ — as did **#3273**, appending `guard:compose-ports` to `nightly-soak.yml`'s tail, which is what leaves it at **31 / 39**.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
