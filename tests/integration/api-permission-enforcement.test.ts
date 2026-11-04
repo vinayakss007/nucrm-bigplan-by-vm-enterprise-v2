@@ -45,7 +45,10 @@ vi.mock('@/lib/dashboard/widget-cache', () => ({
 vi.mock('@/lib/concurrency', () => ({
   withConcurrencyGuard: vi.fn((_opts: unknown, fn: () => Promise<unknown>) => fn()),
 }));
-vi.mock('@/lib/usage/middleware', () => ({
+// #3409: mirror the module; stub only `checkLimit`. A one-export mock makes any
+// route that also reads `limitsEnforce()` throw a TypeError instead of responding.
+vi.mock('@/lib/usage/middleware', async (importActual) => ({
+  ...await importActual<typeof import('@/lib/usage/middleware')>(),
   checkLimit: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/modules/gate', () => ({

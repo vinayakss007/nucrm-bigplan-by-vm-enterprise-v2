@@ -8,7 +8,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
+import { users, contacts, deals, tasks, activities, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
@@ -295,6 +295,48 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 // ── POST: Restore specific user records from backup ──────────────────────────
 
+const CHUNK_SIZE = 100;
+
+/**
+ * Chunked restore for one record set.
+ *
+ * #3409: `onConflictDoNothing()` makes the chunk size a wish, not a fact — only
+ * the rows that come back were admitted, the same rule #3111 set on the trash
+ * door. `insertMany` therefore reports the admitted count and everything derived
+ * from it (the operator's report and the tenant's quota columns) moves by rows
+ * actually written, never by rows requested. A chunk that throws is retried row
+ * by row so one bad record costs one record instead of the whole batch.
+ */
+async function restoreChunked(
+  rows: Array<Record<string, unknown>>,
+  shape: (rest: Record<string, unknown>) => Record<string, unknown>,
+  insertMany: (values: Array<Record<string, unknown>>) => Promise<number>,
+): Promise<{ restored: number; errors: number }> {
+  let restored = 0;
+  let errors = 0;
+
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const values = rows.slice(i, i + CHUNK_SIZE).map((row) => {
+      const { id: _id, ...rest } = row;
+      return shape(rest);
+    });
+
+    try {
+      restored += await insertMany(values);
+    } catch {
+      for (const value of values) {
+        try {
+          restored += await insertMany([value]);
+        } catch {
+          errors++;
+        }
+      }
+    }
+  }
+
+  return { restored, errors };
+}
+
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -319,115 +361,50 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // Restore contacts
     if (records.contacts?.length) {
-      let restored = 0;
-      let errors = 0;
-      const CHUNK_SIZE = 100;
+      const { restored: contactsRestored, errors: contactErrors } = await restoreChunked(
+        records.contacts,
+        (rest) => ({ ...rest, tenantId: tenant_id, assignedTo: user_id, createdAt: new Date(), updatedAt: new Date(), deletedAt: null }),
+        async (values) => (await db.insert(contacts).values(values as typeof contacts.$inferInsert[]).onConflictDoNothing().returning({ id: contacts.id })).length,
+      );
 
-      for (let i = 0; i < records.contacts.length; i += CHUNK_SIZE) {
-        const chunk = records.contacts.slice(i, i + CHUNK_SIZE);
-        const values = chunk.map(contact => {
-          const { id: _id, ...rest } = contact as Record<string, unknown>;
-          return {
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            deletedAt: null,
-          } as typeof contacts.$inferInsert;
-        });
-
-        try {
-          await db.insert(contacts).values(values).onConflictDoNothing();
-          restored += chunk.length;
-        } catch {
-          // Fallback to sequential for this chunk on failure to maintain exact error skipping
-          for (const val of values) {
-            try {
-              await db.insert(contacts).values(val).onConflictDoNothing();
-              restored++;
-            } catch {
-              errors++;
-            }
-          }
-        }
+      // #3409: rows re-admitted here were invisible to the tenant's quota column,
+      // so a restore could push a tenant past `maxContacts` by exactly however
+      // many came back — SQL-side, by the rows actually admitted (#2344, #3111).
+      if (contactsRestored > 0) {
+        await db.update(tenants)
+          .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + ${contactsRestored}` })
+          .where(eq(tenants.id, tenant_id));
       }
-      results['contacts'] = { restored, errors };
+
+      results['contacts'] = { restored: contactsRestored, errors: contactErrors };
     }
 
     // Restore deals
     if (records.deals?.length) {
-      let restored = 0;
-      let errors = 0;
-      const CHUNK_SIZE = 100;
+      const { restored: dealsRestored, errors: dealErrors } = await restoreChunked(
+        records.deals,
+        (rest) => ({ ...rest, tenantId: tenant_id, assignedTo: user_id, createdAt: new Date(), updatedAt: new Date(), deletedAt: null }),
+        async (values) => (await db.insert(deals).values(values as typeof deals.$inferInsert[]).onConflictDoNothing().returning({ id: deals.id })).length,
+      );
 
-      for (let i = 0; i < records.deals.length; i += CHUNK_SIZE) {
-        const chunk = records.deals.slice(i, i + CHUNK_SIZE);
-        const values = chunk.map(deal => {
-          const { id: _id, ...rest } = deal as Record<string, unknown>;
-          return {
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            deletedAt: null,
-          } as typeof deals.$inferInsert;
-        });
-
-        try {
-          await db.insert(deals).values(values).onConflictDoNothing();
-          restored += chunk.length;
-        } catch {
-          // Fallback to sequential for this chunk
-          for (const val of values) {
-            try {
-              await db.insert(deals).values(val).onConflictDoNothing();
-              restored++;
-            } catch {
-              errors++;
-            }
-          }
-        }
+      // #3409: `currentDeals` is priced against `plans.maxDeals` the same way.
+      if (dealsRestored > 0) {
+        await db.update(tenants)
+          .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + ${dealsRestored}` })
+          .where(eq(tenants.id, tenant_id));
       }
-      results['deals'] = { restored, errors };
+
+      results['deals'] = { restored: dealsRestored, errors: dealErrors };
     }
 
-    // Restore tasks
+    // Restore tasks — no quota column prices tasks, so the report is the only
+    // number this set feeds.
     if (records.tasks?.length) {
-      let restored = 0;
-      let errors = 0;
-      const CHUNK_SIZE = 100;
-
-      for (let i = 0; i < records.tasks.length; i += CHUNK_SIZE) {
-        const chunk = records.tasks.slice(i, i + CHUNK_SIZE);
-        const values = chunk.map(task => {
-          const { id: _id, ...rest } = task as Record<string, unknown>;
-          return {
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as typeof tasks.$inferInsert;
-        });
-
-        try {
-          await db.insert(tasks).values(values).onConflictDoNothing();
-          restored += chunk.length;
-        } catch {
-          // Fallback to sequential for this chunk
-          for (const val of values) {
-            try {
-              await db.insert(tasks).values(val).onConflictDoNothing();
-              restored++;
-            } catch {
-              errors++;
-            }
-          }
-        }
-      }
-      results['tasks'] = { restored, errors };
+      results['tasks'] = await restoreChunked(
+        records.tasks,
+        (rest) => ({ ...rest, tenantId: tenant_id, assignedTo: user_id, createdAt: new Date(), updatedAt: new Date() }),
+        async (values) => (await db.insert(tasks).values(values as typeof tasks.$inferInsert[]).onConflictDoNothing().returning({ id: tasks.id })).length,
+      );
     }
 
     console.log(`[User Data Restore] user=${user_id}, tenant=${tenant_id}, source=${source}, results=`, results); // #2529: id, not email — stdout reaches Loki
