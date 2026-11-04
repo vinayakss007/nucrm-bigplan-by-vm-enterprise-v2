@@ -17,6 +17,68 @@ import { getPgDumpVersion, runPgDump } from '@/lib/backups/backup-service';
 import { checksumFile, CHECKSUM_ALGORITHM } from '@/lib/backups/integrity';
 import { uploadBackupArtifact, purgeExpiredBackups, resolveRetentionDays } from '@/lib/backups/offsite';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
+import { classifyBackupError, backupFailure, BACKUP_ERROR_CODES, type ClassifiedBackupError } from '@/lib/backups/backup-error';
+
+/**
+ * The failure path of this job, in one place.
+ *
+ * It used to live inline in the `catch` at the bottom of POST, while the
+ * `backup_records` INSERT ran *above* that `try`. So the one failure that proves
+ * the nightly is broken — the write that would have recorded it — produced no log
+ * line, no `error_logs` row, no email and no row: only the 33-byte body #3275 saw
+ * in the access log. `error_logs.code` also carried the one literal 'BACKUP_FAILED'
+ * for every cause; it now carries the cause, in the same code the answer uses.
+ */
+async function reportBackupFailure(
+  err: unknown,
+  opts: { filename: string; backupId?: string; durationMs: number; as?: ClassifiedBackupError },
+): Promise<ClassifiedBackupError> {
+  const classified = opts.as ?? classifyBackupError(err);
+  const detail = err instanceof Error ? (err.message ?? String(err)) : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+
+  void logError({ error: err, context: 'cron/backup FAILED', metadata: { code: classified.code } });
+
+  try {
+    await withSecurityContext(async (tx) => {
+      if (opts.backupId) {
+        await tx.update(backupRecords)
+          .set({
+            status: 'failed',
+            errorMessage: detail.slice(0, 500),
+            durationMs: opts.durationMs
+          })
+          .where(eq(backupRecords.id, opts.backupId));
+      }
+
+      await tx.insert(errorLogs).values({
+        level: 'fatal',
+        code: classified.code,
+        message: `Automated backup failed (${opts.filename}): ${detail}`,
+        stack: stack?.slice(0, 2000)
+      });
+    });
+  } catch (reportErr) {
+    // When the write that failed *is* the backup_records INSERT, the report cannot
+    // ride on the same write. Log the second failure and let the email below stand alone.
+    void logError({ error: reportErr, context: 'cron/backup: failure not recorded', level: 'warning' });
+  }
+
+  const failedAlerted = await alertSuperAdmin(
+    `CRITICAL: Automated Database Backup FAILED (${classified.code})`,
+    `Time: ${new Date().toISOString()}\nCode: ${classified.code}\nFile: ${opts.filename}\n` +
+    `What to do: ${classified.message}\n\nServer detail: ${detail.slice(0, 500)}\n\n` +
+    'Manual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console'
+  );
+  if (!failedAlerted.success) {
+    await logError({
+      error: new Error(`Backup-failure alert not delivered: ${failedAlerted.error ?? 'provider failure'}`),
+      context: 'cron/backup async side-effect',
+    });
+  }
+
+  return classified;
+}
 
 // Called daily by cron — runs pg_dump, uploads to S3/R2 or keeps local
 export async function POST(request: NextRequest) {
@@ -33,7 +95,8 @@ export async function POST(request: NextRequest) {
   // the old code interpolated `?type=` straight into
   // `nucrm_${backupType}_${timestamp}`, so `?type=../../x` escaped the backup dir.
   if (!['full', 'schema', 'selective'].includes(requestedType)) {
-    return NextResponse.json({ error: 'Invalid backup type' }, { status: 400 });
+    const invalid = backupFailure(BACKUP_ERROR_CODES.TYPE_INVALID);
+    return NextResponse.json({ error: invalid.message, code: invalid.code }, { status: invalid.status });
   }
   const backupType = requestedType as 'full' | 'schema' | 'selective';
   const t0 = Date.now();
@@ -50,16 +113,33 @@ export async function POST(request: NextRequest) {
   // Postgres reuses USING as WITH CHECK for an ALL-COMMANDS policy, so this INSERT is
   // refused with 42501 on the bare pool handle (lib/db/pool.ts normalises every checkout
   // to app.is_super_admin='false'). Same for the two write transactions below.
-  const [backup] = await withSecurityContext((tx) => tx.insert(backupRecords).values({
-    backupType,
-    status: 'running',
-    initiatedAuto: true,
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  }).returning({ id: backupRecords.id }));
+  let backup: { id: string } | undefined;
+  try {
+    [backup] = await withSecurityContext((tx) => tx.insert(backupRecords).values({
+      backupType,
+      status: 'running',
+      initiatedAuto: true,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    }).returning({ id: backupRecords.id }));
+  } catch (err) {
+    const classified = await reportBackupFailure(err, { filename, durationMs: Date.now() - t0 });
+    return apiError(err, classified.message, classified.status);
+  }
 
   if (!backup) {
-    return NextResponse.json({ error: 'Failed to create backup record' }, { status: 500 });
+    // No row back from INSERT ... RETURNING means the same thing as a refusal: this
+    // run is not in backup_records, so nothing downstream can tell it happened. The
+    // cause is known, so it does not go through the classifier.
+    const refused = new Error(`backup_records INSERT returned no row for ${filename}`);
+    const classified = await reportBackupFailure(refused, {
+      filename,
+      durationMs: Date.now() - t0,
+      as: backupFailure(BACKUP_ERROR_CODES.RECORD_WRITE_FAILED),
+    });
+    return apiError(refused, classified.message, classified.status);
   }
+
+  const backupId = backup.id;
 
   try {
     // Ensure local backup dir exists
@@ -196,40 +276,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (err) {
-    const message = err instanceof Error ? (err.message ?? String(err)) : String(err);
-    const stack = err instanceof Error ? err.stack : undefined;
-    const durationMs = Date.now() - t0;
-    void logError({ error: err, context: 'cron/backup FAILED' });
-
-    await withSecurityContext(async (tx) => {
-      await tx.update(backupRecords)
-        .set({
-          status: 'failed',
-          errorMessage: message.slice(0, 500),
-          durationMs: durationMs
-        })
-        .where(eq(backupRecords.id, backup.id));
-
-      await tx.insert(errorLogs).values({
-        level: 'fatal',
-        code: 'BACKUP_FAILED',
-        message: `Automated backup failed: ${message}`,
-        stack: stack?.slice(0, 2000)
-      });
-    });
-
-    // Alert super admin
-    const failedAlerted = await alertSuperAdmin(
-      'CRITICAL: Automated Database Backup FAILED',
-      `Time: ${new Date().toISOString()}\nError: ${message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
-    );
-    if (!failedAlerted.success) {
-      await logError({
-        error: new Error(`Backup-failure alert not delivered: ${failedAlerted.error ?? 'provider failure'}`),
-        context: 'cron/backup async side-effect',
-      });
-    }
-
-    return apiError(err);
+    const classified = await reportBackupFailure(err, { filename, backupId, durationMs: Date.now() - t0 });
+    return apiError(err, classified.message, classified.status);
   }
 }

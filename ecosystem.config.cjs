@@ -126,7 +126,7 @@ module.exports = {
       min_uptime: '10s',
       restart_delay: 1000,
 
-      // Graceful shutdown — finish in-flight requests before exit.
+      // Graceful shutdown, not zero-downtime: pm2's `wait_ready` needs a readiness signal and `next start` never sends one, so a reload costs a brief 502 window — deploy/LAUNCH_RUNBOOK.md §9 (#3275).
       kill_timeout: 10000,
       listen_timeout: 5000,
       shutdown_with_message: true,
