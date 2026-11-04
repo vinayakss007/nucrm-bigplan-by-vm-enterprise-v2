@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { db } from '@/drizzle/db';
-import { contacts, companies } from '@/drizzle/schema';
+import { contacts, companies, tenants } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { requireApiKeyScope } from '@/lib/auth/api-key';
@@ -164,21 +164,38 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       throw new ValidationError('email is required');
     }
 
-    // Insert contact using Drizzle
-    const [result] = await db.insert(contacts).values({
-      tenantId: ctx.tenantId,
-      createdBy: ctx.userId,
-      firstName: body.first_name,
-      lastName: body.last_name,
-      email: body.email,
-      phone: body.phone,
-      companyId: body.company_id,
-      jobTitle: body.title || body.job_title,
-      assignedTo: body.owner_id || ctx.userId,
-      originalOwnerId: body.owner_id || ctx.userId,
-      leadSource: body.lead_source || body.source || 'manual',
-      leadStatus: body.lead_status || body.status || 'new',
-    }).returning();
+    // Insert contact using Drizzle.
+    //
+    // #3409: this public door admitted the row and left `currentContacts` where
+    // it was, so every plan gate the tenant later hits was priced against a
+    // count that had already fallen behind reality. The bump is now in the same
+    // transaction as the insert (#1837's rule on the tenant door): if the bump
+    // fails, the contact does not commit.
+    const result = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(contacts).values({
+        tenantId: ctx.tenantId,
+        createdBy: ctx.userId,
+        firstName: body.first_name,
+        lastName: body.last_name,
+        email: body.email,
+        phone: body.phone,
+        companyId: body.company_id,
+        jobTitle: body.title || body.job_title,
+        assignedTo: body.owner_id || ctx.userId,
+        originalOwnerId: body.owner_id || ctx.userId,
+        leadSource: body.lead_source || body.source || 'manual',
+        leadStatus: body.lead_status || body.status || 'new',
+      }).returning();
+
+      if (!created) throw new Error('Failed to create contact');
+
+      await tx
+        .update(tenants)
+        .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
+
+      return created;
+    });
 
     if (!result) {
       throw new Error('Failed to create contact');

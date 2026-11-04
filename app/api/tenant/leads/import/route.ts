@@ -311,9 +311,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               && (lockedTenant.currentContacts ?? 0) + 1 > lockedTenant.maxContacts) {
               throw new Error(`Plan contact limit reached (${lockedTenant.maxContacts} contacts) — row skipped`);
             }
-            await tx.update(tenants)
-              .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
-              .where(eq(tenants.id, ctx.tenantId));
+            // #3409: the bump is gone from here. `resolveOrCreateContactForLead`
+            // now owns the counter for every door that creates a contact through
+            // it, and this caller kept paying after that moved would have added 2
+            // for one contact. The ceiling read above stays — it is taken under
+            // the FOR UPDATE lock, so it is still the pre-insert snapshot the +1
+            // is priced against.
           }
 
           const leadOid = await generateLeadOid(tx, ctx.tenantId);

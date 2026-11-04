@@ -33,6 +33,7 @@
  *      that writes.
  */
 import { describe, it, expect } from 'vitest';
+import { SQL } from 'drizzle-orm';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -224,8 +225,10 @@ const TENANT_ID = '10000000-0000-0000-0000-000000000001';
 const USER_ID = '20000000-0000-0000-0000-000000000001';
 const LEAD = { firstName: 'Ada', lastName: 'L', email: 'Ada@Example.test ' };
 
-function counterPatches(events: Event[]): Array<Record<string, unknown> | undefined> {
-  return events.filter((e) => e.op === 'update:set' && e.patch && 'currentContacts' in e.patch).map((e) => e.patch);
+function counterPatches(events: Event[]): Array<Record<string, unknown>> {
+  return events
+    .filter((e) => e.op === 'update:set' && e.patch && 'currentContacts' in e.patch)
+    .map((e) => e.patch as Record<string, unknown>);
 }
 
 describe('#3409 B — resolveOrCreateContactForLead pays for the row it admits', () => {
@@ -243,8 +246,9 @@ describe('#3409 B — resolveOrCreateContactForLead pays for the row it admits',
     expect(out.isNewContact).toBe(true);
     const paid = counterPatches(events);
     expect(paid, `expected one counter bump; ops were ${events.map((e) => e.op).join(' | ')}`).toHaveLength(1);
-    // atomic in SQL, never a read-modify-write of a JS number (#2344)
-    expect(typeof (paid[0]!.currentContacts as { sql?: string }).sql).toBe('string');
+    // The bump is an SQL expression, not a JS number read off a row and added to
+    // (#2344) — that is the whole difference between "atomic" and "loses writes".
+    expect(paid[0].currentContacts, 'counter bump must be SQL-side').toBeInstanceOf(SQL);
     const insertAt = events.findIndex((e) => e.op.startsWith('insert:'));
     const payAt = events.findIndex((e) => e.op === 'update:set' && !!e.patch && 'currentContacts' in e.patch);
     expect(insertAt).toBeGreaterThanOrEqual(0);
@@ -293,5 +297,46 @@ describe('#3409 D — POST /api/tenant/contacts decides inside the transaction i
     // what writes the usage_violations row and calls notifyLimitHit, and a
     // request stopped only by the backstop must not skip both.
     expect(readFileSync(join(ROOT, rel), 'utf8')).toMatch(/await checkLimit\(ctx,\s*'contacts'\)/);
+  });
+});
+
+describe('#3409 E — the transaction fence refuses with the response checkLimit refuses with', () => {
+  const rel = 'app/api/tenant/contacts/route.ts';
+  const src = () => readFileSync(join(ROOT, rel), 'utf8');
+
+  it('returns the shared plan-limit response instead of a second copy of the body', () => {
+    expect(src()).toMatch(/planLimitReachedResponse\(\s*'contacts'/);
+  });
+
+  it('does not hand-roll the billing redirect in the route', () => {
+    const handRolled = codeLines(src()).filter((l) => /upgradeUrl/.test(l));
+    expect(handRolled, 'the 402 body has exactly one owner: lib/usage/middleware').toEqual([]);
+  });
+
+  it('COALESCE-guards its own bump — a NULL counter must not increment into NULL', () => {
+    const bumps = codeLines(src()).filter((l) => BUMPS_CONTACTS.test(l));
+    expect(bumps.length, 'expected exactly one counter bump on the create path').toBe(1);
+    expect(bumps[0]).toMatch(/COALESCE/);
+  });
+});
+
+describe('#3409 F — the superadmin restore reports the rows it admitted, not the chunk size', () => {
+  const rel = 'app/api/superadmin/user-data/route.ts';
+  const src = () => readFileSync(join(ROOT, rel), 'utf8');
+
+  it('counts a restored set from what the insert returns', () => {
+    // `onConflictDoNothing()` can admit fewer rows than the chunk asked for, so
+    // chunk.length overstates both the report and any counter priced against it.
+    const byChunk = codeLines(src()).filter((l) => /restored\s*\+=\s*chunk\.length/.test(l));
+    expect(byChunk, 'a restore must count admitted rows, not requested rows').toEqual([]);
+    expect(src()).toMatch(/returning\(/);
+  });
+
+  it('prices the contact counter by what this door admitted', () => {
+    expect(src()).toMatch(/currentContacts:\s*sql`COALESCE\(\$\{tenants\.currentContacts\}, 0\) \+ \$\{contactsRestored\}`/);
+  });
+
+  it('prices the deal counter by what this door admitted', () => {
+    expect(src()).toMatch(/currentDeals:\s*sql`COALESCE\(\$\{tenants\.currentDeals\}, 0\) \+ \$\{dealsRestored\}`/);
   });
 });

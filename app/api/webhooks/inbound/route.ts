@@ -7,8 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { db } from '@/drizzle/db';
 import { withTenantScope } from '@/lib/api/with-api-route';
-import { webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, ilike, asc, desc } from 'drizzle-orm';
+import { webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines, tenants } from '@/drizzle/schema';
+import { eq, and, isNull, ilike, asc, desc, sql } from 'drizzle-orm';
 import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { resolveApiKey } from '@/lib/webhooks/inbound-auth';
@@ -428,6 +428,16 @@ async function handleContact(
     createdBy: userId,
     createdAt: new Date(),
   }).returning({ id: contacts.id });
+
+  // #3409: an inbound webhook is a contact-creating door like any other, and
+  // this one answered `action: 'created'` while the tenant's quota column stayed
+  // where it was. The update paths above must NOT pay — they admit no row.
+  if (newContact) {
+    await tx
+      .update(tenants)
+      .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+      .where(eq(tenants.id, tenantId));
+  }
 
   return { id: newContact?.id ?? null, action: 'created' };
 }

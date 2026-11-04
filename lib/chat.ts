@@ -12,8 +12,8 @@
  */
 import { db } from '@/drizzle/db';
 import { chatSessions, chatMessages } from '@/drizzle/schema/chat';
-import { contacts } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { contacts, tenants } from '@/drizzle/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -174,6 +174,15 @@ export async function convertChatToLead(sessionId: string, tenantId: string) {
     await tx.update(chatSessions)
       .set({ convertedLeadId: c!.id })
       .where(eq(chatSessions.id, sessionId));
+
+    // #3409: the contact this conversion admits is counted by the tenant's
+    // quota column, so it moves inside the same transaction. Leaving it out
+    // made the tenant look smaller than it was to every later `maxContacts`
+    // check, and a swallowed failure here would have done the same thing.
+    await tx
+      .update(tenants)
+      .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+      .where(eq(tenants.id, tenantId));
 
     return c!;
   });
