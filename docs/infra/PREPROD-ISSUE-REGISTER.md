@@ -2193,7 +2193,9 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
 - **What the sentinel is for, in the code.** `lib/db/rls.ts:52` (re-pinned 2026-10-25: **#3225**'s two `withOAuthClientLookupContext` re-export lines landed above it; was `:50`) documents it: every policy **casts**
   `NULLIF(current_setting('app.current_tenant'),'')::uuid`, so a text sentinel made the whole console 500 with
   `invalid input syntax for type uuid`; the nil UUID "casts and matches no tenant row". Reads being empty is
-  deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
+  deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:83`
+  (re-pinned 2026-11-04: **#3409** landed `limitsEnforce` and `planLimitReachedResponse` above it, and the
+  sentinel read moved into the former so the two cannot disagree; was `:43`),
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
   `tests/unit/auth-middleware-require-auth.test.ts:549-558` (re-pinned 2026-10-22 from `:550-559`: `3bf7f648c` (#3073) deleted this file's top-of-file `eslint-disable @typescript-eslint/no-explicit-any` header, which moved every line beneath it up by one).
@@ -5529,7 +5531,8 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
 - **Found by** reading **#3303**'s report against the tree rather than against its own numbers. The
   report's shape is right and one of its three routes was already fixed by other work:
   `app/api/webhooks/inbound/route.ts` now runs inside `withTenantScope`
-  (`app/api/webhooks/inbound/route.ts:866`, `:1135`, imported at `:9`) and adopts the workspace
+  (`app/api/webhooks/inbound/route.ts:876`, `:1145`, imported at `:9` — re-pinned 2026-11-04: **#3409**'s
+  contact-counter bump inside `handleContact` landed above both; was `:866`/`:1135`) and adopts the workspace
   inside its authenticator (`setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)` at
   `lib/webhooks/inbound-auth.ts:71`). **That is the pattern #3303 asked for, already live.** What
   was left is the two SCIM routes and the guard blind spot, and the blind spot is the load-bearing
@@ -5648,7 +5651,8 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
 - **Found by** re-measuring **#3403**'s own file list against this tree instead of trusting it, the way
   **PP-080** did. Seven files sit under `app/api/webhooks/`, and five were already covered:
   `inbound` adopts the workspace inside its authenticator (`withTenantScope` at
-  `app/api/webhooks/inbound/route.ts:866`/`:1135`, `setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)`
+  `app/api/webhooks/inbound/route.ts:876`/`:1145` — re-pinned 2026-11-04 by **#3409**, whose `handleContact`
+  bump pushed both down ten; was `:866`/`:1135` — `setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)`
   at `lib/webhooks/inbound-auth.ts:71`), `payu` already runs **every** write inside
   `withTenantContext(owner.tenantId, NO_USER_SENTINEL, …)` (`app/api/webhooks/payu/route.ts:156`) — the
   exact pattern this entry adopts, reached independently by the quote-callback work — `resend` wraps the
