@@ -159,6 +159,41 @@ Full detail: `deploy/POSTGRES_PRODUCTION_GUIDE.md` §10.3.
 
 ---
 
+## §3.6. Database authentication — pg_hba belongs to the deployment · #3265 🔴 BLOCKER
+
+TLS proves the channel. `pg_hba.conf` decides whether a credential is asked for at
+all, and until #3265 the repo had no copy of it: `initdb` writes one into the data
+directory, and the official image writes `trust` for local and loopback TCP. So a
+new volume — provisioned, or restored onto — came up with "no password from any
+process that can reach the socket", and the hardened file an operator had installed
+lived *inside* the volume that was just replaced.
+
+`deploy/postgres/pg_hba.conf` is now the tracked policy for a packaged/host install.
+Install it and reload; a reload is enough, so the running pool is not dropped:
+
+```bash
+sudo install -m 600 -o postgres -g postgres \
+  deploy/postgres/pg_hba.conf /var/lib/postgresql/16/main/pg_hba.conf   # Debian/Ubuntu path
+sudo -u postgres psql -c 'select pg_reload_conf()'
+
+# Prove the server agrees with the file, behaviourally — no credential is read:
+bash deploy/scripts/health-check.sh          # "PostgreSQL auth: a credential is required"
+npm run guard:pg-hba                         # the tracked tree: file + every compose Postgres
+```
+
+A containerized topology takes the same decision through the image's own knob —
+`POSTGRES_HOST_AUTH_METHOD` and `POSTGRES_INITDB_ARGS=--auth-local=… --auth-host=…`
+are pinned in `docker-compose.yml`, `docker-compose.scale.yml` and
+`docker-compose.slim.yml`, because that file cannot carry `hostssl` rules: the image
+starts with `ssl = off` and no certificate exists, so `hostssl` there refuses every
+application connection at the handshake rather than protecting it.
+
+Both paths matter because the pin only shapes a *new* data directory. An existing
+volume keeps whatever rules it was born with, which is why the assertion above reads
+the running server and not the file.
+
+---
+
 ## §4. Secrets — generate, rotate, and confirm none are in git · #1125 🔴 BLOCKER
 
 `.env*` is gitignored (`!.env.example` is the only exception) and the only
@@ -254,6 +289,7 @@ pm2 conf pm2-logrotate
 - [ ] `https://crm.yourdomain.com` serves a valid (non-self-signed) cert; HTTP→HTTPS redirect works (§2)
 - [ ] `crontab -l` shows `auto-backup`; a fresh backup exists off-VM; `npm run backup:verify` passes (§3)
 - [ ] `SHOW ssl;` returns `on` over an `sslmode=require` connection; no `sslmode=disable` anywhere (§3.5)
+- [ ] `npm run guard:pg-hba` is green, and `health-check.sh` says a credential is required rather than accepting a session without one (§3.6)
 - [ ] `git log --all -- .env .env.local` is empty; all secrets generated/rotated; `sslmode` matches `DATABASE_SSL` (§4)
 - [ ] A deliberate test error appears in Sentry (§5)
 - [ ] A password-reset email is received (§6)

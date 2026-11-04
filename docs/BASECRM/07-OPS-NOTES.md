@@ -249,6 +249,13 @@ app and script alike: `lib/db/ssl-config.ts`'s `pgSslConfig()`, which is plainte
 - Rebuilding this stack on another host: the setting is per-connection, so a `pg_hba` that
   says `trust`/`md5` locally will let an unencrypted pool look healthy forever. That is the
   failure #3381 was filed about.
+- Which is why the `pg_hba` itself is now a tracked artifact. Before #3265 the repo carried
+  none, so a fresh data directory got `initdb`'s defaults — `trust` for the socket and
+  loopback — and an operator's hardened file lived inside the volume a restore replaces.
+  `deploy/postgres/pg_hba.conf` is the host-install policy, the compose services pin the
+  method for a new volume (`POSTGRES_INITDB_ARGS`), `npm run guard:pg-hba` screens the
+  tracked tree, and `deploy/scripts/health-check.sh` asks the running server for a
+  credential and checks whether the answer changes.
 
 ## Cron endpoints — what actually checks the caller
 

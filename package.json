@@ -75,6 +75,7 @@
     "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
     "guard:app-role-counts": "node scripts/check-app-role-counts.mjs",
     "guard:pool-tls": "npx tsx scripts/check-pool-tls-policy.mts",
+    "guard:pg-hba": "node scripts/check-pg-hba.mjs",
     "guard:pm-log-paths": "node scripts/check-pm2-log-paths.mjs",
     "guard:nginx-fd-limit": "npx tsx scripts/check-nginx-fd-limit.mts",
     "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
