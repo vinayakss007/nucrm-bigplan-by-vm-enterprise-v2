@@ -76,6 +76,7 @@
     "guard:app-role-counts": "node scripts/check-app-role-counts.mjs",
     "guard:pool-tls": "npx tsx scripts/check-pool-tls-policy.mts",
     "guard:pm-log-paths": "node scripts/check-pm2-log-paths.mjs",
+    "guard:nginx-fd-limit": "npx tsx scripts/check-nginx-fd-limit.mts",
     "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
