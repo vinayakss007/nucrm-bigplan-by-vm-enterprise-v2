@@ -248,6 +248,38 @@ pm2 conf pm2-logrotate
 
 ---
 
+## §9. A restart is a brief outage · #3275 🟠
+
+`ecosystem.config.cjs`'s `web` app deliberately has **no `wait_ready`**, and a restart of it is
+visible to clients as 502s. Plan the deploy around that instead of assuming `pm2 reload` is
+zero-downtime.
+
+Why `wait_ready` is not the fix:
+
+- pm2 waits for the supervised child to *signal* readiness (`process.send('process_ready')`).
+  `next start` never sends it, so `wait_ready: true` would make every reload wait
+  `listen_timeout`, give up, and kill the process it was trying to keep.
+- In `exec_mode: 'cluster'` the master owns the listening socket; a worker's `listening` event is
+  the fd handover, not a warm app. `listen_timeout: 5000` therefore bounds the handover, not the
+  first request.
+- The rollout in `.github/workflows/deploy.yml` runs `pm2 restart --update-env`, not `reload`, so
+  there is no overlap to preserve in the first place: the outage is the whole Next.js boot.
+
+**Operate accordingly:**
+
+- Restart deliberately, in low traffic, and say so in the change note. Clients in flight get 502
+  until `/api/health` answers again — that is the deploy gate, and it is the reason the gate reads
+  the app rather than `pm2 pid`.
+- A 502 *outside* that window is not a deploy: it is a dead or dying worker. Check
+  `pm2 describe web` (`restarts`, `unstable restarts`) and `logs/web-error.log` around the
+  timestamp; `max_memory_restart` in the same file is the usual culprit.
+- Do not paper over it in the proxy. Masking 502s makes a crashed worker look like the app.
+
+`tests/unit/pm2-restart-outage-3275.test.ts` pins the pair: the config cannot claim a readiness
+signal the supervised process does not emit, and this section has to stay in the tree.
+
+---
+
 ## Final go/no-go checklist
 
 - [ ] `nmap` from outside shows only 22/80/443 open (§1)
@@ -259,6 +291,7 @@ pm2 conf pm2-logrotate
 - [ ] A password-reset email is received (§6)
 - [ ] Grafana admin user is not `admin`; internal ports not publicly reachable (§7)
 - [ ] `pm2 conf pm2-logrotate` shows rotation configured (§8)
+- [ ] The restart outage is scheduled and understood; no `wait_ready` on `web` without a readiness signal in the process it supervises (§9)
 - [ ] `npm run prod:preflight` is green
 
 When every box is checked, the deployment is safe to open to the internet.
