@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
@@ -15,7 +15,7 @@ import { processAutoFollowups } from '@/lib/ai/auto-followup';
 import { logger } from '@/lib/logger';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'ai-auto-followup' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -79,3 +79,6 @@ export async function POST(req: NextRequest) {
     return safeApiError(err); // #2527
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('ai-auto-followup', cronRouteHandler);

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { errorText, truncateForStore } from '@/lib/error-redaction';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
@@ -40,7 +40,7 @@ const CRITICAL_TABLES = [
   'subscriptions', 'audit_logs', 'activities',
 ];
 
-export const POST = withApiRoute(async (req: NextRequest) => {
+const cronRouteHandler = withApiRoute(async (req: NextRequest) => {
   // Verify cron secret
   const verified = await verifyCronSecret(req, { job: 'auto-backup' });
   if (!verified) {
@@ -76,6 +76,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     purged: purgeResult,
   });
 });
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+// Declared before the GET alias so `export const GET = POST` binds a defined
+// binding (the footer form tripped the TDZ — this route serves GET too).
+export const POST = instrumentCronRun('auto-backup', cronRouteHandler);
 
 export const GET = POST;
 

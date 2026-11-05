@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, users, contacts, notifications } from '@/drizzle/schema';
@@ -15,7 +15,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'task-reminders' })) {
     return NextResponse.json({ error:'Unauthorized' }, { status:401 });
   }
@@ -197,3 +197,6 @@ export async function POST(request: NextRequest) {
     return apiError(err);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('task-reminders', cronRouteHandler);
