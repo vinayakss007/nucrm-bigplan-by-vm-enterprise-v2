@@ -5,7 +5,7 @@
  */
 import { db } from '@/drizzle/db';
 import { customFieldDefs } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { formulaEngine } from './engine';
 import { logger } from '@/lib/logger';
 
@@ -29,6 +29,7 @@ export async function syncCalculatedFields(
     })
     .from(customFieldDefs)
     .where(and(
+      isNull(customFieldDefs.deletedAt),
       eq(customFieldDefs.tenantId, tenantId),
       eq(customFieldDefs.entityType, entityType),
       eq(customFieldDefs.isCalculated, true)

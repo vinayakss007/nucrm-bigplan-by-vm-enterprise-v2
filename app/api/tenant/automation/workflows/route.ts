@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { automationWorkflows } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getAllWorkflows } from '@/lib/automation/workflows';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -84,6 +84,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       })
       .onConflictDoUpdate({
         target: [automationWorkflows.tenantId, automationWorkflows.workflowId],
+        targetWhere: sql`${automationWorkflows.deletedAt} IS NULL`,
         set: {
           enabled: enabled,
           config: config || {},

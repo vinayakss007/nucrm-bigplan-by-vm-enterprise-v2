@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { teams, teamMembers } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -57,6 +57,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       })
       .onConflictDoUpdate({
         target: [teamMembers.teamId, teamMembers.userId],
+        targetWhere: sql`${teamMembers.deletedAt} IS NULL`,
         set: { role, deletedAt: null, updatedAt: new Date(), updatedBy: ctx.userId },
       })
       .returning();

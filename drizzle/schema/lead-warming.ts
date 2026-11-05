@@ -249,7 +249,7 @@ export const leadWarmingSchedule = pgTable('lead_warming_schedule', {
 
   ...utils.lifecycle(),
 }, (table) => ({
-  uniqueContactCampaign: uniqueIndex('idx_lead_warming_sched_unique').on(table.contactId, table.campaignId),
+  uniqueContactCampaign: uniqueIndex('idx_lead_warming_sched_unique_live').on(table.contactId, table.campaignId).where(sql`${table.deletedAt} IS NULL`),
   tenantIdx: utils.tenantIdx(table),
   eligibleIdx: index('idx_lead_warming_sched_eligible').on(table.nextEligibleAt).where(sql`opted_out = false`),
 }));

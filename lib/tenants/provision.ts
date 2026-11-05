@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
 import { dealStages, onboardingProgress, pipelines, roles, tenantMembers } from '@/drizzle/schema';
 import { installDefaultModules } from '@/lib/modules/auto-install';
@@ -50,7 +50,7 @@ export async function provisionTenantWorkspace(
   let [adminRole] = await tx
     .select({ id: roles.id })
     .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin')))
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin'), isNull(roles.deletedAt)))
     .limit(1);
 
   if (!adminRole) {
@@ -80,13 +80,14 @@ export async function provisionTenantWorkspace(
     })
     .onConflictDoUpdate({
       target: [tenantMembers.tenantId, tenantMembers.userId],
+      targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
       set: { status: 'active', roleId: adminRole.id, roleSlug: 'admin', updatedAt: new Date() },
     });
 
   const [salesRep] = await tx
     .select({ id: roles.id })
     .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'sales_rep')))
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'sales_rep'), isNull(roles.deletedAt)))
     .limit(1);
 
   if (!salesRep) {

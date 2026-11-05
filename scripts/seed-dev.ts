@@ -556,10 +556,14 @@ async function main() {
       { tenantId: IDS.tenant, userId: IDS.users.manager, roleId: IDS.roles.admin, roleSlug: 'admin', status: 'active' },
       { tenantId: IDS.tenant, userId: IDS.users.rep1, roleId: IDS.roles.salesRep, roleSlug: 'sales_rep', status: 'active' },
       { tenantId: IDS.tenant, userId: IDS.users.rep2, roleId: IDS.roles.salesRep, roleSlug: 'sales_rep', status: 'active' },
-    // (tenant_id, user_id) is unique, and requireAuth resolves membership
-    // through these rows — a leftover pending row must be re-activated.
+    // (tenant_id, user_id) is unique *among live rows* (#3406), and requireAuth
+    // resolves membership through these rows — a leftover pending row must be
+    // re-activated. The predicate belongs in the conflict target: without
+    // `targetWhere` Postgres cannot infer `idx_tenant_members_tenant_user_live`
+    // and the upsert fails with 42P10.
     ]).onConflictDoUpdate({
       target: [schema.tenantMembers.tenantId, schema.tenantMembers.userId],
+      targetWhere: sql`${schema.tenantMembers.deletedAt} IS NULL`,
       set: {
         roleId: sql`excluded.role_id`,
         roleSlug: sql`excluded.role_slug`,

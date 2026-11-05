@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { modules, tenantModules } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES, ModuleRegistry } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -135,6 +135,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
           installedBy: ctx.userId,
         }).onConflictDoUpdate({
           target: [tenantModules.tenantId, tenantModules.moduleId],
+          targetWhere: sql`${tenantModules.deletedAt} IS NULL`,
           set: {
             status: 'active',
             settings: v.settings ?? {},

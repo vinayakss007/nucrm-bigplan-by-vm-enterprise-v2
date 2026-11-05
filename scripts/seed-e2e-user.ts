@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { db } from '../drizzle/db';
 import { users, tenants, tenantMembers, roles, sessions, pipelines, dealStages, contacts, deals } from '../drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken } from '../lib/auth/session';
 import { withSecurityContext, type RlsTransaction } from '../lib/db/rls';
 import * as crypto from 'crypto';
@@ -76,7 +76,7 @@ async function ensureUserAndTenant(tx: RlsTransaction) {
 
   const [role] = await tx.select()
     .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin')))
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin'), isNull(roles.deletedAt)))
     .limit(1);
 
   if (!role) {

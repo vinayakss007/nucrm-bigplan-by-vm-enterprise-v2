@@ -105,7 +105,7 @@ export const CORE_TABLES = {
       dependencies: ['tenants', 'users', 'roles'],
       description: 'Tenant membership and roles',
       isCore: true,
-      indexes: ['idx_tenants_tenant', 'idx_tenant_members_user', 'idx_tenant_members_tenant_user'],
+      indexes: ['idx_tenants_tenant', 'idx_tenant_members_user', 'idx_tenant_members_tenant_user_live'],
     },
   },
   roles: {
@@ -120,7 +120,7 @@ export const CORE_TABLES = {
       dependencies: ['tenants'],
       description: 'RBAC roles',
       isCore: true,
-      indexes: ['idx_roles_tenant', 'idx_roles_tenant_slug'],
+      indexes: ['idx_roles_tenant', 'idx_roles_tenant_slug_live'],
     },
   },
   sessions: {
@@ -165,7 +165,7 @@ export const CORE_TABLES = {
       dependencies: ['tenants', 'roles'],
       description: 'Field-level security',
       isCore: true,
-      indexes: ['idx_field_permissions_unique'],
+      indexes: ['idx_field_permissions_unique_live'],
     },
   },
   recordPermissions: {
