@@ -368,7 +368,7 @@ export const automationWorkflows = pgTable('automation_workflows', {
   return {
     deletedByFk2261Idx: index("automation_workflows_deleted_by_fk_idx").on(table.deletedBy),
     updatedByFk2261Idx: index("automation_workflows_updated_by_fk_idx").on(table.updatedBy),
-    tenantWorkflowIdx: uniqueIndex('idx_automation_workflows_tenant_workflow').on(table.tenantId, table.workflowId),
+    tenantWorkflowIdx: uniqueIndex('idx_automation_workflows_tenant_workflow_live').on(table.tenantId, table.workflowId).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
   

@@ -11,7 +11,7 @@ import * as utils from './utils';
 export const tenants = pgTable('tenants', {
   id: utils.pk(),
   name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
+  slug: text('slug').notNull(),
   shortCode: text('short_code'),
   subdomain: text('subdomain'),
   
@@ -24,7 +24,7 @@ export const tenants = pgTable('tenants', {
   billingEmail: text('billing_email'),
   logoUrl: text('logo_url'),
   faviconUrl: text('favicon_url'),
-  customDomain: text('custom_domain').unique(),
+  customDomain: text('custom_domain'),
   
   // Billing / Stripe
   subscriptionId: text('subscription_id'),
@@ -54,11 +54,13 @@ export const tenants = pgTable('tenants', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
+    slugLiveUnique: uniqueIndex('tenants_slug_unique_live').on(table.slug).where(sql`${table.deletedAt} IS NULL`),
+    customDomainLiveUnique: uniqueIndex('tenants_custom_domain_unique_live').on(table.customDomain).where(sql`${table.deletedAt} IS NULL`),
     subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
     statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
   
-  drz2255_idx_tenants_short_code: uniqueIndex('idx_tenants_short_code').on(table.shortCode).where(sql`(short_code IS NOT NULL)`),
+  drz2255_idx_tenants_short_code: uniqueIndex('idx_tenants_short_code_live').on(table.shortCode).where(sql`${table.deletedAt} IS NULL AND (short_code IS NOT NULL)`),
   drz2255_idx_tenants_owner_id: index('idx_tenants_owner_id').on(table.ownerId),};
 });
 
@@ -158,7 +160,7 @@ export const tenantMembers = pgTable('tenant_members', {
   return {
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_tenant_members_user').on(table.userId),
-    tenantUserIdx: uniqueIndex('idx_tenant_members_tenant_user').on(table.tenantId, table.userId),
+    tenantUserIdx: uniqueIndex('idx_tenant_members_tenant_user_live').on(table.tenantId, table.userId).where(sql`${table.deletedAt} IS NULL`),
   
   drz2255_idx_tenant_members_invited_by: index('idx_tenant_members_invited_by').on(table.invitedBy),
   drz2255_idx_tenant_members_role_id: index('idx_tenant_members_role_id').on(table.roleId),};
@@ -177,7 +179,7 @@ export const roles = pgTable('roles', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-    tenantSlugIdx: uniqueIndex('idx_roles_tenant_slug').on(table.tenantId, table.slug),
+    tenantSlugIdx: uniqueIndex('idx_roles_tenant_slug_live').on(table.tenantId, table.slug).where(sql`${table.deletedAt} IS NULL`),
   };
 });
 
@@ -224,7 +226,7 @@ export const fieldPermissions = pgTable('field_permissions', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    uniqueRoleField: uniqueIndex('idx_field_permissions_unique').on(table.tenantId, table.roleId, table.entityType, table.fieldName),
+    uniqueRoleField: uniqueIndex('idx_field_permissions_unique_live').on(table.tenantId, table.roleId, table.entityType, table.fieldName).where(sql`${table.deletedAt} IS NULL`),
   };
 });
 
@@ -390,7 +392,7 @@ export const invitations = pgTable('invitations', {
   return {
     invitedByFk2261Idx: index("invitations_invited_by_fk_idx").on(table.invitedBy),
     tenantIdx: utils.tenantIdx(table),
-    tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email').on(table.tenantId, table.email),
+    tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email_live').on(table.tenantId, table.email).where(sql`${table.deletedAt} IS NULL`),
   
 };
 });
@@ -442,7 +444,7 @@ export const onboardingProgress = pgTable('onboarding_progress', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    tenantUserStepIdx: uniqueIndex('idx_onboarding_progress_unique').on(table.tenantId, table.userId, table.stepName),
+    tenantUserStepIdx: uniqueIndex('idx_onboarding_progress_unique_live').on(table.tenantId, table.userId, table.stepName).where(sql`${table.deletedAt} IS NULL`),
     tenantUserIdx: index('idx_onboarding_tenant_user').on(table.tenantId, table.userId),
     stepIdx: index('idx_onboarding_step').on(table.stepName, table.isCompleted),
     tenantIdx: utils.tenantIdx(table),

@@ -161,7 +161,7 @@ export const MARKETING_TABLES = {
       dependencies: ['tenants', 'contacts', 'leadWarmingCampaigns'],
       description: 'Per-contact lead warming sending schedule',
       isCore: false,
-      indexes: ['idx_lead_warming_sched_unique', 'idx_lead_warming_sched_tenant', 'idx_lead_warming_sched_eligible'],
+      indexes: ['idx_lead_warming_sched_unique_live', 'idx_lead_warming_sched_tenant', 'idx_lead_warming_sched_eligible'],
     },
   },
 };

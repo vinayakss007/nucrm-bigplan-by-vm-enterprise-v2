@@ -103,14 +103,14 @@ export const recordLinks = pgTable('record_links', {
 
   // One link per (pair, relation). Makes linking idempotent, so a double-click
   // cannot produce two identical rows.
-  uniquePair: uniqueIndex('idx_record_links_unique').on(
+  uniquePair: uniqueIndex('idx_record_links_unique_live').on(
     table.tenantId,
     table.fromType,
     table.fromId,
     table.toType,
     table.toId,
     table.relation
-  ),
+  ).where(sql`${table.deletedAt} IS NULL`),
 
   // Without FKs on the endpoints these CHECKs are the only thing stopping an
   // unknown entity kind or relation from being persisted.
