@@ -55,6 +55,7 @@ const { mockRequireAuth, mockRateLimitMutating, mockVerifySCIMToken, state } = v
     limits: [] as unknown[],
     offsets: [] as unknown[],
     wheres: [] as unknown[],
+    cronHealthRows: null as unknown[] | null,
   },
 }));
 
@@ -85,7 +86,7 @@ function makeChain() {
   return chain;
 }
 
-vi.mock('@/drizzle/db', () => ({ db: { select: () => makeChain() } }));
+vi.mock('@/drizzle/db', () => ({ db: { select: () => makeChain(), execute: async () => state.cronHealthRows ?? [] } }));
 
 vi.mock('@/lib/auth/middleware', () => ({ requireAuth: mockRequireAuth }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: mockRateLimitMutating }));
@@ -105,7 +106,7 @@ vi.mock('@/lib/scim', async (importOriginal) => ({
 }));
 
 import { clampInt } from '@/lib/api/query-params';
-import { registerCronRun, resetCronHealth } from '@/lib/cron/health';
+import { CRON_JOBS } from '@/lib/cron/jobs';
 import { GET as csatStats } from '@/app/api/tenant/csat/stats/route';
 import { GET as auditExport } from '@/app/api/tenant/audit/export/route';
 import { GET as scimUsers } from '@/app/api/scim/v2/Users/route';
@@ -132,6 +133,7 @@ function resetState(rows: unknown[][] = []) {
   state.limits = [];
   state.offsets = [];
   state.wheres = [];
+  state.cronHealthRows = null;
 }
 
 describe('clampInt — the shared NaN-proof clamp (#2766)', () => {
@@ -374,58 +376,76 @@ describe('GET /api/superadmin/search — ?limit', () => {
   });
 });
 
-describe('GET /api/system/cron-health — ?maxAgeMs', () => {
+describe('GET /api/system/cron-health — ?maxAgeMs (#3410 contract)', () => {
+  // #3410 changed what this endpoint reads: the verdict is now the manifest
+  // (lib/cron/jobs.ts) compared against the durable cron_runs ledger, not the
+  // answering process's memory. What #2766 pinned survives — a junk number
+  // must never silence the monitor — and it holds harder: maxAgeMs can now
+  // only ADD tolerance, and no tolerance buys 'healthy' for a job that has
+  // never run.
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  /**
-   * A job that reported in 20 minutes ago, which is stale against the route's own 15-minute
-   * default and against every floor it has ever applied.
-   *
-   * The fake clock stays under the request: the route calls `Date.now()` itself, so
-   * restoring real time before the call would compare a 2026-10-17T10:20Z `lastRunAt`
-   * against the host's clock and every job would read as not-yet-run.
-   */
-  async function withStaleFleet(query: string): Promise<Record<string, unknown>> {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-17T10:00:00Z'));
-    resetCronHealth();
-    registerCronRun(`job-${query.replace(/\W/g, '') || 'absent'}`, { durationMs: 10, status: 'ok' });
-    vi.setSystemTime(new Date('2026-10-17T10:20:00Z'));
+  const NOW = Date.parse('2026-10-17T10:00:00Z');
+  const scheduled = CRON_JOBS.filter(
+    (j) => j.sources.crontab || j.sources.vercel || j.sources.scheduler,
+  );
 
-    mockRequireAuth.mockResolvedValue({ isSuperAdmin: true, tenantId: TENANT_ID } as never);
+  /** Ledger rows saying every scheduled job succeeded one minute ago. */
+  function freshFleetRows(): unknown[] {
+    return scheduled.map((job) => ({
+      job: job.name,
+      lastRunAtMs: NOW - 60_000,
+      lastRunOk: true,
+      lastRunError: null,
+      lastSuccessAtMs: NOW - 60_000,
+    }));
+  }
+
+  async function withFleet(query: string, rows: unknown[]): Promise<Record<string, unknown>> {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
     resetState();
-    const res = await cronHealth(
-      new NextRequest(`http://x/api/system/cron-health${query}`),
-    );
+    state.cronHealthRows = rows;
+    mockRequireAuth.mockResolvedValue({ isSuperAdmin: true, tenantId: TENANT_ID } as never);
+    const res = await cronHealth(new NextRequest(`http://x/api/system/cron-health${query}`));
     expect(res.status).toBe(200);
     return JSON.parse(await res.text()) as Record<string, unknown>;
   }
 
-  it('still reports a dead fleet as dead when ?maxAgeMs is not a number', async () => {
-    // The bug this file exists for: `Math.max(Number('abc'), 60_000)` is `NaN`, and
-    // `lib/cron/health.ts:81` compares `now - lastRunAt > NaN`, which is false for every
-    // job. The monitor did not fail — it reported that it was watching.
-    const body = await withStaleFleet('?maxAgeMs=abc');
-    expect(body.status).toBe('degraded');
+  it('still reports an empty ledger as dead when ?maxAgeMs is not a number', async () => {
+    // The bug this file exists for, re-pinned for the new reader: junk must
+    // not turn the monitor off. An empty ledger under the manifest is every
+    // scheduled job `never_run` — that reads `fail`, whatever the query says.
+    const body = await withFleet('?maxAgeMs=abc', []);
+    expect(body.status).toBe('fail');
+    expect((body.neverRun as string[]).length).toBe(scheduled.length);
     expect(Number(body.staleCount)).toBeGreaterThanOrEqual(1);
   });
 
-  it('reports the same fleet stale with no parameter at all', async () => {
-    const body = await withStaleFleet('');
-    expect(body.status).toBe('degraded');
+  it('reports an empty ledger as dead with no parameter at all', async () => {
+    const body = await withFleet('', []);
+    expect(body.status).toBe('fail');
+    expect(body.neverRun).toContain('trial-check');
   });
 
-  it('keeps the 60-second floor and an open ceiling', async () => {
-    const tight = await withStaleFleet('?maxAgeMs=1000');
-    expect(Number(tight.staleCount)).toBeGreaterThanOrEqual(1);
-    const wide = await withStaleFleet('?maxAgeMs=86400000');
-    expect(wide.status).toBe('healthy');
+  it('cannot be talked out of fail by a generous ceiling', async () => {
+    // The old contract let ?maxAgeMs=86400000 flip a stale-only fleet to
+    // healthy. Under #3410 the slack covers lateness, never a missing job.
+    const body = await withFleet('?maxAgeMs=86400000', []);
+    expect(body.status).toBe('fail');
+  });
+
+  it('a fresh ledger with only tracked orphans left reads degraded, not fail', async () => {
+    const body = await withFleet('', freshFleetRows());
+    expect(body.status).toBe('degraded');
+    expect(body.neverRun).toEqual([]);
+    expect(body.unscheduled).toEqual(expect.arrayContaining(['sla-check', 'process-lead-scoring']));
   });
 
   it('treats an empty ?maxAgeMs= as the absent parameter', async () => {
-    const body = await withStaleFleet('?maxAgeMs=');
-    expect(body.status).toBe('degraded');
+    const body = await withFleet('?maxAgeMs=', []);
+    expect(body.status).toBe('fail');
   });
 });

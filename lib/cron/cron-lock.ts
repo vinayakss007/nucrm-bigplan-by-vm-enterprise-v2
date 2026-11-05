@@ -57,6 +57,7 @@
  */
 import { NextResponse } from 'next/server';
 import { acquireLock } from '@/lib/cache';
+import { registerCronRun } from './health';
 
 /** Machine-readable reason carried by every refused cron lock (#2539). */
 export const CRON_LOCK_REFUSED_REASON = 'lock-held';
@@ -152,6 +153,102 @@ function recordCronSkip(key: string, reason: CronLockRefusalReason): void {
       });
     } catch {
       /* logging must never change what the job answers */
+    }
+  })();
+}
+
+// ── run ledger (#3410) ───────────────────────────────────────────────────────
+
+/**
+ * Wrap a cron route so every attempt lands in `cron_runs` — success, failure
+ * and skipped-by-lock alike. This is the writer the in-memory registry never
+ * had and the row that makes `/api/system/cron-health` able to say `never_run`
+ * instead of remembering only what this process saw since boot.
+ *
+ * Why a response-level wrapper and not a callback lock: the refusal half of
+ * `refuseIfCronLockHeld` already lives in one place; what was missing was the
+ * OTHER exit of every route — the body's response, the throw, and the 423
+ * walking back out. Wrapping the exported POST sees all three without moving
+ * a single line of job logic, and the manifest guard (`guard:cron-manifest`)
+ * fails any cron route whose POST does not go through here, which is what
+ * "no job can opt out" means in practice.
+ *
+ * Recording is fire-and-forget and total-failure-proof like `recordCronSkip`:
+ * a missing DB turns into no row and a quiet console line, never a 500 on a
+ * job that actually ran.
+ */
+export function instrumentCronRun<R extends Request>(
+  jobName: string,
+  handler: (request: R) => Promise<Response>,
+): (request: R) => Promise<Response> {
+  return async (request: R): Promise<Response> => {
+    const startedAt = Date.now();
+    let response: Response;
+    try {
+      response = await handler(request);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      persistCronRun(jobName, startedAt, false, `threw: ${message.slice(0, 200)}`);
+      throw err;
+    }
+    const status = response.status;
+    const ok = status >= 200 && status < 400;
+    if (!ok) {
+      const detail = await describeFailure(response, status);
+      persistCronRun(jobName, startedAt, false, detail);
+    } else {
+      persistCronRun(jobName, startedAt, true, null);
+    }
+    return response;
+  };
+}
+
+async function describeFailure(response: Response, status: number): Promise<string> {
+  let body = '';
+  try {
+    // clone() first: the caller still owns the original stream.
+    body = (await response.clone().text()).slice(0, 200);
+  } catch {
+    /* an unreadable body only costs the ledger its detail column */
+  }
+  if (status === CRON_LOCK_REFUSED_STATUS) {
+    try {
+      const parsed = JSON.parse(body) as { skipped?: string };
+      if (typeof parsed.skipped === 'string') return `skipped: ${parsed.skipped}`;
+    } catch {
+      /* fall through to the generic shape below */
+    }
+    return 'skipped: lock-held';
+  }
+  return `HTTP ${status}${body ? `: ${body}` : ''}`;
+}
+
+function persistCronRun(jobName: string, startedAt: number, ok: boolean, error: string | null): void {
+  const finishedAt = Date.now();
+  const durationMs = finishedAt - startedAt;
+  // The in-memory registry keeps its record too: same process, same truth,
+  // and tests/dashboard readers of lib/cron/health stay meaningful.
+  try {
+    registerCronRun(jobName, { durationMs, status: ok ? 'ok' : 'error', error: error ?? undefined });
+  } catch {
+    /* registry is bounded and dumb; it cannot fail this way */
+  }
+  void (async () => {
+    try {
+      const [{ db }, { cronRuns }] = await Promise.all([
+        import('@/drizzle/db'),
+        import('@/drizzle/schema'),
+      ]);
+      await db.insert(cronRuns).values({
+        job: jobName,
+        startedAt: new Date(startedAt),
+        finishedAt: new Date(finishedAt),
+        ok,
+        error,
+        durationMs,
+      });
+    } catch {
+      /* the ledger write must never change what the job answered */
     }
   })();
 }

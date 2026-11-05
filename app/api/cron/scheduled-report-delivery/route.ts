@@ -14,7 +14,7 @@ import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql, gt } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
-import { cronLockRefusalResponse } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
@@ -152,7 +152,7 @@ function parseCsv(csv: string): { columns: string[]; rows: string[][] } {
   return { columns, rows };
 }
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'scheduled-report-delivery' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -348,3 +348,6 @@ export async function POST(req: NextRequest) {
     await releaseLock(REPORT_LOCK_KEY, lock.value);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('scheduled-report-delivery', cronRouteHandler);
