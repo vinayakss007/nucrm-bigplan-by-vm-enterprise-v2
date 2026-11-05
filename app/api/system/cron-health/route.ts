@@ -64,12 +64,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   ]);
 
   const successByJob = new Map<string, number | null>(
-    (lastSuccess as Array<{ job: string; lastSuccessAtMs: string | number | null }>).map((r) => [
+    ((lastSuccess.rows ?? []) as Array<{ job: string; lastSuccessAtMs: string | number | null }>).map((r) => [
       r.job,
       r.lastSuccessAtMs == null ? null : Number(r.lastSuccessAtMs),
     ]),
   );
-  const rows: CronJobRunSummary[] = (lastAttempt as Array<{
+  const rows: CronJobRunSummary[] = ((lastAttempt.rows ?? []) as Array<{
     job: string;
     lastRunAtMs: string | number;
     lastRunOk: boolean;

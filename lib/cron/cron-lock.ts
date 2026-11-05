@@ -177,19 +177,25 @@ function recordCronSkip(key: string, reason: CronLockRefusalReason): void {
  * a missing DB turns into no row and a quiet console line, never a 500 on a
  * job that actually ran.
  */
-export function instrumentCronRun<R extends Request>(
+export function instrumentCronRun<R extends Request, C>(
   jobName: string,
-  handler: (request: R) => Promise<Response>,
-): (request: R) => Promise<Response> {
-  return async (request: R): Promise<Response> => {
+  handler: (request: R, context: C) => Promise<Response | void | undefined>,
+): (request: R, context: C) => Promise<Response | void | undefined> {
+  return async (request: R, context: C): Promise<Response | void | undefined> => {
     const startedAt = Date.now();
-    let response: Response;
+    let response: Response | void | undefined;
     try {
-      response = await handler(request);
+      response = await handler(request, context);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       persistCronRun(jobName, startedAt, false, `threw: ${message.slice(0, 200)}`);
       throw err;
+    }
+    if (!response) {
+      // Type-level only: withApiRoute always answers a Response. If a future
+      // body ever resolves undefined, the ledger must not call that a run.
+      persistCronRun(jobName, startedAt, false, 'handler returned no Response');
+      return response;
     }
     const status = response.status;
     const ok = status >= 200 && status < 400;

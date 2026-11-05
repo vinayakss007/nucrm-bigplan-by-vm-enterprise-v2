@@ -44,7 +44,7 @@ function rlsRefusal(): Error {
 }
 
 vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
-vi.mock('@/lib/cron/cron-lock', () => ({ refuseIfCronLockHeld: vi.fn(async () => null) }));
+vi.mock('@/lib/cron/cron-lock', () => ({ refuseIfCronLockHeld: vi.fn(async () => null), instrumentCronRun: (_job: string, handler: unknown) => handler }));
 vi.mock('@/lib/errors-server', () => ({
   logError: vi.fn(async (opts: { context?: string; metadata?: Record<string, unknown> }) => {
     sent.logErrors.push(opts);

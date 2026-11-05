@@ -86,7 +86,7 @@ function makeChain() {
   return chain;
 }
 
-vi.mock('@/drizzle/db', () => ({ db: { select: () => makeChain(), execute: async () => state.cronHealthRows ?? [] } }));
+vi.mock('@/drizzle/db', () => ({ db: { select: () => makeChain(), execute: async () => ({ rows: state.cronHealthRows ?? [] }) } }));
 
 vi.mock('@/lib/auth/middleware', () => ({ requireAuth: mockRequireAuth }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: mockRateLimitMutating }));

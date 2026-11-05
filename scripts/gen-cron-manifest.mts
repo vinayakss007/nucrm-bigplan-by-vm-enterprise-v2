@@ -121,8 +121,8 @@ export function checkManifest({
 
   const expectedCrontab = renderCrontab(jobs);
   if (!skipRenderEquality && crontabText !== expectedCrontab) {
-    const expected = parseCrontabJobs(expectedCrontab);
-    const actual = parseCrontabJobs(crontabText);
+    const expected = parseCrontabJobs(expectedCrontab) as string[];
+    const actual = parseCrontabJobs(crontabText) as string[];
     const missing = expected.filter((n) => !actual.includes(n));
     const extra = actual.filter((n) => !expected.includes(n));
     if (missing.length || extra.length) {
@@ -137,8 +137,8 @@ export function checkManifest({
 
   const expectedVercel = renderVercel(jobs);
   if (!skipRenderEquality && vercelText !== expectedVercel) {
-    const expected = parseVercelJobs(expectedVercel);
-    const actual = parseVercelJobs(vercelText);
+    const expected = parseVercelJobs(expectedVercel) as string[];
+    const actual = parseVercelJobs(vercelText) as string[];
     const missing = expected.filter((n) => !actual.includes(n));
     const extra = actual.filter((n) => !expected.includes(n));
     if (missing.length || extra.length) {

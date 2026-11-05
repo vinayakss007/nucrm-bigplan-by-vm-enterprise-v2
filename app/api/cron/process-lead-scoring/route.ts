@@ -76,8 +76,8 @@ async function cronRouteHandler(req: NextRequest) {
 // POST to follow the safe/idempotent HTTP semantics used by the other cron routes.
 // A thin GET is kept as a backwards-compatible delegate for any external scheduler
 // that still invokes this route via GET.
-export async function GET(req: NextRequest) {
-  return POST(req);
+export async function GET(req: NextRequest, ctx: unknown) {
+  return POST(req, ctx);
 }
 
 // #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.

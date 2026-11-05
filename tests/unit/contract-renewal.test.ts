@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
 import { contracts, activities, users } from '@/drizzle/schema';
+import { CRON_JOBS } from '@/lib/cron/jobs';
 
 // The route modules under test are also imported by the pre-existing checks
 // below, so every mock keeps the original module and overrides only the
@@ -214,11 +215,15 @@ describe('contract renewal cron endpoint', () => {
 });
 
 describe('contract renewal cron scheduler', () => {
-  it('cron-scheduler.ts includes contract-renewal-check job', async () => {
+  it('the manifest schedules contract-renewal-check for the in-process scheduler (#3410)', async () => {
+    // #3410 made lib/cron/jobs.ts the single source; the scheduler file no
+    // longer carries per-job literals, so the truth lives in the manifest.
+    const job = CRON_JOBS.find((j) => j.name === 'contract-renewal-check');
+    expect(job).toBeDefined();
+    expect(job!.cron).toBe('0 7 * * *');
+    expect(job!.sources.scheduler).toBe(true);
     const fs = await import('fs');
-    const content = fs.readFileSync('scripts/cron-scheduler.ts', 'utf-8');
-    expect(content).toContain('contract-renewal-check');
-    expect(content).toContain('0 7 * * *');
+    expect(fs.readFileSync('scripts/cron-scheduler.ts', 'utf-8')).toContain('@/lib/cron/jobs');
   });
 
   it('deploy/cron/crontab includes contract-renewal-check', async () => {

@@ -208,10 +208,14 @@ describe('migration 0143 grants the two users arms and nothing wider (#3303)', (
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
+    // Pinned by tag, not by rank: being LAST was incidental to #3303, and the
+    // next append (0144_cron_runs, #3410) must not have to edit this assertion.
+    const mine = journal.entries.filter((e) => e.tag === up!.replace(/\.sql$/, ''));
+    expect(mine).toHaveLength(1);
     const last = journal.entries[journal.entries.length - 1];
-    expect(last.idx).toBe(145);
-    expect(last.tag).toBe(up!.replace(/\.sql$/, ''));
-    expect(last.when).toBe(1793440000000);
+    expect(last.idx).toBeGreaterThan(145);
+    expect(mine[0]!.idx).toBe(145);
+    expect(mine[0]!.when).toBe(1793440000000);
   });
 });
 
