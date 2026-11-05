@@ -176,7 +176,7 @@ describe('#3406 the screen reads what the call sites say', () => {
     ));
     const r = run(root);
     expect(r.status).toBe(1);
-    expect(r.stdout).toMatch(/UNTARGETED\s+app\/api\/widgets\/route\.ts:\d+ — onConflict on widgets\(name\)/);
+    expect(r.stdout).toMatch(/UNTARGETED\s+app\/api\/widgets\/route\.ts:\d+ — onConflictDoUpdate\/Nothing on widgets\(name\)/);
   });
 
   it('the same upsert with targetWhere is clean', () => {
@@ -186,8 +186,67 @@ describe('#3406 the screen reads what the call sites say', () => {
       upsert('      targetWhere: sql`${widgets.deletedAt} IS NULL`,'),
     ));
     const r = run(root);
-    expect(r.stdout, r.stdout + r.stderr).toContain('0 missing targetWhere');
+    expect(r.stdout, r.stdout + r.stderr).toContain('0 missing their predicate');
     expect(r.status).toBe(0);
+  });
+
+  it('raw SQL is read too: ON CONFLICT (cols) DO UPDATE needs the predicate in the clause', () => {
+    // This is the half CI caught and the builder scan could not see.
+    const root = fixture(caseFiles(
+      'CREATE UNIQUE INDEX "widgets_name_unique_live" ON "public"."widgets" ("name") WHERE deleted_at IS NULL;',
+      PARTIAL_SCHEMA,
+      [
+        "import { sql } from 'drizzle-orm';",
+        'export async function POST(client: { query: (s: string, p: unknown[]) => Promise<unknown> }) {',
+        '  await client.query(`',
+        '    INSERT INTO widgets (id, name, tenant_id) VALUES ($1, $2, $3)',
+        '    ON CONFLICT (name) DO UPDATE SET name = excluded.name',
+        '  `, ["1", "n", "t"]);',
+        '  return new Response(null);',
+        '}',
+      ].join('\n'),
+    ));
+    const r = run(root);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/UNTARGETED\s+app\/api\/widgets\/route\.ts:\d+ — raw ON CONFLICT on widgets\(name\)/);
+  });
+
+  it('raw SQL that does restate the predicate is clean', () => {
+    const root = fixture(caseFiles(
+      'CREATE UNIQUE INDEX "widgets_name_unique_live" ON "public"."widgets" ("name") WHERE deleted_at IS NULL;',
+      PARTIAL_SCHEMA,
+      [
+        'export async function POST(client: { query: (s: string, p: unknown[]) => Promise<unknown> }) {',
+        '  await client.query(`',
+        '    INSERT INTO widgets (id, name, tenant_id) VALUES ($1, $2, $3)',
+        '    ON CONFLICT (name) WHERE deleted_at IS NULL DO UPDATE SET name = excluded.name',
+        '  `, ["1", "n", "t"]);',
+        '  return new Response(null);',
+        '}',
+      ].join('\n'),
+    ));
+    expect(run(root).status).toBe(0);
+  });
+
+  it('a deliberate negative control declares itself, and the screen stays quiet', () => {
+    // #2740's reproducer asserts the 42P10; a guard that demanded a fix there would
+    // be asking for the test to stop testing the thing it exists to test.
+    const root = fixture(caseFiles(
+      'CREATE UNIQUE INDEX "widgets_name_unique_live" ON "public"."widgets" ("name") WHERE deleted_at IS NULL;',
+      PARTIAL_SCHEMA,
+      [
+        'export async function POST(client: { query: (s: string, p: unknown[]) => Promise<unknown> }) {',
+        '  // partial-unique:allow 42P10 — negative control, the omission is the assertion',
+        '  await client.query(`',
+        '    INSERT INTO widgets (id, name, tenant_id) VALUES ($1, $2, $3)',
+        '    ON CONFLICT (name) DO UPDATE SET name = excluded.name',
+        '  `, ["1", "n", "t"]);',
+        '  return new Response(null);',
+        '}',
+      ].join('\n'),
+    ));
+    expect(run(root).stdout, run(root).stdout).toContain('0 missing their predicate');
+    expect(run(root).status).toBe(0);
   });
 
   it('a parenthesis in a comment does not truncate the options object', () => {

@@ -239,6 +239,9 @@ export function readSchemaIndexDeclarations(root = ROOT): Map<string, { where: s
  * pointed at a surface converted here must therefore pass `targetWhere`, or it
  * fails with 42P10 ("no unique or exclusion constraint matching the ON CONFLICT
  * specification") the first time it runs — long after this file was merged.
+ * Both forms are read: the Drizzle builder (`onConflictDoUpdate`) and raw SQL
+ * (`INSERT … ON CONFLICT (cols) … DO`), because a repository this size writes
+ * upserts both ways, and the raw half is what CI's live database caught first.
  */
 export type ConflictSite = {
   file: string;
@@ -246,7 +249,24 @@ export type ConflictSite = {
   table: string | null;
   columns: string[];
   hasTargetWhere: boolean;
+  raw?: boolean;
+  /** Set when the statement carries a `partial-unique:allow 42P10` marker above it. */
+  allow?: string;
 };
+
+/**
+ * A statement can *deliberately* omit its predicate — #2740's reproducer asserts that
+ * a partial index is not inferable from columns alone, and must fail with 42P10 for
+ * the test to mean anything. Such a site marks itself with a comment line, and the
+ * marker is only ever a reason the site is *expected* to raise, never a reason the
+ * screen stays quiet about a predicate it cannot see.
+ */
+const ALLOW_MARKER = /partial-unique:allow\s+(42P10)/;
+function allowMarkerAbove(txt: string, at: number): string | undefined {
+  const head = txt.slice(Math.max(0, txt.lastIndexOf('\n', at - 1000) + 1), at);
+  const m = ALLOW_MARKER.exec(head);
+  return m ? m[1] : undefined;
+}
 
 const CAMEL = /([a-z0-9])([A-Z])/g;
 const snake = (s: string) => s.trim().replace(CAMEL, '$1_$2').toLowerCase();
@@ -319,6 +339,45 @@ export function readConflictSites(root = ROOT): ConflictSite[] {
             table,
             columns: cols.sort(),
             hasTargetWhere: /targetWhere:/.test(body),
+            allow: allowMarkerAbove(txt, m.index!),
+          });
+        }
+      }
+    };
+    walk(dir);
+  }
+  return out;
+}
+
+/**
+ * Raw-SQL half of the same rule: `INSERT INTO t (…) ON CONFLICT (cols) [WHERE …] DO`.
+ * The table is the `INSERT INTO` that precedes the clause in the same statement, and
+ * the predicate is whatever sits between the column list and `DO`.
+ */
+export function readRawConflictSites(root = ROOT): ConflictSite[] {
+  const out: ConflictSite[] = [];
+  for (const group of ['app', 'lib', 'scripts', 'components', 'tests', 'server']) {
+    const dir = join(root, group);
+    if (!existsSync(dir)) continue;
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, e.name);
+        if (e.isDirectory()) { walk(p); continue; }
+        if (!/\.(ts|tsx|mts)$/.test(e.name)) continue;
+        const txt = readFileSync(p, 'utf8');
+        if (!/ON CONFLICT/i.test(txt)) continue;
+        for (const m of txt.matchAll(/ON\s+CONFLICT\s*\(([^)]*)\)([\s\S]{0,120}?)\bDO\b/gi)) {
+          const cols = [...(m[1] ?? '').matchAll(/"?\w+"?/g)].map((c) => c[0].replace(/"/g, '')).sort();
+          const before = txt.slice(Math.max(0, m.index! - 900), m.index!);
+          const ins = [...before.matchAll(/INSERT\s+INTO\s+(?:"?public"?\.)?"?([A-Za-z_]\w*)"?/gi)].pop();
+          out.push({
+            file: relative(root, p),
+            line: txt.slice(0, m.index!).split('\n').length,
+            table: ins ? ins[1]!.toLowerCase() : null,
+            columns: cols,
+            hasTargetWhere: /\bWHERE\b/i.test(m[2] ?? ''),
+            raw: true,
+            allow: allowMarkerAbove(txt, m.index!),
           });
         }
       }
@@ -389,10 +448,10 @@ export function analyze(root = ROOT): Report {
   const partialByKey = new Map<string, Surface>();
   for (const surface of onSoft) if (isPartial(surface.where)) partialByKey.set(colKey(surface), surface);
 
-  const sites = readConflictSites(root);
+  const sites = [...readConflictSites(root), ...readRawConflictSites(root)];
   const upsertFindings: Report['upsertFindings'] = [];
   for (const site of sites) {
-    if (!site.table || site.hasTargetWhere) continue;
+    if (!site.table || site.hasTargetWhere || site.allow) continue;
     const surface = partialByKey.get(`${site.table}|${[...site.columns].sort().join(',')}`);
     if (surface) upsertFindings.push({ site, surface });
   }
@@ -416,7 +475,7 @@ function format(report: Report): string {
     `partial-unique-indexes: ${t.migrations} migrations, ${t.softTables} soft-deletable tables, ` +
     `${t.uniqueOnSoft} unique surfaces on them — ${t.partial} partial on deleted_at, ` +
     `${t.absolute} declared absolute, ${report.findings.length} unexplained; ` +
-    `${t.conflictSites} ON CONFLICT sites, ${report.upsertFindings.length} missing targetWhere`,
+    `${t.conflictSites} ON CONFLICT clauses (builder and raw SQL), ${report.upsertFindings.length} missing their predicate`,
   );
   for (const f of report.findings) {
     lines.push(`  MISSING  ${f.surface.table} [${f.surface.kind}] ${f.surface.name} (${f.surface.columns}) — ${f.surface.declaredIn}`);
@@ -428,8 +487,8 @@ function format(report: Report): string {
     lines.push(`  STALE    ${s.name} — ${s.note} (reason on file: ${s.reason})`);
   }
   for (const u of report.upsertFindings) {
-    lines.push(`  UNTARGETED  ${u.site.file}:${u.site.line} — onConflict on ${u.site.table}(${u.site.columns.join(', ')}) ` +
-      `cannot infer the partial index "${u.surface.name}" without targetWhere (42P10 at runtime)`);
+    lines.push(`  UNTARGETED  ${u.site.file}:${u.site.line} — ${u.site.raw ? 'raw ON CONFLICT' : 'onConflictDoUpdate/Nothing'} on ${u.site.table}(${u.site.columns.join(', ')}) ` +
+      `cannot infer the partial index "${u.surface.name}" without ${u.site.raw ? 'its WHERE predicate in the conflict clause' : 'targetWhere'} (42P10 at runtime)`);
   }
   if (!report.findings.length && !report.schemaFindings.length && !report.staleExemptions.length && !report.upsertFindings.length) {
     lines.push('  every unique surface on a soft-deletable table is either partial on deleted_at or declared absolute with a reason');

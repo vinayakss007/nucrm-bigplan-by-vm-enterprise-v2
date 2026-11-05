@@ -82,10 +82,14 @@
 -- --------------------------------------------------------------------
 -- 1. `ON CONFLICT (cols)` infers its index by name-equivalence, and a partial index is
 --    only inferable when the statement restates the predicate. Every upsert aimed at a
---    converted surface therefore now passes `targetWhere` (23 call sites), or Postgres
---    rejects it with 42P10 before it runs. The screen reads the call sites and fails on
---    a missing `targetWhere`, because the failure would otherwise be a route 500 weeks
---    from now, in code nobody is looking at.
+--    converted surface therefore now names the predicate too: 23 Drizzle call sites pass
+--    `targetWhere`, and the two raw-SQL upserts (`scripts/simulate-preprod-flows.ts`,
+--    `tests/integration/calculated-fields.test.ts`) gained a `WHERE deleted_at IS NULL`
+--    inside their conflict clause. Without it Postgres rejects the statement with 42P10
+--    before it runs — which is exactly what CI's live database caught, in the raw-SQL
+--    half this screen had not yet been reading. The screen reads both forms now and fails
+--    on a missing predicate, because the failure would otherwise be a route 500 weeks from
+--    now, in code nobody is looking at.
 -- 2. Key-resolving reads. A unique lookup that does not filter `deleted_at` can now
 --    match a tombstone and a live row at once, and returns whichever Postgres reaches
 --    first. 15 of the 26 converted tables have no code path that writes `deleted_at` at

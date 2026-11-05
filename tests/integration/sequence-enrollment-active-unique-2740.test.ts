@@ -338,6 +338,8 @@ d('#2740 one live drip per (sequence, contact)', () => {
     expect(upserted!.currentStep).toBe(1);
     expect(await liveCount(pool, CONTACT)).toBe(1);
 
+    // partial-unique:allow 42P10 — this is the negative control: the statement
+    // deliberately omits the predicate to prove a partial index is not inferable.
     const bare = await errorFor(
       pool,
       `INSERT INTO sequence_enrollments (id, tenant_id, sequence_id, contact_id, status, current_step, next_step_at, enrolled_at)
