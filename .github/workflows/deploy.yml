@@ -272,16 +272,18 @@ jobs:
               return 1
             }
 
-            # #2300 — ecosystem.config.cjs declares three apps (web, worker,
-            # cron); this step used to restart only web. Every merge touching
+            # #2300 — ecosystem.config.cjs declares 3 apps (worker, cron, realtime)
+            # besides web; this step used to restart only web. Every merge touching
             # worker.ts, lib/automation/**, job handlers or scripts/
             # cron-scheduler.ts shipped web-only: the OLD worker kept consuming
             # NEW queue payloads with old logic (mixed-version processing —
             # wrong plan emails, stale follow-ups, jobs that silently fail or
             # duplicate), and it was invisible because the web health endpoint
             # stayed green. Same for a cron stuck in "errored" (the documented
-            # FATAL: CRON_SECRET class of silent death — no gate noticed).
-            BG_APPS="worker cron"
+            # FATAL: CRON_SECRET class of silent death — no gate noticed). Same
+            # for realtime (#3252): nginx proxies /socket.io/ to it, so a deploy
+            # that never starts it 502s every handshake.
+            BG_APPS="worker cron realtime"
             restart_background_apps() {
               for APP in $BG_APPS; do
                 if pm2 describe "$APP" >/dev/null 2>&1; then

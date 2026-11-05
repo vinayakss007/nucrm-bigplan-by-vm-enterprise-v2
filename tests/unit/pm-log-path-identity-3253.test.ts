@@ -56,13 +56,15 @@ const THREE_APPS = `module.exports = { apps: [
 ]};`;
 
 describe('the tree this branch ships', () => {
-  it('is green, and green means the three apps and their six paths', () => {
+  it('is green, and green means the four apps and their eight paths', () => {
     const r = run(ROOT);
     expect(r.findings).toEqual([]);
-    expect(r.apps).toEqual(['web', 'worker', 'cron']);
+    expect(r.apps).toEqual(['web', 'worker', 'cron', 'realtime']);
     expect(r.declared.sort()).toEqual([
       'cron-error.log',
       'cron-out.log',
+      'realtime-error.log',
+      'realtime-out.log',
       'web-error.log',
       'web-out.log',
       'worker-error.log',
