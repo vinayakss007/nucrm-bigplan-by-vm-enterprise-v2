@@ -43,13 +43,13 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **31** of the `guard:*` aliases by name —
-`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`,
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **32** of the `guard:*` aliases by name —
+`guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`, `guard:cron-manifest`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:nginx-fd-limit`, `guard:override-ranges`,
 `guard:panel-error-state`, `guard:pm-log-paths`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **4** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:pg-hba`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **39** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **40** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
@@ -60,7 +60,10 @@ census command below and `tests/unit/docs-guard-coverage-counts-3239.test.ts` ma
 `guard:[a-z-]+`, so a `guard:pm2-…` name would be read as `guard:pm` and the paragraph would silently
 disagree with the workflow) — and **#3276** appended the `nginx-fd-limit` job as the last entry in
 `jobs:` rather than chaining a fourth alias onto a cited step line, because three register rows quote
-those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail — **31 / 39** now.
+those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail; **#3410** chained
+`guard:cron-manifest` onto the `:85` run line and extended the `:84` step name, keeping both coordinates
+where PP-049 quotes them —
+**32 / 40** now.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -84,7 +87,7 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5783` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, from `:5425` by **PP-079** for the same three additions, from `:5498` by **#3303**/**PP-080**, and from `:5630` by **#3403**/**PP-081**, whose header bullet, summary row and section grew the file **131** lines above the rule and whose integration proof grew it **22** more), re-pinned by **PP-076**, after
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5794` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, from `:5425` by **PP-079** for the same three additions, from `:5498` by **#3303**/**PP-080**, and from `:5630` by **#3403**/**PP-081**, whose header bullet, summary row and section grew the file **131** lines above the rule and whose integration proof grew it **22** more; **#3410** re-pinned `:5783` → `:5794` on 2026-11-05, **11** lines of drift — ten from merges above this sentence, one from its own PP-068 re-pin), re-pinned by **PP-076**, after
 **PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
 The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
 inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the

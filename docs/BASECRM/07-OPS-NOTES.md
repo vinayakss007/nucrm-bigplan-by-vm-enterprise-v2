@@ -219,7 +219,7 @@ binds it on every table where it is enabled, and the policies are
 `tenant_id = current_setting('app.current_tenant')` or an `app.is_super_admin` branch. A
 session that sets neither is admitted to no rows and does not raise. Measured on a development
 database: `count(*) FROM users` → **0** where the platform context reports **28**; `contacts` →
-**0** against **66**; `deal_stages` → **0** against **146**. Of the 226 tables the schema declares,
+**0** against **66**; `deal_stages` → **0** against **146**. Of the 227 tables the schema declares,
 17 have a `FOR SELECT USING (true)` policy and read fine — `tenants` is one of them, which is
 why every number needs its context rather than an assumption.
 
