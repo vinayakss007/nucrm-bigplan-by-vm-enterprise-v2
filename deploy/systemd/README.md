@@ -1,12 +1,16 @@
-# `deploy/systemd/` — host units that are actually installed
+# `deploy/systemd/` — host units, installed and pending
 
-These two files are **byte-identical copies** of what lives in `/etc/systemd/system/` on the
-preprod host, so the repo documents the running state instead of describing an intention.
+The two prune units below are **byte-identical copies** of what lives in `/etc/systemd/system/` on
+the preprod host, so the repo documents the running state instead of describing an intention. The
+`nginx.service.d/` drop-in is the exception and is labelled as such in its own row: it is the fix
+for #3276, written here and **not installed anywhere yet**, because a drop-in that only exists in
+the repo cannot be verified against a host this repository does not have access to from CI.
 
-| unit                          | installed | enabled                     | purpose                                                       |
-| ----------------------------- | --------- | --------------------------- | ------------------------------------------------------------- |
-| `nucrm-builder-prune.service` | yes       | — (triggered)               | `docker builder prune --force --max-used-space=40gb`          |
-| `nucrm-builder-prune.timer`   | yes       | yes (`timers.target.wants`) | daily 05:20 UTC + `RandomizedDelaySec=20m`, `Persistent=true` |
+| unit                          | installed | enabled                     | purpose                                                        |
+| ----------------------------- | --------- | --------------------------- | -------------------------------------------------------------- |
+| `nucrm-builder-prune.service` | yes       | — (triggered)               | `docker builder prune --force --max-used-space=40gb`           |
+| `nucrm-builder-prune.timer`   | yes       | yes (`timers.target.wants`) | daily 05:20 UTC + `RandomizedDelaySec=20m`, `Persistent=true`  |
+| `nginx.service.d/limits.conf` | **no**    | — (needs `daemon-reload`)   | `LimitNOFILE=65535`, so `worker_rlimit_nofile` is true (#3276) |
 
 Why a host timer and not `deploy/cron/crontab`: that crontab is bind-mounted into `nucrm-cron`,
 so editing it changes the live app scheduler with no restart, and it already holds destructive

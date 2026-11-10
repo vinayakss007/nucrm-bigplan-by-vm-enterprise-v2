@@ -28,7 +28,11 @@ flush_rate_limits() {
         docker exec nucrm-redis redis-cli -a "$redis_password" FLUSHDB >/dev/null 2>&1 || true
     fi
     # Clear brute-force blocks and failed attempts from DB
-        docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
+    # #3265: the compose Postgres no longer accepts a credential-free connection, so the
+    # container's own POSTGRES_PASSWORD is resolved inside the container — naming it here
+    # would put the secret in this host's process arguments, readable by any local `ps`.
+        docker exec nucrm-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U nucrm -d nucrm -c "$1"' sh \
+            "DELETE FROM login_blocks; DELETE FROM login_attempts;" >/dev/null 2>&1 || true
 }
 flush_rate_limits
 
@@ -36,7 +40,8 @@ flush_rate_limits
 log() { echo "[$(date +%H:%M:%S)] $1"; }
 
 # Clear stale brute-force blocks that accumulate across test runs
-docker exec nucrm-db psql -U nucrm -d nucrm -c "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
+docker exec nucrm-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U nucrm -d nucrm -c "$1"' sh \
+    "DELETE FROM login_blocks;" >/dev/null 2>&1 || true
 
 test_result() {
     local id="$1" name="$2" expected="$3" actual="$4" detail="${5:-}"
@@ -244,7 +249,8 @@ test_result "A09" "POST /auth/logout" "200" "$LC"
 R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
 
 # Get the logged-in user's ID for assign tests
-USER_ID=$(docker exec nucrm-db psql -U nucrm -d nucrm -t -A -c "SELECT id FROM users WHERE email='a@a.com' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+USER_ID=$(docker exec nucrm-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U nucrm -d nucrm -t -A -c "$1"' sh \
+    "SELECT id FROM users WHERE email='a@a.com' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
 echo "[INFO] Logged-in user ID: $USER_ID"
 
 # Create API key via session cookie + CSRF for all subsequent resource tests

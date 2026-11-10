@@ -9,22 +9,22 @@
 
 ## DONE — verified fixed (checklist was stale)
 
-| Item | What was claimed | Actual status |
-|------|-----------------|---------------|
-| C1 | `.env.local` secrets tracked in git | Already in `.gitignore`, NOT tracked |
-| C3 | `require()` in csrf.ts ESM | Already uses `import crypto from 'crypto'` |
-| C4 | `.env.local` not in `.gitignore` | Already on line 29 of `.gitignore` |
-| H2 | Dockerfile hardcodes JWT_SECRET | Uses `ARG JWT_SECRET` — not hardcoded |
-| H4 | CSRF non-crypto hash | Fixed by commit `7fba712` |
+| Item | What was claimed                    | Actual status                              |
+| ---- | ----------------------------------- | ------------------------------------------ |
+| C1   | `.env.local` secrets tracked in git | Already in `.gitignore`, NOT tracked       |
+| C3   | `require()` in csrf.ts ESM          | Already uses `import crypto from 'crypto'` |
+| C4   | `.env.local` not in `.gitignore`    | Already on line 29 of `.gitignore`         |
+| H2   | Dockerfile hardcodes JWT_SECRET     | Uses `ARG JWT_SECRET` — not hardcoded      |
+| H4   | CSRF non-crypto hash                | Fixed by commit `7fba712`                  |
 
 ## FIXED TODAY (PR needed)
 
-| Item | Fix | Files |
-|------|-----|-------|
-| C2 (partial) | Added `console.error` to 10 critical empty catch blocks | PR #241 (needs your review) |
-| M3 | CSRF rate limit 30→10 req/min | `app/api/auth/csrf-token/route.ts:6` |
-| H1 | Docker compose default DATABASE_SSL=false→true | `deploy/docker-compose.production.yml:123` |
-| M1 | Notification SSE stream: fixed empty catch + TDZ bug | `app/api/tenant/notifications/stream/route.ts` |
+| Item         | Fix                                                     | Files                                          |
+| ------------ | ------------------------------------------------------- | ---------------------------------------------- |
+| C2 (partial) | Added `console.error` to 10 critical empty catch blocks | PR #241 (needs your review)                    |
+| M3           | CSRF rate limit 30→10 req/min                           | `app/api/auth/csrf-token/route.ts:6`           |
+| H1           | Docker compose default DATABASE_SSL=false→true          | `deploy/docker-compose.production.yml:202`     |
+| M1           | Notification SSE stream: fixed empty catch + TDZ bug    | `app/api/tenant/notifications/stream/route.ts` |
 
 ## STILL PENDING (before launch)
 

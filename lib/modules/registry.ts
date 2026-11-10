@@ -11,7 +11,7 @@
 import { db } from '@/drizzle/db';
 import { tenantModules, modules } from '@/drizzle/schema/modules';
 import { tenants } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { ModuleManifest } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -351,6 +351,7 @@ export class ModuleRegistry {
           installedBy,
         }).onConflictDoUpdate({
           target: [tenantModules.tenantId, tenantModules.moduleId],
+          targetWhere: sql`${tenantModules.deletedAt} IS NULL`,
           set: {
             status: 'active',
             settings,

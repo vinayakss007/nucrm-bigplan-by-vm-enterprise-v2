@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
         })
         .onConflictDoUpdate({
           target: [tenantMembers.tenantId, tenantMembers.userId],
+          targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
           set: {
             roleSlug: inv.roleSlug,
             roleId: role?.id || null,

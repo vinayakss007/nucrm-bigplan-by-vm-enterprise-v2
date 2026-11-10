@@ -36,7 +36,7 @@ proxy.ts  ──▶  requireAuth()  ──▶  withApiRoute(handler)
 
 Runs before the handler. Verifies the session JWT at the edge and applies
 coarse rate buckets (`RATE_LIMIT_UNAUTH=30`, `AUTH=120`, `READS=300`,
-`API_KEY=300`). It is a *first line*; it does not build the `AuthContext` and
+`API_KEY=300`). It is a _first line_; it does not build the `AuthContext` and
 is not the authorization authority. Every real permission check happens in the
 handler via `requireAuth` + `can()` + `enforceField*`. A rebuild can keep this
 thin — correctness does not depend on it, cost (rejecting unauthed junk early)
@@ -44,7 +44,7 @@ does.
 
 ### Request auth — `requireAuth()` in `lib/auth/middleware.ts:200`
 
-The single gate a handler calls to learn *who* is making the request:
+The single gate a handler calls to learn _who_ is making the request:
 
 - Reads the `nucrm_session` cookie, verifies the JWT, loads the user, and loads
   the role's permissions: `COALESCE(roles.permissions,'{}'::jsonb)`
@@ -61,10 +61,10 @@ The single gate a handler calls to learn *who* is making the request:
 Wraps the handler body and **pins one pooled connection for the whole request**
 (#1615). This is load-bearing: `setTenantContext()` sets `app.current_tenant` /
 `app.current_user` on that connection, and because the wrapper guarantees every
-query and `db.transaction(...)` in the handler reuses *the same* client, the GUC
+query and `db.transaction(...)` in the handler reuses _the same_ client, the GUC
 is visible to all of them. Without the pin, a subsequent query could land on a
 different pooled backend with no GUC set and (correctly) see zero rows. Rebuild
-note: this pin is not an optimization, it is *how RLS sees the tenant*.
+note: this pin is not an optimization, it is _how RLS sees the tenant_.
 
 ### Response shape
 
@@ -90,21 +90,21 @@ coexisting shapes and the `apiError()` helper (`lib/api-error.ts:37`).
   `withSecurityContext` (`:183-191`), `setImpersonationContext` (`:208`). The
   auth/credential helpers — `withAuthLookupContext`,
   `withAuthResolutionContext`, `withTokenIssueContext`,
-  `withOAuthClientLookupContext` — are *defined* in
+  `withOAuthClientLookupContext` — are _defined_ in
   `lib/db/token-credential-context.ts` (`:90`, `:257`, `:225`, `:145`) and only
   re-exported from `rls.ts:32-41`, so `rls.ts` remains the canonical import path
   while the definitions live elsewhere; cite the symbol, not a `rls.ts` line.
-  The other pre-auth context modules are *not* re-exported — `portal-lookup-context.ts`,
+  The other pre-auth context modules are _not_ re-exported — `portal-lookup-context.ts`,
   `form-capture-context.ts` and `unsubscribe-contact-context.ts` are imported
   straight from their own file (e.g. `app/api/unsubscribe/route.ts:30`).
   See 02/03 for what each SETs and why
-  `withSecurityContext` is super-admin-scoped and must wrap the *smallest*
+  `withSecurityContext` is super-admin-scoped and must wrap the _smallest_
   possible statement set.
 - **Reset on return**: every `app.*` GUC is cleared on connection checkout/return
   (`lib/db/pool.ts:241`, `RESET_TENANT_GUCS_SQL` at
   `lib/db/request-connection.ts:103` → issued at `:251`) and PgBouncer
   runs `server_reset_query='DISCARD ALL'` (`lib/db/rls.ts:10-17`). A leaked GUC
-  across tenants is prevented at *three* layers.
+  across tenants is prevented at _three_ layers.
 
 ## Background work
 
@@ -112,8 +112,10 @@ coexisting shapes and the `apiError()` helper (`lib/api-error.ts:37`).
   journal `drizzle/migrations/meta/_journal.json` and stamps the ledger
   `drizzle.__drizzle_migrations` (`scripts/migrate.ts:68,125,348-374`). See 02.
 - **Cron / automations**: automation rows (`automations` table, 02) drive
-  scheduled/triggered actions; a runner (pg-boss / node-cron under #401) executes
-  them. Not base-CRM-critical to *rebuild* but the table shape is documented.
+  scheduled/triggered actions; the `run-automation` job on the Redis queue executes
+  them (#3411 left one backend; #401's separate question of who _schedules_
+  recurring automations — node-cron vs a beat — is still open). Not
+  base-CRM-critical to _rebuild_ but the table shape is documented.
 - **Guards** (CI hygiene, must exit 0 — see 07): `scripts/check-register-drift.mjs`,
   `scripts/check-register-coords.mjs`, `scripts/check-migration-rls-dml.mjs`,
   `scripts/check-migration-chain.mjs`, `scripts/check-migration-redeclarations.mjs`.
@@ -148,5 +150,5 @@ Large repo. Re-measured at `33f0b7306`:
 25 integration / 11 dashboard / 1 elsewhere), i.e. roughly half of what is
 actually on `main` now. The stale number to fix lives there, not here.
 
-The *base* CRM is a small subset of tables and routes; the rest is product
+The _base_ CRM is a small subset of tables and routes; the rest is product
 surface layered on the same substrate. 06-REBUILD-GUIDE isolates the minimum set.

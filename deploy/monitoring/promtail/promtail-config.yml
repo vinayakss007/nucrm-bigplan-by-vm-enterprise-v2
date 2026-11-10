@@ -1,4 +1,8 @@
 ---
+# Host/Podman/pm2 deployments have no Docker socket, so `docker_sd_configs`
+# below discovers nothing. Use `promtail-config.host.yml` alongside this file
+# (it ships the same pipeline with static file targets instead) — #3261.
+
 server:
   http_listen_port: 9080
   grpc_listen_port: 0

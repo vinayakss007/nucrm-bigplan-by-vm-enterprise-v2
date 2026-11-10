@@ -15,6 +15,7 @@
  * single flat `role_slug` and `contacts.lead_access` defaulted to 'team' while
  * referencing a "team" that had no backing table.
  */
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { users } from './core';
 import * as utils from './utils';
@@ -38,7 +39,7 @@ export const teams = pgTable('teams', {
     managerIdx: index('idx_teams_manager').on(table.managerId),
     // Team names are unique per tenant (case-sensitive at the DB layer; the API
     // normalises before insert).
-    tenantNameIdx: uniqueIndex('idx_teams_tenant_name').on(table.tenantId, table.name),
+    tenantNameIdx: uniqueIndex('idx_teams_tenant_name_live').on(table.tenantId, table.name).where(sql`${table.deletedAt} IS NULL`),
   };
 });
 
@@ -59,6 +60,6 @@ export const teamMembers = pgTable('team_members', {
     teamIdx: index('idx_team_members_team').on(table.teamId),
     userIdx: index('idx_team_members_user').on(table.userId),
     // A user appears at most once per team.
-    teamUserIdx: uniqueIndex('idx_team_members_team_user').on(table.teamId, table.userId),
+    teamUserIdx: uniqueIndex('idx_team_members_team_user_live').on(table.teamId, table.userId).where(sql`${table.deletedAt} IS NULL`),
   };
 });

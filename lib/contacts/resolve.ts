@@ -21,10 +21,16 @@
  * The caller is responsible for:
  *  - Setting `lead.contact_id = result.contactId` on the lead row
  *  - Emitting any audit / webhook side effects
+ *
+ * `tenants.currentContacts` is owned HERE, not by the caller (#3409). Both lead
+ * doors create contacts through this helper, and paying per caller is how one
+ * door bumped and the other silently did not — the counter is what the
+ * `maxContacts` gate then measures against, so an unpaid row made the tenant
+ * look smaller than it was to every later quota check.
  */
 
 import { eq, and, isNull, sql } from 'drizzle-orm';
-import { contacts, companies } from '@/drizzle/schema';
+import { contacts, companies, tenants } from '@/drizzle/schema';
 import type { db as dbType } from '@/drizzle/db';
 
 export interface ResolveLeadInput {
@@ -160,5 +166,11 @@ export async function resolveOrCreateContactForLead(
     .returning({ id: contacts.id });
 
   if (!created) throw new Error('Failed to create contact during lead intake');
+
+  await tx
+    .update(tenants)
+    .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+    .where(eq(tenants.id, tenantId));
+
   return { contactId: created.id, companyId, isNewContact: true };
 }

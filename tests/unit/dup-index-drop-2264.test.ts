@@ -50,6 +50,18 @@ const PAIRS: Record<string, string> = {
 };
 const DROPPED = Object.keys(PAIRS);
 
+/**
+ * #3406 supersedes three kept members on soft-deletable tables: the tombstone-blind
+ * constraint became a partial unique index under a *_live name, so the pair is still
+ * resolved — by its successor, not its survivor.
+ */
+const SUPERSEDED_BY_3406: Record<string, string> = {
+  tenants_slug_unique: 'tenants_slug_unique_live',
+  forms_slug_unique: 'idx_forms_slug_live',
+  product_templates_slug_unique: 'product_templates_slug_unique_live',
+};
+const survivor = (keep: string) => SUPERSEDED_BY_3406[keep] ?? keep;
+
 const SNAPSHOT: { indexes: string[] } = JSON.parse(
   readFileSync(join(ROOT, 'tests/unit/schema-drift-snapshot-2255.json'), 'utf8'),
 );
@@ -138,7 +150,7 @@ describe('schema no longer declares the dropped duplicates (#2264)', () => {
 
   it('every kept member of every pair is still declared', () => {
     const declared = declaredIndexNames();
-    const missing = Object.values(PAIRS).filter((keep) => !declared.has(keep));
+    const missing = Object.values(PAIRS).map(survivor).filter((keep) => !declared.has(keep));
     expect(missing).toEqual([]);
   });
 });
@@ -151,7 +163,7 @@ describe('DB snapshot reflects the drops (#2264)', () => {
 
   it('snapshot still contains every kept member', () => {
     const live = new Set(SNAPSHOT.indexes);
-    expect(Object.values(PAIRS).filter((keep) => !live.has(keep))).toEqual([]);
+    expect(Object.values(PAIRS).map(survivor).filter((keep) => !live.has(keep))).toEqual([]);
   });
 
   it('#2255 duplicate allowlist holds no #2264 duplicate — its members only existed as duplicates', () => {

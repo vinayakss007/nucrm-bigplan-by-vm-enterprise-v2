@@ -13,7 +13,7 @@
  * Loading .env.local: PM2 7.x does NOT implement the `env_file` key — it is
  * accepted and silently ignored — so every app below loads its environment
  * itself. `web` gets it from Next.js (which reads .env.local before running any
- * code); the two `tsx` processes (worker, cron) get it from the
+ * code); the three `tsx` processes (worker, cron, realtime) get it from the
  * `--import ./scripts/load-env.mjs` preload, because tsx does not read .env* at
  * all. Without the preload those processes start with an empty environment:
  * cron died with "FATAL: CRON_SECRET is required" (5 restarts → "errored") and
@@ -39,7 +39,7 @@
  * ports the infra compose publishes (Redis 127.0.0.1:6379, MinIO
  * 127.0.0.1:9000). dotenv/Next.js never overwrite variables already present in
  * the process environment, which is why these `env:` overrides win over the
- * file for all three apps. Override with NUCRM_REDIS_URL / NUCRM_S3_ENDPOINT.
+ * file for every app below. Override with NUCRM_REDIS_URL / NUCRM_S3_ENDPOINT.
  *
  * Usage:
  *   pm2 start ecosystem.config.cjs                 # start all apps
@@ -126,7 +126,7 @@ module.exports = {
       min_uptime: '10s',
       restart_delay: 1000,
 
-      // Graceful shutdown — finish in-flight requests before exit.
+      // Graceful shutdown, not zero-downtime: pm2's `wait_ready` needs a readiness signal and `next start` never sends one, so a reload costs a brief 502 window — deploy/LAUNCH_RUNBOOK.md §9 (#3275).
       kill_timeout: 10000,
       listen_timeout: 5000,
       shutdown_with_message: true,
@@ -212,6 +212,51 @@ module.exports = {
       // #3253: fork mode appends the process id to the file name unless
       // merge_logs is set, so without this pm2 writes `cron-out-0.log` and the
       // path declared above never exists. web and worker already set it.
+      merge_logs: true,
+      watch: false,
+    },
+
+    // ── Realtime (socket.io) ──────────────────────────────────────────────
+    // #3252: deploy/nginx/nginx-production.conf proxies /socket.io/ to an
+    // upstream on 4001 and realtime.ts binds it — but until now nothing on the
+    // pm2 host started realtime.ts, so every websocket handshake 502ed, and
+    // nginx logged the upstream failures where the app's error pipeline could
+    // not see them. One fork instance: socket.io rooms are shared through
+    // Redis (@socket.io/redis-adapter in realtime.ts), not process memory, so
+    // a second instance duplicates work without adding capacity.
+    {
+      name: 'realtime',
+      script: 'node_modules/.bin/tsx',
+      args: '--import ./scripts/load-env.mjs realtime.ts',
+      cwd: __dirname,
+
+      instances: 1,          // exactly one — see the fork note above
+      exec_mode: 'fork',
+
+      env: {
+        NODE_ENV: 'production',
+        DATABASE_SSL: 'true',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        // Bind loopback explicitly (#1042's rule for `web`): nginx is the only
+        // public service here, so 4001 must not reach the VM's public interface.
+        REALTIME_HOST: '127.0.0.1',
+        REALTIME_PORT: 4001,
+        REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
+        S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
+      },
+
+      max_memory_restart: '512M',
+      autorestart: true,
+      // Same restart budget as web: a socket.io handshake storm must not spend
+      // a smaller allowance than the frontend gets.
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 1000,
+      kill_timeout: 10000,
+
+      out_file: `${LOG_DIR}/realtime-out.log`,
+      error_file: `${LOG_DIR}/realtime-error.log`,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss.SSS',
       merge_logs: true,
       watch: false,
     },

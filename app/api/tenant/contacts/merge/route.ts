@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, activities, leads, tasks, tenants, contactTags, followUps, recordLinks, contactScores, contactMergeHistory } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { ownerScope } from '@/lib/api/owner-scope';
@@ -154,6 +154,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await tx.update(recordLinks)
         .set({ toId: primary_id })
         .where(and(
+          isNull(recordLinks.deletedAt),
           eq(recordLinks.toType, 'contact'),
           eq(recordLinks.toId, duplicate_id),
           eq(recordLinks.tenantId, ctx.tenantId),

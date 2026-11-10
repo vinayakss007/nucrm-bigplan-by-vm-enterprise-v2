@@ -178,7 +178,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const [adminRole] = await tx
         .select({ id: roles.id })
         .from(roles)
-        .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin')))
+        .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin'), isNull(roles.deletedAt)))
         .limit(1);
 
       const upgraded = await tx

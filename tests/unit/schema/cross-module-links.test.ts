@@ -122,7 +122,9 @@ describe('cross-module record linking', () => {
     });
 
     it('makes linking idempotent via a unique constraint on the pair', () => {
-      const unique = cfg().indexes.find((i) => i.config.name === 'idx_record_links_unique');
+      // #3406: the key is unique among *live* links. Unlinking is a soft delete,
+      // and a tombstone must not block re-linking the same pair.
+      const unique = cfg().indexes.find((i) => i.config.name === 'idx_record_links_unique_live');
       expect(unique, 'a duplicate link must be impossible').toBeDefined();
       expect(unique!.config.unique).toBe(true);
 

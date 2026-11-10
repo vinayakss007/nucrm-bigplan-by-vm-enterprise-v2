@@ -39,6 +39,7 @@ vi.mock('@/drizzle/schema/chat', () => ({
 
 vi.mock('@/drizzle/schema', () => ({
   contacts: { id: 'id', tenantId: 'tenant_id' },
+  tenants: { id: 'id', currentContacts: 'current_contacts' },
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -287,6 +288,8 @@ describe('Chat - convertChatToLead', () => {
 
     expect(result.success).toBe(true);
     expect(result.leadId).toBe('contact-1');
+    // #3409 — the contact created here must pay for itself in tenants.current_contacts
+    expect(mockTxUpdate).toHaveBeenCalledWith(expect.objectContaining({ currentContacts: 'current_contacts' }));
   });
 
   it('rejects conversion if already converted', async () => {
