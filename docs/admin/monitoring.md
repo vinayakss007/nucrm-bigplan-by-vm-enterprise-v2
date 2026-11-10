@@ -13,6 +13,7 @@ How to see what the platform is doing and get alerted when something breaks.
 | **Grafana**         | Dashboards over Prometheus/Loki                 | `monitoring/`                               |
 | **Loki + Promtail** | Log aggregation and shipping                    | `deploy/monitoring/`                        |
 | **Alertmanager**    | Routes alerts (Slack, webhook)                  | `deploy/monitoring/`                        |
+| **Blackbox**        | TCP/HTTP probes of Postgres, Redis and S3       | `deploy/monitoring/blackbox.yml`            |
 | **Exporters**       | node / redis / postgres exporters               | docker-compose `monitoring` profile         |
 | **PagerDuty**       | On-call incident paging                         | `lib/pagerduty.ts`                          |
 
@@ -62,6 +63,23 @@ Use `/api/health` for load-balancer liveness and `/api/system/health` for deeper
 | **PagerDuty**    | Set `PAGERDUTY_ROUTING_KEY` to page on-call for critical incidents.    |
 | **Alertmanager** | Routes Prometheus alerts (thresholds defined in `deploy/monitoring/`). |
 | **Sentry**       | Notifies on new/spiking exceptions.                                    |
+
+### Dependency probes
+
+Postgres, Redis and the S3 gateway have no local fallback, and their exporters answer for
+themselves: a `postgres-exporter` with a stale DSN stays green while every app connection is
+refused. `blackbox-exporter` dials the sockets the app dials (`blackbox-tcp`) and speaks HTTP
+to the S3 gateway (`blackbox-s3`); `DependencyProbeFailing` pages after two minutes.
+
+The S3 probe treats an unsigned `GET /` answering **403 AccessDenied** as healthy: that
+response proves the gateway is reachable _and_ speaking S3. A 2xx-only probe would page on a
+working gateway. If `S3_ENDPOINT` names a gateway other than `minio:9000`, update the target
+in `deploy/monitoring/prometheus.yml`.
+
+`PrometheusScrapeFailing` and `AlertmanagerDown` watch the monitoring plane itself, and the
+always-firing `Watchdog` alert is the dead-man's switch for total Prometheus death — it is
+only meaningful when something outside this stack notices its absence. See
+`deploy/monitoring/alertmanager.yml` for the current delivery limitations.
 
 ---
 

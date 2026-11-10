@@ -1,0 +1,39 @@
+# ── Blackbox exporter modules (#3257) ───────────────────────────────────────
+#
+# The data tier has no local fallback: Postgres, Redis and the S3 endpoint all
+# fail as a *connection* error, not as a metric. `up{job="postgres"}` only says
+# the postgres-exporter could scrape; it says nothing about whether the app can
+# open the database. These modules answer the connection question directly.
+#
+#   tcp        — can anything open the socket (Postgres, Redis, S3 port)?
+#   s3-gateway — does the S3 gateway answer the S3 protocol?
+#
+# THE 403 IS THE HEALTHY ANSWER, NOT AN ERROR
+# -------------------------------------------
+# An unsigned `GET /` against an S3 gateway is refused with 403 AccessDenied.
+# That response proves two things at once: the socket is open, and an S3 server
+# parsed the request and answered it. Blackbox's default `valid_status_codes` is
+# 2xx only, so the naive probe pages on a perfectly working gateway; a module
+# that accepts *every* status never pages at all. Both are worse than no probe.
+# `valid_status_codes: [200, 403]` is the whole point of this file — keep 403
+# listed even if the gateway starts answering 200 to anonymous requests.
+#
+# SeaweedFS's S3 gateway exposes no `/metrics`, so this is the only way to see
+# it; MinIO's metrics endpoint covers its own internals but still cannot prove
+# the app's path to the socket.
+
+modules:
+  tcp:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  s3-gateway:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      # 403 AccessDenied on an unsigned request is the success case. See above.
+      valid_status_codes: [200, 403]

@@ -50,3 +50,82 @@ scrape_configs:
       - targets: ["node-exporter:9100"]
         labels:
           service: "nucrm-host"
+
+  # ── #3257 — can anything actually OPEN the data tier? ────────────────────
+  # The exporter jobs above report on the exporter, not on the dependency: a
+  # postgres-exporter with a stale DSN keeps answering 200 while every app
+  # connection is refused. These probes dial the socket the app dials.
+  #
+  # The target under `static_configs` is the thing being probed; the relabel
+  # chain below rewrites `__address__` to the blackbox exporter and carries the
+  # real address in `__param_target` / `instance`. Without that chain Prometheus
+  # would scrape the target itself and the job would look green for the wrong
+  # reason.
+  #
+  # Postgres runs on the HOST in production (there is no postgres service in
+  # deploy/docker-compose.production.yml), hence host.docker.internal; Redis
+  # and MinIO are compose services on nucrm-net. The root dev compose runs
+  # Postgres as a container bound to 127.0.0.1, which the monitoring network
+  # cannot reach — use `postgres:5432` there if you want the local probe green.
+  # If `S3_ENDPOINT` points at a different gateway, change the `minio:9000`
+  # entries to its internal address — the module name, not the target, carries
+  # the 403-is-healthy rule.
+  - job_name: "blackbox-tcp"
+    metrics_path: /probe
+    params:
+      module: [tcp]
+    static_configs:
+      - targets:
+          - "host.docker.internal:5432"
+          - "redis:6379"
+          - "minio:9000"
+        labels:
+          service: "nucrm-dependencies"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # The HTTP half of the S3 check: a TCP connect proves the port is open, but
+  # not that the gateway is speaking S3. An unsigned GET / that returns 403 is
+  # the healthy answer (see deploy/monitoring/blackbox.yml).
+  - job_name: "blackbox-s3"
+    metrics_path: /probe
+    params:
+      module: [s3-gateway]
+    static_configs:
+      - targets: ["http://minio:9000/"]
+        labels:
+          service: "nucrm-s3"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ── #3257 — who watches the watcher? ─────────────────────────────────────
+  # Prometheus cannot alert on its own death (the rule engine dies with it),
+  # so two signals cover the two different failures:
+  #   * `prometheus` self-scrape: `up == 0` catches a scrape/config/overload
+  #     failure while the process is still evaluating rules;
+  #   * the always-firing Watchdog alert in alerts.yml is the dead-man switch
+  #     for total death — meaningful only when something outside this stack
+  #     notices its absence.
+  # Alertmanager being down is detectable from here, and it is the failure that
+  # silently swallows every other alert.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: "nucrm-prometheus"
+
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels:
+          service: "nucrm-alertmanager"

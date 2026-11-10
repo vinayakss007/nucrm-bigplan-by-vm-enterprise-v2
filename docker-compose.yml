@@ -347,6 +347,27 @@ services:
     networks:
       - nucrm-net
 
+  # ── Blackbox exporter (#3257) ───────────────────────────────────────────
+  # Probes the data tier the app actually dials. The shared prometheus.yml
+  # targets the production host Postgres via host.docker.internal; this dev
+  # stack publishes Postgres on 127.0.0.1, so that one probe is expected to be
+  # down locally unless the target is changed to `postgres:5432`.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    profiles: ["monitoring"]
+    command:
+      - "--config.file=/etc/blackbox_exporter/blackbox.yml"
+    volumes:
+      - ./deploy/monitoring/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9115:9115"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── Grafana ─────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.1.0

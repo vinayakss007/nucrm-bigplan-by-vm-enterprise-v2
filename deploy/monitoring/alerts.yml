@@ -192,3 +192,57 @@ groups:
         annotations:
           summary: "Disk > 90% full"
           description: "Root filesystem usage has exceeded 90%. Postgres, Prometheus TSDB and deploys all fail on a full root disk; prune the builder cache before it gets here."
+
+  # ── #3257 — probes and the monitoring plane ──────────────────────────────
+  # The rules above watch metrics that only exist when the exporter is already
+  # healthy. These watch the things that have no local fallback (Postgres,
+  # Redis, the S3 gateway) and the plane that would tell a human about them.
+  - name: nucrm-observability
+    rules:
+      - alert: DependencyProbeFailing
+        # `probe_success` is 0 for a refused connection, a DNS failure and a
+        # TLS failure alike — exactly the cases an exporter's `up` cannot see.
+        # blackbox.yml accepts 403 for the S3 module, so a working gateway does
+        # not land here.
+        expr: probe_success{job=~"blackbox-(tcp|s3)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dependency unreachable: {{ $labels.instance }}"
+          description: "The {{ $labels.job }} probe cannot reach {{ $labels.instance }}. The app's path to Postgres, Redis or the S3 gateway is down; an exporter may still report healthy, because exporters answer for themselves."
+
+      - alert: PrometheusScrapeFailing
+        # This covers a scrape/config failure while Prometheus is still alive
+        # enough to evaluate rules. Total Prometheus death cannot fire from
+        # inside Prometheus — that is what the Watchdog rule below is for.
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus cannot scrape itself"
+          description: "The self-scrape has failed for 5 minutes. Rules may be evaluating against stale data, or a config reload left the target broken. Check /-/healthy and the Prometheus logs."
+
+      - alert: AlertmanagerDown
+        # Prometheus can see this one, and it is the failure that silently
+        # swallows every other alert: rules fire, nothing is delivered.
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is DOWN"
+          description: "Prometheus has not been able to scrape Alertmanager for 5 minutes. Alerts are still firing but are not being routed anywhere. Check the nucrm-alertmanager container and its config."
+
+      - alert: Watchdog
+        # Always firing, by design. Alertmanager's dead-man's switch: something
+        # outside this stack must notice when this alert STOPS arriving. With
+        # the current silent receivers (see alertmanager.yml) it documents the
+        # gap rather than closing it — do not read its presence as delivery.
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline is alive"
+          description: "This alert always fires. Its absence at an external receiver means Prometheus, Alertmanager or the route between them is dead."

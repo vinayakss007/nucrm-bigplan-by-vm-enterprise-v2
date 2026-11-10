@@ -523,6 +523,30 @@ services:
     networks:
       - nucrm-net
 
+  # ── Blackbox exporter (#3257) ───────────────────────────────────────────
+  # Probes Postgres, Redis and the S3 gateway from outside the app. The
+  # host-gateway alias is load-bearing: Postgres runs on the HOST, so a probe
+  # of `host.docker.internal:5432` fails DNS without it.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    command:
+      - "--config.file=/etc/blackbox_exporter/blackbox.yml"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9115:9115"
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+          cpus: "0.1"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   grafana:
     image: grafana/grafana:11.1.0
     container_name: nucrm-grafana
