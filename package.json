@@ -72,6 +72,7 @@
     "guard:cron-auth": "node scripts/check-cron-auth.mjs",
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
+    "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
     "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
     "guard:app-role-counts": "node scripts/check-app-role-counts.mjs",
