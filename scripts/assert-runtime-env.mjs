@@ -91,11 +91,32 @@ const SECRET_FLAGS = [
 const unset = (v) => v === undefined || v === null || String(v).trim() === '';
 const shapeOfSecret = (v) => (unset(v) ? '(unset)' : valueIsUnfilledTemplateToken(v) ? 'unfilled-template-token' : `(set, ${String(v).length} chars)`);
 const isLocalish = (v) => /localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]/.test(String(v));
-/** Scheme + "is it localhost", never the host: the report must not carry the deployment. */
+/**
+ * A bare IP literal cannot receive a publicly trusted certificate through the
+ * ACME http-01 paths this repo ships, so an https origin on one is unreachable
+ * for a real user (#3274). Parsed with URL so a lookalike hostname such as
+ * `203.0.113.7.example.com` is not mistaken for an address.
+ */
+const isBareIpHost = (v) => {
+  try {
+    const host = new URL(String(v)).hostname.replace(/^\[|\]$/g, '');
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || (host.includes(':') && /^[0-9a-f:]+$/i.test(host));
+  } catch {
+    return false;
+  }
+};
+/** Scheme + host category, never the host: the report must not carry the deployment. */
 const shapeOfOrigin = (v) =>
   unset(v)
     ? '(unset)'
-    : `${/^https:/i.test(String(v)) ? 'https' : 'http'}${isLocalish(v) ? ', localhost host' : ', non-local host'}`;
+    : `${/^https:/i.test(String(v)) ? 'https' : 'http'}${isLocalish(v) ? ', localhost host' : isBareIpHost(v) ? ', bare-IP host' : ', non-local host'}`;
+const originOf = (v) => {
+  try {
+    return new URL(String(v)).origin;
+  } catch {
+    return '';
+  }
+};
 
 /**
  * The fail-closed table. Each entry answers one question about the environment the
@@ -250,8 +271,21 @@ export const REQUIRED_RUNTIME_FLAGS = [
           ? { name: 'NEXT_PUBLIC_APP_URL', value: '(unset)', expected: 'the public https origin', status: 'warn', note: 'the code falls back to the dev origin, and next build inlines NEXT_PUBLIC_* into every bundle' }
           : ok('NEXT_PUBLIC_APP_URL', '(unset)', 'the public https origin in production');
       }
+      if (production && isBareIpHost(env.NEXT_PUBLIC_APP_URL)) {
+        return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'a hostname with a publicly trusted certificate', 'a bare IP cannot receive a publicly trusted certificate through the ACME paths this repo ships, so every visitor sees a full-page warning; NEXT_PUBLIC_* is inlined at build time, so fix the value and rebuild (#3274)');
+      }
       if (production && (!/^https:/i.test(String(env.NEXT_PUBLIC_APP_URL)) || isLocalish(env.NEXT_PUBLIC_APP_URL))) {
         return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'the public https origin', 'canonical URLs, OAuth redirects and the login link all follow it (#1040)');
+      }
+      if (production) {
+        const allowed = String(env.ALLOWED_ORIGINS ?? '')
+          .split(',')
+          .map((s) => originOf(s.trim()))
+          .filter(Boolean);
+        const canonical = originOf(env.NEXT_PUBLIC_APP_URL);
+        if (allowed.length > 0 && canonical && !allowed.includes(canonical)) {
+          return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'one of ALLOWED_ORIGINS', 'the app would generate links and redirects to an origin its own CORS/CSRF allowlist rejects; after an address change both values must move together, and NEXT_PUBLIC_* needs a rebuild (#3274)');
+        }
       }
       return ok('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'the public https origin in production');
     },

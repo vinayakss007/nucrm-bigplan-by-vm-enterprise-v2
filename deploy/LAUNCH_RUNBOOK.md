@@ -24,8 +24,14 @@ npm run prod:preflight        # env + connectivity checks
 
 Fix anything it reports before continuing.
 
+> A hostname with a publicly trusted certificate is a hard prerequisite, not a
+> polish item — see [§2](#2-real-domain--tls-certificate--1040--blocker). An
+> origin on a bare IP fails preflight (#3274): the certificate cannot be
+> trusted there, and `NEXT_PUBLIC_APP_URL` is inlined at build time, so fixing
+> it later also needs a rebuild.
+
 > #3279: the first half of that command is now `scripts/assert-runtime-env.mjs
-> --expect-production`, which asks the environment a server process would actually get
+--expect-production`, which asks the environment a server process would actually get
 > (`--pid <pid>` reads a live worker's `/proc/<pid>/environ`) instead of trusting the
 > template you copied. It fails on a credential still holding its `<<<REQUIRED>>>`
 > template token, and on a `TRUST_PROXY` that never reached the process — the reading
@@ -33,9 +39,9 @@ Fix anything it reports before continuing.
 > with 503 for every auth action (#2630). #3271 closed the common case by pinning that
 > flag in `ecosystem.config.cjs`, so the default reading of a repo-checked-out tree is
 > clean and `--process-only` is the one that still reports the gap. `npm run
-> assert:runtime-env` is the same file without `--expect-production` — one script, both
+assert:runtime-env` is the same file without `--expect-production` — one script, both
 > keys, since #3279 and #3271 were separately given the same name. On pm2, `pm2 reload
-> ecosystem.config.cjs --update-env` is what pushes a changed value into live workers; a
+ecosystem.config.cjs --update-env` is what pushes a changed value into live workers; a
 > file edit alone does not.
 >
 > Note: if `prod:preflight` errors because its script file is missing, run the
@@ -96,7 +102,12 @@ issue a Let's Encrypt certificate.
    captured at first `start`. `ecosystem.config.cjs` pins it for the `web` app;
    verify with `npm run assert:runtime-env`, and reload with `--update-env`.
    Left unset, every login answers `503 Rate limiter misconfigured: client IP
-   unavailable for an auth endpoint` and nothing else looks wrong.
+unavailable for an auth endpoint` and nothing else looks wrong.
+   `NEXT_PUBLIC_APP_URL` must be a hostname, not a bare IP, and must be one of
+   `ALLOWED_ORIGINS` (#3274) — `npm run prod:preflight` refuses both mistakes.
+   `next build` inlines `NEXT_PUBLIC_*`, so correcting this value on an existing
+   host needs a rebuild, not a reload: a restart keeps serving the old origin
+   from the bundles.
 4. Reload nginx: `sudo nginx -t && sudo systemctl reload nginx`.
 
 ---
@@ -166,7 +177,7 @@ all, and until #3265 the repo had no copy of it: `initdb` writes one into the da
 directory, and the official image writes `trust` for local and loopback TCP. So a
 new volume — provisioned, or restored onto — came up with "no password from any
 process that can reach the socket", and the hardened file an operator had installed
-lived *inside* the volume that was just replaced.
+lived _inside_ the volume that was just replaced.
 
 `deploy/postgres/pg_hba.conf` is now the tracked policy for a packaged/host install.
 Install it and reload; a reload is enough, so the running pool is not dropped:
@@ -188,7 +199,7 @@ are pinned in `docker-compose.yml`, `docker-compose.scale.yml` and
 starts with `ssl = off` and no certificate exists, so `hostssl` there refuses every
 application connection at the handshake rather than protecting it.
 
-Both paths matter because the pin only shapes a *new* data directory. An existing
+Both paths matter because the pin only shapes a _new_ data directory. An existing
 volume keeps whatever rules it was born with, which is why the assertion above reads
 the running server and not the file.
 
@@ -291,7 +302,7 @@ zero-downtime.
 
 Why `wait_ready` is not the fix:
 
-- pm2 waits for the supervised child to *signal* readiness (`process.send('process_ready')`).
+- pm2 waits for the supervised child to _signal_ readiness (`process.send('process_ready')`).
   `next start` never sends it, so `wait_ready: true` would make every reload wait
   `listen_timeout`, give up, and kill the process it was trying to keep.
 - In `exec_mode: 'cluster'` the master owns the listening socket; a worker's `listening` event is
@@ -305,7 +316,7 @@ Why `wait_ready` is not the fix:
 - Restart deliberately, in low traffic, and say so in the change note. Clients in flight get 502
   until `/api/health` answers again — that is the deploy gate, and it is the reason the gate reads
   the app rather than `pm2 pid`.
-- A 502 *outside* that window is not a deploy: it is a dead or dying worker. Check
+- A 502 _outside_ that window is not a deploy: it is a dead or dying worker. Check
   `pm2 describe web` (`restarts`, `unstable restarts`) and `logs/web-error.log` around the
   timestamp; `max_memory_restart` in the same file is the usual culprit.
 - Do not paper over it in the proxy. Masking 502s makes a crashed worker look like the app.
