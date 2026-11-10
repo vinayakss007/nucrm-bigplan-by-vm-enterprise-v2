@@ -1,0 +1,15 @@
+[Unit]
+Description=Watchdog for NuCRM rootless Podman containers (#3264)
+
+[Timer]
+# OnUnitActiveSec never re-arms for a oneshot service: the unit is already
+# inactive when the timer looks for the next elapse, so
+# `systemctl --user list-timers` shows NextElapseUSecMonotonic=infinity and the
+# watchdog silently never runs again. OnUnitInactiveSec schedules from the end
+# of the previous run.
+OnBootSec=2min
+OnUnitInactiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
