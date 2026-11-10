@@ -4,30 +4,30 @@ global:
 
 scrape_configs:
   # PostgreSQL metrics via postgres_exporter
-  - job_name: 'postgres'
+  - job_name: "postgres"
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets: ["postgres-exporter:9187"]
         labels:
-          service: 'nucrm-postgres'
+          service: "nucrm-postgres"
 
   # Redis metrics via redis_exporter
-  - job_name: 'redis'
+  - job_name: "redis"
     static_configs:
-      - targets: ['redis-exporter:9121']
+      - targets: ["redis-exporter:9121"]
         labels:
-          service: 'nucrm-redis'
+          service: "nucrm-redis"
 
   # Node exporter for system metrics
-  - job_name: 'node'
+  - job_name: "node"
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets: ["node-exporter:9100"]
         labels:
-          service: 'nucrm-host'
+          service: "nucrm-host"
 
-  # NuCRM app health endpoint
-  - job_name: 'nucrm-app'
-    metrics_path: '/api/health'
+  # NuCRM app Prometheus metrics endpoint
+  - job_name: "nucrm-app"
+    metrics_path: "/api/metrics"
     static_configs:
-      - targets: ['app:3000']
+      - targets: ["app:3000"]
         labels:
-          service: 'nucrm-app'
+          service: "nucrm-app"
