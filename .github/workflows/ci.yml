@@ -474,6 +474,27 @@ jobs:
       - name: Every Pool's options carry the TLS policy
         run: npm run guard:pool-tls
 
+  # #3406 — uniqueness on a soft-deletable table must exclude tombstones, or a
+  # deleted row keeps its key reserved (delete the team "Sales", retype "Sales",
+  # 23505). The screen re-derives every unique surface from the migration corpus
+  # and demands each is partial on deleted_at, or declared absolute with a
+  # reason in scripts/partial-unique-absolute.json — re-verified, not exempted.
+  partial-unique:
+    name: Partial unique indexes (#3406)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: No deleted row keeps a key reserved
+        run: npm run guard:partial-unique
+
   # #3253 — a pm2 log path is only real if the app pins `merge_logs`; in fork
   # mode without it pm2 writes `cron-out-0.log` and the declared
   # `logs/cron-out.log` never exists. `cron` was undeclared-while-read-by-nothing

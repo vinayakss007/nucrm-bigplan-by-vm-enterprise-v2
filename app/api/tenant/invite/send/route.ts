@@ -91,6 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     })
     .onConflictDoUpdate({
       target: [invitations.tenantId, invitations.email],
+      targetWhere: sql`${invitations.deletedAt} IS NULL`,
       set: {
         roleSlug: roleSlug,
         token,

@@ -13,7 +13,7 @@ import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers, sessions } from '@/drizzle/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 
 export interface GatewayConfig {
   allowedOrigins: string[];
@@ -127,7 +127,7 @@ export async function resolveGatewayTenant(request: NextRequest): Promise<Gatewa
   if (hostname && !hostname.includes('localhost') && !hostname.endsWith('.nucrm.io')) {
     const result = await db.select({ id: tenants.id })
       .from(tenants)
-      .where(eq(tenants.customDomain, hostname))
+      .where(and(eq(tenants.customDomain, hostname), isNull(tenants.deletedAt)))
       .limit(1);
 
     const tenant = result[0];

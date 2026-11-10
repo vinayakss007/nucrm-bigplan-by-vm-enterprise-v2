@@ -150,7 +150,9 @@ async function replayBootstrap(
   await client.query(
     `INSERT INTO tenant_members (tenant_id, user_id, role_id, role_slug, status, joined_at)
      VALUES ($1, $2, $3, 'admin', 'active', now())
-     ON CONFLICT (tenant_id, user_id) DO UPDATE SET status = 'active'`,
+     -- #3406: the key is unique among live rows, and a raw ON CONFLICT has to restate
+     -- that predicate or Postgres rejects the statement with 42P10.
+     ON CONFLICT (tenant_id, user_id) WHERE deleted_at IS NULL DO UPDATE SET status = 'active'`,
     [tenant_id, user_id, role_id]
   );
 

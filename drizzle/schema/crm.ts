@@ -385,7 +385,7 @@ export const customFieldDefs = pgTable('custom_field_defs', {
   return {
     tenantEntityIdx: index('idx_custom_fields_tenant_entity').on(table.tenantId, table.entityType),
     fieldKeyIdx: index('idx_custom_fields_key').on(table.fieldKey),
-    uniqueKey: uniqueIndex('idx_custom_fields_unique_key').on(table.tenantId, table.entityType, table.fieldKey),
+    uniqueKey: uniqueIndex('idx_custom_fields_unique_key_live').on(table.tenantId, table.entityType, table.fieldKey).where(sql`${table.deletedAt} IS NULL`),
   };
 });
 
@@ -393,7 +393,7 @@ export const forms = pgTable('forms', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
   name: text('name').notNull(),
-  slug: text('slug').unique(),
+  slug: text('slug'),
   title: text('title'),
   description: text('description'),
   fields: jsonb('fields').notNull().default([]),
@@ -408,6 +408,7 @@ export const forms = pgTable('forms', {
   ...utils.audit(),
 }, (table) => {
   return {
+    slugLiveUnique: uniqueIndex('idx_forms_slug_live').on(table.slug).where(sql`${table.deletedAt} IS NULL`),
     deletedByFk2261Idx: index("forms_deleted_by_fk_idx").on(table.deletedBy),
     updatedByFk2261Idx: index("forms_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
@@ -541,7 +542,7 @@ export const priceBookEntries = pgTable('price_book_entries', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    uniqueEntry: uniqueIndex('idx_price_book_entries_unique').on(table.priceBookId, table.productId),
+    uniqueEntry: uniqueIndex('idx_price_book_entries_unique_live').on(table.priceBookId, table.productId).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
   };
 });
@@ -560,7 +561,7 @@ export const pipelineHealthMetrics = pgTable('pipeline_health_metrics', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    uniqueMetric: uniqueIndex('idx_pipeline_health_unique').on(table.pipelineId, table.metricDate),
+    uniqueMetric: uniqueIndex('idx_pipeline_health_unique_live').on(table.pipelineId, table.metricDate).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
   };
 });
@@ -682,7 +683,7 @@ export const contactEmails = pgTable('contact_emails', {
 }, (table) => {
   return {
     contactIdx: index('idx_contact_emails_contact').on(table.contactId),
-    emailUniqueIdx: uniqueIndex('idx_contact_emails_unique').on(table.contactId, table.email),
+    emailUniqueIdx: uniqueIndex('idx_contact_emails_unique_live').on(table.contactId, table.email).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
   };
 });

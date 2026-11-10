@@ -1,4 +1,4 @@
--- Down migration for 0144: drop the cron run ledger (#3410).
+-- Down migration for 0145: drop the cron run ledger (#3410).
 DROP POLICY IF EXISTS "cron_runs_super_admin_delete" ON "cron_runs";
 --> statement-breakpoint
 DROP POLICY IF EXISTS "cron_runs_super_admin_read" ON "cron_runs";

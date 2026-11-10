@@ -28,6 +28,10 @@ vi.mock('@/drizzle/schema', () => ({
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => ({ a, b })),
+  // #3406: getBrandingForDomain excludes tombstoned tenants, so the builder
+  // helpers it now composes with must exist on this mock too.
+  and: vi.fn((...parts: unknown[]) => ({ and: parts })),
+  isNull: vi.fn((a: unknown) => ({ isNull: a })),
 }));
 
 describe('Branding Engine', () => {

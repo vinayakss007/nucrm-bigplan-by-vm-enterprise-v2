@@ -204,18 +204,21 @@ describe('migration 0143 grants the two users arms and nothing wider (#3303)', (
     expect(sql).not.toMatch(/ON "(?:sessions|tenant_members|refresh_tokens)"/);
   });
 
-  it('is appended to the journal, unapplied like every migration since #2537', () => {
+  it('is in the journal, unapplied like every migration since #2537', () => {
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
-    // Pinned by tag, not by rank: being LAST was incidental to #3303, and the
-    // next append (0144_cron_runs, #3410) must not have to edit this assertion.
+    // Looked up by tag, not taken from the tail: the chain keeps growing — #3406
+    // appended 0144 and #3410 appended 0145 after this migration — and the test's
+    // subject is 0143 itself. Being LAST was incidental to #3303, so pinning by
+    // rank would make every later append edit this assertion.
     const mine = journal.entries.filter((e) => e.tag === up!.replace(/\.sql$/, ''));
-    expect(mine).toHaveLength(1);
-    const last = journal.entries[journal.entries.length - 1];
-    expect(last.idx).toBeGreaterThan(145);
+    expect(mine, '0143 is missing from the journal').toHaveLength(1);
     expect(mine[0]!.idx).toBe(145);
     expect(mine[0]!.when).toBe(1793440000000);
+    expect(journal.entries.filter((e) => e.idx === mine[0]!.idx)).toHaveLength(1);
+    const last = journal.entries[journal.entries.length - 1];
+    expect(last.idx).toBeGreaterThan(145);
   });
 });
 

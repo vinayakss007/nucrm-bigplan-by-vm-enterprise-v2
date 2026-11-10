@@ -43,13 +43,13 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **32** of the `guard:*` aliases by name —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **33** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`, `guard:cron-manifest`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:nginx-fd-limit`, `guard:override-ranges`,
-`guard:panel-error-state`, `guard:pm-log-paths`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
+`guard:panel-error-state`, `guard:partial-unique`, `guard:pm-log-paths`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **4** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:pg-hba`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **40** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **41** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
@@ -63,7 +63,7 @@ disagree with the workflow) — and **#3276** appended the `nginx-fd-limit` job 
 those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail; **#3410** chained
 `guard:cron-manifest` onto the `:85` run line and extended the `:84` step name, keeping both coordinates
 where PP-049 quotes them —
-**32 / 40** now.
+**33 / 41** now.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -87,7 +87,7 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5794` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, from `:5425` by **PP-079** for the same three additions, from `:5498` by **#3303**/**PP-080**, and from `:5630` by **#3403**/**PP-081**, whose header bullet, summary row and section grew the file **131** lines above the rule and whose integration proof grew it **22** more; **#3410** re-pinned `:5783` → `:5794` on 2026-11-05, **11** lines of drift — ten from merges above this sentence, one from its own PP-068 re-pin), re-pinned by **PP-076**, after
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5800` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5312` when this **#2578**/**PP-077** merge added its header bullet, summary row and section above the rule, from `:5425` by **PP-079** for the same three additions, from `:5498` by **#3303**/**PP-080**, and from `:5630` by **#3403**/**PP-081**, whose header bullet, summary row and section grew the file **131** lines above the rule and whose integration proof grew it **22** more; **#3410** re-pinned `:5783` → `:5794` on 2026-11-05, **11** lines of drift — ten from merges above this sentence, one from its own PP-068 re-pin — and the merge of `main` moved it again to `:5800`, **6** more lines above), re-pinned by **PP-076**, after
 **PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
 The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
 inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the
@@ -143,12 +143,12 @@ cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 519 API routes (was 514; #3246's inbound receivers, #3328's oauth registration)
 find app/tenant -name page.tsx | wc -l                    # 150 tenant pages (was 149)
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 1013 (was 926 on `f054c6e95`; #3303 adds 2, the rest is what merged between; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 1033 (was 1013 on 2026-10-04, 926 on `f054c6e95`; the delta is what merged since, #3410's screens among it; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 292 total .sql (was 280; 0143 up+down and the four 0140–0142 files a merge had dropped from the journal are now paired)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 146 up-migrations (was 140), each with a `.down.sql` since #3284
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 146 journal entries (was 140) — guard:chain re-derives the pairing, not this count
-node -pe "Object.keys(require('./package.json').scripts).length"               # 136 scripts (was 122; guard:pool-tls, guard:cron-auth, guard:pm-log-paths, guard:nginx-fd-limit among the additions)
+ls drizzle/migrations/*.sql | wc -l                       # 296 total .sql (was 280; 0143 up+down and the four 0140–0142 files a merge had dropped from the journal are now paired, plus 0144 and 0145 up+down)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 148 up-migrations (was 140), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 148 journal entries (was 140) — guard:chain re-derives the pairing, not this count
+node -pe "Object.keys(require('./package.json').scripts).length"               # 139 scripts (was 122; guard:pool-tls, guard:cron-auth, guard:pm-log-paths, guard:nginx-fd-limit, guard:cron-manifest among the additions)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13
 # distinct declared table names; plain grep -o misses one multi-line declaration:

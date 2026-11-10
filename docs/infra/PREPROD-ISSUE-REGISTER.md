@@ -30,7 +30,7 @@
 > receiver is built one statement earlier). **0143 lands UNAPPLIED** with **#2537**'s backlog, so against today's
 > database SCIM still answers zero rows — fail-closed, never a leak. This entry arrived as **PP-079** on its own branch
 > and moves here because the merge brought **#3328**'s PP-079 in underneath it: two agents, one number, and the published
-> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** [re-pinned 2026-11-03 by **#3403**/**PP-081**, whose header bullet, summary row and section grew **131** lines above the rule and whose integration proof grew **22** more: `:5761`, then `:5783`, the number it is now] on this merged tree on this merged tree
+> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** [re-pinned 2026-11-03 by **#3403**/**PP-081**, whose header bullet, summary row and section grew **131** lines above the rule and whose integration proof grew **22** more: `:5761`, then `:5783`, then `:5794` by **#3410**, then `:5800` when `main` merged in] on this merged tree on this merged tree
 > (from 5627 the same day). Re-measured 2026-11-02 on the merge of `ea108e4bc`: `guard:rls` **519** routes and **0** tolerated, `scripts/rls-preauth-baseline.json` still empty, **146** up-migrations against **146** journal entries with `0143` among them unapplied, and the SCIM suites at **21** + **12** — **80** green over the five SCIM-facing files, both numbers re-derived from the 20/12/75-over-four this cell and this bullet had carried off the pre-merge tree. The line recording this re-pin is itself the one line of growth it reports.
 > - **Previous:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
 > its handler runs, and it still answered `invalid_client` at every caller on a fresh database, because `oauth_clients`
@@ -2154,7 +2154,10 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   `relforcerowsecurity=t`, so the app role reads nothing by default.
 - **Stale part of the original report.** `default_tenant_id` is NULL but **irrelevant**: `requireAuth` reads only
   `users.lastTenantId` (`lib/auth/middleware.ts:377`); `defaultTenantId` appears nowhere in auth code — grepping it
-  returns `drizzle/schema/core.ts:76`, `scripts/seed-dev.ts`, and a read-only projection at
+  returns `drizzle/schema/core.ts:78` (re-pinned 2026-11-05 from `:76` for **#3406**: converting `tenants.slug`
+  and `tenants.custom_domain` from column-level `.unique()` to partial `…_live` indexes added two table-level
+  lines above this one, so `:76` now reads `isSuperAdmin: boolean('is_super_admin').default(false),` — still a
+  `users` column, but not the `defaultTenantId` this sentence names), `scripts/seed-dev.ts`, and a read-only projection at
   `app/api/superadmin/users/[id]/route.ts:52` (re-pinned 2026-10-17 from `:48` for **#2781**: the `isEntityId` guard that PR adds above this projection shifted it four lines, so `:48` now reads `locale: users.locale,` — still in the same `db.select` column list, but not the `defaultTenantId` read this sentence names).
 - **No platform workspace exists.** `select count(*), count(*) filter (where status='active') from tenants` →
   `183|9`, and those 9 active tenants are all `debug-/verify-/fresh-/my-/e2e-test-workspace-*`; a slug query for

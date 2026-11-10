@@ -58,7 +58,7 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   //             drizzle/schema/ai.ts (#2255 — live since 0013, never declared;
   //             file_uploads was already counted at 224 and only needed its
   //             index.ts re-export).
-  // 226 -> 227: cron_runs (0144_cron_runs, #3410) — the persisted ledger that
+  // 226 -> 227: cron_runs (0145_cron_runs, #3410) — the persisted ledger that
   //             proves a cron job actually ran.
   it('should have exactly 227 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);

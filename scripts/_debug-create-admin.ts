@@ -1,7 +1,7 @@
 import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, roles, tenantMembers } from '@/drizzle/schema';
 import { hashPassword } from '@/lib/auth/session';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 async function main() {
   const email = 'debug@admin.test';
@@ -49,6 +49,7 @@ async function main() {
       isSystem: true,
     }).onConflictDoUpdate({
       target: [roles.tenantId, roles.slug],
+      targetWhere: sql`${roles.deletedAt} IS NULL`,
       set: { permissions: { all: true }, updatedAt: new Date() },
     }).returning();
     console.log('   Admin role:', adminRole?.id);
@@ -65,6 +66,7 @@ async function main() {
       joinedAt: new Date(),
     }).onConflictDoUpdate({
       target: [tenantMembers.tenantId, tenantMembers.userId],
+      targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
       set: { status: 'active', roleSlug: 'admin', roleId: adminRole.id, updatedAt: new Date() },
     });
     console.log('   Member created');
