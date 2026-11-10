@@ -98,6 +98,34 @@ const shapeOfOrigin = (v) =>
     : `${/^https:/i.test(String(v)) ? 'https' : 'http'}${isLocalish(v) ? ', localhost host' : ', non-local host'}`;
 
 /**
+ * True when the URL's host is a bare IP literal. Let's Encrypt does not issue
+ * for raw IPv4/IPv6 addresses through the paths `deploy/scripts/setup-ssl.sh`
+ * uses, so an IP-only production origin can only ever serve a self-signed
+ * certificate and a full-page browser warning (#3274).
+ */
+export function hostIsBareIp(value) {
+  try {
+    const host = new URL(String(value)).hostname;
+    if (host.startsWith('[') && host.endsWith(']')) {
+      return /^[0-9a-f:.]+$/i.test(host.slice(1, -1));
+    }
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Scheme + host + port, so a trailing slash or a path is not read as drift. */
+export function originOf(value) {
+  try {
+    const url = new URL(String(value));
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The fail-closed table. Each entry answers one question about the environment the
  * process has, and says what it expected, so a non-zero exit is readable on its own.
  */
@@ -250,8 +278,14 @@ export const REQUIRED_RUNTIME_FLAGS = [
           ? { name: 'NEXT_PUBLIC_APP_URL', value: '(unset)', expected: 'the public https origin', status: 'warn', note: 'the code falls back to the dev origin, and next build inlines NEXT_PUBLIC_* into every bundle' }
           : ok('NEXT_PUBLIC_APP_URL', '(unset)', 'the public https origin in production');
       }
+      if (production && hostIsBareIp(env.NEXT_PUBLIC_APP_URL)) {
+        return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'a public hostname, not a bare IP', 'a bare IP cannot get a trusted certificate through deploy/scripts/setup-ssl.sh, so every visitor gets a self-signed warning and OAuth callbacks are untrustworthy (#3274)');
+      }
       if (production && (!/^https:/i.test(String(env.NEXT_PUBLIC_APP_URL)) || isLocalish(env.NEXT_PUBLIC_APP_URL))) {
         return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'the public https origin', 'canonical URLs, OAuth redirects and the login link all follow it (#1040)');
+      }
+      if (production && !unset(env.APP_URL) && originOf(env.APP_URL) !== originOf(env.NEXT_PUBLIC_APP_URL)) {
+        return fail('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'the same origin as APP_URL', 'APP_URL is what server-generated links use; when the two disagree one is stale, and NEXT_PUBLIC_APP_URL is baked into every bundle at build time — correcting it needs a rebuild, not a restart (#3274)');
       }
       return ok('NEXT_PUBLIC_APP_URL', shapeOfOrigin(env.NEXT_PUBLIC_APP_URL), 'the public https origin in production');
     },

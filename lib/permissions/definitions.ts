@@ -28,6 +28,8 @@ export const PERMISSIONS: Permission[] = [
   { id: 'contacts.export',     label: 'Export Contacts',     description: 'Download contact data',          category: 'Contacts', dangerLevel: 'moderate' },
   { id: 'contacts.merge',      label: 'Merge Contacts',      description: 'Merge duplicate contacts',       category: 'Contacts', dangerLevel: 'danger' },
   { id: 'contacts.assign',     label: 'Assign Contacts',     description: 'Change contact owner',           category: 'Contacts', dangerLevel: 'moderate' },
+  { id: 'contacts.view',          label: 'View Own Contacts', description: 'See the contacts assigned to you',category: 'Contacts',dangerLevel: 'safe' },
+  { id: 'contacts.email',         label: 'Email Contacts',    description: 'Send email to contacts',          category: 'Contacts',dangerLevel: 'moderate' },
 
   // ── Leads ────────────────────────────────────────────────
   { id: 'leads.view',        label: 'View Own Leads',      description: 'See leads assigned to you',      category: 'Leads',    dangerLevel: 'safe' },
@@ -44,6 +46,10 @@ export const PERMISSIONS: Permission[] = [
   { id: 'companies.create',    label: 'Create Companies',    description: 'Add new companies',              category: 'Companies', dangerLevel: 'safe' },
   { id: 'companies.edit',      label: 'Edit Companies',      description: 'Modify companies',               category: 'Companies', dangerLevel: 'moderate' },
   { id: 'companies.delete',    label: 'Delete Companies',    description: 'Remove companies',               category: 'Companies', dangerLevel: 'danger' },
+  { id: 'companies.view',         label: 'View Own Companies',description: 'See the companies you own',       category: 'Companies',dangerLevel: 'safe' },
+  { id: 'companies.assign',       label: 'Assign Companies',  description: 'Change company owner',            category: 'Companies',dangerLevel: 'moderate' },
+  { id: 'companies.import',       label: 'Import Companies',  description: 'Bulk import via CSV',             category: 'Companies',dangerLevel: 'moderate' },
+  { id: 'companies.export',       label: 'Export Companies',  description: 'Download company data',           category: 'Companies',dangerLevel: 'moderate' },
 
   // ── Deals ────────────────────────────────────────────────
   { id: 'deals.view',        label: 'View Own Deals',      description: 'See your own deals',            category: 'Deals', dangerLevel: 'safe' },
@@ -53,6 +59,8 @@ export const PERMISSIONS: Permission[] = [
   { id: 'deals.delete',        label: 'Delete Deals',        description: 'Remove deals permanently',      category: 'Deals', dangerLevel: 'danger' },
   { id: 'deals.assign',        label: 'Assign Deals',        description: 'Change deal owner',             category: 'Deals', dangerLevel: 'moderate' },
   { id: 'deals.view_value',    label: 'View Deal Values',    description: 'See financial amounts',         category: 'Deals', dangerLevel: 'safe' },
+  { id: 'deals.import',           label: 'Import Deals',      description: 'Bulk import deals',               category: 'Deals',dangerLevel: 'moderate' },
+  { id: 'deals.export',           label: 'Export Deals',      description: 'Download deal data',              category: 'Deals',dangerLevel: 'moderate' },
 
   // ── Tasks ────────────────────────────────────────────────
   { id: 'tasks.view_all',      label: 'View All Tasks',      description: 'See tasks of all team members', category: 'Tasks', dangerLevel: 'safe' },
@@ -60,10 +68,12 @@ export const PERMISSIONS: Permission[] = [
   { id: 'tasks.edit',          label: 'Edit Tasks',          description: 'Update tasks',                  category: 'Tasks', dangerLevel: 'moderate' },
   { id: 'tasks.delete',        label: 'Delete Tasks',        description: 'Remove tasks',                  category: 'Tasks', dangerLevel: 'danger' },
   { id: 'tasks.assign',        label: 'Assign Tasks',        description: 'Assign tasks to team members',  category: 'Tasks', dangerLevel: 'moderate' },
+  { id: 'tasks.view',             label: 'View Own Tasks',    description: 'See the tasks assigned to you',   category: 'Tasks',dangerLevel: 'safe' },
 
   // ── Reports ──────────────────────────────────────────────
   { id: 'reports.view',        label: 'View Reports',        description: 'Access analytics & reports',    category: 'Reports', dangerLevel: 'safe' },
   { id: 'reports.export',      label: 'Export Reports',      description: 'Download report data',          category: 'Reports', dangerLevel: 'moderate' },
+  { id: 'reports.create',         label: 'Create Reports',    description: 'Build custom and scheduled reports',category: 'Reports',dangerLevel: 'moderate' },
 
   // ── Settings ─────────────────────────────────────────────
   { id: 'settings.view',       label: 'View Settings',       description: 'See workspace settings',        category: 'Settings', dangerLevel: 'safe' },
@@ -90,6 +100,8 @@ export const PERMISSIONS: Permission[] = [
   // ── Quotes ──────────────────────────────────────────────
   { id: 'quotes.view',         label: 'View Quotes',         description: 'Access quotes & proposals',     category: 'Sales',   dangerLevel: 'safe' },
   { id: 'quotes.manage',       label: 'Manage Quotes',        description: 'Create/edit/send quotes',       category: 'Sales',   dangerLevel: 'moderate' },
+  { id: 'quotes.edit',            label: 'Edit Quotes',       description: 'Modify an existing quote',        category: 'Sales',dangerLevel: 'moderate' },
+  { id: 'quotes.delete',          label: 'Delete Quotes',     description: 'Remove a quote permanently',      category: 'Sales',dangerLevel: 'danger' },
 
   // ── Invoices ──────────────────────────────────────────────
   { id: 'invoices.view',        label: 'View Invoices',       description: 'Access invoices & billing',       category: 'Sales',   dangerLevel: 'safe' },
@@ -114,10 +126,27 @@ export const PERMISSIONS: Permission[] = [
   // ── Subscriptions ─────────────────────────────────────────
   { id: 'subscriptions.view',   label: 'View Subscriptions',  description: 'Access subscriptions',          category: 'Sales',   dangerLevel: 'safe' },
   { id: 'subscriptions.manage',label: 'Manage Subscriptions',description: 'Create/manage subscriptions', category: 'Sales',   dangerLevel: 'moderate' },
+  { id: 'subscriptions.edit',     label: 'Edit Subscriptions',description: 'Change an existing subscription', category: 'Sales',dangerLevel: 'moderate' },
+  { id: 'subscriptions.delete',   label: 'Delete Subscriptions',description: 'Remove a subscription permanently',category: 'Sales',dangerLevel: 'danger' },
 
   // ── Segments ──────────────────────────────────────────────
   { id: 'segments.view',       label: 'View Segments',       description: 'Access contact segments',       category: 'Marketing', dangerLevel: 'safe' },
   { id: 'segments.manage',     label: 'Manage Segments',     description: 'Create/edit segments',          category: 'Marketing', dangerLevel: 'moderate' },
+
+  // ── Projects ─────────────────────────────────────────────
+  { id: 'projects.create',        label: 'Create Projects',   description: 'Add new projects',                category: 'Projects',dangerLevel: 'moderate' },
+  { id: 'projects.edit',          label: 'Edit Projects',     description: 'Update projects and milestones',  category: 'Projects',dangerLevel: 'moderate' },
+  { id: 'projects.delete',        label: 'Delete Projects',   description: 'Remove projects permanently',     category: 'Projects',dangerLevel: 'danger' },
+
+  // ── Meetings ─────────────────────────────────────────────
+  { id: 'meetings.view',          label: 'View Meetings',     description: 'See meeting records',             category: 'Meetings',dangerLevel: 'safe' },
+  { id: 'meetings.create',        label: 'Create Meetings',   description: 'Schedule new meetings',           category: 'Meetings',dangerLevel: 'moderate' },
+
+  // ── Calendar ─────────────────────────────────────────────
+  { id: 'calendar.manage',        label: 'Manage Calendar',   description: 'Sync and write to external calendars',category: 'Calendar',dangerLevel: 'moderate' },
+
+  // ── Partners ─────────────────────────────────────────────
+  { id: 'partners.create',        label: 'Create Partners',   description: 'Add partner records and their deals',category: 'Partners',dangerLevel: 'moderate' },
 ];
 
 export const PERMISSION_CATEGORIES = [...new Set(PERMISSIONS.map(p => p.category))];
