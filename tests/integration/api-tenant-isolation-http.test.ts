@@ -47,7 +47,12 @@ vi.mock('@/lib/dashboard/widget-cache', () => ({
 vi.mock('@/lib/concurrency', () => ({
   withConcurrencyGuard: vi.fn((_opts: unknown, fn: () => Promise<unknown>) => fn()),
 }));
-vi.mock('@/lib/usage/middleware', () => ({
+// #3409: POST /api/tenant/contacts now also reads `limitsEnforce()` and builds
+// its refusal with `planLimitReachedResponse()`. A mock listing only `checkLimit`
+// turns the real route into a TypeError on its way to a 201, so mirror the
+// module and stub the one export this file wants quiet.
+vi.mock('@/lib/usage/middleware', async (importActual) => ({
+  ...await importActual<typeof import('@/lib/usage/middleware')>(),
   checkLimit: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/modules/gate', () => ({
@@ -171,6 +176,10 @@ describe('Tenant Isolation HTTP (#666)', () => {
       expect(res.status).toBe(201);
       const body = await res.json();
       expect(body.data.tenant_id).toBe('tenant-a-001');
+      // #3409: the row this door admits is priced in the same transaction, so a
+      // create that leaves `tenants.current_contacts` where it was is a failure
+      // here, not just in the unit screen.
+      expect(mockDb.update).toHaveBeenCalled();
     });
   });
 

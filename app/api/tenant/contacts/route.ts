@@ -10,9 +10,9 @@ import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { checkLimit } from '@/lib/usage/middleware';
+import { checkLimit, limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';
+import { contacts, companies, users, tenants, activities, plans } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -201,7 +201,34 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const overLimit = await checkLimit(ctx, 'contacts');
     if (overLimit) return overLimit;
 
-    const contact = await db.transaction(async (tx) => {
+    // #3409 — the pre-flight above is a pre-flight: it reads a count and returns
+    // before anything is locked, so two concurrent creates both saw "one seat
+    // left" and both committed. Here the tenant row is locked FOR UPDATE and the
+    // ceiling is re-read under that lock, which is what makes the decision and
+    // the write one atomic act — the same rule #3080/#3147 set on the lead doors.
+    // The pre-flight stays because it is the half that records the violation and
+    // alerts the owner; the two are not interchangeable.
+    const enforceLimits = limitsEnforce(ctx);
+
+    const admission = await db.transaction(async (tx) => {
+      if (enforceLimits) {
+        const [locked] = await tx
+          .select({ currentContacts: tenants.currentContacts, maxContacts: plans.maxContacts })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1)
+          .for('update');
+
+        // The locked snapshot is the tenant's own counter as of this instant, so
+        // the +1 is priced against a number no other writer can change until this
+        // transaction ends.
+        const projected = (locked?.currentContacts ?? 0) + 1;
+        if (locked?.maxContacts != null && projected > locked.maxContacts) {
+          return { admitted: false as const, limit: locked.maxContacts, actual: projected };
+        }
+      }
+
       const [c] = await tx.insert(contacts)
         .values({
           tenantId: ctx.tenantId,
@@ -248,13 +275,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       // swallowed its error (and logged a useless placeholder context), which
       // let the contact commit while the tenant counter silently drifted.
       // Letting it propagate keeps the row count and the counter atomic.
+      // #3409: COALESCE-guarded — a NULL counter must not be "incremented" into
+      // NULL, which would make the tenant costless to every later ceiling check.
       await tx.update(tenants)
-        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+        .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
         .where(eq(tenants.id, ctx.tenantId));
 
-      return c;
+      return { admitted: true as const, contact: c };
     });
 
+    // The row was never inserted, so the tenant gets the same 402 body the
+    // pre-flight would have produced — a client cannot tell which half stopped it.
+    if (!admission.admitted) {
+      return planLimitReachedResponse('contacts', admission.limit, admission.actual);
+    }
+
+    const contact = admission.contact;
     if (!contact) throw new Error('Failed to create contact');
 
     // Audit log

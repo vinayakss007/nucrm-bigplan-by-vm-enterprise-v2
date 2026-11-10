@@ -445,6 +445,7 @@ async function upsertWarmingSchedule(
     })
     .onConflictDoUpdate({
       target: [leadWarmingSchedule.contactId, leadWarmingSchedule.campaignId],
+      targetWhere: sql`${leadWarmingSchedule.deletedAt} IS NULL`,
       set: {
         lastMessageAt: new Date(),
         nextEligibleAt: new Date(Date.now() + cooldownDays * 86400000),

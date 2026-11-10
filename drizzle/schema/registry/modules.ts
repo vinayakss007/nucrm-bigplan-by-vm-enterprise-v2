@@ -54,7 +54,7 @@ export const MODULES_TABLES = {
       dependencies: ['tenants', 'modules', 'users'],
       description: 'Tenant module installations',
       isCore: false,
-      indexes: ['idx_tenant_modules_unique', 'idx_tenant_modules_tenant'],
+      indexes: ['idx_tenant_modules_unique_live', 'idx_tenant_modules_tenant'],
     },
   },
   customPlugins: {
@@ -115,7 +115,7 @@ export const MODULES_TABLES = {
       dependencies: ['tenants', 'productTemplates', 'users'],
       description: 'Template assignments to tenants',
       isCore: false,
-      indexes: ['idx_tenant_templates_unique'],
+      indexes: ['idx_tenant_templates_unique_live'],
     },
   },
 };

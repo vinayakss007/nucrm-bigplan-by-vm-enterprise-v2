@@ -123,7 +123,6 @@ const realQueue = await vi.importActual<typeof import('@/lib/queue')>('@/lib/que
 
 type Fake = { add?: ReturnType<typeof vi.fn>; send?: ReturnType<typeof vi.fn> };
 let redisQueues: Fake[] = [];
-let bossInstances: Fake[] = [];
 
 vi.mock('ioredis', () => ({
   default: class { ping() { return Promise.resolve('PONG'); } quit() { return Promise.resolve(); } },
@@ -138,18 +137,8 @@ vi.mock('bullmq', () => ({
     close() { return Promise.resolve(); }
   },
 }));
-vi.mock('pg-boss', () => ({
-  PgBoss: class {
-    send: ReturnType<typeof vi.fn>;
-    constructor() {
-      this.send = vi.fn(() => Promise.resolve('job-id'));
-      bossInstances.push(this as unknown as Fake);
-    }
-    start() { return Promise.resolve(true); }
-    createQueue() { return Promise.resolve(); }
-    stop() { return Promise.resolve(); }
-  },
-}));
+// #3411 deleted the pg-boss adapter with its `pg-boss` mock: nothing consumed
+// those jobs, so the retry policy had no second place to be honored.
 
 const { requireAuth } = await import('@/lib/auth/middleware');
 const emailBulk = await import('@/app/api/tenant/email/bulk/route');
@@ -188,13 +177,6 @@ function bullmqAsks() {
   })));
 }
 
-function bossAsks() {
-  return bossInstances.flatMap((b) => (b.send?.mock.calls ?? []).map((c) => ({
-    name: c[0] as string,
-    ...(c[2] as { retryLimit?: number }),
-  })));
-}
-
 const askOf = (asks: { name: string }[], name: string) => asks.find((a) => a.name === name);
 
 beforeEach(() => {
@@ -202,7 +184,6 @@ beforeEach(() => {
   reads = [];
   jobs = [];
   redisQueues = [];
-  bossInstances = [];
   contacts_ = [contact(CONTACT_A), contact(CONTACT_B)];
 });
 
@@ -262,18 +243,6 @@ describe('the retry policy is honored where it is enforced', () => {
     const asks = bullmqAsks();
     expect(askOf(asks, 'send-bulk-emails')).toMatchObject({ attempts: 1, backoff: { type: 'exponential', delay: 1000 } });
     expect(askOf(asks, 'send-notification')?.attempts).toBe(3);
-  });
-
-  it('pg-boss maps the same option onto retryLimit', async () => {
-    delete process.env.REDIS_URL;
-    process.env.DATABASE_URL = 'postgresql://x@localhost:5432/nucrm_test';
-    await realQueue.addJob('send-bulk-emails', { recipients: [] }, { attempts: 1 });
-    await realQueue.addJob('send-notification', { userId: 'u' });
-    await realQueue.closeQueue();
-
-    const asks = bossAsks();
-    expect(askOf(asks, 'send-bulk-emails')?.retryLimit).toBe(1);
-    expect(askOf(asks, 'send-notification')?.retryLimit).toBe(3);
   });
 
   it('`attempts: 0` would NOT mean "never retry" — it inherits the default', async () => {

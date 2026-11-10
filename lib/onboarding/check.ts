@@ -13,7 +13,7 @@
 import { db } from '@/drizzle/db';
 import type { DbClient } from '@/drizzle/db';
 import { onboardingProgress } from '@/drizzle/schema/infra';
-import { eq, and } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 /**
  * A Drizzle client that may be either the shared `db` singleton or a
@@ -91,6 +91,7 @@ export async function markOnboardingComplete(
     completedAt: new Date(),
   }).onConflictDoUpdate({
     target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+    targetWhere: sql`${onboardingProgress.deletedAt} IS NULL`,
     set: {
       isCompleted: true,
       completedAt: new Date(),
@@ -120,6 +121,7 @@ export async function recordOnboardingStep(
     completedAt: new Date(),
   }).onConflictDoUpdate({
     target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+    targetWhere: sql`${onboardingProgress.deletedAt} IS NULL`,
     set: {
       isCompleted: true,
       completedAt: new Date(),

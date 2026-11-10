@@ -46,7 +46,10 @@ describe('Calculated Fields Integration', () => {
       INSERT INTO public.custom_field_defs 
       (tenant_id, entity_type, field_key, field_label, field_type, is_calculated, formula)
       VALUES ($1, 'contact', $2, 'Score + 10', 'number', true, '{{score}} + 10')
-      ON CONFLICT (tenant_id, entity_type, field_key) DO UPDATE 
+      -- #3406: idx_custom_fields_unique_key_live is partial on deleted_at, and a raw
+      -- ON CONFLICT cannot infer a partial index unless the statement restates the
+      -- predicate — without this the upsert is rejected with 42P10.
+      ON CONFLICT (tenant_id, entity_type, field_key) WHERE deleted_at IS NULL DO UPDATE 
       SET formula = EXCLUDED.formula, is_calculated = true
     `, [tenantId, fieldKey]);
 

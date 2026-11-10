@@ -474,6 +474,27 @@ jobs:
       - name: Every Pool's options carry the TLS policy
         run: npm run guard:pool-tls
 
+  # #3406 — uniqueness on a soft-deletable table must exclude tombstones, or a
+  # deleted row keeps its key reserved (delete the team "Sales", retype "Sales",
+  # 23505). The screen re-derives every unique surface from the migration corpus
+  # and demands each is partial on deleted_at, or declared absolute with a
+  # reason in scripts/partial-unique-absolute.json — re-verified, not exempted.
+  partial-unique:
+    name: Partial unique indexes (#3406)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: No deleted row keeps a key reserved
+        run: npm run guard:partial-unique
+
   # #3253 — a pm2 log path is only real if the app pins `merge_logs`; in fork
   # mode without it pm2 writes `cron-out-0.log` and the declared
   # `logs/cron-out.log` never exists. `cron` was undeclared-while-read-by-nothing
@@ -754,6 +775,64 @@ jobs:
             }
           done
           echo "OK: five planted credentials turn this screen red, one named rule each, exactly as #3281 requires."
+
+  # #3276 — `worker_rlimit_nofile 65535` in deploy/nginx/nginx-production.conf is a
+  # REQUEST, not a grant. nginx raises a worker's soft limit only as far as the hard
+  # limit its supervisor handed the process; when it cannot, it logs
+  # `setrlimit(RLIMIT_NOFILE, 65535) failed (13: Permission denied)` once per worker and
+  # serves anyway — on 1024 descriptors per worker under a config that claims 65535. The
+  # host logged exactly that, four times, in a file nothing read. So the number lives in
+  # three files this repo owns and nothing compared: the conf, the systemd drop-in for the
+  # VM's packaged nginx, and the compose `nginx` service's `ulimits:` — plus two pieces of
+  # arithmetic nginx does itself: a proxied connection costs two descriptors, so the limit
+  # must cover `2 * worker_connections`, and a `soft` above `hard` is a shape compose
+  # accepts and nginx cannot use.
+  #
+  # Appended as a NEW JOB below `ci.yml:447` — the last cited coordinate in the file, so
+  # no register pointer moves — and ABOVE #3282's `destructive-gate`. The tail of this
+  # file is an order, not a queue: `tests/unit/prod-seed-refusal-3282.test.ts:445` pins
+  # `destructive-gate` second-to-last while `tests/unit/ci-constraint-vocab-job-3241.test.ts:63`
+  # pins `constraint-vocab` last, so an append between those two asserts a predecessor to
+  # move. `npm ci` is needed only because the screen runs under `tsx`.
+  #
+  # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopts: the
+  # step above is evidence only once a copy of the three surfaces that grants 1024 under a
+  # 65535 request turns it red.
+  nginx-fd-limit:
+    name: nginx file-descriptor limit agreement (#3276)
+    if: vars.NGINX_FD_LIMIT_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - name: One fd limit across the conf, the systemd drop-in and the compose ulimits
+        run: npm run guard:nginx-fd-limit
+
+      - name: Negative control — a drop-in granting 1024 under a 65535 request MUST be red
+        run: |
+          set -uo pipefail
+          FIX="$RUNNER_TEMP/nginx-fd-3276"
+          rm -rf "$FIX"
+          mkdir -p "$FIX/deploy/nginx" "$FIX/deploy/systemd/nginx.service.d"
+          cp deploy/nginx/nginx-production.conf "$FIX/deploy/nginx/"
+          cp deploy/docker-compose.production.yml "$FIX/deploy/"
+          sed 's/^LimitNOFILE=.*/LimitNOFILE=1024/' deploy/systemd/nginx.service.d/limits.conf \
+            > "$FIX/deploy/systemd/nginx.service.d/limits.conf"
+          if npm run guard:nginx-fd-limit -- --json "$FIX" 2>&1 | tee "$RUNNER_TEMP/nginx-fd-negative.log"; then
+            echo "::error::#3276 the guard PASSED a host that would log setrlimit EPERM on every worker — it is not comparing the drop-in with the conf. This job proves nothing until the negative control fails."
+            exit 1
+          fi
+          grep -q '"surface": "agreement"' "$RUNNER_TEMP/nginx-fd-negative.log" || {
+            echo "::error::#3276 the run failed, but never reported the surfaces disagreeing — a different check broke. Inspect nginx-fd-negative.log."
+            exit 1
+          }
+          echo "OK: a 1024 grant under a 65535 request turns this screen red, naming all three numbers."
 
   # #3282 — nothing in this repository could tell that a script was about to destroy a
   # database. `npm run prod:seed` deleted every user, tenant, role, session, pipeline and

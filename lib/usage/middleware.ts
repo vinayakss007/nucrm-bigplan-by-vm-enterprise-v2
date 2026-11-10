@@ -25,9 +25,49 @@ import { logger } from '@/lib/logger';
 
 const ENFORCE = process.env['USAGE_LIMITS'] === 'on';
 
+/**
+ * Whether plan limits are expected to BLOCK this caller right now — the same two
+ * conditions `checkLimit` applies before it returns a 402.
+ *
+ * #3409: a route that has to make the limit decision a second time, inside the
+ * transaction where it actually writes, must ask here rather than re-read
+ * `USAGE_LIMITS` by hand. Two independent readings of one policy is how a gate
+ * ends up enforced in one door and advisory in the next.
+ */
+export function limitsEnforce(ctx: { isSuperAdmin: boolean; tenantId?: string | null }): boolean {
+  if (ctx.isSuperAdmin) return false;
+  if (!ctx.tenantId || ctx.tenantId === NO_TENANT_SENTINEL) return false;
+  return ENFORCE;
+}
+
 export interface CheckLimitOptions {
   /** Override the env flag, e.g. for routes that must always block. */
   enforce?: boolean;
+}
+
+/**
+ * The refusal a tenant gets when a plan limit stops a write: 402 plus this body.
+ *
+ * #3409: a route that has to decide the limit a second time, inside its own
+ * write transaction, returns this exact response. Hand-copying the body at each
+ * door is how a client ends up told one thing by the pre-flight and another by
+ * the fence that actually stopped it.
+ */
+export function planLimitReachedResponse(
+  kind: LimitKind,
+  limit: number,
+  actual: number,
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: `Plan limit reached for ${kind}`,
+      kind,
+      limit,
+      actual,
+      upgradeUrl: '/tenant/settings/billing',
+    },
+    { status: 402 },
+  );
 }
 
 /**
@@ -65,14 +105,5 @@ export async function checkLimit(
   const enforce = opts.enforce ?? ENFORCE;
   if (!enforce) return null;
 
-  return NextResponse.json(
-    {
-      error: `Plan limit reached for ${kind}`,
-      kind,
-      limit: report.limit,
-      actual: report.actual,
-      upgradeUrl: '/tenant/settings/billing',
-    },
-    { status: 402 },
-  );
+  return planLimitReachedResponse(kind, report.limit, report.actual);
 }

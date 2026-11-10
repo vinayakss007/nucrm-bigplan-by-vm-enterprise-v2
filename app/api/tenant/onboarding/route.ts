@@ -11,7 +11,7 @@ import { onboardingStepSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { onboardingProgress, pipelines, dealStages, deals } from '@/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
 import { resolveTemplate } from '@/lib/templates/resolve';
 import { applyTemplate } from '@/lib/templates/apply-template';
@@ -212,6 +212,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+        targetWhere: sql`${onboardingProgress.deletedAt} IS NULL`,
         set: { isCompleted: true, completedAt: new Date(), updatedAt: new Date() },
       });
 
@@ -252,6 +253,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+        targetWhere: sql`${onboardingProgress.deletedAt} IS NULL`,
         set: { isCompleted: true, completedAt: new Date() }
       });
     } else if (v.step) {
@@ -263,6 +265,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         completedAt: new Date(),
       }).onConflictDoUpdate({
         target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
+        targetWhere: sql`${onboardingProgress.deletedAt} IS NULL`,
         set: { isCompleted: true, completedAt: new Date() }
       });
     }

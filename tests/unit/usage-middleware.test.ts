@@ -163,4 +163,25 @@ describe('checkLimit', () => {
     expect(result).toBeNull();
     delete process.env['USAGE_LIMITS'];
   });
+
+  // #3409: a route that re-decides the limit inside its own write transaction
+  // has to hand the user the *same* refusal `checkLimit` hands. Two hand-rolled
+  // 402 bodies is how one policy grows two shapes.
+  it('planLimitReachedResponse is the 402 body checkLimit returns', async () => {
+    const { planLimitReachedResponse, checkLimit } = await import('@/lib/usage/middleware');
+    const built = planLimitReachedResponse('contacts', 10, 11) as { _body: Record<string, unknown>; _status: number };
+    expect(built._status).toBe(402);
+    expect(built._body).toEqual({
+      error: 'Plan limit reached for contacts',
+      kind: 'contacts',
+      limit: 10,
+      actual: 11,
+      upgradeUrl: '/tenant/settings/billing',
+    });
+
+    vi.mocked(getUsageReport).mockResolvedValue({ kind: 'contacts', actual: 11, limit: 10, exceeded: true });
+    vi.mocked(recordViolation).mockResolvedValue({ created: false });
+    const fromCheckLimit = await checkLimit(ctx(), 'contacts', { enforce: true });
+    expect(fromCheckLimit._body).toEqual(built._body);
+  });
 });

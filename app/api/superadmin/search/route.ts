@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, users } from '@/drizzle/schema';
-import { ilike, or, desc, sql } from 'drizzle-orm';
+import { and, desc, ilike, isNull, or, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -44,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         type: sql<'tenant'>`'tenant'`,
       })
       .from(tenants)
-      .where(or(
+      .where(and(isNull(tenants.deletedAt), or(
         ilike(tenants.name, pattern),
         ilike(tenants.slug, pattern),
         ilike(tenants.billingEmail, pattern),
@@ -53,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         // uuid ~~* unknown`), and because the arm is inside the shared OR it
         // took the whole console search down, not just id lookups.
         sql`${tenants.id}::text ilike ${pattern}`,
-      ))
+      )))
       .orderBy(desc(tenants.createdAt))
       .limit(limit),
 

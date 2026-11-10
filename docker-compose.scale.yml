@@ -160,6 +160,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-nucrm}
       - POSTGRES_USER=${POSTGRES_USER:-nucrm}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # A fresh volume otherwise initializes on the image's default rules — `trust`, no
+      # credential asked for — which is #3265; npm run guard:pg-hba fails a tree that
+      # drops either line. Same pin as docker-compose.yml, not a copy of a comment.
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-local=scram-sha-256 --auth-host=scram-sha-256
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
