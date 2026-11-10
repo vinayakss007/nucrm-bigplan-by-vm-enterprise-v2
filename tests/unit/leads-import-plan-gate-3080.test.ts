@@ -6,6 +6,14 @@
  * gate must now be taken INSIDE the per-row transaction (tenant row locked,
  * quota enforced after resolve, counter incremented in SQL) so a quota
  * breach rolls the row back instead of silently over-allocating.
+ *
+ * #3409 moved the counter bump INTO the resolver, because the plain POST door
+ * used the same helper and never paid at all. So this file no longer mocks
+ * `@/lib/contacts/resolve` — it runs the real one. Mocking it would have left
+ * the bump unasserted anywhere, and the rendered SQL below is exactly the
+ * guarantee worth keeping. The fake transaction also unwinds its recorded
+ * writes when the callback throws, because "quota breach rolls the row back"
+ * can only be tested by a transaction that actually rolls back.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -47,14 +55,31 @@ vi.mock('@/drizzle/db', () => {
       };
       return chain;
     },
-    transaction: async (cb: (tx: unknown) => unknown) => cb(db),
-    query: {},
+    // A transaction that commits on return and discards its recorded writes on
+    // throw — the rollback is the half #3080 is about.
+    transaction: async (cb: (tx: unknown) => unknown) => {
+      const written = h.updates.length;
+      try {
+        return await cb(db);
+      } catch (err) {
+        h.updates.length = written;
+        throw err;
+      }
+    },
+    query: {
+      contacts: {
+        // The resolver's email-dedup read: an existing row means "merge", and a
+        // merge must not move the counter.
+        findFirst: async () =>
+          h.newContact
+            ? null
+            : { id: 'c-1', score: 0, phone: null, jobTitle: null, companyId: null, linkedinUrl: null },
+      },
+      companies: { findFirst: async () => null },
+    },
   };
   return { db };
 });
-vi.mock('@/lib/contacts/resolve', () => ({
-  resolveOrCreateContactForLead: async () => ({ contactId: 'c-1', companyId: null, isNewContact: h.newContact }),
-}));
 vi.mock('@/lib/leads/oid', () => ({
   generateLeadOid: async () => 'LEAD-0001',
   isLeadOidCollision: () => false,

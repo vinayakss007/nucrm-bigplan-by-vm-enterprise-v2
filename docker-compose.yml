@@ -180,6 +180,12 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-nucrm}
       - POSTGRES_USER=${POSTGRES_USER:-nucrm}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # Without these two, a fresh pgdata volume is initialized with the image's default
+      # rules — `trust` for local and loopback-TCP connections, so no credential is ever
+      # asked for — and the hardening an operator expects lives inside the volume that
+      # just replaced it. #3265; npm run guard:pg-hba fails a tree that drops either.
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-local=scram-sha-256 --auth-host=scram-sha-256
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:

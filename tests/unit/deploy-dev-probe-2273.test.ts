@@ -37,6 +37,6 @@ describe('deploy.yml dev-server probe (#2273)', () => {
 
   it('keeps the #2300 structure intact (both call sites still deploy_all_and_wait)', () => {
     expect((WF.match(/if deploy_all_and_wait; then/g) || []).length).toBe(2);
-    expect(WF).toContain('BG_APPS="worker cron"');
+    expect(WF).toContain('BG_APPS="worker cron realtime"');
   });
 });

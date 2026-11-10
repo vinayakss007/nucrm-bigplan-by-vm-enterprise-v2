@@ -27,7 +27,7 @@
  *  - rows are configured with either spelling (`createdAt` / `created_at`),
  *    so comparison normalizes both sides.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { fieldPermissions, roles } from '@/drizzle/schema/core';
@@ -116,7 +116,7 @@ async function resolveRoleId(tenantId: string, roleSlug: string): Promise<string
   const [role] = await db
     .select({ id: roles.id })
     .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug)))
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
     .limit(1);
   const id = role?.id ?? null;
   roleIdCache.set(key, { id, at: Date.now() });

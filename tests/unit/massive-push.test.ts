@@ -181,16 +181,31 @@ describe('webhooks - retryFailedWebhooks', () => {
 describe('queue - comprehensive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.REDIS_URL;
+    process.env.REDIS_URL = 'redis://localhost:6379';
     delete process.env.DATABASE_URL;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.doMock('ioredis', () => ({
+      default: vi.fn(function () {
+        return { ping: async () => 'PONG', quit: async () => 'OK', on: () => undefined };
+      }),
+    }));
+    vi.doMock('bullmq', () => ({
+      Queue: vi.fn(function () {
+        return { add: async () => ({ id: '1' }), close: async () => undefined };
+      }),
+      Worker: vi.fn(),
+    }));
   });
 
-  it('getQueueAdapter returns memory adapter as fallback', async () => {
+  // #3411: every case below used to run against the in-memory adapter, which is
+  // precisely the thing that made "the job is queued" a false statement. They now
+  // run against the only backend that can deliver, and the outage path is asserted
+  // as a rejection instead of as a silent buffer.
+  it('getQueueAdapter returns the redis adapter', async () => {
     const { getQueueAdapter } = await import('@/lib/queue');
     const adapter = await getQueueAdapter();
-    expect(adapter.provider).toBe('memory');
+    expect(adapter.provider).toBe('redis');
   });
 
   it('getQueueAdapter returns same adapter on second call', async () => {
@@ -200,7 +215,7 @@ describe('queue - comprehensive', () => {
     expect(a1).toBe(a2);
   });
 
-  it('addJob adds to memory queue', async () => {
+  it('addJob hands the job to BullMQ', async () => {
     const { addJob } = await import('@/lib/queue');
     await expect(addJob('send-email', { to: 'test@example.com' })).resolves.not.toThrow();
   });
@@ -230,23 +245,18 @@ describe('queue - comprehensive', () => {
     await closeQueue();
     const adapter = await getQueueAdapter();
     expect(adapter).toBeDefined();
-    expect(adapter.provider).toBe('memory');
+    expect(adapter.provider).toBe('redis');
   });
 
-  it('getBoss throws when not using pg-boss', async () => {
-    const { getBoss } = await import('@/lib/queue');
-    await expect(getBoss()).rejects.toThrow('pg-boss');
-  });
-
-  it('memory adapter processes jobs after interval', async () => {
-    vi.useFakeTimers();
-    const { addJob, getQueueAdapter } = await import('@/lib/queue');
-    await addJob('send-email', { to: 'user@test.com' });
-    const adapter = await getQueueAdapter();
-    vi.advanceTimersByTime(6000);
-    vi.useRealTimers();
-    expect(adapter).toBeDefined();
-    expect(adapter.provider).toBe('memory');
+  it('rejects rather than buffering when Redis cannot be reached', async () => {
+    vi.resetModules();          // a fresh module, so the failing ping is the one it sees
+    vi.doMock('ioredis', () => ({
+      default: vi.fn(function () {
+        return { ping: async () => { throw new Error('ECONNREFUSED'); }, quit: async () => 'OK', on: () => undefined };
+      }),
+    }));
+    const { addJob } = await import('@/lib/queue');
+    await expect(addJob('send-email', { to: 'user@test.com' })).rejects.toThrow(/Redis is unavailable/);
   });
 });
 

@@ -204,14 +204,17 @@ describe('migration 0143 grants the two users arms and nothing wider (#3303)', (
     expect(sql).not.toMatch(/ON "(?:sessions|tenant_members|refresh_tokens)"/);
   });
 
-  it('is appended to the journal, unapplied like every migration since #2537', () => {
+  it('is in the journal, unapplied like every migration since #2537', () => {
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
-    const last = journal.entries[journal.entries.length - 1];
-    expect(last.idx).toBe(145);
-    expect(last.tag).toBe(up!.replace(/\.sql$/, ''));
-    expect(last.when).toBe(1793440000000);
+    // Looked up by tag, not taken from the tail: the chain keeps growing — #3406
+    // appended 0144 after this migration — and the test's subject is 0143 itself.
+    const entry = journal.entries.find((e) => e.tag === up!.replace(/\.sql$/, ''));
+    expect(entry, '0143 is missing from the journal').toBeDefined();
+    expect(entry!.idx).toBe(145);
+    expect(entry!.when).toBe(1793440000000);
+    expect(journal.entries.filter((e) => e.idx === entry!.idx)).toHaveLength(1);
   });
 });
 

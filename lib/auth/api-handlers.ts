@@ -6,8 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
-import { isNull } from 'drizzle-orm';
-import { eq, and, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
 import { cookieSecureForRequest, requestIsHttps } from '@/lib/auth/cookie-security';
@@ -323,7 +322,7 @@ export async function POST_signup(request: NextRequest) {
 
       // CRITICAL: Create tenant_member row — user is ADMIN of their own org
       let adminRole;
-      [adminRole] = await tx.select().from(roles).where(and(eq(roles.tenantId, t.id), eq(roles.slug, 'admin'))).limit(1);
+      [adminRole] = await tx.select().from(roles).where(and(eq(roles.tenantId, t.id), eq(roles.slug, 'admin'), isNull(roles.deletedAt))).limit(1);
       
       if (!adminRole) {
         [adminRole] = await tx.insert(roles).values({
@@ -346,6 +345,7 @@ export async function POST_signup(request: NextRequest) {
         joinedAt: new Date(),
       }).onConflictDoUpdate({
         target: [tenantMembers.tenantId, tenantMembers.userId],
+        targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
         set: { status: 'active', roleId: adminRole.id, roleSlug: 'admin', updatedAt: new Date() }
       });
 
@@ -383,7 +383,7 @@ export async function POST_signup(request: NextRequest) {
       // 3. Create Default Roles (beyond admin) - with conflict handling
       const [existingSalesRep] = await tx.select({ id: roles.id })
         .from(roles)
-        .where(and(eq(roles.tenantId, t.id), eq(roles.slug, 'sales_rep')))
+        .where(and(eq(roles.tenantId, t.id), eq(roles.slug, 'sales_rep'), isNull(roles.deletedAt)))
         .limit(1);
 
       if (!existingSalesRep) {

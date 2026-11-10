@@ -10,7 +10,7 @@ import { emailWarmupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailWarmupConfigs, emailWarmupPool } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -88,6 +88,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         })
         .onConflictDoUpdate({
           target: [emailWarmupConfigs.tenantId, emailWarmupConfigs.fromEmail],
+          targetWhere: sql`${emailWarmupConfigs.deletedAt} IS NULL`,
           set: {
             fromName: from_name || '',
             dailyLimitStart: daily_limit_start || 5,

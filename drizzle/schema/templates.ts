@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, timestamp, jsonb, boolean, integer, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { users } from './core';
 import * as utils from './utils';
@@ -11,7 +12,7 @@ import * as utils from './utils';
 export const productTemplates = pgTable('product_templates', {
   id: utils.pk(),
   name: text('name').notNull(),
-  slug: text('slug').unique(),
+  slug: text('slug'),
   description: text('description'),
   icon: text('icon'),
   modules: jsonb('modules').default([]),
@@ -26,6 +27,7 @@ export const productTemplates = pgTable('product_templates', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
+    slugLiveUnique: uniqueIndex('product_templates_slug_unique_live').on(table.slug).where(sql`${table.deletedAt} IS NULL`),
     statusIdx: index('idx_product_templates_status').on(table.status),
   
   drz2255_idx_product_templates_created_by: index('idx_product_templates_created_by').on(table.createdBy),};
@@ -41,7 +43,7 @@ export const tenantTemplates = pgTable('tenant_templates', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    uniqueAssignment: uniqueIndex('idx_tenant_templates_unique').on(table.tenantId, table.templateId),
+    uniqueAssignment: uniqueIndex('idx_tenant_templates_unique_live').on(table.tenantId, table.templateId).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
   
   drz2255_idx_tenant_templates_applied_by: index('idx_tenant_templates_applied_by').on(table.appliedBy),};

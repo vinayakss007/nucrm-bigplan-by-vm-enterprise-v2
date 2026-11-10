@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { sql } from 'drizzle-orm';
 import {uniqueIndex, pgTable, uuid, text, timestamp, jsonb, boolean, index} from 'drizzle-orm/pg-core';
 import { users } from './core';
 import * as utils from './utils';
@@ -38,7 +39,7 @@ export const tenantModules = pgTable('tenant_modules', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    uniqueInstallation: uniqueIndex('idx_tenant_modules_unique').on(table.tenantId, table.moduleId),
+    uniqueInstallation: uniqueIndex('idx_tenant_modules_unique_live').on(table.tenantId, table.moduleId).where(sql`${table.deletedAt} IS NULL`),
     tenantIdx: utils.tenantIdx(table),
   
   drz2255_idx_tenant_modules_installed_by: index('idx_tenant_modules_installed_by').on(table.installedBy),};

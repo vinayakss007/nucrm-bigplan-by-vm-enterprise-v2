@@ -70,7 +70,14 @@ on_error() {
 }
 trap on_error ERR
 
-BYPASS=$(docker exec nucrm-db psql -h localhost -U "$BACKUP_DB_ROLE" -d nucrm -At -c \
+# #3265: the compose Postgres services now initialize with `scram-sha-256` for local and
+# loopback TCP, so a dump role has to present a credential. It is resolved *inside* the
+# container from the container's own environment — `-e PGPASSWORD=$POSTGRES_PASSWORD` or
+# an interpolated value would put the secret in this host's process arguments, where any
+# local `ps` reads it.
+BYPASS=$(docker exec nucrm-db sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$1" -d "$2" -At -c "$3"' sh \
+  "$BACKUP_DB_ROLE" nucrm \
   "SELECT CASE WHEN COALESCE(rolsuper,false) OR COALESCE(rolbypassrls,false) THEN 'bypass' ELSE 'rls-bound' END FROM pg_roles WHERE rolname = current_user") \
   || { echo "[$(date)] ERROR: cannot reach database as role '$BACKUP_DB_ROLE'" >&2; exit 1; }
 if [[ "$BYPASS" != "bypass" ]]; then
@@ -80,15 +87,9 @@ fi
 
 # pg_dump with compression
 echo "[$(date)] Starting database backup..."
-docker exec nucrm-db pg_dump \
-  -h localhost \
-  -p 5432 \
-  -U "$BACKUP_DB_ROLE" \
-  -d nucrm \
-  --no-owner \
-  --no-acl \
-  -Fc \
-  -f /tmp/backup.dump && \
+docker exec nucrm-db sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h localhost -p 5432 -U "$1" -d "$2" --no-owner --no-acl -Fc -f /tmp/backup.dump' sh \
+  "$BACKUP_DB_ROLE" nucrm && \
 docker cp nucrm-db:/tmp/backup.dump "$BACKUP_FILE" && \
 docker exec nucrm-db rm -f /tmp/backup.dump
 

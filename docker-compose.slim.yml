@@ -60,6 +60,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-nucrm}
       - POSTGRES_USER=${POSTGRES_USER:-nucrm}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-nucrm}
+      # Pinned like every other Postgres service here (#3265): a fresh pgdata-slim
+      # volume would otherwise come up on the image default, `trust`, and the dev
+      # topology would be the one place the hole is easy to forget about.
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-local=scram-sha-256 --auth-host=scram-sha-256
     volumes:
       - pgdata-slim:/var/lib/postgresql/data
     ports:

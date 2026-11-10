@@ -3,8 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, uuid, text, jsonb, boolean, index } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, uuid, text, jsonb, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 import * as utils from './utils';
 
 export const customEntities = pgTable('custom_entities', {
@@ -20,7 +20,7 @@ export const customEntities = pgTable('custom_entities', {
   ...utils.lifecycle(),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  slugIdx: index('idx_custom_entities_slug').on(table.tenantId, table.slug),
+  slugIdx: uniqueIndex('idx_custom_entities_slug').on(table.tenantId, table.slug).where(sql`${table.deletedAt} IS NULL`),
   activeIdx: utils.activeIdx(table),
 }));
 
