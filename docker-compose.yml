@@ -355,6 +355,26 @@ services:
     networks:
       - nucrm-net
 
+  # ── Blackbox exporter (#3257) ────────────────────────────────────────────
+  # The scrape jobs alone prove a process is running; this is what proves a
+  # socket can be opened to Postgres, Redis and the S3 gateway. It stays off
+  # the host interface for the same reason as every other monitoring service:
+  # loopback only, reached through an SSH tunnel. `probe_success` and the
+  # `nucrm-observability` group in alerts.yml are the consumers.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./deploy/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "127.0.0.1:9115:9115"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   # ── Grafana ─────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.1.0

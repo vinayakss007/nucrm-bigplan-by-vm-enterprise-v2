@@ -1,0 +1,32 @@
+# Blackbox exporter modules for the dependency probes (#3257).
+#
+# Prometheus scrapes the exporters themselves and node_exporter, which proves a
+# process is running and emitting metrics — not that anything can open a socket
+# to Postgres, Redis or the S3 gateway. Those three are the only dependencies
+# with no local fallback in `lib/`, and all three fail as a *connection* error,
+# which no existing metric reports. These modules answer that question.
+#
+# `s3-gateway` is HTTP rather than TCP on purpose: SeaweedFS/MinIO cannot be
+# assumed to expose `/metrics`, and "the socket is open" is not the same as "the
+# gateway answers S3". The non-obvious part is the status code — an UNSIGNED
+# `GET /` (ListBuckets) returns **403 AccessDenied** on a healthy gateway with
+# no anonymous access. A probe that only accepts 2xx pages on a working bucket
+# endpoint, and one that accepts every status never pages at all, so the list is
+# explicit: 403 (healthy, denied as expected) and 200 (anonymous listing is
+# enabled, still answering).
+modules:
+  tcp:
+    prober: tcp
+    timeout: 3s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  s3-gateway:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: false
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [403, 200]
