@@ -1,0 +1,12 @@
+{
+  "_about": "Tolerations for scripts/check-pool-mode-invariant.mjs (guard:pool-mode, #3404). R5 fails a pooler that is declared but used by nothing in the same file unless an entry here says who knows about it. `reason` is the current truth, `issue` is where it is tracked. An entry is not a waiver of R1/R2/R3/R4 — those rules still run against every file listed here, which is the point: prod's pooler was unsafe *because* it was unused, and nothing recorded that anyone had decided that.",
+  "_added": "2026-11-03",
+  "docker-compose.yml": {
+    "reason": "Local Docker runs web/worker with network_mode: host against postgres:5432; the pooler is opt-in via `--profile pgbouncer` and the two env lines that would route through it are deliberately commented (docker-compose.yml:204-206, :40-41). Enabling the profile is a documented local test of the pgbouncer code path, not the default topology.",
+    "issue": "#3404"
+  },
+  "deploy/docker-compose.production.yml": {
+    "reason": "The production app's DATABASE_URL is operator-supplied (${DATABASE_URL:?...} at :146 and :251) and this file never sets PGBOUNCER_ENABLED=true, so the container is built and never addressed by the app. Its mode is still declared session with a reset query: the pooler is one .env edit away from being live, and before #3404 that edit would have turned on transaction pooling with no server_reset_query at all. Either wire it and size MAX_DB_CONNECTIONS against the app pools, or delete the service; that decision is the deploy owner's, not a guard's.",
+    "issue": "#3404"
+  }
+}

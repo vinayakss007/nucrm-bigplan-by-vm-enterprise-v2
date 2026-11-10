@@ -1,0 +1,25 @@
+[Unit]
+Description=Start stopped NuCRM rootless Podman containers (#3264)
+After=default.target
+
+[Service]
+Type=oneshot
+
+# Load-bearing, not decorative. `podman start` leaves rootlessport/conmon
+# children in this unit's cgroup; the default control-group kill mode SIGKILLs
+# them when the oneshot exits, so :3002/:9080 go dead while `podman ps` still
+# reports the container running. `podman restart` does NOT restore those
+# bindings; a stop + start does.
+KillMode=process
+
+# systemd user units do not inherit the operator's shell PATH. Rootless podman
+# lives in /usr/bin on OL9; keep the lookup deterministic.
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+ExecStart=%h/.local/bin/nucrm-start-containers.sh
+
+# There is no user journal on the target host (`journalctl --user` reports no
+# journal files), so the unit must write to a file. `append:` needs systemd
+# >= 240; OL9 ships 252.
+StandardOutput=append:%h/.local/state/nucrm-containers.log
+StandardError=append:%h/.local/state/nucrm-containers.log
