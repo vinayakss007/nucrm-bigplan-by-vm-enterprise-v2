@@ -192,3 +192,76 @@ groups:
         annotations:
           summary: "Disk > 90% full"
           description: "Root filesystem usage has exceeded 90%. Postgres, Prometheus TSDB and deploys all fail on a full root disk; prune the builder cache before it gets here."
+
+  # #3257 — the monitoring plane's own health, and the dependency probes.
+  #
+  # The failure this group exists for is a silent one: when the blackbox
+  # exporter dies, `probe_success` stops being exported. There is no `0` to
+  # alert on, every panel shows "No data", and the absence reads as "nothing
+  # wrong" on exactly the dashboards that are supposed to notice. So one rule
+  # watches the exporter and another fires on the probes going missing, rather
+  # than only on a probe that fails.
+  - name: nucrm-observability
+    rules:
+      - alert: BlackboxExporterDown
+        expr: up{job="blackbox-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blackbox exporter is DOWN"
+          description: 'up{job="blackbox-exporter"} has been 0 for 2 minutes. Every Postgres/Redis/S3 probe is now dark — the failure looks like ''no data'', not like an outage, so this is the rule that has to fire first.'
+
+      - alert: DependencyProbeFailing
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} is unreachable (probe failed)"
+          description: "The blackbox probe against {{ $labels.instance }} ({{ $labels.service }}) has failed for 2 minutes. This is a connect/answer failure, not a metrics gap: the exporter is up and says the dependency cannot be opened."
+
+      - alert: DependencyProbesMissing
+        expr: absent(probe_success)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No dependency probes are being recorded"
+          description: "probe_success is absent for 10 minutes — the blackbox scrape job or its config is missing, not merely failing. Without it a dead Postgres/Redis/S3 endpoint produces no alert at all."
+
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is DOWN"
+          description: 'up{job="alertmanager"} has been 0 for 5 minutes. Prometheus may still evaluate rules, but no alert leaves the box.'
+
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rejected its last config reload"
+          description: "The running config is the previous one; a scrape job or rule added since the reload is not active. Check `promtool check config` and the Prometheus log."
+
+      - alert: PrometheusRuleEvaluationFailing
+        expr: increase(prometheus_rule_evaluation_failures_total[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation is failing"
+          description: "One or more rule groups failed to evaluate in the last 15 minutes. An unevaluated alert cannot fire, so this is the monitoring plane's equivalent of a silent test failure."
+
+      - alert: PrometheusSelfScrapeMissing
+        expr: absent(up{job="prometheus"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus is not scraping itself"
+          description: 'up{job="prometheus"} is absent — the self-scrape job or its target was removed. Prometheus cannot alert on its own death, but an external scraper and Grafana rely on this series to tell ''healthy'' from ''gone''.'

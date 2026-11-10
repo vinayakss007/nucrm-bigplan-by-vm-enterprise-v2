@@ -523,6 +523,32 @@ services:
     networks:
       - nucrm-net
 
+  # ── Blackbox exporter (#3257) ────────────────────────────────────────────
+  # Answers "can anything open Postgres / Redis / the S3 gateway", which no
+  # exporter metric does. Postgres runs on the HOST here (see postgres-exporter
+  # below), so `postgres` is mapped to the host gateway to keep prometheus.yml's
+  # probe target identical to the compose-service name used by the dev stack.
+  # Loopback-only like every other monitoring service; reach it by SSH tunnel.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "127.0.0.1:9115:9115"
+    extra_hosts:
+      - "postgres:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: "0.1"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
   grafana:
     image: grafana/grafana:11.1.0
     container_name: nucrm-grafana
