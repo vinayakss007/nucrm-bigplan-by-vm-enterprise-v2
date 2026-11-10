@@ -10,16 +10,16 @@
  * -------
  * `setTenantContext()` sets `app.current_tenant` / `app.current_user` as
  * SESSION-scoped GUCs on whatever connection that one statement grabbed.
- * Behind PgBouncer (transaction pooling, `PGBOUNCER_ENABLED=true` — which is
- * how pre-prod AND production run) a session-scoped GUC is only as durable as
- * the server connection it happened to land on: `server_reset_query =
- * 'DISCARD ALL'` wipes it on release, and the next statement — in particular
- * the `BEGIN` of a bare `db.transaction()` — routinely lands on a DIFFERENT
- * server connection whose GUCs are empty. The fail-closed RLS policy then
- * denies the write. This is exactly what broke `POST /api/tenant/contacts`
- * (D1 in the live API E2E: `new row violates row-level security policy for
- * table "contacts"`) while reads on the same route kept passing by luck of
- * connection reuse under sequential load.
+ * Behind PgBouncer in TRANSACTION pooling (`POOL_MODE=transaction`, which several
+ * compose files declared until #3404) a session-scoped GUC is only as durable as
+ * the server connection it happened to land on — and `server_reset_query =
+ * 'DISCARD ALL'` is inert in that mode, so the next statement, in particular the
+ * `BEGIN` of a bare `db.transaction()`, can land on a DIFFERENT server connection,
+ * one that may still carry ANOTHER tenant's GUCs because nothing cleared them. The
+ * fail-closed RLS policy then denies the write, or answers for the wrong tenant.
+ * This is what broke `POST /api/tenant/contacts` (D1 in the live API E2E: `new row
+ * violates row-level security policy for table "contacts"`) while reads on the same
+ * route kept passing by luck of connection reuse under sequential load.
  *
  * FIX
  * ---

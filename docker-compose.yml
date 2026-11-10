@@ -201,7 +201,8 @@ services:
       - nucrm-net
 
   # ── PgBouncer (Connection Pooler) ──────────────────────────────────────────
-  # Optional: sits between app and postgres in transaction mode (pool_size=20).
+  # Optional: sits between app and postgres. SESSION mode, never transaction (#3404 —
+  # `npm run guard:pool-mode`); the service block below explains why. pool_size=20.
   # Production (pm2 deploy, deploy.yml) does NOT use pgbouncer — the app talks
   # directly to postgres and lib/db/pool.ts does a release-time GUC reset
   # (pool.ts:218). For local Docker, pgbouncer is *disabled by default* because
@@ -228,7 +229,14 @@ services:
       - LISTEN_ADDR=127.0.0.1
       - LISTEN_PORT=6432
       - AUTH_TYPE=scram-sha-256
-      - POOL_MODE=transaction
+      # #3404: session, not transaction. lib/db/rls.ts sets app.current_tenant with
+      # set_config(..., is_local=false) — a SESSION-scoped GUC (ADR-0003). Under
+      # transaction pooling a server connection is recycled after every transaction,
+      # so the next client inherits the previous tenant's GUC, and the manual makes
+      # server_reset_query inert in that mode so nothing clears it. The result is the
+      # silent zero-row write migration 0100 recorded, not an error. `guard:pool-mode`
+      # fails the build if any declared pooler drifts back.
+      - POOL_MODE=session
       - DEFAULT_POOL_SIZE=20
       - MAX_CLIENT_CONN=200
       - MAX_DB_CONNECTIONS=50
@@ -343,6 +351,26 @@ services:
       - promdata:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Blackbox exporter (#3257) ────────────────────────────────────────────
+  # The scrape jobs alone prove a process is running; this is what proves a
+  # socket can be opened to Postgres, Redis and the S3 gateway. It stays off
+  # the host interface for the same reason as every other monitoring service:
+  # loopback only, reached through an SSH tunnel. `probe_success` and the
+  # `nucrm-observability` group in alerts.yml are the consumers.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./deploy/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "127.0.0.1:9115:9115"
     restart: unless-stopped
     networks:
       - nucrm-net

@@ -53,7 +53,8 @@ export interface InternalSignerView {
  * Everything AFTER the row is known runs in the workspace the row names, in the
  * same transaction — one connection checkout and one credential read for a page
  * that used to need three reads and no context at all (PP-028 measured each
- * stray `set_config` round trip at ~200 ms under PgBouncer transaction pooling).
+ * stray `set_config` round trip at ~200 ms — while the pooler still declared
+ * transaction pooling, before #3404 pinned session mode).
  */
 export async function getInternalSigningByToken(token: string): Promise<InternalSignerView | null> {
   if (!token) return null;

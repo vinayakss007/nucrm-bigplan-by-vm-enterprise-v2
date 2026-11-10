@@ -414,7 +414,23 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:-nucrm}
-      - POOL_MODE=transaction
+      # #3404: this service declared POOL_MODE=transaction with NO server_reset_query,
+      # which is the tenant-leak combination twice over — session-scoped
+      # app.current_tenant (ADR-0003) survives the recycle, and the one setting that
+      # could clear it was never declared. Nothing failed only because this file's
+      # DATABASE_URL is operator-supplied: the moment it names `pgbouncer:6432` the
+      # leak is live. `guard:pool-mode` now fails the build on any drift.
+      # Sizing, stated honestly because session pooling changes what the limits mean:
+      # one client holds one server connection, so MAX_DB_CONNECTIONS=50 is the real
+      # concurrency ceiling, and this file's own defaults can exceed it —
+      # DATABASE_POOL_SIZE=20 x NUCRM_WEB_REPLICAS=2 plus worker 20 x 1 = up to 60
+      # clients against 50 (`deploy/postgres/postgresql.conf` max_connections=60, ~3
+      # reserved). Under that load clients queue instead of erroring, so the failure is
+      # latency, not a refused connection — but if prod ever routes through the pooler,
+      # raise MAX_DB_CONNECTIONS with the DB's max_connections or lower the app pools.
+      # `guard:pool-mode` prints this ratio as an advisory on every run.
+      - POOL_MODE=session
+      - SERVER_RESET_QUERY=DISCARD ALL
       - DEFAULT_POOL_SIZE=50
       - MAX_CLIENT_CONN=200
       - MAX_DB_CONNECTIONS=50
@@ -519,6 +535,32 @@ services:
         limits:
           memory: 256M
           cpus: "0.25"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ── Blackbox exporter (#3257) ────────────────────────────────────────────
+  # Answers "can anything open Postgres / Redis / the S3 gateway", which no
+  # exporter metric does. Postgres runs on the HOST here (see postgres-exporter
+  # below), so `postgres` is mapped to the host gateway to keep prometheus.yml's
+  # probe target identical to the compose-service name used by the dev stack.
+  # Loopback-only like every other monitoring service; reach it by SSH tunnel.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: nucrm-blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "127.0.0.1:9115:9115"
+    extra_hosts:
+      - "postgres:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: "0.1"
     restart: unless-stopped
     networks:
       - nucrm-net

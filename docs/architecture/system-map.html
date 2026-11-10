@@ -181,7 +181,7 @@
     <span class="chip"><b>226</b> tables</span>
     <span class="chip"><b>146</b> migrations</span>
     <span class="chip"><b>231</b> pages</span>
-    <span class="chip"><b>37</b> guards</span>
+    <span class="chip"><b>38</b> guards</span>
     <span class="chip"><b>22</b> cron routes</span>
     <span class="chip"><b>9</b> fix families</span>
     <span class="chip"><b>2 × P0</b> · <b>6 × P1</b> · <b>1 × P2</b></span>
@@ -234,7 +234,7 @@
     <div class="card"><div class="n">63</div><div class="l">schema modules (46 + 17 registry)</div></div>
     <div class="card"><div class="n">430</div><div class="l">lib TypeScript files</div></div>
     <div class="card"><div class="n">524</div><div class="l">files importing a DB client</div></div>
-    <div class="card"><div class="n">37</div><div class="l">guard scripts</div></div>
+    <div class="card"><div class="n">38</div><div class="l">guard scripts</div></div>
     <div class="card"><div class="n">7</div><div class="l">CI workflows</div></div>
     <div class="card"><div class="n">22</div><div class="l">cron routes</div></div>
     <div class="card warn"><div class="n">20/22</div><div class="l">cron routes scheduled by any source</div></div>
@@ -524,11 +524,11 @@ flowchart TB
 
 <section id="l7">
   <h2><span class="lay">L7</span>Control plane: how the architecture is enforced</h2>
-  <p class="sub">37 bespoke guard scripts — none parses an AST. 36 of the 37 do run in some workflow (ci.yml covers 33: 30 by alias, 3 by bare <code>node scripts/…</code>), and the local pre-merge script runs 4 while nothing calls it. The census is ungrepable: grepping <code>npm run guard:</code> cannot see a bare invocation.</p>
+  <p class="sub">38 bespoke guard scripts — none parses a TypeScript AST, though <code>guard:pool-mode</code> (#3404) is the first to parse its inputs structurally at all: compose YAML, not a line pattern. 37 of the 38 do run in some workflow (ci.yml covers 34: 31 by alias, 3 by bare <code>node scripts/…</code>), and the local pre-merge script runs 4 while nothing calls it. The census is ungrepable: grepping <code>npm run guard:</code> cannot see a bare invocation.</p>
   <pre class="mermaid">
 flowchart LR
   DEV["Developer"] --> PRE["pre-merge gate<br/>8 steps · 4 guards"]
-  PRE --> G1["37 guard scripts<br/>36 wired · 0 parse ASTs"]
+  PRE --> G1["38 guard scripts<br/>37 wired · 0 parse ASTs"]
   PRE --> TC["typecheck, lint, unit tests"]
   G1 --> CI
   TC --> CI
