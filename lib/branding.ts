@@ -10,7 +10,7 @@
 
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 export interface BrandingConfig {
   logoUrl: string | null;
@@ -86,7 +86,7 @@ export async function getBrandingForDomain(domain: string): Promise<BrandingConf
     settings: tenants.settings,
   })
     .from(tenants)
-    .where(eq(tenants.customDomain, domain))
+    .where(and(eq(tenants.customDomain, domain), isNull(tenants.deletedAt)))
     .limit(1);
 
   const tenant = result[0];

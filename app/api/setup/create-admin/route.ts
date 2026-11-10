@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, count } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
 import { newPasswordSchema } from '@/lib/api/schemas/auth';
 import { installDefaultModules } from '@/lib/modules/auto-install';
@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
         isSystem: true,
       }).onConflictDoUpdate({
         target: [roles.tenantId, roles.slug],
+        targetWhere: sql`${roles.deletedAt} IS NULL`,
         set: { permissions: { all: true }, updatedAt: new Date() }
       }).returning({ id: roles.id });
       if (!adminRole) throw new Error('Failed to create admin role');
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
         joinedAt: new Date()
       }).onConflictDoUpdate({
         target: [tenantMembers.tenantId, tenantMembers.userId],
+        targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
         set: {
           status: 'active',
           roleSlug: 'admin',

@@ -134,16 +134,31 @@ describe('auth/csrf', () => {
 describe('queue/index - comprehensive', () => {
   beforeEach(() => {
     vi.resetModules();
-    delete process.env.REDIS_URL;
+    process.env.REDIS_URL = 'redis://localhost:6379';
     delete process.env.DATABASE_URL;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.doMock('ioredis', () => ({
+      default: vi.fn(function () {
+        return { ping: async () => 'PONG', quit: async () => 'OK', on: () => undefined };
+      }),
+    }));
+    vi.doMock('bullmq', () => ({
+      Queue: vi.fn(function () {
+        return { add: async () => ({ id: '1' }), close: async () => undefined };
+      }),
+      Worker: vi.fn(),
+    }));
   });
 
-  it('memory adapter is used as fallback', async () => {
+  // #3411: this block used to prove the memory fallback was reachable. That
+  // fallback is what let a job be accepted and then discarded, so what is proven
+  // here now is that there is exactly one provider and that a missing Redis is a
+  // refusal, not a reroute.
+  it('redis is the only provider', async () => {
     const { getQueueAdapter } = await import('@/lib/queue');
     const adapter = await getQueueAdapter();
-    expect(adapter.provider).toBe('memory');
+    expect(adapter.provider).toBe('redis');
   });
 
   it('addJob queues job', async () => {
@@ -158,20 +173,10 @@ describe('queue/index - comprehensive', () => {
     expect(adapter).toBeDefined();
   });
 
-  it('getBoss throws with memory provider', async () => {
-    const { getBoss } = await import('@/lib/queue');
-    await expect(getBoss()).rejects.toThrow('pg-boss');
-  });
-
-  it('memory adapter processes jobs', async () => {
-    vi.useFakeTimers();
-    const { addJob, getQueueAdapter } = await import('@/lib/queue');
-    await addJob('send-notification', { userId: 'u1' });
-    const adapter = await getQueueAdapter();
-    vi.advanceTimersByTime(6000);
-    vi.useRealTimers();
-    expect(adapter).toBeDefined();
-    expect(adapter.provider).toBe('memory');
+  it('refuses to enqueue when REDIS_URL is not configured', async () => {
+    delete process.env.REDIS_URL;
+    const { addJob } = await import('@/lib/queue');
+    await expect(addJob('send-notification', { userId: 'u1' })).rejects.toThrow(/REDIS_URL/);
   });
 });
 

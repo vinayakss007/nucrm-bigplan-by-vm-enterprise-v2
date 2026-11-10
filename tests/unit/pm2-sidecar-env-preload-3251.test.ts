@@ -39,7 +39,7 @@ const byName = (name: string): Pm2App => {
 
 describe('#3251 every tsx sidecar preloads the env file itself', () => {
   it('has a sidecar to guard, so the filter below cannot pass by matching nothing', () => {
-    expect(tsxApps.map((a) => a.name).sort()).toEqual(['cron', 'worker']);
+    expect(tsxApps.map((a) => a.name).sort()).toEqual(['cron', 'realtime', 'worker']);
   });
 
   it('passes the load-env preload in args, before the entry point', () => {

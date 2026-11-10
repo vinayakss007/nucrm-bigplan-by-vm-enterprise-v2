@@ -186,7 +186,7 @@ export const CRM_TABLES = {
       dependencies: ['tenants'],
       description: 'Custom field definitions',
       isCore: false,
-      indexes: ['idx_custom_fields_tenant_entity', 'idx_custom_fields_key', 'idx_custom_fields_unique_key'],
+      indexes: ['idx_custom_fields_tenant_entity', 'idx_custom_fields_key', 'idx_custom_fields_unique_key_live'],
     },
   },
   forms: {
@@ -276,7 +276,7 @@ export const CRM_TABLES = {
       dependencies: ['priceBooks', 'products'],
       description: 'Price book entries',
       isCore: false,
-      indexes: ['idx_price_book_entries_unique'],
+      indexes: ['idx_price_book_entries_unique_live'],
     },
   },
   pipelineHealthMetrics: {
@@ -291,7 +291,7 @@ export const CRM_TABLES = {
       dependencies: ['pipelines', 'tenants'],
       description: 'Pipeline health tracking',
       isCore: false,
-      indexes: ['idx_pipeline_health_unique', 'idx_pipeline_health_metrics_tenant'],
+      indexes: ['idx_pipeline_health_unique_live', 'idx_pipeline_health_metrics_tenant'],
     },
   },
   tags: {
@@ -381,7 +381,7 @@ export const CRM_TABLES = {
       dependencies: ['contacts'],
       description: 'Additional contact emails',
       isCore: false,
-      indexes: ['idx_contact_emails_contact', 'idx_contact_emails_unique'],
+      indexes: ['idx_contact_emails_contact', 'idx_contact_emails_unique_live'],
     },
   },
   contactLifecycleHistory: {

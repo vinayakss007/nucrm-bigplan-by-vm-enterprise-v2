@@ -83,7 +83,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       // Resolve role_id
       const [role] = await tx.select()
         .from(roles)
-        .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, role_slug)))
+        .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, role_slug), isNull(roles.deletedAt)))
         .limit(1);
       
       const roleId = role?.id || null;
@@ -238,7 +238,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       if (!roleSlug) return NextResponse.json({ error: 'roleSlug required' }, { status: 400 });
       const [role] = await db.select()
         .from(roles)
-        .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, roleSlug)))
+        .where(and(or(isNull(roles.tenantId), eq(roles.tenantId, ctx.tenantId)), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
         .limit(1);
       
       const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);

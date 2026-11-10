@@ -159,6 +159,41 @@ Full detail: `deploy/POSTGRES_PRODUCTION_GUIDE.md` §10.3.
 
 ---
 
+## §3.6. Database authentication — pg_hba belongs to the deployment · #3265 🔴 BLOCKER
+
+TLS proves the channel. `pg_hba.conf` decides whether a credential is asked for at
+all, and until #3265 the repo had no copy of it: `initdb` writes one into the data
+directory, and the official image writes `trust` for local and loopback TCP. So a
+new volume — provisioned, or restored onto — came up with "no password from any
+process that can reach the socket", and the hardened file an operator had installed
+lived *inside* the volume that was just replaced.
+
+`deploy/postgres/pg_hba.conf` is now the tracked policy for a packaged/host install.
+Install it and reload; a reload is enough, so the running pool is not dropped:
+
+```bash
+sudo install -m 600 -o postgres -g postgres \
+  deploy/postgres/pg_hba.conf /var/lib/postgresql/16/main/pg_hba.conf   # Debian/Ubuntu path
+sudo -u postgres psql -c 'select pg_reload_conf()'
+
+# Prove the server agrees with the file, behaviourally — no credential is read:
+bash deploy/scripts/health-check.sh          # "PostgreSQL auth: a credential is required"
+npm run guard:pg-hba                         # the tracked tree: file + every compose Postgres
+```
+
+A containerized topology takes the same decision through the image's own knob —
+`POSTGRES_HOST_AUTH_METHOD` and `POSTGRES_INITDB_ARGS=--auth-local=… --auth-host=…`
+are pinned in `docker-compose.yml`, `docker-compose.scale.yml` and
+`docker-compose.slim.yml`, because that file cannot carry `hostssl` rules: the image
+starts with `ssl = off` and no certificate exists, so `hostssl` there refuses every
+application connection at the handshake rather than protecting it.
+
+Both paths matter because the pin only shapes a *new* data directory. An existing
+volume keeps whatever rules it was born with, which is why the assertion above reads
+the running server and not the file.
+
+---
+
 ## §4. Secrets — generate, rotate, and confirm none are in git · #1125 🔴 BLOCKER
 
 `.env*` is gitignored (`!.env.example` is the only exception) and the only
@@ -248,17 +283,51 @@ pm2 conf pm2-logrotate
 
 ---
 
+## §9. A restart is a brief outage · #3275 🟠
+
+`ecosystem.config.cjs`'s `web` app deliberately has **no `wait_ready`**, and a restart of it is
+visible to clients as 502s. Plan the deploy around that instead of assuming `pm2 reload` is
+zero-downtime.
+
+Why `wait_ready` is not the fix:
+
+- pm2 waits for the supervised child to *signal* readiness (`process.send('process_ready')`).
+  `next start` never sends it, so `wait_ready: true` would make every reload wait
+  `listen_timeout`, give up, and kill the process it was trying to keep.
+- In `exec_mode: 'cluster'` the master owns the listening socket; a worker's `listening` event is
+  the fd handover, not a warm app. `listen_timeout: 5000` therefore bounds the handover, not the
+  first request.
+- The rollout in `.github/workflows/deploy.yml` runs `pm2 restart --update-env`, not `reload`, so
+  there is no overlap to preserve in the first place: the outage is the whole Next.js boot.
+
+**Operate accordingly:**
+
+- Restart deliberately, in low traffic, and say so in the change note. Clients in flight get 502
+  until `/api/health` answers again — that is the deploy gate, and it is the reason the gate reads
+  the app rather than `pm2 pid`.
+- A 502 *outside* that window is not a deploy: it is a dead or dying worker. Check
+  `pm2 describe web` (`restarts`, `unstable restarts`) and `logs/web-error.log` around the
+  timestamp; `max_memory_restart` in the same file is the usual culprit.
+- Do not paper over it in the proxy. Masking 502s makes a crashed worker look like the app.
+
+`tests/unit/pm2-restart-outage-3275.test.ts` pins the pair: the config cannot claim a readiness
+signal the supervised process does not emit, and this section has to stay in the tree.
+
+---
+
 ## Final go/no-go checklist
 
 - [ ] `nmap` from outside shows only 22/80/443 open (§1)
 - [ ] `https://crm.yourdomain.com` serves a valid (non-self-signed) cert; HTTP→HTTPS redirect works (§2)
 - [ ] `crontab -l` shows `auto-backup`; a fresh backup exists off-VM; `npm run backup:verify` passes (§3)
 - [ ] `SHOW ssl;` returns `on` over an `sslmode=require` connection; no `sslmode=disable` anywhere (§3.5)
+- [ ] `npm run guard:pg-hba` is green, and `health-check.sh` says a credential is required rather than accepting a session without one (§3.6)
 - [ ] `git log --all -- .env .env.local` is empty; all secrets generated/rotated; `sslmode` matches `DATABASE_SSL` (§4)
 - [ ] A deliberate test error appears in Sentry (§5)
 - [ ] A password-reset email is received (§6)
 - [ ] Grafana admin user is not `admin`; internal ports not publicly reachable (§7)
 - [ ] `pm2 conf pm2-logrotate` shows rotation configured (§8)
+- [ ] The restart outage is scheduled and understood; no `wait_ready` on `web` without a readiness signal in the process it supervises (§9)
 - [ ] `npm run prod:preflight` is green
 
 When every box is checked, the deployment is safe to open to the internet.

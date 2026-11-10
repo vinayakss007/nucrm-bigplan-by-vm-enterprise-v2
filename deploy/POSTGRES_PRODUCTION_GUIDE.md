@@ -598,6 +598,45 @@ All schema changes are logged:
 SELECT * FROM public._migration_history ORDER BY applied_at DESC;
 ```
 
+### 10.5 Host-Based Authentication · #3265
+
+`deploy/postgres/pg_hba.conf` is the tracked policy for a packaged/host install. It
+exists because the alternative is whatever `initdb` wrote into the data directory: the
+image default is `trust` for local and loopback TCP, so a new volume — provisioned or
+restored onto — asks for no credential, and an operator's hardened file lives inside
+the directory that volume replaces.
+
+```bash
+sudo install -m 600 -o postgres -g postgres \
+  deploy/postgres/pg_hba.conf /var/lib/postgresql/16/main/pg_hba.conf
+sudo -u postgres psql -c 'select pg_reload_conf()'   # reload, not restart: the pool survives
+```
+
+What the file declares, and what the two screens check:
+
+| Rule                                              | Why                                                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `local all postgres peer`                         | the OS account on the box, no password stored anywhere                                            |
+| `local all all scram-sha-256`                     | the socket is not a free pass for other roles                                                     |
+| `host … 127.0.0.1/32 scram-sha-256`               | an operator's `psql -h localhost` still answers                                                   |
+| `hostssl nucrm nucrm_app 0.0.0.0/0 scram-sha-256` | TLS is mandatory for the app role; a rule that merely allows it is the hole #3381 was filed about |
+| no superuser, no replication over the network     | both fail closed instead of matching a wider line                                                 |
+
+`md5` and cleartext `password` are absent on purpose — md5 is offline-crackable and
+still accepted for legacy verifiers, `password` sends the verifier in the clear.
+
+- `npm run guard:pg-hba` reads the tracked tree: the file's rules, and every compose
+  service that runs a Postgres image, which must pin `--auth-local`/`--auth-host`
+  itself (`POSTGRES_INITDB_ARGS`) since a new directory is initialized from the image.
+- `deploy/scripts/health-check.sh` reads the **running** server by offering no
+  credential and checking whether a session opens — the pin shapes a new data
+  directory only, so an existing volume can still carry `trust`.
+
+Containerized topologies keep `host` rather than `hostssl` for the same reason the
+guides keep saying `127.0.0.1`: the image starts with `ssl = off` and no certificate
+exists, so `hostssl` there refuses every application connection at the handshake. TLS
+on that topology is the client's decision — `lib/db/ssl-config.ts`, `DATABASE_SSL`.
+
 ---
 
 ## 11. Reference: Useful SQL Queries

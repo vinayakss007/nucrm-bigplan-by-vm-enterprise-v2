@@ -18,11 +18,11 @@ const ROOT = join(import.meta.dirname!, '..', '..');
 const WF = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
 
 describe('deploy workflow restarts every pm2 app (#2300)', () => {
-  it('names worker and cron as background apps', () => {
-    expect(WF).toMatch(/BG_APPS="worker cron"/);
-    // ecosystem.config.cjs really declares exactly these two beside web
+  it('names worker, cron and realtime as background apps', () => {
+    expect(WF).toMatch(/BG_APPS="worker cron realtime"/);
+    // ecosystem.config.cjs really declares exactly these beside web
     const eco = readFileSync(join(ROOT, 'ecosystem.config.cjs'), 'utf8');
-    for (const app of ['worker', 'cron', 'web']) {
+    for (const app of ['worker', 'cron', 'realtime', 'web']) {
       expect(eco, `ecosystem declares ${app}`).toContain(`name: '${app}'`);
     }
   });

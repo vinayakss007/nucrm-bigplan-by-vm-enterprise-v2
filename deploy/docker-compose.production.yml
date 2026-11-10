@@ -43,6 +43,18 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: nucrm-nginx
+    # #3276 — `worker_rlimit_nofile 65535` in ./nginx/nginx-production.conf is a
+    # request, not a grant: nginx raises its soft limit only as far as the hard
+    # limit its supervisor handed the process. With nothing set here every worker
+    # logs `setrlimit(RLIMIT_NOFILE, 65535) failed (13: Permission denied)` at
+    # start and then serves on 1024 fds while the config claims 65535 — a
+    # connection ceiling 64x lower than the one being reviewed. tests/unit/
+    # nginx-fd-limit-agreement-3276.test.ts pins this number to the conf and to
+    # the systemd drop-in, because this file and that one are the same fact.
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     ports:
       - "${NUCRM_PUBLIC_PORT:-80}:80"
       - "${NUCRM_PUBLIC_SSL_PORT:-443}:443"

@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import {pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint} from 'drizzle-orm/pg-core';
+import {pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint, uniqueIndex} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { tenants, users, apiKeys } from './core';
 import * as utils from './utils';
@@ -356,7 +356,7 @@ export const apiKeyUsageInfra = pgTable('api_key_usage_infra', {
 export const dashboardTemplates = pgTable('dashboard_templates', {
   id: utils.pk(),
   name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
+  slug: text('slug').notNull(),
   category: text('category'),
   layout: jsonb('layout').notNull().default([]),
   filters: jsonb('filters').notNull().default({}),
@@ -366,6 +366,7 @@ export const dashboardTemplates = pgTable('dashboard_templates', {
 }, (table) => {
   return {
     activeIdx: utils.activeIdx(table),
+    slugUniqueLive: uniqueIndex('dashboard_templates_slug_unique_live').on(table.slug).where(sql`${table.deletedAt} IS NULL`),
   
 };
 });
@@ -373,7 +374,7 @@ export const dashboardTemplates = pgTable('dashboard_templates', {
 export const reportTemplates = pgTable('report_templates', {
   id: utils.pk(),
   name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
+  slug: text('slug').notNull(),
   reportType: text('report_type').notNull(),
   queryConfig: jsonb('query_config').notNull().default({}),
   chartConfig: jsonb('chart_config').notNull().default({}),
@@ -383,6 +384,7 @@ export const reportTemplates = pgTable('report_templates', {
 }, (table) => {
   return {
     activeIdx: utils.activeIdx(table),
+    slugUniqueLive: uniqueIndex('report_templates_slug_unique_live').on(table.slug).where(sql`${table.deletedAt} IS NULL`),
   
 };
 });

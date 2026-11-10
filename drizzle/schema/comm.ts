@@ -274,7 +274,7 @@ export const emailWarmupConfigs = pgTable('email_warmup_configs', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-    uniqueEmailIdx: uniqueIndex('idx_email_warmup_unique').on(table.tenantId, table.fromEmail),
+    uniqueEmailIdx: uniqueIndex('idx_email_warmup_unique_live').on(table.tenantId, table.fromEmail).where(sql`${table.deletedAt} IS NULL`),
   };
 });
 
@@ -400,6 +400,6 @@ export const webhookFieldMappings = pgTable('webhook_field_mappings', {
   return {
     tenantIdx: utils.tenantIdx(table),
     lookupIdx: index('idx_webhook_field_mappings_lookup').on(table.tenantId, table.entityType, table.apiKeyId),
-    uniqueSourceKey: uniqueIndex('idx_webhook_field_mappings_unique').on(table.tenantId, table.apiKeyId, table.entityType, table.sourceKey),
+    uniqueSourceKey: uniqueIndex('idx_webhook_field_mappings_unique_live').on(table.tenantId, table.apiKeyId, table.entityType, table.sourceKey).where(sql`${table.deletedAt} IS NULL`),
   };
 });

@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockJobTypes: string[] = [];
-const mockCreateQueue = vi.fn(async (name: string) => { mockJobTypes.push(name); });
-const mockStart = vi.fn(async () => {});
 const mockClose = vi.fn(async () => {});
 const mockSend = vi.fn(async () => 'job-1');
 const mockWork = vi.fn(async () => {});
@@ -31,29 +28,8 @@ vi.mock('ioredis', () => ({
     };
   }),
 }));
-vi.mock('pg-boss', () => ({
-  default: vi.fn(function MockPgBoss() {
-    return {
-      start: mockStart,
-      send: mockSend,
-      work: mockWork,
-      createQueue: mockCreateQueue,
-      stop: mockClose,
-    };
-  }),
-  // pg-boss v12 ships BOTH a default export and the named `PgBoss` class
-  // (dist/index.js: `export class PgBoss` + `export default Boss`). lib/queue
-  // now uses the typed named export, so the mock must mirror the real shape.
-  PgBoss: vi.fn(function MockPgBoss() {
-    return {
-      start: mockStart,
-      send: mockSend,
-      work: mockWork,
-      createQueue: mockCreateQueue,
-      stop: mockClose,
-    };
-  }),
-}));
+// #3411: the `pg-boss` mock went with the adapter. This file's job is now to keep
+// every declared job type registered on the one backend that can deliver it.
 
 process.env.REDIS_URL = 'redis://localhost:6379';
 
@@ -61,17 +37,14 @@ describe('queue adapter registration', () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.restoreAllMocks();
-    mockJobTypes.length = 0;
     mockBullQueueCtor.mockClear();
     mockSend.mockReset();
     mockWork.mockReset();
-    mockStart.mockReset();
-    mockCreateQueue.mockReset();
     process.env.REDIS_URL = 'redis://localhost:6379';
     delete process.env.DATABASE_URL;
   });
 
-  it('registers send-lead-warming in Redis adapter', async () => {
+  it('registers send-lead-warming in the Redis adapter', async () => {
     const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
     const queue = await getQueueAdapter();
     expect(queue.provider).toBe('redis');
@@ -82,20 +55,11 @@ describe('queue adapter registration', () => {
     await closeQueue();
   });
 
-  it('registers send-lead-warming in pg-boss adapter', async () => {
-    delete process.env.REDIS_URL;
-    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
-
-    const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
-    const queue = await getQueueAdapter();
-    expect(queue.provider).toBe('pgboss');
-
-    expect(mockCreateQueue).toHaveBeenCalledWith('send-lead-warming');
-
-    await closeQueue();
-  });
-
-  it('registers webhooks in Redis adapter so addJob(webhooks) routes correctly (#1186)', async () => {
+  // #3411 deleted the pg-boss adapter — nothing in this repo called `boss.work()`,
+  // so a job that negotiated its way there was written to a table and never read.
+  // Its two registration cases went with it; `queue-single-backend-3411.test.ts`
+  // now asserts the opposite property: no backend but Redis can be reached.
+  it('registers webhooks in the Redis adapter so addJob(webhooks) routes correctly (#1186)', async () => {
     const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
     const queue = await getQueueAdapter();
     expect(queue.provider).toBe('redis');
@@ -106,19 +70,6 @@ describe('queue adapter registration', () => {
     // The webhooks worker consumes the 'webhooks' queue; addJob must accept it
     // instead of throwing "Unknown job type".
     await expect(queue.addJob('webhooks', { url: 'https://example.com', payload: {} })).resolves.toBeUndefined();
-
-    await closeQueue();
-  });
-
-  it('registers webhooks in pg-boss adapter (#1186)', async () => {
-    delete process.env.REDIS_URL;
-    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
-
-    const { getQueueAdapter, closeQueue } = await import('@/lib/queue/index');
-    const queue = await getQueueAdapter();
-    expect(queue.provider).toBe('pgboss');
-
-    expect(mockCreateQueue).toHaveBeenCalledWith('webhooks');
 
     await closeQueue();
   });

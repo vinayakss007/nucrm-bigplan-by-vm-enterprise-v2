@@ -30,7 +30,7 @@
 | ------------ | ------------------------------------------------------- | ---------------------------------------------- |
 | C2 (partial) | Added `console.error` to 10 critical empty catch blocks | PR #241 (needs your review)                    |
 | M3           | CSRF rate limit 30→10 req/min                           | `app/api/auth/csrf-token/route.ts:6`           |
-| H1           | Docker compose default DATABASE_SSL=false→true          | `deploy/docker-compose.production.yml:123`     |
+| H1           | Docker compose default DATABASE_SSL=false→true          | `deploy/docker-compose.production.yml:202`     |
 | M1           | Notification SSE stream: fixed empty catch + TDZ bug    | `app/api/tenant/notifications/stream/route.ts` |
 
 ## STILL PENDING (before launch)

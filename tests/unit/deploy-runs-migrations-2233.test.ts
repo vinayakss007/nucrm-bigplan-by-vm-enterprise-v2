@@ -70,7 +70,7 @@ describe('deploy.yml delegates migration to the tested script (#2233)', () => {
 
   it('keeps prior deploy wiring intact (RLS gate, #2300 all-apps, #2273 probe)', () => {
     expect(WF_CODE).toContain('check-db-role-privileges.mjs');
-    expect(WF_CODE).toContain('BG_APPS="worker cron"');
+    expect(WF_CODE).toContain('BG_APPS="worker cron realtime"');
     expect(WF_CODE).toContain('dev_server_exposed(');
     expect((WF_CODE.match(/if deploy_all_and_wait; then/g) || []).length).toBe(2);
   });

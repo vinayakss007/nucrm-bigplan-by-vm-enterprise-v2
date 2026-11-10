@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { setTenantContext } from '@/lib/db/rls';
 import { tenants, users, plans, subscriptions, roles, tenantMembers } from '@/drizzle/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -100,6 +100,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         isSystem: true,
       }).onConflictDoUpdate({
         target: [roles.tenantId, roles.slug],
+        targetWhere: sql`${roles.deletedAt} IS NULL`,
         set: { permissions: { all: true }, updatedAt: new Date() },
       }).returning();
       if (!adminRole) throw new Error('Failed to create workspace admin role');
@@ -112,6 +113,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         joinedAt: new Date(),
       }).onConflictDoUpdate({
         target: [tenantMembers.tenantId, tenantMembers.userId],
+        targetWhere: sql`${tenantMembers.deletedAt} IS NULL`,
         set: { status: 'active', roleSlug: 'admin', roleId: adminRole.id, updatedAt: new Date() },
       });
 
