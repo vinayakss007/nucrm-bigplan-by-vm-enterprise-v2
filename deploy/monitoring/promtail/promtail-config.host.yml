@@ -1,0 +1,68 @@
+###############################################################################
+#  NuCRM — promtail config for a HOST (podman / pm2) deployment   [#3261]
+#
+#  promtail-config.yml discovers its targets through the Docker socket. That is
+#  correct for the compose stack, and impossible on a rootless-Podman or pm2
+#  host: there is no Docker daemon to ask, so the pipeline starts, finds zero
+#  targets and scrapes nothing while every dashboard stays green. This file is
+#  the host-local replacement, shipped in the repo so each new host does not
+#  re-derive it (it used to live only on one machine, outside version control).
+#
+#  The non-obvious part, and the reason this file exists rather than a copied
+#  snippet: log locations belong in the `__path__` LABEL of a static_config,
+#  never under `targets:`. Promtail reads `targets:` as network addresses. A
+#  filesystem path there is dropped with `no path for target`, which looks like
+#  a broken scrape instead of a config error, and the only symptom is silence.
+#
+#  Run it as a user that can read the log files (normally root or a systemd
+#  unit with the right group membership):
+#
+#    promtail -config.file=deploy/monitoring/promtail/promtail-config.host.yml
+#
+#  Change the paths below to match NUCRM_LOG_DIR / the host's log layout. The
+#  defaults cover the two checkout locations named by the runbook (`/srv/nucrm`,
+#  `/opt/nucrm`), the `/var/log/nucrm` directory the pm2 pre-setup creates, and
+#  nginx's package log directory.
+###############################################################################
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  # A host process owns this file; /tmp would be lost on reboot.
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  # On a host deployment Loki is reached through the loopback port the compose
+  # stack publishes (127.0.0.1:3100), not through a Docker service name.
+  - url: http://127.0.0.1:3100/loki/api/v1/push
+
+scrape_configs:
+  # ── Application logs (pm2 out_file / error_file) ──────────────────────────
+  #
+  # ecosystem.config.cjs writes `<name>-out.log` / `<name>-error.log` under
+  # NUCRM_LOG_DIR, whose default is `<repo>/logs`. `merge_logs: true` is pinned
+  # on every app so these names are the files pm2 actually writes (#3253).
+  - job_name: nucrm-app
+    static_configs:
+      - targets: ["localhost"]
+        labels:
+          job: "nucrm-app"
+          __path__: "/srv/nucrm/logs/*.log"
+      - targets: ["localhost"]
+        labels:
+          job: "nucrm-app"
+          __path__: "/opt/nucrm/logs/*.log"
+      - targets: ["localhost"]
+        labels:
+          job: "nucrm-app"
+          __path__: "/var/log/nucrm/*.log"
+
+  # ── nginx edge logs ───────────────────────────────────────────────────────
+  - job_name: nucrm-nginx
+    static_configs:
+      - targets: ["localhost"]
+        labels:
+          job: "nucrm-nginx"
+          __path__: "/var/log/nginx/*.log"
