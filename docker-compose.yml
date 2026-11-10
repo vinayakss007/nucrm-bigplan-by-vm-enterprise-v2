@@ -258,7 +258,9 @@ services:
 
   # ── MinIO (S3-compatible storage) ─────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    # Docker Hub removed the minio/* repositories (now 404); MinIO publishes to
+    # quay.io. Pinned release for reproducibility (#3258).
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: nucrm-s3
     command: server /data --console-address ":9001"
     environment:
@@ -280,7 +282,8 @@ services:
 
   # ── MinIO Client (auto-create bucket on startup) ─────────────────────────
   minio-setup:
-    image: minio/mc:latest
+    # See the note on the `minio` service: quay.io is now the canonical registry.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: nucrm-s3-setup
     depends_on:
       minio:
