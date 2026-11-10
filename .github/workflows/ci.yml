@@ -81,8 +81,8 @@ jobs:
         run: npm run guard:portal-rls-context && npm run guard:catch-empty && npm run guard:panel-error-state
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
-      - name: Cron lock, cron auth, cron manifest + field-permission wiring guards (#2539, #2597, #3298, #3410)
-        run: npm run guard:cron-lock && npm run guard:cron-auth && npm run guard:cron-manifest && npm run guard:field-permissions
+      - name: Cron lock, cron auth, cron manifest, field-permission wiring + permission vocabulary guards (#2539, #2597, #3298, #3402, #3410)
+        run: npm run guard:cron-lock && npm run guard:cron-auth && npm run guard:cron-manifest && npm run guard:field-permissions && npm run guard:permission-vocabulary
       - name: Raw-SQL + un-armed RLS read + pool TLS policy guards (#2528, #3280, #3381)
         run: npm run guard:raw-sql && npm run guard:app-role-counts && npm run guard:pool-tls
 

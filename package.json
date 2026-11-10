@@ -73,6 +73,7 @@
     "guard:cron-manifest": "npx tsx scripts/gen-cron-manifest.mts --check",
     "cron:manifest": "npx tsx scripts/gen-cron-manifest.mts",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
+    "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
     "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
     "guard:app-role-counts": "node scripts/check-app-role-counts.mjs",
