@@ -102,10 +102,13 @@ Tenant isolation is enforced at **two layers**:
    [`lib/db/rls.ts`](../../lib/db/rls.ts) sets the session GUCs `app.current_tenant` and
    `app.current_user`, and RLS policies restrict every row to the current tenant.
 
-> **PgBouncer note:** PgBouncer runs in **transaction pooling** mode. Session-scoped GUCs persist on
-> a pooled connection and are cleared by `DISCARD ALL` on connection reset. Request-scoped
-> connection pinning keeps the tenant context and the query on the same connection. Never disable
-> RLS or the isolation guards. See [Security](./security.md) and
+> **PgBouncer note:** PgBouncer is declared in **session pooling** mode with
+> `server_reset_query = DISCARD ALL`, and #3404 made that an enforced invariant —
+> `npm run guard:pool-mode` parses every compose declaration and fails the build on a
+> drift back to transaction pooling, where the reset is inert and the next client would
+> inherit the previous tenant's `app.current_tenant`. Request-scoped connection pinning
+> keeps the tenant context and the query on the same connection either way. Never
+> disable RLS or the isolation guards. See [Security](./security.md) and
 > [`docs/TENANT-ISOLATION-VERIFICATION.md`](../TENANT-ISOLATION-VERIFICATION.md).
 
 ---

@@ -80,6 +80,7 @@
     "guard:pg-hba": "node scripts/check-pg-hba.mjs",
     "guard:pm-log-paths": "node scripts/check-pm2-log-paths.mjs",
     "guard:nginx-fd-limit": "npx tsx scripts/check-nginx-fd-limit.mts",
+    "guard:pool-mode": "node scripts/check-pool-mode-invariant.mjs",
     "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
@@ -280,7 +281,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "ws": "^8.21.0",

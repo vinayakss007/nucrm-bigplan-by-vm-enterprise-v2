@@ -51,8 +51,11 @@ Two enforced layers — **never** rely on only one:
    `app.current_tenant` / `app.current_user`; RLS policies restrict rows to the current tenant.
    `verifyAllRLSEnabled()` audits that critical tables have RLS on.
 
-**PgBouncer (transaction mode):** session GUCs persist on a pooled connection and are cleared by
-`DISCARD ALL`. Request-scoped connection pinning keeps `setTenantContext` and the query together.
+**PgBouncer (session mode, #3404):** session GUCs persist on the server connection the
+client holds and `DISCARD ALL` clears them when it is released. Transaction pooling is
+the unsafe spelling — the reset query is inert there, so the next client would inherit
+the previous tenant's context — and `npm run guard:pool-mode` now fails the build on it.
+Request-scoped connection pinning keeps `setTenantContext` and the query together.
 Additional guards live in `lib/db/tenant-isolation-guard.ts`.
 
 > Verify isolation regularly: `npm run db:verify-isolation`. See

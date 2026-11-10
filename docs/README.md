@@ -19,6 +19,9 @@ Ordered. Each row says what you get from the file.
 | 5   | [`docs/migration-chain-state.md`](./migration-chain-state.md)               | The five migration-chain defects and their baseline                |
 | 6   | [`docs/infra/PREPROD-ISSUE-REGISTER.md`](./infra/PREPROD-ISSUE-REGISTER.md) | Every open defect with its evidence, numbered PP-nnn               |
 | 7   | [`docs/adr/README.md`](./adr/README.md)                                     | Decisions taken, and the ruling on the 0001–0006 collisions        |
+| 8   | [`docs/architecture/SYSTEM-MAP.md`](./architecture/SYSTEM-MAP.md)            | The whole system as it runs, layer by layer, with the nine defect families overlaid |
+| 9   | [`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) | Why the same bugs keep returning — H1–H9, each with reproducible evidence |
+| 10  | [`docs/reports/FIX-PLAN-2026-11-01.md`](./reports/FIX-PLAN-2026-11-01.md)     | Those nine families as 22 single-issue PRs, ordered, with proof and rollback |
 
 ## Living reference
 
@@ -37,19 +40,29 @@ the tree and the live preprod database — not the date it was written.
 | [`docs/reference/data-model.md`](./reference/data-model.md)                 | 2026-10-04                                |
 | [`docs/admin/architecture.md`](./admin/architecture.md)                     | 2026-10-04, counts only — see Known-stale |
 | [`docs/infra/PREPROD-ISSUE-REGISTER.md`](./infra/PREPROD-ISSUE-REGISTER.md) | 2026-10-04                                |
+| [`docs/architecture/SYSTEM-MAP.md`](./architecture/SYSTEM-MAP.md)           | 2026-11-01, re-measured 2026-11-03        |
+| [`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) | 2026-11-01, re-measured 2026-11-03 |
+| [`docs/reports/FIX-PLAN-2026-11-01.md`](./reports/FIX-PLAN-2026-11-01.md)   | 2026-11-01, re-measured 2026-11-03 — the roadmap; issues #3401–#3413 filed from it |
 
-Those ten were re-measured against `package.json`, `drizzle/schema/`, `drizzle/migrations/` and the
+The last three were measured against the tree on 2026-11-01 and re-measured against
+`origin/main` on 2026-11-03, not against the preprod database, so their counts are
+reproducible with the commands in
+[`docs/reports/DESIGN-ISSUES-2026-10-31.md`](./reports/DESIGN-ISSUES-2026-10-31.md) §8. Three of the
+findings they describe are already fixed on `main` (#3401 via #3417, #3403 via #3436, #3413 via #3430)
+— the docs record that instead of re-prescribing it.
+
+The first ten were re-measured against `package.json`, `drizzle/schema/`, `drizzle/migrations/` and the
 preprod database on 2026-10-04. The numbers they carry are reproducible by the commands in
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **33** of the `guard:*` aliases by name —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **34** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:nginx-fd-limit`, `guard:override-ranges`,
-`guard:panel-error-state`, `guard:partial-unique`, `guard:permission-vocabulary`, `guard:pm-log-paths`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
+`guard:panel-error-state`, `guard:partial-unique`, `guard:permission-vocabulary`, `guard:pm-log-paths`, `guard:pool-mode`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **4** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:pg-hba`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **41** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **42** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
@@ -60,7 +73,7 @@ census command below and `tests/unit/docs-guard-coverage-counts-3239.test.ts` ma
 `guard:[a-z-]+`, so a `guard:pm2-…` name would be read as `guard:pm` and the paragraph would silently
 disagree with the workflow) — and **#3276** appended the `nginx-fd-limit` job as the last entry in
 `jobs:` rather than chaining a fourth alias onto a cited step line, because three register rows quote
-those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail, and **#3402** chaining `guard:permission-vocabulary` onto `ci.yml:85` in place, because a fifth line there slides every `ci.yml:2NN`/`:4NN` citation downstream — **33 / 41** now, which is what the command prints.
+those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail, and **#3402** chaining `guard:permission-vocabulary` onto `ci.yml:85` in place, because a fifth line there slides every `ci.yml:2NN`/`:4NN` citation downstream, and **#3404** wired `guard:pool-mode`, the first screen in the estate that parses the YAML it checks rather than grepping it — **34 / 42** now, which is what the command prints.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -140,12 +153,12 @@ cd /srv/nucrm
 find app/api -name route.ts | wc -l                       # 519 API routes (was 514; #3246's inbound receivers, #3328's oauth registration)
 find app/tenant -name page.tsx | wc -l                    # 150 tenant pages (was 149)
 find app/superadmin -name page.tsx | wc -l                # 31 · app/portal: 9
-find tests -name '*.test.*' | wc -l                       # 1013 (was 926 on `f054c6e95`; #3303 adds 2, the rest is what merged between; Playwright .spec.ts excluded: 7)
+find tests -name '*.test.*' | wc -l                       # 1035 (was 1013 on 2026-10-04, 926 on `f054c6e95`; the delta is what merged since, #3404's screen among it; Playwright .spec.ts excluded: 7)
 ls drizzle/schema/*.ts | wc -l                            # 46 schema files
-ls drizzle/migrations/*.sql | wc -l                       # 292 total .sql (was 280; 0143 up+down and the four 0140–0142 files a merge had dropped from the journal are now paired)
-ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 146 up-migrations (was 140), each with a `.down.sql` since #3284
-node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 146 journal entries (was 140) — guard:chain re-derives the pairing, not this count
-node -pe "Object.keys(require('./package.json').scripts).length"               # 138 scripts (was 122; guard:pool-tls, guard:cron-auth, guard:pm-log-paths, guard:nginx-fd-limit, guard:permission-vocabulary among the additions)
+ls drizzle/migrations/*.sql | wc -l                       # 296 total .sql (was 280; 0143 up+down and the four 0140–0142 files a merge had dropped from the journal are now paired, plus 0144 up+down)
+ls drizzle/migrations/*.sql | grep -v '\.down\.sql' | wc -l   # 148 up-migrations (was 140), each with a `.down.sql` since #3284
+node -pe "require('./drizzle/migrations/meta/_journal.json').entries.length"   # 148 journal entries (was 140) — guard:chain re-derives the pairing, not this count
+node -pe "Object.keys(require('./package.json').scripts).length"               # 139 scripts (was 122; guard:pool-tls, guard:cron-auth, guard:pm-log-paths, guard:nginx-fd-limit, guard:permission-vocabulary, guard:pool-mode among the additions)
 node -pe "require('./package.json').version"                                   # 0.9.0
 node -pe "Object.keys(require('./package.json').dependencies).filter(k=>k.startsWith('@radix-ui/')).length"   # 13
 # distinct declared table names; plain grep -o misses one multi-line declaration:
