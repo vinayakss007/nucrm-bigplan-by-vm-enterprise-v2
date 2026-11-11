@@ -16,14 +16,14 @@
 
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { processLeadWarming, resetMonthlyCounters, type WarmingResult } from '@/lib/lead-warming/engine';
 import { analyzeUnprocessedReplies } from '@/lib/lead-warming/reply-analyzer';
 import { apiError } from '@/lib/api-error';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   // Validate cron secret
   if (!await verifyCronSecret(req, { job: 'lead-warming' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -99,3 +99,6 @@ export async function POST(req: NextRequest) {
     return apiError(err, "Internal server error", 500);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('lead-warming', cronRouteHandler);

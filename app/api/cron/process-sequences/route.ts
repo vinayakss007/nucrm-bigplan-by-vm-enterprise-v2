@@ -13,7 +13,7 @@ import { sequenceEnrollments, tasks, sequenceStepLogs } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { acquireLock, releaseLock } from '@/lib/cache';
-import { cronLockRefusalResponse } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import {
   activeStepWhere,
@@ -32,7 +32,7 @@ import {
 const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
 const SEQUENCE_LOCK_TTL = 120; // 2 minutes
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'process-sequences' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -451,3 +451,6 @@ export async function POST(req: NextRequest) {
     await releaseLock(SEQUENCE_LOCK_KEY, lock.value);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('process-sequences', cronRouteHandler);

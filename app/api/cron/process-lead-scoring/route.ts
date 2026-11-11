@@ -16,11 +16,11 @@ import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'process-lead-scoring' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -76,6 +76,9 @@ export async function POST(req: NextRequest) {
 // POST to follow the safe/idempotent HTTP semantics used by the other cron routes.
 // A thin GET is kept as a backwards-compatible delegate for any external scheduler
 // that still invokes this route via GET.
-export async function GET(req: NextRequest) {
-  return POST(req);
+export async function GET(req: NextRequest, ctx: unknown) {
+  return POST(req, ctx);
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('process-lead-scoring', cronRouteHandler);
