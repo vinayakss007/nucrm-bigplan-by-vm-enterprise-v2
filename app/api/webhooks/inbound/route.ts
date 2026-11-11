@@ -4,14 +4,25 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { escapeLike } from '@/lib/api/sanitize-like';
-import { db } from '@/drizzle/db';
 import { withTenantScope } from '@/lib/api/with-api-route';
-import { webhookInboundLogs, contacts, leads, deals, companies, tasks, dealStages, pipelines, tenants } from '@/drizzle/schema';
-import { eq, and, isNull, ilike, asc, desc, sql } from 'drizzle-orm';
+// #3246: every statement below used to run on the bare pool or on a
+// `db.transaction()` handle that carried no tenant GUC. `contacts`, `leads`,
+// `deals`, `companies`, `tasks`, `deal_stages`, `pipelines` and
+// `webhook_inbound_logs` are all tenant-policyed, so a read without
+// `app.current_tenant` answered zero rows and the webhook silently did
+// nothing. The route already knows the tenant — `resolveApiKey` resolved the
+// API key to a workspace — so the work below runs inside that workspace's
+// context, named explicitly rather than inherited from a pinned connection.
+import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { webhookInboundLogs, contacts, leads, deals, companies, tasks, tenants } from '@/drizzle/schema';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { RateLimiter, getRateLimitHeaders } from '@/lib/rate-limit';
 import { fireWebhooks, type WebhookEvent } from '@/lib/webhooks';
 import { resolveApiKey } from '@/lib/webhooks/inbound-auth';
+// #3246: the stage lookups live in their own module because this route is under
+// the #1843/#422 size ratchet — the same reason `lib/webhooks/inbound-auth.ts`
+// exists.
+import { resolveRequestedStage, resolveDefaultStage } from '@/lib/webhooks/inbound-stages';
 import { logAudit } from '@/lib/audit';
 import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
@@ -29,7 +40,6 @@ const MAX_PAYLOAD_SIZE = 1_000_000; // 1 MB
 const MAX_BATCH_SIZE = 100;
 const VALID_ACTIONS = new Set(['create', 'update', 'upsert']);
 const VALID_ENTITIES = new Set(['contact', 'lead', 'deal', 'company', 'task']);
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Max serialized size of the raw body we persist into webhook_inbound_logs.payload. */
 const MAX_STORED_PAYLOAD_BYTES = 64 * 1024; // 64 KB
@@ -294,6 +304,15 @@ export function buildStoredPayload(
 /**
  * Log a webhook delivery attempt, including the raw body and (redacted) headers
  * so an unexpected payload shape stays recoverable and replayable.
+ *
+ * #3246: `webhook_inbound_logs` is tenant-policyed, so the insert needs
+ * `app.current_tenant`. On the success path the caller already holds the
+ * transaction that is writing the record, and passing it here keeps the log
+ * row in the same commit as the record it describes. On the failure paths
+ * there is no transaction — the error path runs after the item's transaction
+ * rolled back — so this opens the tenant's own context instead of writing on
+ * the bare pool, where the policy would admit no row and the insert would
+ * fail while reporting nothing.
  */
 export async function logWebhookDelivery(input: {
   tenantId: string;
@@ -308,12 +327,12 @@ export async function logWebhookDelivery(input: {
   body?: unknown;
   headers?: HeaderLike | null;
   data?: Record<string, unknown>;
-}) {
+}, tx?: RlsTransaction) {
   try {
     const succeeded = input.status === 'success';
     const ignoredKeys = input.data ? collectIgnoredKeys(input.entity, input.data) : [];
 
-    await db.insert(webhookInboundLogs).values({
+    const values = {
       tenantId: input.tenantId,
       apiKeyId: input.apiKeyId,
       action: input.action,
@@ -328,7 +347,15 @@ export async function logWebhookDelivery(input: {
       processed: succeeded,
       processedAt: succeeded ? new Date() : null,
       createdAt: new Date(),
-    });
+    };
+
+    if (tx) {
+      await tx.insert(webhookInboundLogs).values(values);
+    } else {
+      await withTenantContext(input.tenantId, NO_USER_SENTINEL, async (ctx) => {
+        await ctx.insert(webhookInboundLogs).values(values);
+      });
+    }
   } catch (err) {
     void logError({ error: err, context: 'webhooks/inbound log delivery', level: 'warning' });
   }
@@ -350,7 +377,7 @@ async function handleContact(
   raw: Record<string, unknown>,
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
 
@@ -450,7 +477,7 @@ async function handleLead(
   raw: Record<string, unknown>,
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
 
@@ -528,100 +555,6 @@ async function handleLead(
   return { id: newLead?.id ?? null, action: 'created' };
 }
 
-interface ResolvedStage {
-  stageId: string;
-  pipelineId: string;
-}
-
-/**
- * Resolve the stage the caller asked for, tenant-scoped.
- *
- * Mirrors `app/api/tenant/deals/route.ts`: a stage id wins over a stage name,
- * and a name is matched case-insensitively against `deal_stages` joined to
- * `pipelines` so the tenant filter lives on the pipeline row.
- *
- * A caller-supplied id is *never* trusted as-is: it has to come back from the
- * tenant-scoped query, otherwise a webhook key for tenant A could park a deal on
- * tenant B's stage. Returns null when the caller asked for nothing, or asked by
- * a name that matches nothing (the caller's spelling is not authoritative — the
- * create path then falls back to the default pipeline).
- */
-async function resolveRequestedStage(
-  suppliedStageId: string | null,
-  stageName: string | null,
-  tenantId: string
-): Promise<ResolvedStage | null> {
-  if (suppliedStageId) {
-    if (!UUID_RE.test(suppliedStageId)) {
-      throw new Error(`stage_id must be a uuid (got "${suppliedStageId}"); use "stage" to reference a stage by name`);
-    }
-
-    const [row] = await db
-      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
-      .from(dealStages)
-      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-      .where(and(
-        eq(dealStages.id, suppliedStageId),
-        eq(pipelines.tenantId, tenantId)
-      ))
-      .limit(1);
-
-    if (!row) {
-      throw new Error(`stage_id ${suppliedStageId} does not belong to this tenant`);
-    }
-    return { stageId: row.id, pipelineId: row.pipelineId };
-  }
-
-  if (stageName) {
-    const [row] = await db
-      .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
-      .from(dealStages)
-      .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-      .where(and(
-        ilike(dealStages.name, escapeLike(stageName)),
-        eq(pipelines.tenantId, tenantId)
-      ))
-      .limit(1);
-
-    if (row) return { stageId: row.id, pipelineId: row.pipelineId };
-  }
-
-  return null;
-}
-
-/**
- * Fallback for a create with no usable stage input: the first stage of the
- * tenant's default pipeline. `isDefault DESC` puts the flagged pipeline first
- * and still yields a pipeline when none is flagged; `order ASC` then picks the
- * left-most stage. Returns null when the tenant has no pipelines or no stages.
- */
-async function resolveDefaultStage(tenantId: string): Promise<ResolvedStage | null> {
-  const [pipeline] = await db
-    .select({ id: pipelines.id })
-    .from(pipelines)
-    .where(and(
-      eq(pipelines.tenantId, tenantId),
-      isNull(pipelines.deletedAt)
-    ))
-    .orderBy(desc(pipelines.isDefault), asc(pipelines.createdAt))
-    .limit(1);
-
-  if (!pipeline) return null;
-
-  const [stage] = await db
-    .select({ id: dealStages.id, pipelineId: dealStages.pipelineId })
-    .from(dealStages)
-    .where(and(
-      eq(dealStages.tenantId, tenantId),
-      eq(dealStages.pipelineId, pipeline.id),
-      isNull(dealStages.deletedAt)
-    ))
-    .orderBy(asc(dealStages.order))
-    .limit(1);
-
-  if (!stage) return null;
-  return { stageId: stage.id, pipelineId: stage.pipelineId };
-}
 
 /**
  * Create or update a deal.
@@ -631,7 +564,7 @@ async function handleDeal(
   raw: Record<string, unknown>,
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const title = sanitizeString(d['title'] as string, 200);
@@ -662,7 +595,7 @@ async function handleDeal(
   // Only touch the stage columns when the caller actually said something about
   // the stage — an update that omits it must leave the existing stage alone.
   const requestedStage = (suppliedStageId || stageName)
-    ? await resolveRequestedStage(suppliedStageId, stageName, tenantId)
+    ? await resolveRequestedStage(suppliedStageId, stageName, tenantId, tx)
     : null;
 
   const dealData = {
@@ -704,7 +637,7 @@ async function handleDeal(
   // first stage. No `as unknown as typeof deals.$inferInsert` cast is needed —
   // every key below is now a genuine `deals` column, so the compiler checks the
   // payload instead of a cast hiding the mismatch.
-  const stage = requestedStage ?? await resolveDefaultStage(tenantId);
+  const stage = requestedStage ?? await resolveDefaultStage(tenantId, tx);
   if (!stage) {
     throw new Error(
       'Cannot determine a stage for this deal: send "stage_id" (a uuid belonging to this tenant) or "stage" (an existing stage name), or create a pipeline with at least one stage for this tenant first'
@@ -732,7 +665,7 @@ async function handleCompany(
   raw: Record<string, unknown>,
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const name = sanitizeString(d['name'] as string, 200);
@@ -786,7 +719,7 @@ async function handleTask(
   raw: Record<string, unknown>,
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const d = normalizeFields(raw);
   const title = sanitizeString(d['title'] as string, 200);
@@ -839,7 +772,7 @@ async function processItem(
   item: { action: string; entity: string; data: Record<string, unknown> },
   tenantId: string,
   userId: string,
-  tx: typeof db
+  tx: RlsTransaction
 ): Promise<EntityResult> {
   const { action, entity, data } = item;
 
@@ -867,12 +800,21 @@ type InboundRequestBody = {
   data?: Record<string, unknown>;
 };
 
+/**
+ * #3246: every statement below used to run on the bare pool or on a
+ * `db.transaction()` handle that carried no tenant GUC. `contacts`, `leads`,
+ * `deals`, `companies`, `tasks`, `deal_stages`, `pipelines` and
+ * `webhook_inbound_logs` are all tenant-policyed, so a read without
+ * `app.current_tenant` answered zero rows and the webhook silently did
+ * nothing. The route already knows the tenant — `resolveApiKey` resolved the
+ * API key to a workspace — so the work below runs inside that workspace's
+ * context, named explicitly rather than inherited from a pinned connection.
+ */
 export async function POST(request: NextRequest) {
   // The tenant adopted in resolveApiKey is a SESSION-scoped GUC on the checkout
   // that statement happened to use, and the pool clears it on release
-  // (lib/db/pool.ts:241). This path is anonymous, so nothing wraps it the way
-  // withApiRoute wraps an authenticated route — pin one client for the request
-  // or every statement below the auth still reads an empty app.current_tenant.
+  // (lib/db/pool.ts:241) — pin one client for the request, because the claim
+  // and the carrier it stashes still need one connection for its length.
   return withTenantScope(() => handleInbound(request));
 }
 
@@ -999,27 +941,35 @@ async function handleInbound(request: NextRequest) {
       );
 
       try {
-        const result = await db.transaction(async (tx) => {
-          const r = await processItem(mappedItem, currentKey.tenantId, currentKey.userId!, tx);
+        // #3246: the item's writes and its log row run in one transaction that
+        // NAMES the tenant. `db.transaction()` on its own carried no GUCs, so
+        // every statement in it answered zero rows under the tenant policies
+        // — the webhook reported success and stored nothing.
+        const result = await withTenantContext(
+          currentKey.tenantId,
+          currentKey.userId ?? NO_USER_SENTINEL,
+          async (tx) => {
+            const r = await processItem(mappedItem, currentKey.tenantId, currentKey.userId!, tx);
 
-          // Log delivery inside the same transaction
-          await logWebhookDelivery({
-            tenantId: currentKey.tenantId,
-            apiKeyId: currentKey.id,
-            action: item.action,
-            entity: item.entity,
-            status: 'success',
-            statusCode: 200,
-            errorMessage: null,
-            recordId: r.id,
-            payloadSize: contentLength || 0,
-            body,
-            headers: request.headers,
-            data: item.data,
-          });
+            // Log delivery inside the same transaction
+            await logWebhookDelivery({
+              tenantId: currentKey.tenantId,
+              apiKeyId: currentKey.id,
+              action: item.action,
+              entity: item.entity,
+              status: 'success',
+              statusCode: 200,
+              errorMessage: null,
+              recordId: r.id,
+              payloadSize: contentLength || 0,
+              body,
+              headers: request.headers,
+              data: item.data,
+            }, tx);
 
-          return r;
-        });
+            return r;
+          },
+        );
 
         results.push({
           entity: item.entity,
