@@ -30,7 +30,7 @@
 > receiver is built one statement earlier). **0143 lands UNAPPLIED** with **#2537**'s backlog, so against today's
 > database SCIM still answers zero rows — fail-closed, never a leak. This entry arrived as **PP-079** on its own branch
 > and moves here because the merge brought **#3328**'s PP-079 in underneath it: two agents, one number, and the published
-> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** [re-pinned 2026-11-03 by **#3403**/**PP-081**, whose header bullet, summary row and section grew **131** lines above the rule and whose integration proof grew **22** more: `:5761`, then `:5783`, then `:5794` by **#3410**, then `:5801` when `main` merged in] on this merged tree on this merged tree
+> one keeps it. The keep-the-entry bullet this chain has re-pinned twenty times is at line **5630** [re-pinned 2026-11-03 by **#3403**/**PP-081**, whose header bullet, summary row and section grew **131** lines above the rule and whose integration proof grew **22** more: `:5761`, then `:5783`, then `:5794` by **#3410**, then `:5802` when `main` merged in] on this merged tree on this merged tree
 > (from 5627 the same day). Re-measured 2026-11-02 on the merge of `ea108e4bc`: `guard:rls` **519** routes and **0** tolerated, `scripts/rls-preauth-baseline.json` still empty, **146** up-migrations against **146** journal entries with `0143` among them unapplied, and the SCIM suites at **21** + **12** — **80** green over the five SCIM-facing files, both numbers re-derived from the 20/12/75-over-four this cell and this bullet had carried off the pre-merge tree. The line recording this re-pin is itself the one line of growth it reports.
 > - **Previous:** 2026-10-27 (UTC) — **PP-079**: **PP-061's third layer.** `/api/auth/oauth/token` is open at the edge and
 > its handler runs, and it still answered `invalid_client` at every caller on a fresh database, because `oauth_clients`
@@ -282,9 +282,10 @@
 > carrying 064, **#2506** carrying 066 and **#2518** carrying 067 — the earlier merge keeps the number
 > and the later one moves, the resolution PP-057 and PP-063 record; **#2507** still holds 065 open, so this entry
 > lands at 068. This entry also re-pins the one pointer _into_ the register, and found it broken before this
-> PR: `docs/README.md:100` aimed at `:1598` for the keep-the-entry rule (re-pinned from `:71` on 2026-11-05 by **#3410**, whose
+> PR: `docs/README.md:101` aimed at `:1598` for the keep-the-entry rule (re-pinned from `:71` on 2026-11-05 by **#3410**, whose
 > docs-census entry grew the paragraph above it **3** lines, from `:90` when `main` merged in and its own census
-> entry grew it **3** more, and again from `:87` when **#3404**'s pool-mode guard landed), which lived at `:3913` at
+> entry grew it **3** more, from `:87` when **#3404**'s pool-mode guard landed, and from `:100` to `:101` when
+> **#3273**'s compose-ports screen landed), which lived at `:3913` at
 > `4dc2ef82` (**2,315 lines** of drift) and sits at `:4350` now that **PP-064**, **PP-066** and
 > **PP-067** have merged — no guard sees any of it, because
 > `scripts/check-register-coords.mjs` scans only the register's own outward citations.

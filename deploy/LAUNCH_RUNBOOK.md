@@ -53,8 +53,8 @@ ecosystem.config.cjs --update-env` is what pushes a changed value into live work
 ## §1. Firewall — close all ports except 22/80/443 · #1036, #1042 🔴 BLOCKER
 
 The data-plane ports (Postgres 5432, Redis 6379, MinIO 9000/9001, Prometheus
-9090, Grafana 3001, Loki 3100, Alertmanager 9093) are bound to `127.0.0.1` by
-compose, but the host must also deny them at the edge as a backstop.
+9090, Grafana 3001, Loki 3100, Alertmanager 9093) must bind to `127.0.0.1`;
+`npm run guard:compose-ports` checks that (#3273). Deny them at the edge too.
 
 ```bash
 sudo bash deploy/scripts/setup-firewall.sh
@@ -323,7 +323,7 @@ signal the supervised process does not emit, and this section has to stay in the
 
 ## Final go/no-go checklist
 
-- [ ] `nmap` from outside shows only 22/80/443 open (§1)
+- [ ] `npm run guard:compose-ports` is green, and `nmap` from outside shows only 22/80/443 open (§1)
 - [ ] `https://crm.yourdomain.com` serves a valid (non-self-signed) cert; HTTP→HTTPS redirect works (§2)
 - [ ] `crontab -l` shows `auto-backup`; a fresh backup exists off-VM; `npm run backup:verify` passes (§3)
 - [ ] `SHOW ssl;` returns `on` over an `sslmode=require` connection; no `sslmode=disable` anywhere (§3.5)
