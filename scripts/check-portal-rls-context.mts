@@ -75,9 +75,11 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * exact failure #3186 was filed for. It moves when the surface moves, and only
  * with the walk that produced the new number: 120 after #3312 pinned the ten
  * lib/ files an anonymous route calls and steps 4b/4d's three libraries came
- * back as pinned targets, none of which the 103 floor had counted.
+ * back as pinned targets, none of which the 103 floor had counted; 121 after
+ * #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`,
+ * which the walk reaches because `lib/webhooks` is a pinned target.
  */
-export const MIN_SCANNED_FILES = 120;
+export const MIN_SCANNED_FILES = 121;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
@@ -762,6 +764,30 @@ export function buildTargets(root: string): string[] {
  * opened by `withPluginWebhookLookupContext`, closed by the statement that hands the
  * claimed row's tenant to the `plugin_execution_logs` write once the HMAC has passed.
  * `webhooks` (44) and `auth/sso` (2) stay deferred to #3246.
+ *
+ * Step 3 (2026-10-26) did the same to `app/api/auth/sso`'s 2 reads behind migration
+ * 0140's two arms, so the ledger was two.
+ *
+ * Step 4 (2026-11-11) deleted the `app/api/webhooks` entry, and the ledger is one.
+ * Its 24 findings were all in ONE file — `app/api/webhooks/inbound/route.ts` — and
+ * they were the last reads in the repo that rode the PP-027 carrier instead of
+ * naming a context: the route adopts its tenant in `resolveApiKey` and then read
+ * `contacts`, `leads`, `deals`, `companies`, `tasks`, `deal_stages`, `pipelines` and
+ * `webhook_inbound_logs` through a `db.transaction()` handle that carried no
+ * `app.current_tenant`. The binding is now explicit — the item transaction opens
+ * `withTenantContext(tenantId, …)`, the stage lookups read through that same
+ * handle, and the log row is written inside the transaction it describes — so the
+ * directory is back in scope and a NEW unbound read there is a red build rather
+ * than a number inside a ceiling.
+ *
+ * Step 5 (2026-11-11, #3312) deleted the two `lib/` entries for the same reason:
+ * `lib/webhooks` (22) and `lib/stripe-subscription-sync.ts` (2) now bind a tenant
+ * context, or the 0093 super-admin arm where the caller is the cross-tenant cron.
+ *
+ * What is left is `app/api/cron` → #2539, and it is the honest shape: a scheduled
+ * job that authenticates by cron secret and then iterates every tenant on purpose.
+ * That is a per-tenant context loop to be written, not a missing
+ * `withTenantContext()` call, and it stays a COUNTED exemption until #2539 lands it.
  */
 export type ScopeDeferral = {
   dir: string;
@@ -778,31 +804,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'the per-tenant context loop is the work #2539 tracks, and these reads are its, not a route '
       + 'that forgot withTenantContext().',
     maxFindings: 59,
-  },
-  {
-    dir: 'app/api/webhooks',
-    deferredTo: '#3246',
-    why: 'Provider callbacks verify a signing secret and must derive the tenant from the payload, '
-      + 'which is the pre-auth lookup-arm decision #3246 now tracks; a signature proves the sender, '
-      + 'not the tenant, so no GUC exists to set before that resolution happens.',
-    maxFindings: 24,
-  },
-  {
-    dir: 'lib/webhooks',
-    deferredTo: '#3312',
-    why: 'Webhook delivery and field-mapping helpers read tenant-policyed tables on the bare pool '
-      + 'or on transaction handles not bound by a context-establishing call. They are invoked by '
-      + 'anonymous webhook routes that derive tenant from provider signatures; each helper must '
-      + 'receive and bind a tenant context. Fix tracked as part of #3312.',
-    maxFindings: 22,
-  },
-  {
-    dir: 'lib/stripe-subscription-sync.ts',
-    deferredTo: '#3312',
-    why: 'Stripe subscription sync reads tenant-policyed tables on a transaction handle that callers '
-      + 'may leave unbound, falling back to the bare pool. Callers must pass a context-bound handle. '
-      + 'Fix tracked as part of #3312.',
-    maxFindings: 2,
   },
 ];
 

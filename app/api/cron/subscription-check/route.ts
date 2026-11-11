@@ -5,7 +5,7 @@
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
@@ -41,7 +41,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
  * (tenants_read_all USING true) and its tenants_authenticated_update policy
  * admits the downgrade once app.current_user is set, which the sweep does.
  */
-export async function POST(request: Request) {
+async function cronRouteHandler(request: Request) {
   if (!await verifyCronSecret(request, { job: 'subscription-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -171,3 +171,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('subscription-check', cronRouteHandler);

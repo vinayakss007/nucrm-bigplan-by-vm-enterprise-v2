@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -170,7 +170,7 @@ async function resolveVerifyAlerts(): Promise<void> {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'backup-verify' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -450,3 +450,6 @@ export async function POST(request: NextRequest) {
     await mainPool.end();
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('backup-verify', cronRouteHandler);

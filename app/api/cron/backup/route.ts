@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { backupRecords, backupAlerts, errorLogs } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -81,7 +81,7 @@ async function reportBackupFailure(
 }
 
 // Called daily by cron — runs pg_dump, uploads to S3/R2 or keeps local
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'backup' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -280,3 +280,6 @@ export async function POST(request: NextRequest) {
     return apiError(err, classified.message, classified.status);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('backup', cronRouteHandler);

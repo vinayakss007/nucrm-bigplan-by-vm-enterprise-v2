@@ -3,9 +3,9 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db, type DbClient } from '@/drizzle/db';
 import { subscriptions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
 
 /** The subset of a Stripe subscription object the local row mirrors. */
 export interface SyncableStripeSubscription {
@@ -30,13 +30,18 @@ export async function syncSubscriptionRow(
   // this write in it. Without this the webhook's `tenants` update and this
   // `subscriptions` update committed separately, so a throw here left the
   // tenant moved and the billing row stale — the exact drift #2228 exists to
-  // prevent. Optional: a caller that passes nothing falls back to the pool and
-  // behaves exactly as before.
-  dbOrTx?: DbClient,
+  // prevent.
+  //
+  // #3312: the handle is typed `RlsTransaction`, not `DbClient`, because
+  // `subscriptions` is FORCE-RLS. A bare-pool fallback silently updated zero
+  // rows. A caller with no transaction must name the tenant, and the helper
+  // opens the context itself; a caller with neither is refused rather than
+  // writing blind.
+  dbOrTx?: RlsTransaction,
+  tenantId?: string,
 ): Promise<void> {
   if (!subscription.id) return;
-
-  const client = dbOrTx ?? db;
+  const stripeSubscriptionId = subscription.id;
 
   // subscriptions.status vocabulary in this app is 'canceled' (one L) — the
   // tenants mapping in the webhook uses 'cancelled'; normalize before persisting.
@@ -66,23 +71,46 @@ export async function syncSubscriptionRow(
     updates.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
   }
 
-  await client.update(subscriptions)
-    .set(updates)
-    .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
+  const write = async (client: RlsTransaction) => {
+    await client.update(subscriptions)
+      .set(updates)
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
+  };
+
+  if (dbOrTx) return write(dbOrTx);
+  if (!tenantId) {
+    throw new Error(
+      'syncSubscriptionRow needs the caller transaction or a tenantId: subscriptions is FORCE-RLS, '
+      + 'and an unbound write matches zero rows while reporting success',
+    );
+  }
+  return withTenantContext(tenantId, NO_USER_SENTINEL, write);
 }
 
 /** #2228 — subscription.deleted must retire the row, not just the tenant. */
 export async function markSubscriptionCanceled(
   subscriptionId?: string | null,
   // #2530: same reason as syncSubscriptionRow — see that comment.
-  dbOrTx?: DbClient,
+  // #3312: same bound-handle rule as syncSubscriptionRow.
+  dbOrTx?: RlsTransaction,
+  tenantId?: string,
 ): Promise<void> {
   if (!subscriptionId) return;
-  await (dbOrTx ?? db).update(subscriptions)
-    .set({
-      status: 'canceled',
-      cancelAtPeriodEnd: false,
-      updatedAt: new Date(),
-    })
-    .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
+  const write = async (client: RlsTransaction) => {
+    await client.update(subscriptions)
+      .set({
+        status: 'canceled',
+        cancelAtPeriodEnd: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
+  };
+  if (dbOrTx) return write(dbOrTx);
+  if (!tenantId) {
+    throw new Error(
+      'markSubscriptionCanceled needs the caller transaction or a tenantId: subscriptions is FORCE-RLS, '
+      + 'and an unbound write matches zero rows while reporting success',
+    );
+  }
+  return withTenantContext(tenantId, NO_USER_SENTINEL, write);
 }
