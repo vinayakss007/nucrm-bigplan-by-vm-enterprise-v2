@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily sweep of orphaned Turbopack cache dirs (#2565)
+
+[Timer]
+# 04:40, offset from nucrm-builder-prune.timer (05:20) so two disk-reclaiming
+# jobs do not run at once. Persistent=true catches up after a reboot.
+OnCalendar=*-*-* 04:40:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=nucrm-tmp-sweep.service
+
+[Install]
+WantedBy=timers.target
