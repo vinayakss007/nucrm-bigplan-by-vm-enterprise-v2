@@ -787,23 +787,6 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'not the tenant, so no GUC exists to set before that resolution happens.',
     maxFindings: 24,
   },
-  {
-    dir: 'lib/webhooks',
-    deferredTo: '#3312',
-    why: 'Webhook delivery and field-mapping helpers read tenant-policyed tables on the bare pool '
-      + 'or on transaction handles not bound by a context-establishing call. They are invoked by '
-      + 'anonymous webhook routes that derive tenant from provider signatures; each helper must '
-      + 'receive and bind a tenant context. Fix tracked as part of #3312.',
-    maxFindings: 22,
-  },
-  {
-    dir: 'lib/stripe-subscription-sync.ts',
-    deferredTo: '#3312',
-    why: 'Stripe subscription sync reads tenant-policyed tables on a transaction handle that callers '
-      + 'may leave unbound, falling back to the bare pool. Callers must pass a context-bound handle. '
-      + 'Fix tracked as part of #3312.',
-    maxFindings: 2,
-  },
 ];
 
 /** Why a deferral is not admissible; returns the reason, or null. */

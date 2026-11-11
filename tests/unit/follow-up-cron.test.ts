@@ -114,14 +114,19 @@ async function runCron() {
 }
 
 describe('Cron jobs registration', () => {
-  it('detect-missed-followups and ai-auto-followup are registered in cron-scheduler.ts', async () => {
+  it('detect-missed-followups and ai-auto-followup are registered in the cron manifest (#3410)', async () => {
+    // This test used to grep the scheduler's hand-written literals (the
+    // `intervalMs` mirror of the crontab). #3410 replaced that with one
+    // manifest that every scheduler reads, so registration is asserted
+    // against lib/cron/jobs.ts and the wiring, not against duplicated text.
+    const { CRON_JOBS } = await import('@/lib/cron/jobs');
+    const byName = new Map(CRON_JOBS.map((j) => [j.name, j]));
+    expect(byName.get('detect-missed-followups')?.cron).toBe('*/30 * * * *');
+    expect(byName.get('detect-missed-followups')?.sources.scheduler).toBe(true);
+    expect(byName.get('ai-auto-followup')?.cron).toBe('0 * * * *');
+    expect(byName.get('ai-auto-followup')?.sources.scheduler).toBe(true);
     const fs = await import('fs');
-    const content = fs.readFileSync('scripts/cron-scheduler.ts', 'utf-8');
-    expect(content).toContain('detect-missed-followups');
-    expect(content).toContain('ai-auto-followup');
-    expect(content).toContain('*/30 * * * *');
-    expect(content).toContain('30 * 60_000');
-    expect(content).toContain('60 * 60_000');
+    expect(fs.readFileSync('scripts/cron-scheduler.ts', 'utf-8')).toContain('@/lib/cron/jobs');
   });
 
   it('detect-missed-followups and ai-auto-followup are registered in crontab', async () => {

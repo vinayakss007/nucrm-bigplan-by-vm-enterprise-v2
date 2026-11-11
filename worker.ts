@@ -511,7 +511,7 @@ const whatsappWebhookWorker = new Worker(
 const webhookWorker = new Worker(
   'webhooks',
   async (job) => {
-    const { url, payload, headers, webhookId: _webhookId, deliveryId } = job.data;
+    const { url, payload, headers, webhookId: _webhookId, deliveryId, tenantId } = job.data;
     // #1293: redact the URL — webhook targets can carry tokens/keys in the query string.
     console.log(`[Webhook Worker] Processing job: ${job.id} - Delivering to ${redactUrl(url)}`);
     
@@ -519,7 +519,14 @@ const webhookWorker = new Worker(
       const { processWebhookDelivery } = await import('@/lib/webhooks/delivery');
       
       if (deliveryId) {
-        await processWebhookDelivery(deliveryId);
+        // #3312: webhook_deliveries is FORCE-RLS; the row can only be read and
+        // updated under the tenant that owns it. A job without one cannot
+        // deliver anything, and failing is honest — silently returning
+        // "delivered" is the zero-row bug this binding removes.
+        if (!tenantId) {
+          throw new Error(`Webhook job ${job.id} carries deliveryId ${deliveryId} but no tenantId`);
+        }
+        await processWebhookDelivery(deliveryId, tenantId);
         return { delivered: true, deliveryId };
       }
       
