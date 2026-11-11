@@ -209,12 +209,16 @@ describe('migration 0143 grants the two users arms and nothing wider (#3303)', (
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
     // Looked up by tag, not taken from the tail: the chain keeps growing — #3406
-    // appended 0144 after this migration — and the test's subject is 0143 itself.
-    const entry = journal.entries.find((e) => e.tag === up!.replace(/\.sql$/, ''));
-    expect(entry, '0143 is missing from the journal').toBeDefined();
-    expect(entry!.idx).toBe(145);
-    expect(entry!.when).toBe(1793440000000);
-    expect(journal.entries.filter((e) => e.idx === entry!.idx)).toHaveLength(1);
+    // appended 0144 and #3410 appended 0145 after this migration — and the test's
+    // subject is 0143 itself. Being LAST was incidental to #3303, so pinning by
+    // rank would make every later append edit this assertion.
+    const mine = journal.entries.filter((e) => e.tag === up!.replace(/\.sql$/, ''));
+    expect(mine, '0143 is missing from the journal').toHaveLength(1);
+    expect(mine[0]!.idx).toBe(145);
+    expect(mine[0]!.when).toBe(1793440000000);
+    expect(journal.entries.filter((e) => e.idx === mine[0]!.idx)).toHaveLength(1);
+    const last = journal.entries[journal.entries.length - 1];
+    expect(last.idx).toBeGreaterThan(145);
   });
 });
 

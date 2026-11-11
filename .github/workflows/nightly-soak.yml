@@ -414,3 +414,34 @@ jobs:
           name: pg-hba-results-${{ github.run_number }}
           path: "$RUNNER_TEMP/pg-hba-results"
           if-no-files-found: ignore
+
+  # ── #3273 — a compose `ports:` entry with no bind address is 0.0.0.0 ────────
+  # LAUNCH_RUNBOOK.md §1 told the operator the data-plane ports "are bound to
+  # 127.0.0.1 by compose", and one topology had not honoured that: only the edge
+  # firewall was holding Postgres and Redis shut. Checkout-only scan, no install,
+  # no docker — the same shape as the catalogue-grant screen above.
+  compose-ports-screen:
+    name: Compose published-ports screen (#3273)
+    if: vars.COMPOSE_PORTS_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the screen
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/compose-ports-results"
+          mkdir -p "$RESULTS_DIR"
+          npm run guard:compose-ports 2>&1 | tee "$RESULTS_DIR/compose-ports.log"
+          code=${PIPESTATUS[0]}
+          echo "screen exit=$code" | tee -a "$RESULTS_DIR/compose-ports.log"
+          exit "$code"
+
+      - name: Upload screen results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compose-ports-results-${{ github.run_number }}
+          path: ${{ runner.temp }}/compose-ports-results
+          if-no-files-found: warn
+          retention-days: 30

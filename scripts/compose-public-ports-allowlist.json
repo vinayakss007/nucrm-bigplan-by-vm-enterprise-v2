@@ -1,0 +1,29 @@
+{
+  "_comment": "Public `ports:` mappings, accepted on purpose. Keyed by file + service + the entry as written, so it survives line moves and dies when the entry changes. Every entry needs a reason; `npm run guard:compose-ports` reports any that no longer matches a real mapping.",
+  "entries": [
+    {
+      "file": "docker-compose.scale.yml",
+      "service": "nginx",
+      "mapping": "${NUCRM_PUBLIC_PORT:-80}:80",
+      "reason": "The load balancer is the deployment's front door; HTTP redirects to HTTPS here."
+    },
+    {
+      "file": "docker-compose.scale.yml",
+      "service": "nginx",
+      "mapping": "${NUCRM_PUBLIC_SSL_PORT:-443}:443",
+      "reason": "The only port a client is expected to reach; TLS terminates in nginx."
+    },
+    {
+      "file": "deploy/docker-compose.production.yml",
+      "service": "nginx",
+      "mapping": "${NUCRM_PUBLIC_PORT:-80}:80",
+      "reason": "The load balancer is the deployment's front door; HTTP redirects to HTTPS here."
+    },
+    {
+      "file": "deploy/docker-compose.production.yml",
+      "service": "nginx",
+      "mapping": "${NUCRM_PUBLIC_SSL_PORT:-443}:443",
+      "reason": "The only port a client is expected to reach; TLS terminates in nginx."
+    }
+  ]
+}

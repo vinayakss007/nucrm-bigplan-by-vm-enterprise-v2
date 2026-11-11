@@ -57,6 +57,7 @@
     "guard:rollback-coverage": "node scripts/check-down-migration-coverage.mjs",
     "guard:counters": "node scripts/check-counter-increments.mjs",
     "guard:csv": "node scripts/check-csv-blob.mjs",
+    "guard:compose-ports": "node scripts/check-compose-public-ports.mjs",
     "guard:portal-softdelete": "npx tsx scripts/check-portal-soft-delete.mts",
     "guard:public-ratelimit": "npx tsx scripts/check-public-rate-limit.mts",
     "guard:public-projection": "npx tsx scripts/check-public-row-projection.mts",
@@ -70,6 +71,8 @@
     "guard:catalog-grants": "node scripts/check-integration-catalog-grants.mjs",
     "guard:cron-auth": "node scripts/check-cron-auth.mjs",
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
+    "guard:cron-manifest": "npx tsx scripts/gen-cron-manifest.mts --check",
+    "cron:manifest": "npx tsx scripts/gen-cron-manifest.mts",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
@@ -80,6 +83,7 @@
     "guard:pg-hba": "node scripts/check-pg-hba.mjs",
     "guard:pm-log-paths": "node scripts/check-pm2-log-paths.mjs",
     "guard:nginx-fd-limit": "npx tsx scripts/check-nginx-fd-limit.mts",
+    "guard:pool-mode": "node scripts/check-pool-mode-invariant.mjs",
     "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
@@ -280,7 +284,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "ws": "^8.21.0",

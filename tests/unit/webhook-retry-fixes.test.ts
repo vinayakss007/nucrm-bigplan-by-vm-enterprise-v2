@@ -60,6 +60,14 @@ vi.mock('@/drizzle/db', () => ({
             where: vi.fn(),
           })),
         })),
+        // #3312: purgeOldDLQEntries runs under withSecurityContext, which sets
+        // app.is_super_admin via tx.execute and deletes through the tx handle.
+        execute: vi.fn(async () => ({ rows: [] })),
+        delete: vi.fn(() => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(() => [{ id: 'purged-1' }]),
+          })),
+        })),
       };
       return fn(tx);
     }),

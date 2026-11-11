@@ -1,27 +1,35 @@
-# NuCRM — Cron Schedule (kept in sync with vercel.json crons)
+# NuCRM — Cron Schedule — GENERATED FILE (#3410).
 #
-# SCHEDULER POLICY (#1422): exactly ONE of these sources is active per
-# environment. pm2/VM deployments (production) use THIS host crontab.
-# vercel.json crons are only active on Vercel-hosted deployments.
-# Never enable both against the same environment — routes carry Redis
-# dedup locks as a safety net, but do not rely on them.
+# Do not edit: every line here is rendered from lib/cron/jobs.ts
+# (npm run cron:manifest). PR CI runs npm run guard:cron-manifest, and an
+# edit this file alone fails the build. vercel.json crons is generated the
+# same way.
 #
-# All jobs call the app's API endpoints with CRON_SECRET auth
+# SCHEDULER POLICY (#1422): exactly ONE scheduler is active per environment.
+# pm2/VM deployments (production) use THIS host crontab. vercel.json crons
+# are only active on Vercel-hosted deployments; scripts/cron-scheduler.ts
+# (pm2 `cron` / the in-process alternative) reads the same manifest.
+# Never enable two against the same environment — routes carry Redis dedup
+# locks as a safety net, but do not rely on them.
+#
+# All jobs call the app's API endpoints with CRON_SECRET auth.
+# A crontab line must be re-installed on the host with every deploy
+# (crontab deploy/cron/crontab — verify with crontab -l afterwards).
 
-*/5 * * * *   /usr/local/bin/run-cron.sh process-sequences
-*/10 * * * *  /usr/local/bin/run-cron.sh retry-webhooks
-0 * * * *     /usr/local/bin/run-cron.sh task-reminders
-0 0 * * *     /usr/local/bin/run-cron.sh trial-check
-0 0 * * 0     /usr/local/bin/run-cron.sh usage-snapshot
-0 2 * * *     /usr/local/bin/run-cron.sh auto-backup
-0 3 * * 0     /usr/local/bin/run-cron.sh backup-health
-0 4 * * *     /usr/local/bin/run-cron.sh backup-verify
-0 4 * * 0     /usr/local/bin/run-cron.sh cleanup
-0 9,13,17 * * * /usr/local/bin/run-cron.sh warmup-emails
-0 5 * * *     /usr/local/bin/run-cron.sh subscription-check
-*/30 * * * *  /usr/local/bin/run-cron.sh detect-missed-followups
-0 * * * *     /usr/local/bin/run-cron.sh ai-auto-followup
-0 7 * * *     /usr/local/bin/run-cron.sh contract-renewal-check
-0 8 * * *     /usr/local/bin/run-cron.sh process-at-risk
-0 7 * * *     /usr/local/bin/run-cron.sh subscription-renewal-check
-0 8 * * *     /usr/local/bin/run-cron.sh scheduled-report-delivery
+*/5 * * * *	/usr/local/bin/run-cron.sh process-sequences
+*/10 * * * *	/usr/local/bin/run-cron.sh retry-webhooks
+0 * * * *	/usr/local/bin/run-cron.sh task-reminders
+0 0 * * *	/usr/local/bin/run-cron.sh trial-check
+0 0 * * 0	/usr/local/bin/run-cron.sh usage-snapshot
+0 2 * * *	/usr/local/bin/run-cron.sh auto-backup
+0 3 * * 0	/usr/local/bin/run-cron.sh backup-health
+0 4 * * *	/usr/local/bin/run-cron.sh backup-verify
+0 4 * * 0	/usr/local/bin/run-cron.sh cleanup
+0 9,13,17 * * *	/usr/local/bin/run-cron.sh warmup-emails
+0 5 * * *	/usr/local/bin/run-cron.sh subscription-check
+*/30 * * * *	/usr/local/bin/run-cron.sh detect-missed-followups
+0 * * * *	/usr/local/bin/run-cron.sh ai-auto-followup
+0 7 * * *	/usr/local/bin/run-cron.sh contract-renewal-check
+0 8 * * *	/usr/local/bin/run-cron.sh process-at-risk
+0 7 * * *	/usr/local/bin/run-cron.sh subscription-renewal-check
+0 8 * * *	/usr/local/bin/run-cron.sh scheduled-report-delivery

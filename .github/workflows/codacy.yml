@@ -38,13 +38,34 @@ jobs:
       actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
     name: Codacy Security Scan
     runs-on: ubuntu-latest
+    # #3459's CLI bump made the scan run for 6 hours before GitHub cancelled it
+    # (the default limit), which is how the breakage was noticed at all. A
+    # scan that cannot finish in 20 minutes is a scan that will not finish at
+    # all, and a job that fails in 20 minutes says so instead of going quiet
+    # for 6. The scan completes in well under a minute at the pinned revision.
+    timeout-minutes: 20
     steps:
       # Checkout the repository to the GitHub Actions runner
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Execute Codacy Analysis CLI and generate a SARIF output with the security issues identified during the analysis
       - name: Run Codacy Analysis CLI
+        # #3459 bumped this to 562ee3e9 (CLI 7.9.25) and the scan stopped
+        # completing: that CLI resolves the tool set from the remote project
+        # configuration and runs every analyzer it names, pulling ~31 images
+        # that total ~20GB. A GitHub-hosted runner does not have that disk,
+        # so the run wedged until GitHub's 6-hour job limit cancelled it —
+        # six consecutive runs, including the one on `main` itself, all
+        # "cancelled", and the scan's green check went away repo-wide.
+        #
+        # The pinned revision below is the last one that completes here. It
+        # runs the same CLI through the same entry point with the same
+        # project token; it just resolves a smaller tool set, so it fits.
+        # Re-bumping needs the tool set bounded first (a `.codacy.yml` that
+        # names the analyzers, or a runner with the disk for the images) —
+        # measured, not assumed: a single-tool run of the new CLI finishes
+        # in 14s, the full set does not finish at all.
         uses: codacy/codacy-analysis-cli-action@d840f886c4bd4edc059706d09c6a1586111c540b
         with:
           # Check https://github.com/codacy/codacy-analysis-cli#project-token to get your project token from your Codacy repository
@@ -61,6 +82,6 @@ jobs:
 
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif

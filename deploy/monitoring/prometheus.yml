@@ -50,3 +50,77 @@ scrape_configs:
       - targets: ["node-exporter:9100"]
         labels:
           service: "nucrm-host"
+
+  # ── Dependency probes (#3257) ──────────────────────────────────────────────
+  #
+  # Everything above proves a process is running and emitting metrics. None of
+  # it proves that a socket can be opened to Postgres, Redis or the S3 gateway —
+  # the three dependencies with no local fallback in `lib/`, which fail as
+  # connection errors rather than as metrics. These jobs hand a target to the
+  # blackbox exporter (`deploy/monitoring/blackbox.yml`) and keep the real
+  # target in the `instance` label, so a failing probe names the dependency.
+  #
+  # `postgres` resolves to the compose service in the dev stack; the production
+  # compose maps the same name to the host gateway, where Postgres listens
+  # (deploy/docker-compose.production.yml, blackbox-exporter extra_hosts).
+  - job_name: "blackbox-tcp"
+    metrics_path: /probe
+    params:
+      module: [tcp]
+    static_configs:
+      - targets: ["postgres:5432"]
+        labels:
+          service: "nucrm-postgres"
+      - targets: ["redis:6379"]
+        labels:
+          service: "nucrm-redis"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: "blackbox-s3"
+    metrics_path: /probe
+    params:
+      module: [s3-gateway]
+    static_configs:
+      - targets: ["minio:9000"]
+        labels:
+          service: "nucrm-s3"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ── Watch the monitoring plane itself (#3257) ──────────────────────────────
+  #
+  # `up == 0` is the only signal that separates "the app is fine" from "the app
+  # is down and so is the thing that would have said so". A dead Prometheus
+  # cannot alert on its own absence, but this self-scrape keeps its own health
+  # in the TSDB and makes `up{job="prometheus"}` usable from an external
+  # scraper/Grafana. A dead blackbox exporter is the important one: it makes
+  # every dependency probe vanish, which otherwise looks like "nothing is
+  # wrong".
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: "nucrm-prometheus"
+
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels:
+          service: "nucrm-alertmanager"
+
+  - job_name: "blackbox-exporter"
+    static_configs:
+      - targets: ["blackbox-exporter:9115"]
+        labels:
+          service: "nucrm-blackbox"
