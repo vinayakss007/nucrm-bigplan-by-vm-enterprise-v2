@@ -17,7 +17,7 @@ vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => {}) }));
 // and that the route reaches them at all is pinned in cron-auth-uniform-3298.test.ts.
 // What this spec owns is the job's own logic.
 vi.mock('@/lib/auth/cron', () => ({ verifyCronSecret: vi.fn(async () => true) }));
-vi.mock('@/lib/cron/cron-lock', () => ({ refuseIfCronLockHeld: vi.fn(async () => null) }));
+vi.mock('@/lib/cron/cron-lock', () => ({ refuseIfCronLockHeld: vi.fn(async () => null), instrumentCronRun: (_job: string, handler: unknown) => handler }));
 vi.mock('@/lib/email/service', () => ({ alertSuperAdmin: vi.fn(async () => ({ success: true, provider: 'unit' })) }));
 vi.mock('@/lib/backups/backup-service', () => ({ pgLibpqEnv: (u: string) => ({ PGURL: u }) }));
 vi.mock('@/lib/db/ssl-config', () => ({ pgSslConfig: () => undefined }));

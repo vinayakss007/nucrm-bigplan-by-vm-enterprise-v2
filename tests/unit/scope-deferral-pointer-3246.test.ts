@@ -20,6 +20,11 @@
  * Step 3 (2026-10-26) did the same to `app/api/auth/sso`'s 2 reads behind migration 0140's two arms, so
  * the ledger is two and only #3246's webhook surface is left counting against it.
  *
+ * Step 4 (2026-11-11) deleted #3312's two lib/ entries: `lib/webhooks` (22 reads in delivery, DLQ and
+ * field-mapping) and `lib/stripe-subscription-sync.ts` (2) now bind a tenant context — or the 0093
+ * super-admin arm where the caller is the cross-tenant cron — instead of reading the bare pool. The
+ * ledger is the two route surfaces below; the lib/ ratchet is green rather than exempted.
+ *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
 import { describe, it, expect } from 'vitest';
@@ -34,15 +39,13 @@ const GUARD_SRC = readFileSync(
 
 describe('#3246 the deferral ledger points at live work', () => {
   it('has exactly the directories still deferred, at the ceilings they were measured with', () => {
-    // app/api/cron and app/api/webhooks are #3246's; the two lib/ entries are #3312's,
-    // added when that guard started scanning lib/ files an anonymous route calls.
+    // Both are #3246's provider-callback surfaces. #3312's two lib/ entries were
+    // deleted when those helpers started binding a tenant context.
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
       'app/api/webhooks',
-      'lib/webhooks',
-      'lib/stripe-subscription-sync.ts',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 24, 22, 2]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 24]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
