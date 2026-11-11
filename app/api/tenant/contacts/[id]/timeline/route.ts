@@ -35,6 +35,7 @@ async function contactVisible(ctx: AuthContext, contactId: string): Promise<bool
     .where(and(
       eq(contacts.id, contactId),
       eq(contacts.tenantId, ctx.tenantId),
+      isNull(contacts.deletedAt),
       ownerScope(ctx, 'contacts.view_all', contacts),
     ))
     .limit(1);

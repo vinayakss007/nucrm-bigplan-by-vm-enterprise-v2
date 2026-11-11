@@ -145,6 +145,21 @@ export const GET = withApiRoute(async (request: NextRequest,
 
     const { id } = await params;
 
+    // The history of a record is read with the record's own rule (#3406). A
+    // tombstoned contact is gone everywhere else in the app; its lifecycle
+    // trail must not remain readable by id alone.
+    const [contact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(
+        eq(contacts.id, id),
+        eq(contacts.tenantId, ctx.tenantId),
+        isNull(contacts.deletedAt),
+      ))
+      .limit(1);
+
+    if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+
     const history = await db.select({
       id: contactLifecycleHistory.id,
       tenantId: contactLifecycleHistory.tenantId,

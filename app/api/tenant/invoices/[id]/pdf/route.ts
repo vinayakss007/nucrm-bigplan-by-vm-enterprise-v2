@@ -16,7 +16,7 @@ import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems, contacts, tenants } from '@/drizzle/schema';
-import { eq, and, sql, asc } from 'drizzle-orm';
+import { eq, and, sql, asc, isNull } from 'drizzle-orm';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { renderInvoicePdf } from '@/lib/pdf/render';
@@ -164,7 +164,12 @@ export const GET = withApiRoute(async (req: NextRequest,
     const items = await db
       .select()
       .from(invoiceLineItems)
-      .where(eq(invoiceLineItems.invoiceId, invoiceId))
+      .where(and(
+        eq(invoiceLineItems.invoiceId, invoiceId),
+        // A removed line item is not part of the invoice any more; rendering it
+        // made the PDF disagree with the totals (#3406).
+        isNull(invoiceLineItems.deletedAt),
+      ))
       .orderBy(asc(invoiceLineItems.sortOrder));
 
     let contactName = '';
@@ -172,7 +177,7 @@ export const GET = withApiRoute(async (req: NextRequest,
       const [contact] = await db
         .select({ name: contacts.firstName })
         .from(contacts)
-        .where(eq(contacts.id, invoice.contactId))
+        .where(and(eq(contacts.id, invoice.contactId), isNull(contacts.deletedAt)))
         .limit(1);
       contactName = contact?.name || '';
     }
