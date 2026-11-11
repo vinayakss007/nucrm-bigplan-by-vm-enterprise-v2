@@ -34,11 +34,27 @@ const mockState = {
   countRows: [{ n: 4000 }] as Array<Record<string, unknown>>,
 };
 
+/**
+ * The statements this route issues, found by what they say rather than by
+ * position. The purge path sets the `app.include_deleted` GUC before it
+ * counts (the policies are armed on `deleted_at`, so the count has to see
+ * the tombstones), which means the count is no longer the first statement
+ * executed — and a positional index would silently read the GUC call as
+ * the count.
+ */
+const statements = {
+  guc: () => mockState.executes.filter((e) => e.sql.includes('set_config')),
+  count: () => mockState.executes.find((e) => e.sql.includes('count(*)')),
+  purgeTrash: () => mockState.executes.find((e) => e.sql.includes('public.purge_trash()')),
+};
+
 const mockDb = {
   execute: vi.fn(async (fragment: unknown) => {
     const q = toSql(fragment);
     mockState.executes.push(q);
-    return { rows: mockState.executes.length === 1 ? mockState.countRows : [] };
+    // The count query is the one that asks for `count(*)`; every other
+    // statement (the GUC set/clear, the purge function) has no rows.
+    return { rows: q.sql.includes('count(*)') ? mockState.countRows : [] };
   }),
   delete: vi.fn((table: Parameters<typeof getTableName>[0]) => ({
     where: async (predicate: unknown) => {
@@ -90,16 +106,17 @@ describe('DELETE /api/tenant/trash — purge_all', () => {
 
   it('counts every trash table the UI shows, not just the four the function covers', async () => {
     await DELETE(purgeRequest({ purge_all: true }));
-    const count = mockState.executes[0].sql;
+    const count = statements.count()?.sql;
+    expect(count, 'the count query was never issued').toBeDefined();
     for (const table of ['contacts', 'deals', 'companies', 'tasks', 'leads', 'projects']) {
       expect(count).toContain(`"${table}"`);
     }
-    expect(count.match(/count\(\*\)/g)).toHaveLength(6);
+    expect(count!.match(/count\(\*\)/g)).toHaveLength(6);
   });
 
   it('still calls purge_trash() for the four tables it owns', async () => {
     await DELETE(purgeRequest({ purge_all: true }));
-    expect(mockState.executes[1].sql).toContain('public.purge_trash()');
+    expect(statements.purgeTrash()?.sql).toContain('public.purge_trash()');
   });
 
   it('deletes the two tables purge_trash() cannot reach, scoped to the caller tenant', async () => {
@@ -137,7 +154,12 @@ describe('DELETE /api/tenant/trash — purge_all', () => {
       await DELETE(purgeRequest({ id: 'row-9', resource_type: 'deal' }))
     ).json();
     expect(json).toEqual({ ok: true });
-    expect(mockState.executes).toHaveLength(0);
+    // The single-row delete now sets and clears the `app.include_deleted` GUC
+    // (the policy on a `deleted_at` table is armed, so the DELETE's USING /
+    // WITH CHECK needs the GUC or the row is invisible to it). What must NOT
+    // happen is the purge_all path's work: no count query, no purge_trash().
+    expect(statements.count()).toBeUndefined();
+    expect(statements.purgeTrash()).toBeUndefined();
     expect(mockState.deletes.map((d) => d.table)).toEqual(['deals']);
   });
 });
