@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWebhookEvent } from '@/lib/stripe';
-import { db, type DbClient } from '@/drizzle/db';
+import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import {
@@ -331,7 +331,7 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
       // tenant-level terminal guard above is about ACCESS, not about the
       // billing record), otherwise the row stays on the pre-upgrade plan
       // forever when the upgrade route's local tx failed after charging.
-      await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx as DbClient);
+      await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx);
     });
     return;
   }
@@ -349,7 +349,7 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
     // webhook synced tenants.status/planId but never subscriptions, so any
     // Stripe-first/DB-second drift in the upgrade flow was permanent. Re-sync
     // it from the event payload (Stripe is the source of truth here).
-    await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx as DbClient);
+    await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx);
   });
 
   logger.info(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
@@ -383,7 +383,7 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
 
     // #2228: close the loop — the subscriptions row must reach 'canceled' too,
     // otherwise the upgrade/cancel routes keep operating on a stale row.
-    await markSubscriptionCanceled(subscription.id, tx as DbClient);
+    await markSubscriptionCanceled(subscription.id, tx);
   });
 
   logger.info(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);

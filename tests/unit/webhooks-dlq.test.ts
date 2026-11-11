@@ -4,13 +4,8 @@ let mockRows: unknown[] = [{ count: 0 }];
 let mockThen = vi.fn((fn?: (rows: unknown[]) => unknown) => fn ? fn(mockRows) : mockRows);
 let mockWhere = vi.fn(() => ({ then: mockThen }));
 
-const mockDlqTxUpdate = vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })) }));
-const mockDlqTxInsert = vi.fn(() => ({
-  values: vi.fn(() => ({ returning: vi.fn(() => Promise.resolve([{ id: 'dlq-tx-1' }])) })),
-}));
-
-vi.mock('@/drizzle/db', () => ({
-  db: {
+vi.mock('@/drizzle/db', () => {
+  const db: Record<string, unknown> = {
     query: {
       webhookDeliveries: { findFirst: vi.fn() },
       deadLetterQueue: { findFirst: vi.fn(), findMany: vi.fn() },
@@ -29,12 +24,15 @@ vi.mock('@/drizzle/db', () => ({
         returning: vi.fn(() => Promise.resolve([{ id: 'dlq-1' }])),
       })),
     })),
-    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
-      update: mockDlqTxUpdate,
-      insert: mockDlqTxInsert,
-    })),
-  },
-}));
+    // #3312: the helpers now open withTenantContext/withSecurityContext, so
+    // the double must expose the transaction and set_config execute that the
+    // real client has. Handing back the same object keeps every existing
+    // assertion about the pool methods meaningful.
+    execute: vi.fn(() => Promise.resolve({ rows: [] })),
+    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(db)),
+  };
+  return { db };
+});
 
 vi.mock('@/drizzle/schema/automation', () => ({
   deadLetterQueue: { id: 'id', tenantId: 'tenant_id', status: 'status', createdAt: 'created_at' },
@@ -71,13 +69,13 @@ describe('Webhook Dead Letter Queue', () => {
     it('returns null when delivery not found', async () => {
       const { db } = await import('@/drizzle/db');
       (db.query.webhookDeliveries.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-      expect(await mod.moveToDeadLetterQueue('nonexistent')).toBeNull();
+      expect(await mod.moveToDeadLetterQueue('nonexistent', 't-1')).toBeNull();
     });
 
     it('returns null when delivery is not failed', async () => {
       const { db } = await import('@/drizzle/db');
       (db.query.webhookDeliveries.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: 'pending' });
-      expect(await mod.moveToDeadLetterQueue('d-1')).toBeNull();
+      expect(await mod.moveToDeadLetterQueue('d-1', 't-1')).toBeNull();
     });
 
     it('inserts DLQ entry for failed delivery', async () => {
@@ -88,7 +86,7 @@ describe('Webhook Dead Letter Queue', () => {
         metadata: { attempt: 3, maxRetries: 3, failureReason: 'Timeout', url: 'https://x.com/hook' },
       });
 
-      expect(await mod.moveToDeadLetterQueue('d-1')).toBe('dlq-1');
+      expect(await mod.moveToDeadLetterQueue('d-1', 't-1')).toBe('dlq-1');
     });
   });
 
@@ -96,13 +94,13 @@ describe('Webhook Dead Letter Queue', () => {
     it('returns false when DLQ entry not found', async () => {
       const { db } = await import('@/drizzle/db');
       (db.query.deadLetterQueue.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-      expect(await mod.retryFromDLQ('nonexistent')).toBe(false);
+      expect(await mod.retryFromDLQ('nonexistent', 't-1')).toBe(false);
     });
 
     it('throws when DLQ entry is not pending', async () => {
       const { db } = await import('@/drizzle/db');
       (db.query.deadLetterQueue.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: 'resolved' });
-      await expect(mod.retryFromDLQ('dlq-1')).rejects.toThrow('not retryable');
+      await expect(mod.retryFromDLQ('dlq-1', 't-1')).rejects.toThrow('not retryable');
     });
   });
 
@@ -163,10 +161,10 @@ describe('Webhook Dead Letter Queue', () => {
       const { db } = await import('@/drizzle/db');
       const findFirst = db.query.deadLetterQueue.findFirst as ReturnType<typeof vi.fn>;
       findFirst
-        .mockResolvedValueOnce({ status: 'pending', payload: { deliveryId: 'd-1' }, maxAttempts: 3 })
-        .mockResolvedValueOnce({ status: 'pending', payload: { deliveryId: 'd-2' }, maxAttempts: 3 });
+        .mockResolvedValueOnce({ status: 'pending', tenantId: 't-1', payload: { deliveryId: 'd-1' }, maxAttempts: 3 })
+        .mockResolvedValueOnce({ status: 'pending', tenantId: 't-1', payload: { deliveryId: 'd-2' }, maxAttempts: 3 });
 
-      const result = await mod.bulkRetryDLQ(['dlq-1', 'dlq-2']);
+      const result = await mod.bulkRetryDLQ(['dlq-1', 'dlq-2'], 't-1');
       expect(result.succeeded + result.failed).toBe(2);
     });
   });
