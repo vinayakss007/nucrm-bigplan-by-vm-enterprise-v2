@@ -37,15 +37,15 @@ is what this set documents for a faithful rebuild.
 
 ## How to read the set
 
-| File | Covers | Start here if… |
-| ---- | ------ | -------------- |
-| [`01-ARCHITECTURE.md`](./01-ARCHITECTURE.md) | Process model, layering, the request pipeline, pooling, env | you want the 30,000 ft view |
-| [`02-DATA-MODEL.md`](./02-DATA-MODEL.md) | Schema layout, core tables, shared column factories | you are designing the DB |
-| [`03-RBAC-AUTHZ.md`](./03-RBAC-AUTHZ.md) | Force-RLS policies, GUCs, role `can()`, field `enforce.ts`, auth/CSRF, rate limit | you are implementing authorization |
-| [`04-TEMPLATE-SYSTEM.md`](./04-TEMPLATE-SYSTEM.md) | `product_templates`, materializer, idempotency, superadmin + onboarding | you are implementing templates |
-| [`05-BUSINESS-FLOWS.md`](./05-BUSINESS-FLOWS.md) | Envelope + deals/leads/contacts CRUD/bulk/import/export, auth routes | you are implementing the API |
-| [`06-REBUILD-GUIDE.md`](./06-REBUILD-GUIDE.md) | Empty repo → running app, ordered, with the acceptance gate | you are rebuilding it |
-| [`07-OPS-NOTES.md`](./07-OPS-NOTES.md) | Env, DB role realign, worktrees, ports, migration-on-hotpatched-DB, deploy, gotchas | you are running/debugging it |
+| File                                               | Covers                                                                              | Start here if…                     |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
+| [`01-ARCHITECTURE.md`](./01-ARCHITECTURE.md)       | Process model, layering, the request pipeline, pooling, env                         | you want the 30,000 ft view        |
+| [`02-DATA-MODEL.md`](./02-DATA-MODEL.md)           | Schema layout, core tables, shared column factories                                 | you are designing the DB           |
+| [`03-RBAC-AUTHZ.md`](./03-RBAC-AUTHZ.md)           | Force-RLS policies, GUCs, role `can()`, field `enforce.ts`, auth/CSRF, rate limit   | you are implementing authorization |
+| [`04-TEMPLATE-SYSTEM.md`](./04-TEMPLATE-SYSTEM.md) | `product_templates`, materializer, idempotency, superadmin + onboarding             | you are implementing templates     |
+| [`05-BUSINESS-FLOWS.md`](./05-BUSINESS-FLOWS.md)   | Envelope + deals/leads/contacts CRUD/bulk/import/export, auth routes                | you are implementing the API       |
+| [`06-REBUILD-GUIDE.md`](./06-REBUILD-GUIDE.md)     | Empty repo → running app, ordered, with the acceptance gate                         | you are rebuilding it              |
+| [`07-OPS-NOTES.md`](./07-OPS-NOTES.md)             | Env, DB role realign, worktrees, ports, migration-on-hotpatched-DB, deploy, gotchas | you are running/debugging it       |
 
 ## The invariants (do not break these during a rebuild)
 
@@ -53,7 +53,7 @@ These are the properties that took the whole Part A/Part B effort to establish.
 A "base CRM" that violates any of them is not this app:
 
 - **Deny-by-default, FORCE RLS** on every tenant table. The app DB role is the
-  table *owner* but **not** a Postgres superuser and has **no** `BYPASSRLS`, so
+  table _owner_ but **not** a Postgres superuser and has **no** `BYPASSRLS`, so
   policies bind it too. An unset `app.current_tenant` GUC denies (via
   `NULLIF(current_setting(...), '')::uuid`), it does not error. See 03-RBAC-AUTHZ.
 - **Membership is visible before a tenant GUC exists.** `tenant_members` and
@@ -62,7 +62,7 @@ A "base CRM" that violates any of them is not this app:
   deliberately **no** super-admin bypass on those tables — one `app.is_super_admin`
   SET would flip ~60 policies. See 02-DATA-MODEL.
 - **Field permissions STRIP, they do not 403** — except when the restricted
-  column *is* the action (bulk/assign), which 403s. Reads drop disallowed keys;
+  column _is_ the action (bulk/assign), which 403s. Reads drop disallowed keys;
   writes apply everything allowed and report the rest via `X-Stripped-Fields`.
   See 03-RBAC-AUTHZ.
 - **Template apply is idempotent** and the DB is the source of truth. See 04.
@@ -74,7 +74,7 @@ A "base CRM" that violates any of them is not this app:
   RLS will return it. **Every `SELECT` against any table carrying `deletedAt` must
   filter `isNull(<table>.deletedAt)`.** Omitting it is the #3224/#3228 defect class
   (lead-warming mailed soft-deleted contacts; send sinks + AI hydrations did the
-  same) — both shipped with the write half *correct*, so the code looked fine. See
+  same) — both shipped with the write half _correct_, so the code looked fine. See
   02 § factories.
 - **A pre-auth credential read must name the credential, and RLS SELECT gates
   UPDATE.** A pre-auth read of `password_resets` / `email_verifications` /
@@ -91,7 +91,7 @@ A "base CRM" that violates any of them is not this app:
   until 0137), **every arm needs its own read** (0137/0138 each ship a
   `*_claim_read` SELECT beside the write), and **the privilege GUC and the
   row-narrowing value can be one and the same** (0138's
-  `app.unsubscribe_contact`). Any new one of these has to be appended to *both*
+  `app.unsubscribe_contact`). Any new one of these has to be appended to _both_
   connection-reset lists — `tests/unit/rls-unsubscribe-contact-guc-3237.test.ts`
   pins the two lists equal and pinned to the literal count.
 - **A queue default is a side-effect decision.** `lib/queue/index.ts:130` hands every job
@@ -99,14 +99,14 @@ A "base CRM" that violates any of them is not this app:
   the processor restarts its recipient list at index 0 with no claim and no dedupe key,
   and the addresses are masked out of the result set so a retry cannot even be resumed.
   `send-bulk-emails` is therefore queued with `attempts: 1` (#3293). Before accepting any
-  retry default, ask what the processor does on the *second* run. See 07 § Background jobs.
+  retry default, ask what the processor does on the _second_ run. See 07 § Background jobs.
 - **A guarded table is not a usable table: a policy is not a writer.** `oauth_clients` has carried
   `tenant_isolation` `FOR ALL` since 0088 and had **no `INSERT` anywhere in the app**, so
   `POST /api/auth/oauth/token` answered `invalid_client` — byte-identical to a wrong secret, since
   `app/api/auth/oauth/token/route.ts:69` and `:79` return the same 401 — for every caller on a fresh
   database. The writer is `app/api/tenant/oauth-clients/route.ts:89`, and it needed no migration.
   Two rules: **check what the existing arms already reach before adding one**, and when an auth
-  route rejects *everyone*, ask whether the row it reads can exist at all. See 03 § #3328.
+  route rejects _everyone_, ask whether the row it reads can exist at all. See 03 § #3328.
 
 ## Provenance
 
@@ -138,11 +138,11 @@ the doc again. `#3236` added 0137 and `#3242` added 0138,
 issue site from `:249` to `:251`. Re-pinned here: 01's context-helper and
 reset bullets plus a fresh sizing census (**918** `*.test.*` files — 866 unit /
 39 integration / 12 dashboard / 1 api; **139** journal steps; **277** `.sql` files),
-02's GUC list reorganised by *writing file* (rls / token-credential / portal-lookup /
+02's GUC list reorganised by _writing file_ (rls / token-credential / portal-lookup /
 form-capture / unsubscribe-contact) instead of pretending everything lives in
 `rls.ts`, and 03's pre-auth walk extended to 0134–0138 with `rls.ts:118`→`:120`.
 Two assertions from the `docs/basecrm-citation-drill` branch are deliberately **not**
-ported because they contradict the code: that the reset clears *twelve* GUCs, and
+ported because they contradict the code: that the reset clears _twelve_ GUCs, and
 that `app.oauth_client_id` is absent from the reset lists. **That sentence is now
 itself behind the branch it describes**: `#3234` has been re-pushed since
 (head `206a35b64`, 2026-10-25 15:47Z) and its head now names `app.oauth_client_id`
@@ -165,12 +165,12 @@ no migration and no schema table, so 01/02/03's pins are untouched by it.
 **Re-drilled a third time the same day, against `main = 5760c2538` and landed on
 `main = 54be92020` (#3244's follow-up).** The `:N` set was re-derived with a scanner over
 every `file.ext:NNN` in this directory and each hit checked by hand, which found four
-wrong pointers, one stale census figure and one wrong *claim* among the things the
+wrong pointers, one stale census figure and one wrong _claim_ among the things the
 previous two passes had left. The scan counts **155** coordinates: **57** carry a path
 long enough for the tripwire to resolve them on its own, and the other **98** are bare
 `file.ext:NNN` — the test only resolves those where its `PINNED` pairs name the file, so
 the remainder were checked by hand this pass and are what the next hand pass inherits.
-Both figures are of the text *after* this pass edited it, which is the only honest way
+Both figures are of the text _after_ this pass edited it, which is the only honest way
 to count the citations in a document a change is rewriting.
 
 - `03` § 2 cited `requireAuth` at `middleware.ts:341`. `:341` is the
@@ -182,9 +182,9 @@ to count the citations in a document a change is rewriting.
   `core.ts:217…`, which is `field_permissions` — the next entry in the same list.
 - `05` cited `resolveDealStage` at `resolve-stage.ts:117`: that is the last line of the
   function's body (`return { ok: false, reason: 'missing' }`), not the function
-  (`:82`). Where a bullet says "the create path *calls* X", the pointer is to X.
+  (`:82`). Where a bullet says "the create path _calls_ X", the pointer is to X.
 - `06` step 4 introduced its helper list as "GUC helpers in `lib/db/rls.ts`" and named
-  `withAuthLookupContext` in that list. Only four of the helpers are *defined* there;
+  `withAuthLookupContext` in that list. Only four of the helpers are _defined_ there;
   `withAuthLookupContext` is defined at `lib/db/token-credential-context.ts:90` and
   reaches `rls.ts` through the re-export at `lib/db/rls.ts:32-41`, and
   `withUnsubscribeContactContext` (`lib/db/unsubscribe-contact-context.ts:120`) is not
@@ -206,7 +206,7 @@ to count the citations in a document a change is rewriting.
   expression is `tenant_id IS NULL OR tenant_id = …`, unconditionally (0039 does not
   branch on nullability the way `0037:239`/`:241` do). A `FOR ALL` policy with no WITH
   CHECK reuses its USING for writes — the rule `0136:45` states — so the write check for
-  a NULL `tenant_id` is gone, and a no-GUC query returns the *global* rows on any table
+  a NULL `tenant_id` is gone, and a no-GUC query returns the _global_ rows on any table
   whose `tenant_id` is nullable. Both bullets now say which of 0037/0039 is being
   described, because a rebuild that followed the old wording would have written a
   checkpoint that fails on a table that is behaving correctly.
@@ -216,11 +216,11 @@ which is why three audits in one day each found a new set. `tests/unit/` grew a
 resolution test for the pinned subset instead — see `#3244`'s follow-up PR — so the
 next merge that moves a line under a cited symbol fails a test rather than a reader.
 What that test can and cannot promise is worth stating, because the difference is the
-whole reason this directory keeps rotting: it asserts *pairs* (the doc still carries the
+whole reason this directory keeps rotting: it asserts _pairs_ (the doc still carries the
 pointer **and** the cited line still carries what the pointer promises) for the
 hand-resolved coordinates, range-checks the 57 path-bearing citations against their
 files, and re-derives the 0037/0039 policy shape and the reset list's GUC count from
-migration and connection text. It cannot check a *sentence*: `05`'s `bulk/route.ts:29`
+migration and connection text. It cannot check a _sentence_: `05`'s `bulk/route.ts:29`
 matches nine tracked routes, so an abbreviated citation only fails when it is past EOF
 in every one of them, and no test notices if the prose next to a still-correct line
 number stops describing it. That residue is what the hand pass is for.
@@ -235,7 +235,7 @@ is the **fifteenth** name on both reset lists, and the tree now holds **926**
 so 02, 03 and that test moved together in #3246 instead of one of them drifting. `03`
 § 1 gained 0139 as the fourth worked example, because it is the same dead endpoint on a
 table whose `tenant_id` is NOT NULL — and, unlike 0136–0138, the dead half was the
-*read*: one SELECT-only arm, no write granted, and the migration lands UNAPPLIED with
+_read_: one SELECT-only arm, no write granted, and the migration lands UNAPPLIED with
 the rest of the backlog.
 
 **Re-counted again 2026-10-31 for the 0140–0142 journal repair.** Four up-migrations
@@ -248,6 +248,15 @@ entries over **290** `.sql` files — 145 forward, 145 `.down.sql` — and the t
 GUCs, and `app/api/webhooks` plus the ten `lib/` files #3312 pinned leave **107** reads
 in **4** counted deferrals across a **120**-file anonymous walk (the guard re-derives
 all four). The migrations remain UNAPPLIED with the rest of the backlog (#2537).
+
+**Re-counted again 2026-11-11 for #3246's inbound binding and #3312's lib/ binding.**
+The ledger is down to **one** entry: `app/api/cron` **59/59** → **#2539**, the scheduled
+job that iterates every tenant on purpose. `app/api/webhooks` (24) and the two `lib/`
+entries (22 + 2) are bound now, not excused — the inbound route opens
+`withTenantContext(tenantId, …)` for the transaction that writes the record, and the
+webhook helpers name the tenant or the 0093 super-admin arm — so the walk over the
+**121**-file anonymous surface examines **276** statements and leaves **59** reads in
+that one counted deferral. The guard re-derives it.
 
 **Re-counted again 2026-10-31 for #3303's SCIM context.** Three numbers moved with
 one migration: `app.scim_tenant` (0143) is the **twentieth** name on both reset

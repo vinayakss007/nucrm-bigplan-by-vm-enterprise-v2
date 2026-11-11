@@ -23,8 +23,11 @@ import {
 // and the digit-name regression specifically — against injected fixtures, no
 // filesystem.
 
-const GOOD_ROUTE_SRC = `import { refuseIfCronLockHeld } from '${LOCK_MODULE}';\nconst r = await refuseIfCronLockHeld('x', 60);\n`;
+const GOOD_ROUTE_SRC = `import { refuseIfCronLockHeld } from '${LOCK_MODULE}';\nconst r = await refuseIfCronLockHeld('x', 60);\nexport const POST = instrumentCronRun('cleanup', cronRouteHandler);\n`;
 const reader = (src) => () => src;
+// #3410 added a per-route-name assertion (the POST must be instrumented under
+// ITS OWN name), so multi-route fixtures read with a name-aware reader.
+const namedReader = (src) => (dir) => src.replace("instrumentCronRun('cleanup'", `instrumentCronRun('${dir}'`);
 
 describe('parseCrontabJobs', () => {
   it('keeps only run-cron.sh lines, ignores comments and blanks', () => {
@@ -118,7 +121,7 @@ describe('runChecks', () => {
     const routes = ['cleanup', 'sla-check', 'backup'];
     const { problems, counts } = runChecks({
       routes,
-      readRoute: () => GOOD_ROUTE_SRC,
+      readRoute: namedReader(GOOD_ROUTE_SRC),
       crontab: ['cleanup', 'sla-check'],
       vercel: ['cleanup', 'sla-check', 'backup'],
       inProcess: routes,

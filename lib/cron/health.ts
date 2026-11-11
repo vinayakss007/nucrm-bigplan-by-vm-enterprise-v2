@@ -16,6 +16,7 @@
  *
  * The /api/system/cron-health endpoint reads this registry.
  */
+import { CRON_JOBS } from './jobs';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,4 +97,111 @@ export function getStaleJobs(maxAgeMs = 900_000): CronHealthEntry[] {
  */
 export function resetCronHealth(): void {
   registry.clear();
+}
+
+// ── Durable health: the manifest vs the cron_runs ledger (#3410) ─────────────
+//
+// The in-memory registry above can only ever answer "what has THIS process
+// seen since boot". The functions below answer "has this job ever run", by
+// comparing lib/cron/jobs.ts against the rows instrumentCronRun writes into
+// cron_runs. A scheduled job with no row is `never_run` — as loud as stale —
+// and the overall verdict is `fail`, not a pass with a warning.
+
+// (cron_runs comparison lives at the bottom of this file, #3410.)
+
+/** One job's collapsed ledger rows, as fetched by /api/system/cron-health. */
+export interface CronJobRunSummary {
+  job: string;
+  /** Epoch ms of the most recent attempt (row with the greatest started_at). */
+  lastRunAtMs: number;
+  lastRunOk: boolean;
+  lastRunError: string | null;
+  /** Epoch ms of the most recent SUCCESSFUL run, or null if there was none. */
+  lastSuccessAtMs: number | null;
+}
+
+export type CronJobHealthStatus = 'ok' | 'stale' | 'never_run' | 'unscheduled';
+export type CronFleetVerdict = 'healthy' | 'degraded' | 'fail';
+
+export interface CronManifestHealthEntry {
+  job: string;
+  owner: string;
+  path: string;
+  cron: string;
+  expectedEveryMs: number;
+  scheduledIn: string[];
+  status: CronJobHealthStatus;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+}
+
+export interface CronManifestHealthReport {
+  status: CronFleetVerdict;
+  jobs: CronManifestHealthEntry[];
+  neverRun: string[];
+  stale: string[];
+  unscheduled: string[];
+  counts: Record<CronJobHealthStatus, number>;
+}
+
+/**
+ * Pure verdict — no DB, no clock beyond the injected `nowMs`, which is what
+ * makes "a manifest job with no cron_runs row yields never_run" a unit test.
+ *
+ * `maxAgeSlackMs` is the ?maxAgeMs query parameter from #2766, re-scoped: it
+ * can only ever TOLERATE more lateness (the stale threshold is
+ * max(expectedEveryMs, slack)), never invent a stricter one, and a junk value
+ * falls back to 0 — the manifest's own arithmetic. That keeps #2766's promise
+ * (a typo in the query string must not flip the monitor off) without letting
+ * the query string mask a job that has never run at all.
+ */
+export function summarizeCronHealth(
+  rows: readonly CronJobRunSummary[],
+  nowMs: number = Date.now(),
+  maxAgeSlackMs = 0,
+): CronManifestHealthReport {
+  const slack = Number.isFinite(maxAgeSlackMs) && maxAgeSlackMs > 0 ? maxAgeSlackMs : 0;
+  const byJob = new Map(rows.map((r) => [r.job, r]));
+  const jobs: CronManifestHealthEntry[] = [];
+
+  for (const spec of CRON_JOBS) {
+    const scheduledIn = (['crontab', 'vercel', 'scheduler'] as const)
+      .filter((source) => spec.sources[source]);
+    const row = byJob.get(spec.name);
+    let status: CronJobHealthStatus;
+    if (scheduledIn.length === 0) {
+      status = 'unscheduled';
+    } else if (!row) {
+      status = 'never_run';
+    } else {
+      const threshold = Math.max(spec.expectedEveryMs, slack);
+      status =
+        row.lastSuccessAtMs === null || nowMs - row.lastSuccessAtMs > threshold
+          ? 'stale'
+          : 'ok';
+    }
+    jobs.push({
+      job: spec.name,
+      owner: spec.owner,
+      path: spec.path,
+      cron: spec.cron,
+      expectedEveryMs: spec.expectedEveryMs,
+      scheduledIn,
+      status,
+      lastRunAt: row ? new Date(row.lastRunAtMs).toISOString() : null,
+      lastSuccessAt: row?.lastSuccessAtMs != null ? new Date(row.lastSuccessAtMs).toISOString() : null,
+      lastError: row?.lastRunError ?? null,
+    });
+  }
+
+  const counts: Record<CronJobHealthStatus, number> = { ok: 0, stale: 0, never_run: 0, unscheduled: 0 };
+  for (const j of jobs) counts[j.status] += 1;
+  const neverRun = jobs.filter((j) => j.status === 'never_run').map((j) => j.job);
+  const stale = jobs.filter((j) => j.status === 'stale').map((j) => j.job);
+  const unscheduled = jobs.filter((j) => j.status === 'unscheduled').map((j) => j.job);
+  const status: CronFleetVerdict =
+    neverRun.length || stale.length ? 'fail' : unscheduled.length ? 'degraded' : 'healthy';
+
+  return { status, jobs, neverRun, stale, unscheduled, counts };
 }

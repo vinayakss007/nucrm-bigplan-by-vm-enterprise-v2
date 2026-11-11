@@ -81,7 +81,7 @@ beforeEach(() => {
 
 const processDelivery = async () => {
   const { processWebhookDelivery } = await import('@/lib/webhooks/delivery');
-  return processWebhookDelivery(DELIVERY_ID, HOOK_URL);
+  return processWebhookDelivery(DELIVERY_ID, '10000000-0000-4000-8000-000000000001', HOOK_URL);
 };
 
 describe('#3299: an SSRF refusal ends the delivery, it does not schedule another', () => {

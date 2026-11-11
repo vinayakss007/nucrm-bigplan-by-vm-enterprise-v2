@@ -9,7 +9,7 @@
  * Creates in-app notifications + emails for contract owners/assignees.
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { reminderWindows, utcDateStr } from '@/lib/cron/renewal-windows';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -24,7 +24,7 @@ import { logError } from '@/lib/errors-server';
 
 const REMINDER_DAYS = [30, 14, 7, 3];
 
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'contract-renewal-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -230,3 +230,6 @@ export async function POST(request: NextRequest) {
     return apiError(err);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('contract-renewal-check', cronRouteHandler);

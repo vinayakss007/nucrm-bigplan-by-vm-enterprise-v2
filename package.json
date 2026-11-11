@@ -72,6 +72,8 @@
     "guard:catalog-grants": "node scripts/check-integration-catalog-grants.mjs",
     "guard:cron-auth": "node scripts/check-cron-auth.mjs",
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
+    "guard:cron-manifest": "npx tsx scripts/gen-cron-manifest.mts --check",
+    "cron:manifest": "npx tsx scripts/gen-cron-manifest.mts",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",

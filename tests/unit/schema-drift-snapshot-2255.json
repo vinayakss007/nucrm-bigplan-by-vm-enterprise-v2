@@ -3669,6 +3669,15 @@
    "status",
    "subject",
    "updated_at"
+  ],
+  "cron_runs": [
+   "duration_ms",
+   "error",
+   "finished_at",
+   "id",
+   "job",
+   "ok",
+   "started_at"
   ]
  },
  "indexes": [
