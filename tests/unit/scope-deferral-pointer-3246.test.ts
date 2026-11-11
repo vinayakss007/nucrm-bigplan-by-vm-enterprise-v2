@@ -25,6 +25,13 @@
  * super-admin arm where the caller is the cross-tenant cron — instead of reading the bare pool. The
  * ledger is the two route surfaces below; the lib/ ratchet is green rather than exempted.
  *
+ * Step 5 (2026-11-11) deleted the last #3246 entry, `app/api/webhooks` (24 reads). All 24 were in
+ * `app/api/webhooks/inbound/route.ts`, and they rode the PP-027 carrier instead of naming a context:
+ * the route adopts its tenant in `resolveApiKey` and then read tenant-policyed tables through a
+ * `db.transaction()` handle that carried no `app.current_tenant`. The item transaction now opens
+ * `withTenantContext(tenantId, …)`, so the directory is back in scope and the ledger is ONE entry:
+ * `app/api/cron` → #2539, the scheduled job that iterates every tenant on purpose.
+ *
  * Proprietary & confidential. NuCRM Enterprise — Property of abetworks.in.
  */
 import { describe, it, expect } from 'vitest';
@@ -39,16 +46,23 @@ const GUARD_SRC = readFileSync(
 
 describe('#3246 the deferral ledger points at live work', () => {
   it('has exactly the directories still deferred, at the ceilings they were measured with', () => {
-    // Both are #3246's provider-callback surfaces. #3312's two lib/ entries were
-    // deleted when those helpers started binding a tenant context.
+    // One entry left: the cron surface, which is #2539's per-tenant context
+    // loop. #3246's own webhook surface and #3312's two lib/ surfaces are
+    // bound now, so their entries are gone rather than re-pinned.
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
-      'app/api/webhooks',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59, 24]);
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([59]);
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }
+  });
+
+  it('does not defer the webhook surface any more — it is bound, not excused', () => {
+    // The entry this file's issue asked for. While it existed, a NEW unbound
+    // read under app/api/webhooks would have been absorbed by the 24/24
+    // ceiling; now the directory is in scope and one is a red build.
+    expect(SCOPE_DEFERRALS.map((d) => d.dir)).not.toContain('app/api/webhooks');
   });
 
   it('names its own `deferredTo` inside the reason a reviewer is supposed to be able to argue with', () => {
@@ -68,9 +82,10 @@ describe('#3246 the deferral ledger points at live work', () => {
       expect(entry.deferredTo, entry.dir).not.toBe('#3102');
       expect(entry.why, `${entry.dir}'s why still argues with a closed issue`).not.toContain('#3102');
     }
-    expect(SCOPE_DEFERRALS.filter((d) => d.deferredTo === '#3246').map((d) => d.dir)).toEqual([
-      'app/api/webhooks',
-    ]);
+    // #3246's own entry is gone: the inbound route binds its 24 reads, so the
+    // ledger defers to #2539 alone and no entry names #3246 any more.
+    expect(SCOPE_DEFERRALS.filter((d) => d.deferredTo === '#3246').map((d) => d.dir)).toEqual([]);
+    expect(SCOPE_DEFERRALS.map((d) => d.deferredTo)).toEqual(['#2539']);
   });
 
   it('leaves the narrative above the list telling the same story the entries do', () => {

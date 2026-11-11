@@ -10,8 +10,8 @@ Three independent gates must all agree for a request to succeed:
 3. **Field permissions at the handler** — `enforceFieldRead/Write` strip or reject
    the columns a role may not touch, on every entity route.
 
-The first is *invisibility*; the second is *capability*; the third is *column
-access within a capability*. A rebuild needs all three — this is exactly the gap
+The first is _invisibility_; the second is _capability_; the third is _column
+access within a capability_. A rebuild needs all three — this is exactly the gap
 that made field_permissions a no-op on leads/contacts/companies/tasks until
 #2618/#2647/#2649 closed it.
 
@@ -27,7 +27,7 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   (`tenant_id::text = current_setting('app.current_tenant')`, `0037:249`).
   **Read the next bullet before copying this one — 0039 replaced it, and the
   sentence above describes 0037, not the shipped policy.**
-- **Fail-closed** (`0039:12-22` is the *reason*; the emitted policy is
+- **Fail-closed** (`0039:12-22` is the _reason_; the emitted policy is
   `0039:64-75`): the check becomes
   `tenant_id IS NULL OR tenant_id = (CASE WHEN NULLIF(current_setting('app.current_tenant', true),'') IS NULL THEN NULL ELSE NULLIF(…)::uuid END)`.
   No GUC set → the comparison is `NULL` → **no tenant-owning row matches** (deny),
@@ -50,10 +50,12 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
      check (the rule `0136:45` spells out for exactly this reason). So "you
      cannot write a row into someone else's tenant" survives, but "you cannot
      write a row with no tenant" no longer does — and that is the shape
-     #3246's deferred class still describes (`app/api/webhooks`, per its
-     `SCOPE_DEFERRALS` entry: no tenant GUC exists to set before the provider
-     payload resolves the tenant). The two classes 0139 and 0140 bounded out —
-     the plugin receiver and `/api/auth/sso` — each read a row that *carries* the
+     #3246's remaining deferred class still describes (`app/api/cron`, per its
+     `SCOPE_DEFERRALS` entry: a scheduled job that authenticates by cron secret
+     and then iterates every tenant on purpose, so the per-tenant context loop is
+     #2539's to write). The three classes that used to make that point — the
+     plugin receiver (0139), `/api/auth/sso` (0140) and the inbound webhook
+     route (#3246, 2026-11-11) — bounded out: each read a row that _carries_ the
      tenant, then name `app.current_tenant` from it before any write, so their
      tenantless-write guard is the application's, not the policy's. Claiming RLS
      covers it would be the false alarm #3186 is about.
@@ -62,7 +64,7 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
   (is_local=true → dies at COMMIT/ROLLBACK). Cleared on pool checkout/return
   (`lib/db/pool.ts:241` inline on release; in `lib/db/request-connection.ts` the
   `RESET_TENANT_GUCS_SQL` constant at `:103`, issued at the checkout/return call
-  site `:251` — the lines above it are the *comment* explaining why the privilege
+  site `:251` — the lines above it are the _comment_ explaining why the privilege
   GUCs are cleared, not the statement; re-pinned 2026-10-25 @ `2ff3e88b5` from
   `:97-98,245`, which was itself a re-pin of `:93-94,241`) and by PgBouncer
   `server_reset_query='DISCARD ALL'` (`rls.ts:10-17`). Each of those reset
@@ -84,18 +86,18 @@ that made field_permissions a no-op on leads/contacts/companies/tasks until
 Some tables have a super-admin read/write policy; **the tenant data a member
 owns does not.** Verified per table (all in `0088`/`0054`/`0127`):
 
-| Table | Super-admin bypass? | Policies |
-| ----- | ------------------- | -------- |
-| `tenant_members` | **NO** | `tenant_isolation` + `tenant_members_self_read` (SELECT keyed on `app.current_user`, `status='active'`) — `0127:50` |
-| `roles` | **NO** | `tenant_isolation` + `roles_tenant_member_read` (SELECT via `EXISTS` on `tenant_members`) — `0127:59` |
-| `deals` / `leads` / `contacts` / `companies` / `tasks` | **NO** | `tenant_isolation` only — no named super-admin policy exists in any migration |
-| `users` | **YES** | `users_super_admin_read` (`0088:413`), `_update :421`, `_delete :429`, `users_read_self :397`, `users_auth_lookup :359`, `users_bootstrap_insert :64`, `users_tenant_member_read` (`0089`) |
-| `tenants` | **YES** | `tenants_read_all USING(true)` (`0054:147`), `tenants_super_admin_update` (`0100`), `tenants_bootstrap_insert` (`0088:74`) |
-| `login_blocks` / `login_attempts` | **YES** | `*_super_admin_only` FOR ALL (`0088:485/493`) |
-| `product_templates`, `plans`, `modules`, `feature_registry`, `system_settings`, … | **YES** | each `*_read_all USING(true)` + `*_super_admin_write` (`0054:13-147`) |
+| Table                                                                             | Super-admin bypass? | Policies                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tenant_members`                                                                  | **NO**              | `tenant_isolation` + `tenant_members_self_read` (SELECT keyed on `app.current_user`, `status='active'`) — `0127:50`                                                                        |
+| `roles`                                                                           | **NO**              | `tenant_isolation` + `roles_tenant_member_read` (SELECT via `EXISTS` on `tenant_members`) — `0127:59`                                                                                      |
+| `deals` / `leads` / `contacts` / `companies` / `tasks`                            | **NO**              | `tenant_isolation` only — no named super-admin policy exists in any migration                                                                                                              |
+| `users`                                                                           | **YES**             | `users_super_admin_read` (`0088:413`), `_update :421`, `_delete :429`, `users_read_self :397`, `users_auth_lookup :359`, `users_bootstrap_insert :64`, `users_tenant_member_read` (`0089`) |
+| `tenants`                                                                         | **YES**             | `tenants_read_all USING(true)` (`0054:147`), `tenants_super_admin_update` (`0100`), `tenants_bootstrap_insert` (`0088:74`)                                                                 |
+| `login_blocks` / `login_attempts`                                                 | **YES**             | `*_super_admin_only` FOR ALL (`0088:485/493`)                                                                                                                                              |
+| `product_templates`, `plans`, `modules`, `feature_registry`, `system_settings`, … | **YES**             | each `*_read_all USING(true)` + `*_super_admin_write` (`0054:13-147`)                                                                                                                      |
 
 **Why membership/roles have no super-admin bypass** (the 0127 design note,
-#2253): `app.is_super_admin` is a *single* GUC that flips ~60 policies across 49
+#2253): `app.is_super_admin` is a _single_ GUC that flips ~60 policies across 49
 tables. Using it to read "which tenants am I in" at login would grant way more
 than the lookup needs. 0127 instead adds two narrow, SELECT-only,
 `app.current_user`-keyed policies so the pre-tenant login resolution is scoped to
@@ -105,7 +107,7 @@ exactly the caller's own membership rows.
 
 `withSecurityContext(fn)` (`lib/db/rls.ts:260-268`) opens a transaction and runs
 `setSuperAdminContext(tx)` (`:244`) → `set_config('app.is_super_admin','true',true)`.
-It is **not request-scoped** (doc `:154-163`) — wrap the *smallest possible*
+It is **not request-scoped** (doc `:154-163`) — wrap the _smallest possible_
 statement set. Callers: pre-auth bootstrap/signup/SSO provisioning
 (`app/api/setup/create-admin/route.ts`, `app/api/v1/auth/route.ts`,
 `lib/auth/sso.ts`), super-admin audit (`lib/audit/super-admin.ts`), the
@@ -132,23 +134,24 @@ for the pre-tenant email→user lookup) and `withAuthResolutionContext`
 `withTokenIssueContext` (`:225`) documented under § 1 pre-auth redemption below.
 
 ### Pre-auth credential redemption — the GUC vocabulary and the trap (0134–0140)
+
 Three user-scoped, secret-bearing tables — **`password_resets`**,
 **`email_verifications`**, **`oauth_codes`** — carry only a `*_user_own` policy
 that needs `app.current_user`, which pre-auth flows (forgot-password, verify-email,
 OAuth code issue/redeem) never have. Their redemption RLS is **four GUCs deep**, and
 the vocabulary the rest of this doc must use for them:
 
-| GUC | Set by | Guards |
-| --- | ------ | ------ |
-| `app.auth_lookup` | `withAuthLookupContext` (`token-credential-context.ts:90`) | "this request is a credential **lookup**" — a boolean, it names *kind*, never *which* |
-| `app.token_issue` | `setTokenIssueContext` (`:197`) / `withTokenIssueContext` (`:225`) | the INSERT of a freshly minted credential row + its own claim read/update |
-| `app.token_credential` | named by `setAuthLookupContext` (`:47`, credential arg sets it at `:53`) and `setTokenIssueContext` (`:212`) | the **specific token value** the query is matching |
-| `app.token_retire_user` | `setTokenIssueContext` (`:213`, its `retireUser` scope) | the one user whose outstanding `password_resets` a retire write may tombstone |
+| GUC                     | Set by                                                                                                       | Guards                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `app.auth_lookup`       | `withAuthLookupContext` (`token-credential-context.ts:90`)                                                   | "this request is a credential **lookup**" — a boolean, it names _kind_, never _which_ |
+| `app.token_issue`       | `setTokenIssueContext` (`:197`) / `withTokenIssueContext` (`:225`)                                           | the INSERT of a freshly minted credential row + its own claim read/update             |
+| `app.token_credential`  | named by `setAuthLookupContext` (`:47`, credential arg sets it at `:53`) and `setTokenIssueContext` (`:212`) | the **specific token value** the query is matching                                    |
+| `app.token_retire_user` | `setTokenIssueContext` (`:213`, its `retireUser` scope)                                                      | the one user whose outstanding `password_resets` a retire write may tombstone         |
 
 **The invariant — name the credential, do not merely declare "pre-auth."** 0134's
 SELECT arm was `USING (app.auth_lookup = 'true' AND deleted_at IS NULL AND
 expires_at > now())` — **no token predicate** (`0134:57-65`). `app.auth_lookup` is a
-boolean: it says *what kind of request this is*, never *which credential*. So any
+boolean: it says _what kind of request this is_, never _which credential_. So any
 pre-auth read that flipped it saw **every live row of all three tables**, and one
 injected `WHERE` was enough to enumerate other users' reset/verification/OAuth
 tokens. 0135 narrowed every `*_auth_lookup` arm to also require
@@ -168,21 +171,21 @@ alone raised 42501), and the route answered "invalid or expired token" even thou
 #3102's write was correct. #3102's path kept failing after 0134 shipped for exactly
 this reason. 0135 fixed it with a per-table **claim-context SELECT arm**
 (`*_token_claim_read`: `app.token_issue = 'true' AND <token> = app.token_credential`,
-no freshness clause, so it admits the row before *and* after the tombstone —
+no freshness clause, so it admits the row before _and_ after the tombstone —
 `0135:117-124`), and gave `password_resets` a `*_token_retire` +
 `*_token_retire_read` pair keyed on `app.token_retire_user` (`0135:138-159`). **A
 claim that cannot see its own row silently updates zero rows.**
 
 **The same two traps, re-run one layer up (0136–0140).** The OAuth endpoints,
 `/api/unsubscribe`, the plugin webhook receiver and the SSO handoff each hit the
-*identical* failure and each got the *identical* fix, so treat these as five worked
+_identical_ failure and each got the _identical_ fix, so treat these as five worked
 examples of the rule rather than new vocabulary:
 
 - **0136 `pre_auth_oauth_rls`** (#3225) gave `oauth_clients` a SELECT arm
   `app.auth_lookup = 'true' AND client_id = current_setting('app.oauth_client_id')`
   (`:104`) — a fifth GUC, and the reason `app.oauth_client_id` is on both reset
   lists: the client id is public but the row it selects carries
-  `client_secret`, so a stale value picks a *victim's* client for whatever request
+  `client_secret`, so a stale value picks a _victim's_ client for whatever request
   inherits the checkout. For `oauth_tokens` it added the INSERT arm
   `oauth_tokens_token_issue` (`:115`) and the refresh-token claim pair
   `oauth_tokens_refresh_claim_read` / `oauth_tokens_refresh_claim`
@@ -192,9 +195,9 @@ examples of the rule rather than new vocabulary:
 - **0137 `pre_auth_oauth_revoke`** (#3231) added no GUC at all. `/oauth/revoke`
   deletes an **access** token, and 0136 only ever admitted the **refresh** column,
   so the revoke matched zero rows. Fix: `oauth_tokens_access_claim` (DELETE, `:76`)
-  + `oauth_tokens_access_claim_read` (SELECT, `:86`) — same clause shape,
-  `access_token = app.token_credential`. *A credential column that no policy names
-  is unrevocable.*
+  - `oauth_tokens_access_claim_read` (SELECT, `:86`) — same clause shape,
+    `access_token = app.token_credential`. _A credential column that no policy names
+    is unrevocable._
 - **0138 `pre_auth_unsubscribe_contact_rls`** (#3237) let `/api/unsubscribe` flip
   `contacts.do_not_contact`. Here the privilege and the row-narrowing value are the
   **same** GUC: `contacts_unsubscribe_claim_read` (SELECT, `:135`) and
@@ -211,13 +214,13 @@ examples of the rule rather than new vocabulary:
 - **0139 `pre_auth_plugin_webhook_lookup`** (#3246) is the same dead endpoint on a
   table whose `tenant_id` is `NOT NULL`: `custom_plugins`' only arm is
   `tenant_isolation`, so the anonymous `POST /api/tenant/plugins/webhook/[id]` read
-  of the row carrying `webhook_secret` matched zero rows and answered 404 *before*
+  of the row carrying `webhook_secret` matched zero rows and answered 404 _before_
   the HMAC could run. Fix: `custom_plugins_webhook_lookup_read` (SELECT only) keyed
   on `id = NULLIF(current_setting('app.plugin_webhook_id', true), '')::uuid` with
   `deleted_at IS NULL` frozen in. It grants no write: the route hands the tenant over
   after verification, so `plugin_execution_logs` still writes under
-  `tenant_isolation`. *A policy that admits no read is not a hardening gap — it is an
-  unreachable endpoint.*
+  `tenant_isolation`. _A policy that admits no read is not a hardening gap — it is an
+  unreachable endpoint._
 
 - **0140 `pre_auth_sso_provider_lookup`** (#3246) is the same dead endpoint twice over,
   and the one case where the caller holds no row id. `GET /api/auth/sso/start` resolves
@@ -226,25 +229,25 @@ examples of the rule rather than new vocabulary:
   it got two arms, one per key: `sso_providers_domain_lookup_read` repeats the route's
   predicate (`provider_type = 'oidc' AND is_active AND deleted_at IS NULL` plus the `?`
   test against `app.sso_lookup_domain`), and `sso_providers_id_lookup_read` narrows on
-  `id` only — deliberately *not* `is_active`, because callback/route.ts answers "no
+  `id` only — deliberately _not_ `is_active`, because callback/route.ts answers "no
   longer available" from the row it read. Both are SELECT-only; `sso_sessions` gets
   nothing. Its insert ran under `withUserContext`, which names `app.current_user` and
   not the tenant, and `sso_sessions` has only `tenant_isolation`: measured, that raises
   `new row violates row-level security policy`, so the route now uses the existing
-  `withTenantContext(provider.tenantId, userId, …)`. *Narrowing by a value the caller
-  already knows beats a boolean that lets the query choose the row (0134).*
+  `withTenantContext(provider.tenantId, userId, …)`. _Narrowing by a value the caller
+  already knows beats a boolean that lets the query choose the row (0134)._
 
 **The arm inventory, per table** (`password_resets` / `email_verifications` /
 `oauth_codes`), as 0135 leaves them — 11 `CREATE POLICY` statements, four per table
 plus two for `password_resets`:
 
-| Arm | Command | Clause shape |
-| --- | ------- | ------------ |
-| `*_auth_lookup` | SELECT | `app.auth_lookup` + `<token_col> = app.token_credential` + `deleted_at IS NULL` + `expires_at > now()` |
-| `*_token_claim_read` | SELECT | `app.token_issue` + `<token_col> = app.token_credential`, **no liveness clause** — it must admit the row both before *and* after the tombstone, which is exactly why the lookup arm above cannot double as it |
-| `*_token_claim` | UPDATE | same USING as the claim read plus `deleted_at IS NULL AND expires_at > now()`; `WITH CHECK (deleted_at IS NOT NULL)` (or `used_at` set) |
-| `*_token_issue` | INSERT | left exactly as 0134 wrote it — an INSERT has no pre-existing row to hide behind |
-| `password_resets_token_retire` + `_retire_read` | UPDATE / SELECT | keyed on `app.token_retire_user → user_id`, the one-live-token rule (#3075) |
+| Arm                                             | Command         | Clause shape                                                                                                                                                                                                  |
+| ----------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `*_auth_lookup`                                 | SELECT          | `app.auth_lookup` + `<token_col> = app.token_credential` + `deleted_at IS NULL` + `expires_at > now()`                                                                                                        |
+| `*_token_claim_read`                            | SELECT          | `app.token_issue` + `<token_col> = app.token_credential`, **no liveness clause** — it must admit the row both before _and_ after the tombstone, which is exactly why the lookup arm above cannot double as it |
+| `*_token_claim`                                 | UPDATE          | same USING as the claim read plus `deleted_at IS NULL AND expires_at > now()`; `WITH CHECK (deleted_at IS NOT NULL)` (or `used_at` set)                                                                       |
+| `*_token_issue`                                 | INSERT          | left exactly as 0134 wrote it — an INSERT has no pre-existing row to hide behind                                                                                                                              |
+| `password_resets_token_retire` + `_retire_read` | UPDATE / SELECT | keyed on `app.token_retire_user → user_id`, the one-live-token rule (#3075)                                                                                                                                   |
 
 The token column is `token` / `token_hash` / `code` per table. Set all of this
 through `setTokenIssueContext` / `withTokenIssueContext` — a `CredentialWriteScope`
@@ -262,7 +265,7 @@ helpers from `@/lib/db/rls` (`:20`), which is the point of that façade.
   This bullet said `:341` until 2026-10-25 @ `5760c2538`, and `:341` is not a
   `requireAuth` coordinate at all — it is the `COALESCE(roles.permissions, …)`
   select line inside its query, which `01-ARCHITECTURE.md:51` correctly cites for
-  *that*. `01`'s heading and `06`'s step both named `:200` the whole time, so
+  _that_. `01`'s heading and `06`'s step both named `:200` the whole time, so
   the two files disagreed about the same symbol; the drift went unnoticed
   because `:341` is inside a 500-line file, where a wrong number still points
   at something plausible.
@@ -275,14 +278,15 @@ helpers from `@/lib/db/rls` (`:20`), which is the point of that façade.
 - **Ownership / `view_all` 404 gate** (`app/api/tenant/deals/[id]/route.ts`):
   GET `:67-70`, PATCH `:160-162`, DELETE `:311-320`. Pattern:
   ```ts
-  if (!can(ctx, 'deals.view_all')) {
-    if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) return 404; // not 403 — don't leak existence
+  if (!can(ctx, "deals.view_all")) {
+    if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId)
+      return 404; // not 403 — don't leak existence
   }
   ```
   It returns **404, not 403**, so a rep cannot probe which deal ids exist.
 - **Seeded role format** — the admin role signs up with
   `permissions: { all: true }`, `roleSlug:'admin'`
-  (`api-handlers.ts:325,336`). Sales-rep roles must be seeded in the *same*
+  (`api-handlers.ts:325,336`). Sales-rep roles must be seeded in the _same_
   `Record<string,boolean>` jsonb shape or `can()` never matches (issue #2629;
   acceptance P6 grants a rep the deals/leads/contacts caps via
   `UPDATE roles SET permissions = COALESCE(...) || {...}`).
@@ -310,9 +314,10 @@ body and reported via `X-Stripped-Fields` (doctrine at `:15-21`, `:221-225`). A
 PATCH touching one restricted key of five still applies the other four. `read`
 access blocks writes too (you can see it but not change it).
 
-**The exception**: where the restricted column *is* the action, rejecting is the
+**The exception**: where the restricted column _is_ the action, rejecting is the
 only coherent behavior, so it 403s with
 `field_permissions restricts: <field>`:
+
 - `deals/bulk:110-112`, `leads/bulk:78`, `contacts/bulk:137`,
   `companies/bulk:102`, `tasks/bulk:109`, `leads/assign:60`,
   `leads/[id]/assign:61`.
@@ -329,15 +334,15 @@ restriction is configured on the **column**, so the enforcement must map each
 response key back to its owning column:
 
 - **`normalize(key)`** (`:94`) — camelCase → snake_case (before `_lowercase`).
-- **`READ_ALIASES`** (`:50-81`) — per-entity synonym map (only *true* synonyms,
+- **`READ_ALIASES`** (`:50-81`) — per-entity synonym map (only _true_ synonyms,
   not general renames):
-  | Entity | field → aliases |
-  | ------ | --------------- |
-  | deals | `amount:[value]`, `stage_id:[stage, stage_name]`, `created_by:[user_id]` |
-  | leads | `lead_status:[status]`, `lead_source:[source]`, `created_by:[user_id]`, `first_name:[leadFirstName]`, `last_name:[leadLastName]` |
-  | contacts | `job_title:[title]`, `created_by:[user_id]` |
-  | companies | `company_size:[numberOfEmployees]` |
-  | tasks | `created_by:[user_id]` |
+  | Entity    | field → aliases                                                                                                                  |
+  | --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+  | deals     | `amount:[value]`, `stage_id:[stage, stage_name]`, `created_by:[user_id]`                                                         |
+  | leads     | `lead_status:[status]`, `lead_source:[source]`, `created_by:[user_id]`, `first_name:[leadFirstName]`, `last_name:[leadLastName]` |
+  | contacts  | `job_title:[title]`, `created_by:[user_id]`                                                                                      |
+  | companies | `company_size:[numberOfEmployees]`                                                                                               |
+  | tasks     | `created_by:[user_id]`                                                                                                           |
 - **`ownerField(entity, key)`** (`:181-188`) — returns the canonical column whose
   alias list contains the key, matching against **both the raw key and its
   normalized form**, else returns `key`.
@@ -353,7 +358,7 @@ response key back to its owning column:
   returns true iff the field's access level ≥ required.
 - **Default-open** (`passes()` `:167-173`): no row configured for a field →
   allowed, matching the promise in `field-permissions.ts:50-51`
-  (`if (!perm) return 'write'`). Fields are restricted by *explicit* config only.
+  (`if (!perm) return 'write'`). Fields are restricted by _explicit_ config only.
 - **`restrictionCache`** keyed `tenant:role:entity` (`:106`), TTL 60s
   (`ROLE_TTL_MS:97`), built by `getFieldRestrictions` (`:132-165`). A separate
   `roleIdCache` (`:96`) resolves `role_slug`→roleId (`:112`).
@@ -366,7 +371,7 @@ response key back to its owning column:
 - **POST** (`:54-75`), **admin-only** (`:58`). Zod `setPermissionSchema`
   (`:17-22`): `role_id` (uuid), `entity_type` (1–100), `field_name` (1–100),
   `access_level` enum `none|read|write|admin`. Calls `setFieldPermission(...)`
-  (`:65`) → 201. Cache invalidation happens *inside* `setFieldPermission`.
+  (`:65`) → 201. Cache invalidation happens _inside_ `setFieldPermission`.
 - **GET** (`:24-52`) validates `role_id` is a UUID (`isUuid:44`).
 - Body shape the acceptance harness uses:
   `{ role_id: <uuid>, entity_type: 'deals', field_name: 'amount', access_level: 'none' }`.
@@ -411,7 +416,7 @@ CSRF (`lib/auth/csrf.ts`):
   > than collapse every user into a shared `unknown` bucket (which both breaks
   > per-IP protection and DoSes the whole box on one wave of failures).
 - **Brute force** (`brute-force.ts`): `DEFAULT_CONFIG` = **5 failures / 15 min →
-  30-min block** (`:27-31`). `recordFailedAttempt` counts per **IP *and* per
+  30-min block** (`:27-31`). `recordFailedAttempt` counts per **IP _and_ per
   email** (`:186-212`), inserts `login_blocks` via `blockIdentifier`
   (`:248-266`, upsert on `(identifier, identifier_type)`). `findLoginBlocks`
   (`:80-110`) reads both buckets in one query; in-memory fail-safe
