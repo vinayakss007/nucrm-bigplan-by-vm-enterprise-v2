@@ -5,12 +5,12 @@
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { processWarmUp, type WarmUpResult } from '@/lib/email/warmup';
 import { NextRequest, NextResponse } from 'next/server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'warmup-emails' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -51,3 +51,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to process warmup' }, { status: 500 });
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('warmup-emails', cronRouteHandler);

@@ -390,3 +390,25 @@ export const reportTemplates = pgTable('report_templates', {
 });
 
 
+
+// ── CRON RUN LEDGER (#3410) ───────────────────────────
+// One row per cron attempt — success, failure or skipped-by-lock — written
+// from inside the shared instrumentation (lib/cron/cron-lock.ts), so no job
+// can opt out. /api/system/cron-health reads it back against lib/cron/jobs.ts
+// and the cleanup cron prunes it. Platform-level: no tenant_id; RLS is
+// FORCE'd with a permissive INSERT (the schedulers are unprivileged writers,
+// mirroring error_logs_insert_any) and super-admin reads/ deletes.
+export const cronRuns = pgTable('cron_runs', {
+  id: utils.pk(),
+  job: text('job').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  ok: boolean('ok').notNull(),
+  error: text('error'),
+  durationMs: integer('duration_ms'),
+}, (table) => {
+  return {
+    jobStartedIdx: index('idx_cron_runs_job_started').on(table.job, table.startedAt),
+    startedIdx: index('idx_cron_runs_started').on(table.startedAt),
+  };
+});

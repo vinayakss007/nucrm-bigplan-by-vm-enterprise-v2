@@ -27,7 +27,7 @@
  * template and keeps advancing.
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
@@ -100,7 +100,7 @@ function anchorDayFor(template: {
   return anchorDayOf(template.nextBillingDate, fallbackDay);
 }
 
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'recurring-invoice-generator' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -399,3 +399,6 @@ export async function POST(request: NextRequest) {
     return apiError(err);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('recurring-invoice-generator', cronRouteHandler);

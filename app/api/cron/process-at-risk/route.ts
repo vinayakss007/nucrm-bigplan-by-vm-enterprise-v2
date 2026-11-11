@@ -5,7 +5,7 @@
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -16,7 +16,7 @@ import { formatCurrency } from '@/lib/utils';
 import { apiError } from '@/lib/api-error';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'process-at-risk' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -144,3 +144,6 @@ export async function POST(request: NextRequest) {
     return apiError(error, "Internal server error", 500);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('process-at-risk', cronRouteHandler);

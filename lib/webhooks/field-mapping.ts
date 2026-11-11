@@ -17,8 +17,8 @@
  */
 
 import { and, eq, getTableColumns, isNull, or } from 'drizzle-orm';
-import { db } from '@/drizzle/db';
 import { webhookFieldMappings } from '@/drizzle/schema/comm';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import { contacts, leads, deals, companies } from '@/drizzle/schema/crm';
 import { tasks } from '@/drizzle/schema/tasks';
 
@@ -326,6 +326,13 @@ export function applyFieldMappings(
  * Matches rows for this API key plus the tenant-wide rows (`api_key_id IS
  * NULL`). Where both exist for the same `sourceKey`, the key-specific row wins —
  * a tenant-wide default should never override a per-integration decision.
+ *
+ * #3312: `webhook_field_mappings` is FORCE-RLS and its only policy is
+ * `tenant_isolation`, keyed on `app.current_tenant`. The route has already
+ * verified the API key and resolved `tenantId`, but a read on the bare pool
+ * carries no GUC and answers zero rows for every tenant — the mapping silently
+ * stops applying while the endpoint still returns 200. The read runs inside
+ * `withTenantContext` for the tenant whose key was verified.
  */
 export async function loadFieldMappings(
   tenantId: string,
@@ -338,23 +345,25 @@ export async function loadFieldMappings(
     ? or(eq(webhookFieldMappings.apiKeyId, apiKeyId), isNull(webhookFieldMappings.apiKeyId))
     : isNull(webhookFieldMappings.apiKeyId);
 
-  const rows = await db
-    .select({
-      sourceKey: webhookFieldMappings.sourceKey,
-      targetType: webhookFieldMappings.targetType,
-      targetKey: webhookFieldMappings.targetKey,
-      transform: webhookFieldMappings.transform,
-      isActive: webhookFieldMappings.isActive,
-      apiKeyId: webhookFieldMappings.apiKeyId,
-    })
-    .from(webhookFieldMappings)
-    .where(and(
-      eq(webhookFieldMappings.tenantId, tenantId),
-      eq(webhookFieldMappings.entityType, entityType),
-      eq(webhookFieldMappings.isActive, true),
-      isNull(webhookFieldMappings.deletedAt),
-      keyScope
-    ));
+  const rows = await withTenantContext(tenantId, NO_USER_SENTINEL, async (tx) =>
+    tx
+      .select({
+        sourceKey: webhookFieldMappings.sourceKey,
+        targetType: webhookFieldMappings.targetType,
+        targetKey: webhookFieldMappings.targetKey,
+        transform: webhookFieldMappings.transform,
+        isActive: webhookFieldMappings.isActive,
+        apiKeyId: webhookFieldMappings.apiKeyId,
+      })
+      .from(webhookFieldMappings)
+      .where(and(
+        eq(webhookFieldMappings.tenantId, tenantId),
+        eq(webhookFieldMappings.entityType, entityType),
+        eq(webhookFieldMappings.isActive, true),
+        isNull(webhookFieldMappings.deletedAt),
+        keyScope
+      )),
+  );
 
   // Key-specific beats tenant-wide for the same source key.
   const bySourceKey = new Map<string, FieldMapping>();
