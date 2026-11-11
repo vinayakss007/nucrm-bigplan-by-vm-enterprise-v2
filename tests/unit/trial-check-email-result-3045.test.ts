@@ -32,6 +32,7 @@ const mockTxInsert = vi.fn();
 vi.mock('@/lib/crypto', () => ({ verifySecret: vi.fn(() => true) }));
 vi.mock('@/lib/cron/cron-lock', () => ({
   refuseIfCronLockHeld: vi.fn(async () => null),
+  instrumentCronRun: (_job: string, handler: unknown) => handler,
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => {}) }));
 vi.mock('@/lib/email/service', () => ({ sendEmail: vi.fn() }));

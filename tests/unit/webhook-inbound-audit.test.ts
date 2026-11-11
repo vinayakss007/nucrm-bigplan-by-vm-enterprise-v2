@@ -81,6 +81,10 @@ vi.mock('@/drizzle/db', () => {
       companies: { findFirst: async () => undefined },
       tasks: { findFirst: async () => undefined },
     },
+    // #3246: the route now opens `withTenantContext(tenantId, …)` for the
+    // item's transaction, and that helper sets the tenant GUCs through
+    // `tx.execute`. The double answers it, so the transaction still runs.
+    execute: async () => ({ rows: [] }),
     transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };
   return { db };

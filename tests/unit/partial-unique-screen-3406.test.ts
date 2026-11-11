@@ -296,9 +296,11 @@ describe('#3406 the live repo reads clean, and the census is the published one',
 
   it('reports the numbers the migration header and the docs quote', () => {
     // Pinning the census is the point: each of these moved once already this PR,
-    // when a parser stopped seeing statements it had been counting.
+    // when a parser stopped seeing statements it had been counting. `migrations` moved
+    // again on the merge of `main`: #3406's 0144 and #3410's cron ledger are two
+    // files at one number, so the ledger became 0145 and the chain grew to 148.
     expect(report.totals).toEqual({
-      migrations: 147,
+      migrations: 148,
       softTables: 204,
       uniqueOnSoft: 59,
       partial: 34,

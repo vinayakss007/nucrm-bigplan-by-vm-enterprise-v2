@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -69,7 +69,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
  *     always 4), never rows, so it cannot report its own blast radius. This
  *     route can, and does, as trash_rows_deleted.
  */
-export const POST = withApiRoute(async (request: NextRequest) => {
+const cronRouteHandler = withApiRoute(async (request: NextRequest) => {
   // Two ways to authorize this job:
   //  1. the scheduler presents the shared CRON_SECRET, or
   //  2. a logged-in super admin triggers it manually from the dashboard.
@@ -132,6 +132,29 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         .where(lt(passwordResets.expiresAt, new Date()));
       return resetsResult.rowCount ?? 0;
     });
+
+    // 2b. Cron run ledger prune (#3410) — the ledger is append-only per
+    // attempt and every scheduler tick can add rows, so retention lives here
+    // in the weekly cleanup rather than in the writer. Same bounded-batch
+    // shape as sessions; 30 days back is far more than any expectedEveryMs
+    // in the manifest (a week), so health never loses the job it needs.
+    let cronRunsPruned = 0;
+    for (let i = 0; i < MAX_SESSION_ITERATIONS; i++) {
+      const removed = await withSecurityContext(async (tx) => {
+        const batch = await tx.execute(sql`
+          DELETE FROM cron_runs
+          WHERE cron_runs.id IN (
+            SELECT cron_runs.id FROM cron_runs
+            WHERE cron_runs.started_at < NOW() - interval '30 days'
+            LIMIT ${SESSION_BATCH}
+          )
+        `);
+        return batch.rowCount ?? 0;
+      });
+      cronRunsPruned += removed;
+      if (removed === 0) break;
+    }
+    r['cron_runs'] = cronRunsPruned;
 
     // 3. Tenant-scoped work: expired invitations and the permanent trash purge.
     // Downgrade the connection BEFORE the sweep (same set_config the pool's own
@@ -237,3 +260,6 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return apiError(err);
   }
 });
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('cleanup', cronRouteHandler);

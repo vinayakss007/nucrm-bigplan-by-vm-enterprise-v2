@@ -33,7 +33,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import type { DbClient } from '@/drizzle/db';
+import type { RlsTransaction } from '@/lib/db/rls';
 
 interface Stmt {
   conn: 'db' | 'tx';
@@ -221,14 +221,14 @@ const poolOf = (table: string, op: Stmt['op']) =>
 const firstTxIndex = () => H.state.timeline.findIndex((s) => s.conn === 'tx');
 
 /** A client that records what it was asked to write, for the helper units. */
-function spyClient(hits: Record<string, unknown>[]): DbClient {
+function spyClient(hits: Record<string, unknown>[]): RlsTransaction {
   return {
     update: () => ({
       set: (values: Record<string, unknown>) => ({
         where: async () => { hits.push(values); return { rowCount: 1 }; },
       }),
     }),
-  } as unknown as DbClient;
+  } as unknown as RlsTransaction;
 }
 
 function jsonPost(url: string, body: unknown): Promise<Response> {
@@ -276,12 +276,22 @@ describe('#2530 stripe-subscription-sync honours the caller transaction', () => 
     expect(poolOf('subscriptions', 'update')).toEqual([]);
   });
 
-  it('syncSubscriptionRow still falls back to the pool when handed nothing', async () => {
-    await syncSubscriptionRow({ id: SUB_ID }, null, 'active');
+  it('syncSubscriptionRow opens a tenant context when handed a tenant instead of a transaction', async () => {
+    // #3312: the old fallback wrote on the bare pool, where FORCE RLS matched
+    // zero rows and reported success. A caller without a transaction must name
+    // the tenant; the helper opens the context itself.
+    await syncSubscriptionRow({ id: SUB_ID }, null, 'active', undefined, TENANT_ID);
 
-    const onPool = poolOf('subscriptions', 'update');
-    expect(onPool).toHaveLength(1);
-    expect(onPool[0]?.set).toMatchObject({ status: 'active' });
+    const onTx = txOf('subscriptions', 'update');
+    expect(onTx).toHaveLength(1);
+    expect(onTx[0]?.set).toMatchObject({ status: 'active' });
+    expect(poolOf('subscriptions', 'update')).toEqual([]);
+  });
+
+  it('syncSubscriptionRow refuses a caller with neither a transaction nor a tenant', async () => {
+    await expect(syncSubscriptionRow({ id: SUB_ID }, null, 'active')).rejects.toThrow(/tenantId/);
+    expect(poolOf('subscriptions', 'update')).toEqual([]);
+    expect(txOf('subscriptions', 'update')).toEqual([]);
   });
 
   it('markSubscriptionCanceled writes through the transaction it is handed', async () => {
