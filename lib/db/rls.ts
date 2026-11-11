@@ -140,6 +140,83 @@ export async function withTenantContext<T>(
 export const SUPER_ADMIN_GUC = 'app.is_super_admin';
 
 /**
+ * Name of the GUC that opts a connection into reading tombstoned rows.
+ *
+ * Set by the trash and permanent-delete paths so the app can read rows whose
+ * deleted_at is not null, and cleared immediately after. Every RLS policy on a
+ * deleted_at table is armed with `deleted_at IS NULL OR
+ * current_setting('app.include_deleted', true) = 'true'` by migration 0145, so
+ * a connection that does not set this GUC sees only live rows through RLS — even
+ * when the app-level query asks for `isNotNull(deletedAt)`.
+ *
+ * This is the narrowest tombstone-read privilege: it does not change tenant
+ * scoping, actor identity, or super-admin state. It only flips one predicate in
+ * every policy's USING/WITH CHECK. Callers must set it for the shortest possible
+ * sequence and clear it after — the trash GET reads six tables, the PATCH reads
+ * one, the DELETE reads one; each is a tight transaction or a single statement.
+ *
+ * The GUC is session-scoped when called without `tx` (connection checkout) and
+ * transaction-scoped (`SET LOCAL`) when called with `tx`. Under session scope the
+ * pool's DISCARD ALL clears it on return (#3404 pins the pooler to session mode).
+ */
+export const INCLUDE_DELETED_GUC = 'app.include_deleted';
+
+/**
+ * Opt the current transaction (or, without `tx`, the current connection checkout)
+ * into reading tombstoned rows.
+ *
+ * Call before a query that must see `deleted_at IS NOT NULL` rows through an RLS
+ * policy armed by migration 0145. The policy's USING clause is
+ * `deleted_at IS NULL OR current_setting('app.include_deleted', true) = 'true'`,
+ * so without this call the policy evaluates to `deleted_at IS NULL` and the
+ * tombstoned row is invisible to RLS regardless of what the app query asks for.
+ *
+ * `tx` is preferred: `SET LOCAL` scopes the GUC to one transaction and clears it
+ * at COMMIT/ROLLBACK, so a bare `setIncludeDeleted(tx)` cannot leak to the next
+ * checkout. Without `tx` the GUC is session-scoped and survives until DISCARD ALL
+ * — safe only on a connection the caller pins and resets.
+ */
+export async function setIncludeDeleted(tx?: RlsTransaction): Promise<void> {
+  const client = tx || db;
+  if (isMockClient(client)) return;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(
+    sql`SELECT set_config('app.include_deleted', 'true', ${isLocal})`
+  );
+}
+
+/**
+ * Clear the tombstone-read GUC — call immediately after the query that needed it.
+ *
+ * Defence-in-depth: even though DISCARD ALL / COMMIT / ROLLBACK clear the GUC,
+ * an explicit clear makes the Privilege boundary obvious in the source and fails
+ * loud if a future refactor moves the clear away from the query that needed it.
+ */
+export async function clearIncludeDeleted(tx?: RlsTransaction): Promise<void> {
+  const client = tx || db;
+  if (isMockClient(client)) return;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(
+    sql`SELECT set_config('app.include_deleted', '', ${isLocal})`
+  );
+}
+
+/**
+ * Read the current value of the tombstone-read GUC.
+ *
+ * Primarily for tests that assert the GUC is absent when it should be and set
+ * when a tombstone-read path is active.
+ */
+export async function getIncludeDeleted(tx?: RlsTransaction): Promise<string> {
+  const client = tx || db;
+  if (isMockClient(client)) return '';
+  const result = await client.execute(
+    sql`SELECT current_setting('app.include_deleted', true)`
+  );
+  return (result.rows[0] as { current_setting?: string })?.current_setting ?? '';
+}
+
+/**
  * Mark the current transaction (or, without `tx`, the current connection
  * checkout) as a platform-security context.
  *

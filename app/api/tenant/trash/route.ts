@@ -10,6 +10,7 @@ import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies, leads, projects, tenants } from '@/drizzle/schema';
 import { eq, and, isNotNull, sql, desc, type Column } from 'drizzle-orm';
+import { setIncludeDeleted, clearIncludeDeleted } from '@/lib/db/rls';
 import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -76,6 +77,13 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const type = new URL(req.url).searchParams.get('type');
+
+    // The app-level query asks for deleted_at IS NOT NULL, but RLS on every
+    // deleted_at table is armed with `deleted_at IS NULL OR
+    // app.include_deleted = 'true'` (migration 0145). Without setting the GUC
+    // the policy side evaluates to `deleted_at IS NULL` and the tombstoned rows
+    // are invisible to RLS regardless of the app predicate (#3406 policy arm).
+    await setIncludeDeleted();
 
     const contactQuery = db
       .select({
@@ -195,10 +203,14 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       days_remaining: Math.max(0, 30 - Math.floor((now - new Date(item.deleted_at ?? 0).getTime()) / 86400000)),
     }));
 
+    await clearIncludeDeleted();
     return NextResponse.json({ data: withExpiry, total: withExpiry.length });
  
  
-  } catch (err) { return apiError(err); }
+  } catch (err) {
+    await clearIncludeDeleted().catch(() => {});
+    return apiError(err);
+  }
 });
 
 export const PATCH = withApiRoute(async (req: NextRequest) => {
@@ -229,28 +241,37 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     const updateData: Partial<typeof contacts.$inferInsert> = { deletedAt: null, deletedBy: null, updatedAt: new Date() };
     if (resource_type === 'contact') updateData.isArchived = false;
 
-    const [current] = await db
-      .select({ updatedAt: table.updatedAt })
-      .from(table)
-      .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine))
-      .limit(1);
-
-    // Row not in trash at all → 404
-    if (!current) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
-
-    // Resolve the concurrency guard from the pre-tx read, then run the guarded
-    // restore + tenant-counter re-increment atomically (H7). If the guarded
-    // update matches 0 rows the tx returns null and we roll back to the 409
-    // stale response — the counter must not be bumped without a restore.
-    // concurrencyGuard's loose-table overload is typed PgTableWithColumns<any>,
-    // which no any-free shape can satisfy structurally (its enableRLS/index
-    // members), so the dynamic table is handed over through `never`. Runtime
-    // behavior is unchanged: the guard only reads table.updatedAt.
-    const guard = concurrencyGuard(table as never, current.updatedAt as Date | string | null | undefined);
-    const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine];
-    if (guard) conditions.push(guard);
-
+    // The restore reads the tombstoned row and writes through RLS-armed
+    // policies (migration 0145), so the GUC must be set INSIDE the transaction
+    // that does the work — SET LOCAL scopes it to the tx and clears at
+    // COMMIT/ROLLBACK, and the transaction's connection is the one that runs
+    // both the SELECT (USING) and the UPDATE (WITH CHECK). A session-scoped
+    // setIncludeDeleted() on the outer db client would not carry into the tx.
     const row = await db.transaction(async (tx) => {
+      await setIncludeDeleted(tx);
+
+      const [current] = await tx
+        .select({ updatedAt: table.updatedAt })
+        .from(table)
+        .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine))
+        .limit(1);
+
+      // Row not in trash at all → 404 (tag with a symbol the outer handler
+      // distinguishes from a stale-write null returned by the update step).
+      if (!current) return { _notInTrash: true } as const;
+
+      // Resolve the concurrency guard from the pre-tx read, then run the guarded
+      // restore + tenant-counter re-increment atomically (H7). If the guarded
+      // update matches 0 rows the tx returns null and we roll back to the 409
+      // stale response — the counter must not be bumped without a restore.
+      // concurrencyGuard's loose-table overload is typed PgTableWithColumns<any>,
+      // which no any-free shape can satisfy structurally (its enableRLS/index
+      // members), so the dynamic table is handed over through `never`. Runtime
+      // behavior is unchanged: the guard only reads table.updatedAt.
+      const guard = concurrencyGuard(table as never, current.updatedAt as Date | string | null | undefined);
+      const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine];
+      if (guard) conditions.push(guard);
+
       const [restored] = await tx
         .update(table)
         .set(updateData)
@@ -275,14 +296,26 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       return restored;
     });
 
-    // Row was in trash but update returned 0 rows → stale write (concurrent modification)
-    if (!row) return NextResponse.json({ error: 'Stale data — this record was modified by another user. Please refresh and retry.' }, { status: 409 });
+    // Distinguish "not in trash" (404) from "stale write" (409): the tx tags
+    // a not-in-trash result with _notInTrash, a stale write returns null.
+    if (row && typeof row === 'object' && '_notInTrash' in row) {
+      await clearIncludeDeleted();
+      return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
+    }
+    if (!row) {
+      await clearIncludeDeleted();
+      return NextResponse.json({ error: 'Stale data — this record was modified by another user. Please refresh and retry.' }, { status: 409 });
+    }
 
+    await clearIncludeDeleted();
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:`restore`, entityType: resource_type, entityId: id });
     return NextResponse.json({ ok: true, message: `${resource_type} restored successfully` });
  
  
-  } catch (err) { return apiError(err); }
+  } catch (err) {
+    await clearIncludeDeleted().catch(() => {});
+    return apiError(err);
+  }
 });
 
 export const DELETE = withApiRoute(async (req: NextRequest) => {
@@ -294,6 +327,15 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required to permanently delete' }, { status: 403 });
 
     const { id, resource_type, purge_all } = await readJsonBody(req);
+    if (!ctx.isAdmin && purge_all) {
+      // purge_all needs the tombstone-read GUC; if the caller somehow bypassed
+      // the isAdmin gate above (it cannot, but the GUC is session-scoped and a
+      // leaked GUC is a real privilege, so this path explicitly refuses to set
+      // it for a non-admin purge — the purge loop below is the only path that
+      // sets include_deleted for a non-single-delete).
+      await clearIncludeDeleted();
+      return NextResponse.json({ error: 'Admin required to permanently delete' }, { status: 403 });
+    }
 
     if (purge_all) {
       // Two things were wrong with calling purge_trash() alone here. It covers
@@ -305,6 +347,14 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       // Count what the 30-day window actually covers (RLS bounds it to this tenant, exactly as it
       // bounds the function's own deletes), then let the function do the four tables it owns and
       // delete the two it does not. PP-045.
+      // The count query and the purge both touch tombstoned rows through
+      // RLS-armed policies (migration 0145). The purge_trash() function is not
+      // SECURITY DEFINER — it runs as the calling role (nucrm) and its DELETEs
+      // go through the same policies the app queries do, so the GUC must be set
+      // or the function returns 0 rows purged (the DELETEs are silently blocked
+      // by RLS, not by permission).
+      await setIncludeDeleted();
+
       const qualified = await db.execute(sql`
         SELECT
           (SELECT count(*) FROM ${contacts}
@@ -340,6 +390,8 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
           ));
       }
 
+      await clearIncludeDeleted();
+
       await logAudit({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
@@ -355,15 +407,24 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     const entry = TRASH_TABLES[resource_type];
     if (!entry) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
 
+    // Permanent delete reads the tombstoned row through an RLS-armed policy,
+    // so the GUC must be set for the DELETE's USING/WITH CHECK to admit the row.
+    await setIncludeDeleted();
+
     const result = await db
       .delete(entry.table)
       .where(and(eq(entry.table.id, id), eq(entry.table.tenantId, ctx.tenantId), isNotNull(entry.table.deletedAt)));
       
+    await clearIncludeDeleted();
+
     if (result.rowCount === 0) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
     
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:'permanent_delete', entityType: resource_type, entityId: id });
     return NextResponse.json({ ok: true });
  
  
-  } catch (err) { return apiError(err); }
+  } catch (err) {
+    await clearIncludeDeleted().catch(() => {});
+    return apiError(err);
+  }
 });
