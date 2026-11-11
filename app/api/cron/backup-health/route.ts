@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
@@ -22,7 +22,7 @@ const insertAlert = (alertType: string, message: string) =>
   withSecurityContext((tx) => tx.insert(backupAlerts).values({ alertType, message }));
 
 // Runs every 6 hours — checks backup health and alerts if backup is overdue
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'backup-health' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -114,3 +114,6 @@ export async function POST(request: NextRequest) {
     return apiError(err);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('backup-health', cronRouteHandler);

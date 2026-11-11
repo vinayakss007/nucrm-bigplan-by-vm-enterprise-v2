@@ -25,9 +25,13 @@
  * sets, so rule 3 checks each of them separately rather than assuming one
  * table: deploy/cron/crontab (17 jobs, the pm2/VM production scheduler),
  * vercel.json crons (18, Vercel only) and scripts/cron-scheduler.ts (18, the
- * in-process alternative). #1422 says exactly ONE is active per environment, so
- * they are not required to be identical — but every divergence must be a named,
- * tracked decision, and a tracked set may only shrink.
+ * in-process alternative). #3410 since then: the three are all derived from
+ * lib/cron/jobs.ts, which `guard:cron-manifest` diffs line-for-line; this
+ * guard still owns the ROUTE half — lock sites, the 423 mask, and the
+ * schedule-name-to-route parity that survives even a manifest edit. #1422
+ * says exactly ONE source is active per environment, so they are not required
+ * to be identical — but every divergence is now a named `sources` flag, and
+ * a tracked set may only shrink.
  *
  * The pure rules are exported and the filesystem/CLI layer sits behind an
  * import.meta.url guard, so each rule is unit-testable with injected fixtures
@@ -92,6 +96,26 @@ export function parseSchedulerJobs(text) {
   return [...new Set(names)].sort();
 }
 
+/**
+ * #3410: cron-scheduler.ts no longer re-declares jobs — it derives the ones
+ * with `sources: { … scheduler: true }` from lib/cron/jobs.ts. When the file
+ * imports the manifest, the in-process set is read from the manifest source
+ * instead of the scheduler source; the legacy literal form still parses.
+ */
+export function isManifestDerivedScheduler(text) {
+  return text.includes('/lib/cron/jobs');
+}
+
+/** Manifest source text -> the job names whose `sources.scheduler` is true. */
+export function parseManifestSchedulerJobs(manifestText) {
+  const names = [
+    ...manifestText.matchAll(
+      /\{\s*name:\s*'([a-z0-9-]+)'[^}]*?sources:\s*\{[^}]*?scheduler:\s*true/g,
+    ),
+  ].map((m) => m[1]);
+  return [...new Set(names)].sort();
+}
+
 // ── Pure rules: job lists + a per-route source reader in, problems out ──────
 
 /** Rules 1 + 2 — one lock site per route, and no local `ok:true` skip mask. */
@@ -108,6 +132,12 @@ export function checkLockSites(routes, readRoute) {
     }
     if (/ok:\s*true\s*,\s*skipped\s*:/.test(src)) {
       problems.push(`${file} reports a skipped run as ok:true — the exact mask #2539 removed. A refusal is 423 / { ok: false, skipped: "lock-held" } from lib/cron/cron-lock.ts.`);
+    }
+    // #3410: the run ledger. A route that exports POST directly writes no
+    // cron_runs row, and the job's silence becomes indistinguishable from
+    // never having run — which is the exact defect the issue measured.
+    if (!src.includes(`export const POST = instrumentCronRun('${dir}',`)) {
+      problems.push(`${file} does not wrap its POST in instrumentCronRun('${dir}', …) (#3410) — attempts bypass the cron_runs ledger, so cron-health cannot tell "never ran" from "forgot to report".`);
     }
   }
   return problems;
@@ -209,12 +239,17 @@ export function main() {
     .map((entry) => entry.name)
     .sort();
 
+  const schedulerText = read(SCHEDULER_FILE);
+  const inProcess = isManifestDerivedScheduler(schedulerText)
+    ? parseManifestSchedulerJobs(read('lib/cron/jobs.ts'))
+    : parseSchedulerJobs(schedulerText);
+
   const { problems, notes, counts } = runChecks({
     routes,
     readRoute: (dir) => read(join(CRON_DIR, dir, 'route.ts')),
     crontab: parseCrontabJobs(read(CRONTAB_FILE)),
     vercel: parseVercelJobs(read(VERCEL_FILE)),
-    inProcess: parseSchedulerJobs(read(SCHEDULER_FILE)),
+    inProcess,
   });
 
   if (problems.length > 0) {

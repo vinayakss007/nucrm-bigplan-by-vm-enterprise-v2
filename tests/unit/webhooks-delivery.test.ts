@@ -119,7 +119,7 @@ describe('Webhook Delivery', () => {
     it('throws when delivery not found', async () => {
       mockDbFindFirst.mockResolvedValueOnce(null);
 
-      await expect(mod.processWebhookDelivery('nonexistent'))
+      await expect(mod.processWebhookDelivery('nonexistent', 't-1'))
         .rejects.toThrow('not found');
     });
 
@@ -128,7 +128,7 @@ describe('Webhook Delivery', () => {
         id: 'd-1', payload: {}, metadata: {}, status: 'pending',
       });
 
-      await expect(mod.processWebhookDelivery('d-1'))
+      await expect(mod.processWebhookDelivery('d-1', 't-1'))
         .rejects.toThrow('No URL found');
     });
 
@@ -142,7 +142,7 @@ describe('Webhook Delivery', () => {
         ok: true, status: 200, statusText: 'OK', text: () => 'OK',
       });
 
-      await mod.processWebhookDelivery('d-1');
+      await mod.processWebhookDelivery('d-1', 't-1');
 
       expect(mockDbUpdateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'success' })
@@ -157,7 +157,7 @@ describe('Webhook Delivery', () => {
       });
       globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('Network error'));
 
-      await mod.processWebhookDelivery('d-1');
+      await mod.processWebhookDelivery('d-1', 't-1');
 
       expect(mockDbUpdateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'pending' })
@@ -172,7 +172,7 @@ describe('Webhook Delivery', () => {
       });
       globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('Final failure'));
 
-      await mod.processWebhookDelivery('d-1');
+      await mod.processWebhookDelivery('d-1', 't-1');
 
       expect(mockDbUpdateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed' })
@@ -184,7 +184,7 @@ describe('Webhook Delivery', () => {
     it('returns zero stats when no results', async () => {
       mockDbSelectResolve.mockResolvedValue([{ count: 0 }]);
 
-      const stats = await mod.getWebhookStats('wh-1');
+      const stats = await mod.getWebhookStats('wh-1', 't-1');
       expect(stats.total).toBe(0);
       expect(stats.success).toBe(0);
       expect(stats.failed).toBe(0);
@@ -200,7 +200,7 @@ describe('Webhook Delivery', () => {
         .mockResolvedValueOnce([{ count: 1 }])
         .mockResolvedValueOnce([{ avg_ms: 450 }]);
 
-      const stats = await mod.getWebhookStats('wh-1');
+      const stats = await mod.getWebhookStats('wh-1', 't-1');
       expect(stats.total).toBe(10);
       expect(stats.success).toBe(7);
       expect(stats.failed).toBe(2);

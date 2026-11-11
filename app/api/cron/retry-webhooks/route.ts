@@ -5,7 +5,7 @@
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { retryFailedWebhooks, drainDeletedWebhookQueue } from '@/lib/webhooks';
 import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
@@ -15,7 +15,7 @@ import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { setSuperAdminContext } from '@/lib/db/rls';
 
-export const POST = withApiRoute(async (req: NextRequest) => {
+const cronRouteHandler = withApiRoute(async (req: NextRequest) => {
   if (!await verifyCronSecret(req, { job: 'retry-webhooks' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -48,3 +48,6 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ error: 'Failed to retry webhooks' }, { status: 500 });
   }
 });
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('retry-webhooks', cronRouteHandler);

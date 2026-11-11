@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { apiError } from '@/lib/api-error';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { db } from '@/drizzle/db';
@@ -14,7 +14,7 @@ import { eq, and, lte, isNull, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
-export async function POST(req: NextRequest) {
+async function cronRouteHandler(req: NextRequest) {
   if (!await verifyCronSecret(req, { job: 'detect-missed-followups' }))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -92,3 +92,6 @@ export async function POST(req: NextRequest) {
     return apiError(err);
   }
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('detect-missed-followups', cronRouteHandler);

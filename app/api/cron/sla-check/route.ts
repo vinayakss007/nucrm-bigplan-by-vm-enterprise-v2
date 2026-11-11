@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, slaPolicies, slaBreaches, users, tenantMembers } from '@/drizzle/schema';
@@ -25,7 +25,7 @@ import { checkSLABreach, DEFAULT_SLA_TIMES, type SLADefinition } from '@/lib/sla
  * 3. Escalate existing breaches to higher levels
  * 4. Send in-app notifications and email alerts for breaches
  */
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'sla-check' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -368,3 +368,6 @@ async function sendEscalationNotification(
 
   return { recipients: admins.length, assigneeRowMissing: false };
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('sla-check', cronRouteHandler);

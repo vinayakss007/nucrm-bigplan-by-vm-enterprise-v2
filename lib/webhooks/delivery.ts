@@ -12,12 +12,12 @@
  * - Failure tracking
  */
 
-import { db } from '@/drizzle/db';
 import { webhookDeliveries } from '@/drizzle/schema/automation';
 import { eq, and, sql, gt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import { logger } from '@/lib/logger';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 export interface WebhookPayload {
   id: string;
@@ -49,17 +49,25 @@ export interface WebhookDelivery {
 
 /**
  * Queue webhook for delivery with retry
+ *
+ * #3312: `webhook_deliveries` is FORCE-RLS with only `tenant_isolation`, so
+ * the insert and every later read must name the tenant. The payload already
+ * carries it; the delivery path threads it through so no statement runs on the
+ * bare pool and silently writes/reads zero rows.
  */
 export async function queueWebhook(payload: WebhookPayload): Promise<string> {
-  const [result] = await db.insert(webhookDeliveries)
-    .values({
-      tenantId: payload.tenant_id,
-      webhookId: payload.id,
-      eventType: payload.event,
-      payload: payload.payload,
-      status: 'pending',
-    })
-    .returning({ id: webhookDeliveries.id });
+  const result = await withTenantContext(payload.tenant_id, NO_USER_SENTINEL, async (tx) => {
+    const [inserted] = await tx.insert(webhookDeliveries)
+      .values({
+        tenantId: payload.tenant_id,
+        webhookId: payload.id,
+        eventType: payload.event,
+        payload: payload.payload,
+        status: 'pending',
+      })
+      .returning({ id: webhookDeliveries.id });
+    return inserted;
+  });
 
   if (!result) {
     throw new Error('Failed to queue webhook');
@@ -67,7 +75,7 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
 
   // Immediately attempt delivery
   try {
-    await processWebhookDelivery(result.id, payload.url, payload.headers);
+    await processWebhookDelivery(result.id, payload.tenant_id, payload.url, payload.headers);
   } catch {
     logger.error('[webhooks] Initial delivery attempt failed', { deliveryId: result.id });
   }
@@ -79,11 +87,22 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
 
 /**
  * Process webhook delivery
+ *
+ * `tenantId` is required: the delivery row can only be read under the tenant
+ * that owns it, and every later UPDATE is matched by id inside the same
+ * context. The HTTP call deliberately runs OUTSIDE the transaction so a slow
+ * endpoint does not pin a pooled connection.
  */
-export async function processWebhookDelivery(deliveryId: string, url?: string, headers?: Record<string, string>): Promise<void> {
-  const delivery = await db.query.webhookDeliveries.findFirst({
-    where: eq(webhookDeliveries.id, deliveryId)
-  });
+export async function processWebhookDelivery(
+  deliveryId: string,
+  tenantId: string,
+  url?: string,
+  headers?: Record<string, string>,
+): Promise<void> {
+  const delivery = await withTenantContext(tenantId, NO_USER_SENTINEL, (tx) =>
+    tx.query.webhookDeliveries.findFirst({
+      where: eq(webhookDeliveries.id, deliveryId)
+    }));
 
   if (!delivery) {
     throw new Error(`Webhook delivery ${deliveryId} not found`);
@@ -127,14 +146,15 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
     const durationMs = Date.now() - startTime;
 
     if (response.ok) {
-      await db.update(webhookDeliveries)
-        .set({
-          status: 'success',
-          responseStatus: response.status,
-          responseBody: responseBody,
-          durationMs: durationMs,
-        })
-        .where(eq(webhookDeliveries.id, deliveryId));
+      await withTenantContext(tenantId, NO_USER_SENTINEL, (tx) =>
+        tx.update(webhookDeliveries)
+          .set({
+            status: 'success',
+            responseStatus: response.status,
+            responseBody: responseBody,
+            durationMs: durationMs,
+          })
+          .where(eq(webhookDeliveries.id, deliveryId)));
 
       devLogger.queue('webhook-delivery', 'completed');
     } else {
@@ -153,24 +173,25 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
     // a nextRetryAt for a delivery that can never succeed.
     if (error instanceof SsrfBlockedError) {
       const blockedReason = `Blocked by SSRF protection: ${error.reason}`;
-      await db.update(webhookDeliveries)
-        .set({
-          status: 'failed',
-          responseBody: blockedReason,
-          durationMs: durationMs,
-          metadata: {
-            ...(delivery.metadata as Record<string, unknown>),
-            attempt,
-            max_retries: maxRetries,
-            url: deliveryUrl,
-            failureReason: blockedReason,
-            blockedAt: new Date().toISOString(),
-          }
-        })
-        .where(eq(webhookDeliveries.id, deliveryId));
+      await withTenantContext(tenantId, NO_USER_SENTINEL, (tx) =>
+        tx.update(webhookDeliveries)
+          .set({
+            status: 'failed',
+            responseBody: blockedReason,
+            durationMs: durationMs,
+            metadata: {
+              ...(delivery.metadata as Record<string, unknown>),
+              attempt,
+              max_retries: maxRetries,
+              url: deliveryUrl,
+              failureReason: blockedReason,
+              blockedAt: new Date().toISOString(),
+            }
+          })
+          .where(eq(webhookDeliveries.id, deliveryId)));
 
       const { moveToDeadLetterQueue } = await import('./dlq');
-      await moveToDeadLetterQueue(deliveryId);
+      await moveToDeadLetterQueue(deliveryId, tenantId);
 
       devLogger.queue('webhook-delivery', 'blocked by SSRF protection — moved to dead letter queue');
       return;
@@ -184,44 +205,46 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
       const delay = baseDelay + jitter;
       const nextRetry = new Date(Date.now() + delay * 1000);
 
-      await db.update(webhookDeliveries)
-        .set({
-          status: 'pending',
-          responseBody: errMessage,
-          durationMs: durationMs,
-          metadata: {
-            ...(delivery.metadata as Record<string, unknown>),
-            attempt,
-            max_retries: maxRetries,
-            url: deliveryUrl,
-            nextRetryAt: nextRetry.toISOString(),
-            lastError: errMessage,
-          }
-        })
-        .where(eq(webhookDeliveries.id, deliveryId));
+      await withTenantContext(tenantId, NO_USER_SENTINEL, (tx) =>
+        tx.update(webhookDeliveries)
+          .set({
+            status: 'pending',
+            responseBody: errMessage,
+            durationMs: durationMs,
+            metadata: {
+              ...(delivery.metadata as Record<string, unknown>),
+              attempt,
+              max_retries: maxRetries,
+              url: deliveryUrl,
+              nextRetryAt: nextRetry.toISOString(),
+              lastError: errMessage,
+            }
+          })
+          .where(eq(webhookDeliveries.id, deliveryId)));
 
       devLogger.queue('webhook-delivery', `retrying (attempt ${attempt}/${maxRetries}, delay ${Math.round(delay)}s)`);
     } else {
       // Max retries exhausted — move to dead letter queue
-      await db.update(webhookDeliveries)
-        .set({
-          status: 'failed',
-          responseBody: errMessage,
-          durationMs: durationMs,
-          metadata: {
-            ...(delivery.metadata as Record<string, unknown>),
-            attempt,
-            max_retries: maxRetries,
-            url: deliveryUrl,
-            failureReason: errMessage,
-            exhaustedAt: new Date().toISOString(),
-          }
-        })
-        .where(eq(webhookDeliveries.id, deliveryId));
+      await withTenantContext(tenantId, NO_USER_SENTINEL, (tx) =>
+        tx.update(webhookDeliveries)
+          .set({
+            status: 'failed',
+            responseBody: errMessage,
+            durationMs: durationMs,
+            metadata: {
+              ...(delivery.metadata as Record<string, unknown>),
+              attempt,
+              max_retries: maxRetries,
+              url: deliveryUrl,
+              failureReason: errMessage,
+              exhaustedAt: new Date().toISOString(),
+            }
+          })
+          .where(eq(webhookDeliveries.id, deliveryId)));
 
       // Move to DLQ for manual inspection
       const { moveToDeadLetterQueue } = await import('./dlq');
-      await moveToDeadLetterQueue(deliveryId);
+      await moveToDeadLetterQueue(deliveryId, tenantId);
 
       devLogger.queue('webhook-delivery', 'failed — moved to dead letter queue');
       devLogger.error(error as Error, `Webhook delivery ${deliveryId} exhausted ${maxRetries} retries`);
@@ -251,8 +274,12 @@ export async function generateSignature(delivery: WebhookDelivery): Promise<stri
 /**
  * Get webhook delivery stats
  * Uses parameterized queries to prevent SQL injection
+ *
+ * #3312: `webhook_deliveries` is FORCE-RLS, so all five counts run inside one
+ * tenant context. On the bare pool every count is zero — a stats panel that
+ * reads as "no deliveries" for a webhook that is failing constantly.
  */
-export async function getWebhookStats(webhookId: string, days: number = 7): Promise<{
+export async function getWebhookStats(webhookId: string, tenantId: string, days: number = 7): Promise<{
   total: number;
   success: number;
   failed: number;
@@ -265,55 +292,57 @@ export async function getWebhookStats(webhookId: string, days: number = 7): Prom
   // Calculate the cutoff date in JavaScript instead of SQL
   const cutoffDate = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
 
-  const totalResults = await db.select({ count: sql<number>`count(*)::int` })
-    .from(webhookDeliveries)
-    .where(and(eq(webhookDeliveries.webhookId, webhookId), gt(webhookDeliveries.createdAt, cutoffDate)));
+  return withTenantContext(tenantId, NO_USER_SENTINEL, async (tx) => {
+    const totalResults = await tx.select({ count: sql<number>`count(*)::int` })
+      .from(webhookDeliveries)
+      .where(and(eq(webhookDeliveries.webhookId, webhookId), gt(webhookDeliveries.createdAt, cutoffDate)));
 
-  // #1185/#1465: successful deliveries are written with status 'success'
-  // (see processWebhookDelivery + the table default), never 'delivered'.
-  const successResults = await db.select({ count: sql<number>`count(*)::int` })
-    .from(webhookDeliveries)
-    .where(and(
-      eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'success'), 
-      gt(webhookDeliveries.createdAt, cutoffDate))
-    );
+    // #1185/#1465: successful deliveries are written with status 'success'
+    // (see processWebhookDelivery + the table default), never 'delivered'.
+    const successResults = await tx.select({ count: sql<number>`count(*)::int` })
+      .from(webhookDeliveries)
+      .where(and(
+        eq(webhookDeliveries.webhookId, webhookId), 
+        eq(webhookDeliveries.status, 'success'), 
+        gt(webhookDeliveries.createdAt, cutoffDate))
+      );
 
-  const failedResults = await db.select({ count: sql<number>`count(*)::int` })
-    .from(webhookDeliveries)
-    .where(and(
-      eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'failed'), 
-      gt(webhookDeliveries.createdAt, cutoffDate))
-    );
+    const failedResults = await tx.select({ count: sql<number>`count(*)::int` })
+      .from(webhookDeliveries)
+      .where(and(
+        eq(webhookDeliveries.webhookId, webhookId), 
+        eq(webhookDeliveries.status, 'failed'), 
+        gt(webhookDeliveries.createdAt, cutoffDate))
+      );
 
-  const pendingResults = await db.select({ count: sql<number>`count(*)::int` })
-    .from(webhookDeliveries)
-    .where(and(
-      eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'pending'), 
-      gt(webhookDeliveries.createdAt, cutoffDate))
-    );
+    const pendingResults = await tx.select({ count: sql<number>`count(*)::int` })
+      .from(webhookDeliveries)
+      .where(and(
+        eq(webhookDeliveries.webhookId, webhookId), 
+        eq(webhookDeliveries.status, 'pending'), 
+        gt(webhookDeliveries.createdAt, cutoffDate))
+      );
 
-  // #1465: average the existing duration_ms column. The previous query
-  // referenced a non-existent `delivered_at` column, which threw at runtime
-  // ("column delivered_at does not exist") on every stats fetch. duration_ms
-  // is recorded on every delivery attempt, including successes.
-  const avgTimeResults = await db.select({ avg_ms: sql<number>`COALESCE(AVG(${webhookDeliveries.durationMs}), 0)` })
-    .from(webhookDeliveries)
-    .where(and(
-      eq(webhookDeliveries.webhookId, webhookId), 
-      eq(webhookDeliveries.status, 'success'), 
-      gt(webhookDeliveries.createdAt, cutoffDate))
-    );
+    // #1465: average the existing duration_ms column. The previous query
+    // referenced a non-existent `delivered_at` column, which threw at runtime
+    // ("column delivered_at does not exist") on every stats fetch. duration_ms
+    // is recorded on every delivery attempt, including successes.
+    const avgTimeResults = await tx.select({ avg_ms: sql<number>`COALESCE(AVG(${webhookDeliveries.durationMs}), 0)` })
+      .from(webhookDeliveries)
+      .where(and(
+        eq(webhookDeliveries.webhookId, webhookId), 
+        eq(webhookDeliveries.status, 'success'), 
+        gt(webhookDeliveries.createdAt, cutoffDate))
+      );
 
-  return {
-    total: totalResults[0]?.count || 0,
-    success: successResults[0]?.count || 0,
-    failed: failedResults[0]?.count || 0,
-    pending: pendingResults[0]?.count || 0,
-    avgDeliveryTime: avgTimeResults[0]?.avg_ms || 0,
-  };
+    return {
+      total: totalResults[0]?.count || 0,
+      success: successResults[0]?.count || 0,
+      failed: failedResults[0]?.count || 0,
+      pending: pendingResults[0]?.count || 0,
+      avgDeliveryTime: avgTimeResults[0]?.avg_ms || 0,
+    };
+  });
 }
 
 export default {
