@@ -2,8 +2,8 @@
 #  Cloud-provider firewall — the public edge (#1036 backstop at the cloud layer)
 #
 #  Only SSH (restrictable via admin_cidrs), HTTP, and HTTPS are allowed inbound.
-#  This is defence-in-depth ON TOP of the host UFW rules that
-#  deploy/scripts/setup-firewall.sh applies — a mis-set host rule still can't
+#  This is defence-in-depth ON TOP of the host firewall rules (UFW or
+#  firewalld) that deploy/scripts/setup-firewall.sh applies — a mis-set host rule still can't
 #  expose Postgres/Redis/monitoring because the cloud firewall drops them first.
 ###############################################################################
 

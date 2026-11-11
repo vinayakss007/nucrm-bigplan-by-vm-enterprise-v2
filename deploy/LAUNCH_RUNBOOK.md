@@ -59,6 +59,8 @@ The data-plane ports (Postgres 5432, Redis 6379, MinIO 9000/9001, Prometheus
 ```bash
 sudo bash deploy/scripts/setup-firewall.sh
 # non-default SSH port:  sudo bash deploy/scripts/setup-firewall.sh --ssh-port 2222
+# The script auto-detects firewalld (RHEL/Oracle Linux) or UFW (Debian/Ubuntu);
+# force one with --backend firewalld|ufw, and review with --dry-run first.
 ```
 
 **Verify from OUTSIDE the VM** (another machine):

@@ -147,7 +147,70 @@ check_firewall() {
     fi
     return
   fi
-  # Fallback: inspect UFW status locally.
+  # Fallback: inspect the local firewall. firewalld is the default on RHEL /
+  # Oracle Linux (where UFW is not packaged), so checking only UFW reported a
+  # hardened host as "not firewalled" and an exposed one as "ufw not installed".
+  local firewalld_installed=0 state=""
+  if command -v firewall-cmd >/dev/null 2>&1; then
+    firewalld_installed=1
+    state="$(firewall-cmd --state 2>/dev/null || true)"
+    if [[ "$state" == "running" ]]; then
+      local iface zone ports services target rich ssh_port allowed_ports allowed_services
+      local extra_ports=() extra_services=()
+      iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}' || true)"
+      zone=""
+      if [[ -n "$iface" ]]; then
+        zone="$(firewall-cmd --get-zone-of-interface="$iface" 2>/dev/null || true)"
+      fi
+      if [[ -z "$zone" || "$zone" == "no zone" ]]; then
+        zone="$(firewall-cmd --get-default-zone 2>/dev/null || echo public)"
+      fi
+      if ! firewall-cmd --zone="$zone" --list-all >/dev/null 2>&1; then
+        _warn "firewall" "firewalld is running but zone ${zone} could not be read (run as root)" \
+          "sudo bash deploy/scripts/infra-readiness.sh   # or pass --public-ip <IP>"
+        return
+      fi
+      ports="$(firewall-cmd --zone="$zone" --list-ports 2>/dev/null || true)"
+      services="$(firewall-cmd --zone="$zone" --list-services 2>/dev/null || true)"
+      target="$(firewall-cmd --zone="$zone" --get-target 2>/dev/null || true)"
+      rich="$(firewall-cmd --zone="$zone" --list-rich-rules 2>/dev/null || true)"
+      ssh_port="$(grep -E '^[[:space:]]*Port[[:space:]]+[0-9]+' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' | head -1 || true)"
+      ssh_port="${ssh_port:-22}"
+      allowed_ports=" 80/tcp 443/tcp ${ssh_port}/tcp "
+      allowed_services=" ssh http https dhcpv6-client "
+      local p s
+      for p in ${ports}; do
+        [[ "$allowed_ports" == *" ${p} "* ]] || extra_ports+=("$p")
+      done
+      for s in ${services}; do
+        [[ "$allowed_services" == *" ${s} "* ]] || extra_services+=("$s")
+      done
+      if [[ "$target" == "ACCEPT" ]]; then
+        _prodfail "firewall" "firewalld zone ${zone} target=ACCEPT — unmatched traffic is allowed" \
+          "sudo bash deploy/scripts/setup-firewall.sh --backend firewalld"
+      elif [[ ${#extra_ports[@]} -gt 0 || ${#extra_services[@]} -gt 0 ]]; then
+        local findings=()
+        [[ ${#extra_ports[@]} -gt 0 ]] && findings+=("ports: ${extra_ports[*]}")
+        [[ ${#extra_services[@]} -gt 0 ]] && findings+=("services: ${extra_services[*]}")
+        _prodfail "firewall" "firewalld zone ${zone} exposes ${findings[*]}" \
+          "sudo bash deploy/scripts/setup-firewall.sh --backend firewalld"
+      else
+        _ok "firewall" "firewalld zone ${zone} allows only SSH/HTTP/HTTPS"
+      fi
+      if [[ -n "$rich" ]]; then
+        _warn "firewall" "firewalld zone ${zone} has rich rules; review them for opened ports" \
+          "firewall-cmd --zone=${zone} --list-rich-rules"
+      fi
+      return
+    fi
+    if [[ -z "$state" ]]; then
+      _warn "firewall" "firewalld is installed but its state could not be read (run as root)" \
+        "sudo bash deploy/scripts/infra-readiness.sh   # or pass --public-ip <IP>"
+      return
+    fi
+    # firewalld is installed but stopped; UFW may be the active backend.
+  fi
+
   if command -v ufw >/dev/null 2>&1; then
     local status; status="$(ufw status 2>/dev/null | head -1 || true)"
     if echo "$status" | grep -qi "Status: active"; then
@@ -156,8 +219,11 @@ check_firewall() {
       _prodfail "firewall" "ufw installed but NOT active — all ports may be public" \
         "sudo bash deploy/scripts/setup-firewall.sh"
     fi
+  elif [[ "$firewalld_installed" -eq 1 ]]; then
+    _prodfail "firewall" "firewalld installed but NOT running — all ports may be public" \
+      "sudo bash deploy/scripts/setup-firewall.sh --backend firewalld"
   else
-    _prodfail "firewall" "ufw not installed; cannot confirm the host is firewalled" \
+    _prodfail "firewall" "neither firewalld nor ufw is active; cannot confirm the host is firewalled" \
       "sudo bash deploy/scripts/setup-firewall.sh   (or pass --public-ip <IP> to probe)"
   fi
 }
