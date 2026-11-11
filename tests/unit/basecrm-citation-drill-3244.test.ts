@@ -367,7 +367,12 @@ describe('#3244 follow-up — every citation in docs/BASECRM points inside its f
     expect(defect('docs/BASECRM/02-DATA-MODEL.md', 'lib/db/pool.ts', 241)).toBeNull();
     // …and the one phantom that is on purpose stays allowed only while listed.
     expect(defect('docs/BASECRM/03-RBAC-AUTHZ.md', 'lib/db/rls.ts', 372)).toBeNull();
-    expect(defect('docs/BASECRM/03-RBAC-AUTHZ.md', 'lib/db/rls.ts', 373)).not.toBeNull();
+    // The negative control has to be past EOF, not merely "a line the allowlist
+    // does not name": `rls.ts` grew (the `app.include_deleted` helpers), so a
+    // fixed line that used to be past its end now names a real line and the
+    // control would pass vacuously. Ask for the line after the file's last one.
+    const rlsLines = readFileSync(join(ROOT, 'lib/db/rls.ts'), 'utf8').split('\n').length;
+    expect(defect('docs/BASECRM/03-RBAC-AUTHZ.md', 'lib/db/rls.ts', rlsLines + 1)).not.toBeNull();
   });
 });
 

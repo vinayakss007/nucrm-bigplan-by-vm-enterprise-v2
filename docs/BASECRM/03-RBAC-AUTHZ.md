@@ -105,8 +105,8 @@ exactly the caller's own membership rows.
 
 ### withSecurityContext — the super-admin escape hatch (use sparingly)
 
-`withSecurityContext(fn)` (`lib/db/rls.ts:181-189`) opens a transaction and runs
-`setSuperAdminContext(tx)` (`:165`) → `set_config('app.is_super_admin','true',true)`.
+`withSecurityContext(fn)` (`lib/db/rls.ts:260-268`) opens a transaction and runs
+`setSuperAdminContext(tx)` (`:244`) → `set_config('app.is_super_admin','true',true)`.
 It is **not request-scoped** (doc `:154-163`) — wrap the _smallest possible_
 statement set. Callers: pre-auth bootstrap/signup/SSO provisioning
 (`app/api/setup/create-admin/route.ts`, `app/api/v1/auth/route.ts`,
@@ -124,8 +124,9 @@ credential helpers were moved **out of `rls.ts`** to
 `lib/db/token-credential-context.ts` under #3218; `rls.ts` only **re-exports**
 them (`rls.ts:32-41`), so the import surface described above is unchanged but
 grepping `rls.ts` for the definitions finds nothing (a rebuilder used to be sent
-to the now-wrong `rls.ts:289` / `rls.ts:372` — `:289` is `await setUserContext(...)`
-inside `withUserContext`, and `:372` never existed). They are:
+to the now-wrong `rls.ts:289` / `rls.ts:372` — `:289` was `await setUserContext(...)`
+inside `withUserContext` (now `:368`, after #3406's `app.include_deleted` helpers were
+added above it), and `:372` did not exist then either). They are:
 `withAuthLookupContext` (`token-credential-context.ts:90`, sets `app.auth_lookup`
 for the pre-tenant email→user lookup) and `withAuthResolutionContext`
 (`token-credential-context.ts:257`) — plus `setAuthLookupContext` (`:47`),

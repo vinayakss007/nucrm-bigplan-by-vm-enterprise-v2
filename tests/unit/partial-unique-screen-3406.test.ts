@@ -299,8 +299,9 @@ describe('#3406 the live repo reads clean, and the census is the published one',
     // when a parser stopped seeing statements it had been counting. `migrations` moved
     // again on the merge of `main`: #3406's 0144 and #3410's cron ledger are two
     // files at one number, so the ledger became 0145 and the chain grew to 148.
+    // This PR's own 0146 (the RLS tombstone arm) makes it 149.
     expect(report.totals).toEqual({
-      migrations: 148,
+      migrations: 149,
       softTables: 204,
       uniqueOnSoft: 59,
       partial: 34,

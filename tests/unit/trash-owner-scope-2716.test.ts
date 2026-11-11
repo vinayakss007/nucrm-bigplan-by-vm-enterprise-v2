@@ -349,7 +349,11 @@ describe('a rep cannot restore a row they do not own (#2716)', () => {
     it(`${type}: 404, nothing written, nothing audited`, async () => {
       const res = await patch(REP, { id, resource_type: type });
       expect(res.status).toBe(404);
-      expect(mockDb.transaction).not.toHaveBeenCalled();
+      // The restore now runs inside a transaction — the `app.include_deleted`
+      // GUC is `SET LOCAL`, so it has to be set on the transaction's own
+      // connection to reach the row the SELECT and the UPDATE both need. What
+      // must not happen is any WRITE: the transaction opens, reads, finds
+      // nothing the caller owns, and rolls back.
       expect(updates).toHaveLength(0);
       expect(audits).toHaveLength(0);
     });
