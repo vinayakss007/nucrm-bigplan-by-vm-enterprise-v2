@@ -329,19 +329,45 @@ jobs:
             # One unit of work for BOTH the forward deploy and the rollback:
             # web must be healthy first (a broken web must not have its
             # consumers churned), then worker+cron are restarted and gated.
+            #
+            # #3268: a healthy web endpoint is not proof that the other three
+            # processes exist. Verify the whole pm2 table before declaring the
+            # deploy (or the rollback) successful.
             deploy_all_and_wait() {
               restart_and_wait || return 1
               restart_background_apps
-              bg_gate
+              bg_gate || return 1
+              echo "Verifying the host's pm2 table matches the deploy (#3268)..."
+              npx tsx --import ./scripts/load-env.mjs scripts/verify-deploy-host.mts --phase post
             }
 
             echo "Fetching latest code..."
+            # #3268: `git checkout --force` is destructive. If the host carries
+            # a tracked edit or an untracked patch that only exists here, this
+            # checkout silently deletes it and the deploy ships a tree the
+            # repository does not describe. Fail before touching the checkout.
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "ABORT: the host working copy has local changes; git checkout --force would discard them (#3268)."
+              git status --short
+              echo "Commit the change to the repository or remove it, then re-run the deploy."
+              exit 1
+            fi
             git fetch origin main
             git checkout --force "$SHA"
             echo "Checked out $SHA"
 
             echo "Installing dependencies..."
             npm ci --no-audit --no-fund
+
+            # #3268: after checkout/install and before migrations or a build,
+            # prove the host can actually serve this commit: the tree is clean,
+            # both S3 buckets answer HeadBucket, and the backup role can read
+            # every tenant. Each of these has silently shipped a broken host.
+            echo "Verifying host state before build (#3268)..."
+            if ! npx tsx --import ./scripts/load-env.mjs scripts/verify-deploy-host.mts --phase pre; then
+              echo "ABORT: host state verification failed. Nothing was migrated, built or restarted."
+              exit 1
+            fi
 
             # #2306 — RLS invariant gate, BEFORE anything is restarted. A role
             # that is a superuser or has BYPASSRLS makes every tenant_isolation
