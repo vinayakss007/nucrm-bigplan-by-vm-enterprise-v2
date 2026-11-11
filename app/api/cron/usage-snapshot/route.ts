@@ -6,7 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
@@ -61,7 +61,7 @@ import { sweepTenants } from '@/lib/cron/tenant-scope';
  * Until 0091's branch is extended, do not read a suspended tenant's
  * users_count/storage_used_mb/api_calls_count as a real measurement.
  */
-export async function POST(request: NextRequest) {
+async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'usage-snapshot' })) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -155,3 +155,6 @@ async function backfillPerUserColumns(): Promise<{
   }
   return { corrected, sweep };
 }
+
+// #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
+export const POST = instrumentCronRun('usage-snapshot', cronRouteHandler);
