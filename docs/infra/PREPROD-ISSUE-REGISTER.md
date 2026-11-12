@@ -3711,8 +3711,8 @@ database`, and exactly two FAILs:
   same thing one step further down the battery: 16 aliases at `:45-85` → 17 at `:45-87`, `db:sync`
   `:124`/`:169` → `:126`/`:171`, the SAST `node` calls `:219`/`:252` → `:221`/`:254`, the `test-unit`
   services block `:90-103` → `:92-105`, `test-integration` `:135-148` → `:137-150`, the schema-drift step
-  `:399` → `:401`, and the `package.json` guard block `:47-68` → `:47-69`): `package.json:47-69` defines **23**
-  `guard:*` scripts. Workflows invoke **20** by alias — `ci.yml` runs 17 (`rls`, `csrf`, `schemas`, `boundaries`,
+  `:399` → `:401`, and the `package.json` guard block `:47-68` → `:47-69`): `package.json:"guard:rls"` heads the `guard:*`
+  block — **23** scripts at this measurement, **44** on 2026-11-12 (keyed by name, so a line above it is not drift, #3201). Workflows invoke **20** by alias — `ci.yml` runs 17 (`rls`, `csrf`, `schemas`, `boundaries`,
   `filesize`, `any-suppressions`, `chain`, `migration-rls`, `counters`, `csv`, `portal-softdelete`,
   `public-ratelimit`, `public-projection`, `portal-rls-context`, `coords`, `cron-lock`, `raw-sql`, at `:45` through
   `:87`) and `nightly-soak.yml` runs 3 (`guard:running-config --allow-empty` at `:216`, `guard:register-drift`
@@ -4054,10 +4054,10 @@ not wired in).
   which wrapped this route's read and both of its deletes) are the same pair. `app/api/webhooks/razorpay/route.ts:57` returns 503 unless the provider is
   configured and `:71` HMACs the **raw** body before parsing it — with no
   `RAZORPAY_WEBHOOK_SECRET` set, `lib/razorpay.ts:131` throws inside that call and the route's own
-  catch turns it into a 400, so it fails **closed**. `app/api/webhooks/payu/route.ts:53` is the same
-  503 gate for `PAYU_MERCHANT_KEY`/`_SALT` and `:78` verifies the posted hash **before** any
-  invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent. Both re-pinned from `:52` and
-  `:77` on 2026-10-11 — **#2527** (`5ef259f1`) inserted one line above each of them here.
+  catch turns it into a 400, so it fails **closed**. `app/api/webhooks/payu/route.ts:70` is the same
+  503 gate for `PAYU_MERCHANT_KEY`/`_SALT` (its 503 return a line down at `:71`) and `:95` verifies the posted hash **before** any
+  invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent. Both re-pinned from `:52`/`:77` on 2026-10-11
+  (**#2527**, `5ef259f1`, one line inserted above each) and again from `:53`/`:78` on 2026-11-12 (**#3246**, `15c8c926e`, which put this callback's reads in their own transaction).
   `app/api/webhooks/telegram/bot/route.ts:78` (re-pinned 2026-10-27 from `:77`: **#3316** imported
   `withAuthLookupContext` above it so the sender resolves through the privilege that can see `users`)
   answers 403 with no `TELEGRAM_WEBHOOK_SECRET`, and `:88` (from `:87`, same edit) timing-safe-compares the
@@ -4086,8 +4086,8 @@ not wired in).
   would exfiltrate it. Now projected to the 4 it uses (`id`, `tenantId`, `status`, `webhookSecret`).
   Measured totals for the guard: **28 → 30** public write sites, **68 → 85** `.select()` read sites,
   **54 → 59** route files, same single waiver. PayU contributed 3 of those read sites and needed no
-  change — `app/api/webhooks/payu/route.ts:122`, `:139` and `:172` already name their columns (re-pinned from
-  121/138/171 on 2026-10-11 — **#2527**'s same +1 shift; the bare `:139` and `:172` had rotted silently, because
+  change — `app/api/webhooks/payu/route.ts:163`, `:180` and `:212` already name their columns (re-pinned from
+  `:122`/`:139`/`:172` on 2026-11-12 — **#3246** moved all three by 41 lines (40 the third) when it gave the quote lookup its own claim; before that 121/138/171 on 2026-10-11, **#2527**'s same +1 shift, the bare `:139`/`:172` rotted silently, because
   `guard:register-drift` only resolves a citation that carries its path), which
   is the pattern the projection guard exists to enforce and, on this route, had already been followed.
   Nothing on `custom_plugins` was exposed in a response or a log on main, so this is a
@@ -5667,7 +5667,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `app/api/webhooks/inbound/route.ts:818`/`:1095` — re-pinned 2026-11-11 by **#3246**, whose tenant-bound
   transaction and stage-module split moved both; was `:876`/`:1145` — `setTenantContext(row.tenantId, row.userId ?? NO_USER_SENTINEL)`
   at `lib/webhooks/inbound-auth.ts:71`), `payu` already runs **every** write inside
-  `withTenantContext(owner.tenantId, NO_USER_SENTINEL, …)` (`app/api/webhooks/payu/route.ts:156`) — the
+  `withTenantContext(owner.tenantId, NO_USER_SENTINEL, …)` (`app/api/webhooks/payu/route.ts:157`, re-pinned from `:156` on 2026-11-12 — **#3246**) — the
   exact pattern this entry adopts, reached independently by the quote-callback work — `resend` wraps the
   handler in `withTenantScope` (`app/api/webhooks/resend/route.ts:85`), `telegram/bot` only reads and does
   it inside `withAuthLookupContext` (`app/api/webhooks/telegram/bot/route.ts:118`, `:142`), and `whatsapp`
