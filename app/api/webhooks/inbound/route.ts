@@ -654,6 +654,16 @@ async function handleDeal(
     createdAt: new Date(),
   }).returning({ id: deals.id });
 
+  // #3409: a deal this webhook creates is exactly as real as one the UI creates,
+  // and `tenants.currentDeals` is what both `deals/import`'s batch ceiling and the
+  // usage panel price against — the contact branch above already counts itself
+  // this way, so the deal branch counting nothing made the counter read small by
+  // every deal any integration ever made. Same transaction as the insert.
+  await tx
+    .update(tenants)
+    .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+    .where(eq(tenants.id, tenantId));
+
   return { id: newDeal?.id ?? null, action: 'created' };
 }
 
