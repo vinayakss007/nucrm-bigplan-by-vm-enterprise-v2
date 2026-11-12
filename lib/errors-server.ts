@@ -120,6 +120,47 @@ async function forwardToLoki(opts: {
   }
 }
 
+/**
+ * Best-effort forward to the issue tracker (#3269). Complements Sentry and
+ * Loki: those are views, an issue is a queue entry a human is expected to act
+ * on. Gated on `GITHUB_ISSUES_TOKEN` + `GITHUB_ISSUES_REPO` inside the module,
+ * deduplicated by a stable fingerprint + cooldown, and guarded end to end — a
+ * filing failure is a warn line, never a throw and never a caller-visible delay
+ * beyond its own 8s timeout.
+ */
+async function forwardToGitHubIssue(opts: {
+  message: string;
+  level: ErrorLevel;
+  context?: string;
+  tenantId?: string;
+  userId?: string;
+  requestId?: string;
+  requestUrl?: string;
+  requestMethod?: string;
+  stack?: string;
+}): Promise<void> {
+  try {
+    const mod = await import('@/lib/errors/github-issue').catch(() => null);
+    if (!mod?.fileErrorIssue) return;
+    const result = await mod.fileErrorIssue({
+      message: opts.message,
+      level: opts.level,
+      context: opts.context,
+      tenantId: opts.tenantId,
+      userId: opts.userId,
+      requestId: opts.requestId,
+      requestUrl: opts.requestUrl,
+      requestMethod: opts.requestMethod,
+      stack: opts.stack,
+    });
+    if (result.outcome === 'failed') {
+      console.warn(`[errors-server] GitHub issue filing failed (${result.error ?? 'unknown'})`);
+    }
+  } catch {
+    // Never let observability forwarding break the caller.
+  }
+}
+
 function getSourceLocation(): { file: string; line: number; function: string } | null {
   const err = new Error();
   const stack = err.stack?.split('\n');
@@ -173,7 +214,7 @@ export async function logError(opts: {
   sourceFile?: string;
   /** Correlation id; defaults to the current request's id from AsyncLocalStorage. */
   requestId?: string;
-  /** Set false to skip the external forwards (Sentry + Loki) for a noisy expected error. Default true. The DB row is still written. */
+  /** Set false to skip the external forwards (Sentry + Loki + the issue tracker) for a noisy expected error. Default true. The DB row is still written. */
   captureToSentry?: boolean;
 }): Promise<void> {
   // A malformed JSON body is the caller's error and every renderer already
@@ -268,8 +309,9 @@ export async function logError(opts: {
   }
 
   // External "assist" views — forward the same error out-of-band (best-effort).
-  // `captureToSentry:false` quiets BOTH external sinks (Sentry + Loki) for noisy
-  // expected errors; the DB row is always written above regardless.
+  // `captureToSentry:false` quiets ALL external sinks (Sentry + Loki + the
+  // issue tracker) for noisy expected errors; the DB row is always written above
+  // regardless.
   if (opts.captureToSentry !== false) {
     await forwardToSentry({
       // The raw Error is not passed on: Sentry renders `event.message` from
@@ -294,6 +336,20 @@ export async function logError(opts: {
       userId: opts.userId,
       requestId,
       metadata: opts.metadata,
+      requestUrl: opts.requestUrl,
+      requestMethod: opts.requestMethod,
+      stack,
+    });
+    // #3269 — the redacted message, not the raw error: the issue body is a
+    // published artifact, and `message` is what `truncateForStore` already ran
+    // through the redaction funnel above.
+    await forwardToGitHubIssue({
+      message,
+      level,
+      context: opts.context,
+      tenantId: opts.tenantId,
+      userId: opts.userId,
+      requestId,
       requestUrl: opts.requestUrl,
       requestMethod: opts.requestMethod,
       stack,
