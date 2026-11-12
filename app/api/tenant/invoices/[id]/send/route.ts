@@ -101,8 +101,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         text: `Invoice ${invoice.invoiceNumber || invoice.title} for $${Number(invoice.totalAmount).toFixed(2)}: ${pdfUrl}`,
       });
     } catch (err) {
-      console.warn('[invoices/send] email send threw:', (err as Error).message);
-      emailResult = { success: false, error: (err as Error).message };
+      void logError({ error: err, context: 'invoices/send email', tenantId: ctx.tenantId, level: 'warning' });
+      emailResult = { success: false, error: err instanceof Error ? err.message : 'Email send failed' };
     }
 
     // Delivery failed → keep the invoice in its current status and answer a
