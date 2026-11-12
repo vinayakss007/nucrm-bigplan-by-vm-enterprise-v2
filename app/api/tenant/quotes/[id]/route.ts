@@ -10,9 +10,10 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { documentTotal, money } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { allowedFromStatus, canTransition, type OfferStatus } from '@/lib/offers';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -121,8 +122,20 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
+    // #3407: `status` is a transition, not a free-text field with a vocabulary.
+    // This route used to write whatever target the payload named from whatever
+    // state the row happened to hold, so a late "declined" PATCH could overwrite
+    // a buyer's acceptance and a cancelled/expired quote could be sent again.
+    // The registry the public accept/decline routes read decides here too; the
+    // from-set then rides in the WHERE below so a concurrent writer cannot
+    // invalidate the read between this check and the write.
+    const targetStatus = allowedFields.status;
+    if (targetStatus !== undefined && typeof targetStatus !== 'string') {
+      return NextResponse.json({ error: 'status must be a string' }, { status: 400 });
+    }
+
     const [existing] = await db
-      .select({ id: quotes.id, updatedAt: quotes.updatedAt })
+      .select({ id: quotes.id, status: quotes.status, updatedAt: quotes.updatedAt })
       .from(quotes)
       .where(
         and(
@@ -135,6 +148,22 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    if (targetStatus !== undefined && !canTransition(existing.status, targetStatus as OfferStatus)) {
+      return NextResponse.json(
+        { error: `Quote cannot move from '${existing.status}' to '${targetStatus}'.` },
+        { status: 409 },
+      );
+    }
+
+    // #3407: a status write claims the from-set in the WHERE as well as checking
+    // it above. Postgres re-evaluates the predicate under the row lock, so a
+    // concurrent accept/decline/cancel that commits after the read makes this
+    // update match zero rows (withConcurrencyGuard answers 409) instead of being
+    // overwritten by the stale payload.
+    const statusClaim = targetStatus === undefined
+      ? []
+      : [inArray(quotes.status, allowedFromStatus(targetStatus))];
+
     const [updated] = await withConcurrencyGuard(
       () => db
         .update(quotes)
@@ -143,7 +172,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
-        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), updatedAtMs(quotes, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`))
+        .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId), updatedAtMs(quotes, existing.updatedAt!), sql`${quotes.deletedAt} IS NULL`, ...statusClaim))
         .returning(),
       'Quote',
       existing.updatedAt!,
