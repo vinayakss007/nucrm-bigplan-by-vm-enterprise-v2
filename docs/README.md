@@ -56,14 +56,14 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **35** of the `guard:*` aliases by name —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **36** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`, `guard:cron-manifest`,
 `guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:nginx-fd-limit`, `guard:override-ranges`,
 `guard:panel-error-state`, `guard:partial-unique`, `guard:permission-vocabulary`, `guard:pm-log-paths`, `guard:pool-mode`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
-`guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
+`guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas`, `guard:tenant-db-context` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **5** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:compose-ports`, `guard:pg-hba`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **44** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
-`package.json` defines **43** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **45** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **45** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
@@ -74,7 +74,7 @@ census command below and `tests/unit/docs-guard-coverage-counts-3239.test.ts` ma
 `guard:[a-z-]+`, so a `guard:pm2-…` name would be read as `guard:pm` and the paragraph would silently
 disagree with the workflow) — and **#3276** appended the `nginx-fd-limit` job as the last entry in
 `jobs:` rather than chaining a fourth alias onto a cited step line, because three register rows quote
-those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail, and as did **#3273**, appending `guard:compose-ports` beside it, and **#3402** chaining `guard:permission-vocabulary` onto `ci.yml:85` in place, because a fifth line there slides every `ci.yml:2NN`/`:4NN` citation downstream, and **#3404** wired `guard:pool-mode`, the first screen in the estate that parses the YAML it checks rather than grepping it, and as did **#3410** chaining `guard:cron-manifest` onto that same `:85` run line and extending the `:84` step name, keeping both coordinates where PP-049 quotes them — **35 / 44** now, which is what the command prints.
+those step _names_ — as did **#3265**, appending `guard:pg-hba` to `nightly-soak.yml`'s tail, and as did **#3273**, appending `guard:compose-ports` beside it, and **#3402** chaining `guard:permission-vocabulary` onto `ci.yml:85` in place, because a fifth line there slides every `ci.yml:2NN`/`:4NN` citation downstream, and **#3404** wired `guard:pool-mode`, the first screen in the estate that parses the YAML it checks rather than grepping it, and as did **#3410** chaining `guard:cron-manifest` onto that same `:85` run line and extending the `:84` step name, keeping both coordinates where PP-049 quotes them, and **#3405** then chained `guard:tenant-db-context` onto that same `:87` run line rather than adding a step, so the coordinates PP-059 quotes there still read what they read — **36 / 45** now, which is what the command prints.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
