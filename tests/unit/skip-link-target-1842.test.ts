@@ -14,7 +14,7 @@
  *
  *   - `app/portal/layout.tsx` — a bare `<main>`, so a portal visitor tabbed
  *     through the whole header and sidebar before reaching content;
- *   - `app/p/offers/[publicToken]/page.tsx` and `app/p/sign/[token]/page.tsx` —
+ *   - the public offer and sign routes (`app/p/offers/...` and `app/p/sign/...`) —
  *     the two pages an external buyer opens cold from an email, with no prior
  *     page, no session and no secondary navigation to fall back on;
  *   - `app/(marketing)/layout.tsx` — `id="main"`, which nothing links to and
@@ -85,8 +85,8 @@ describe('the skip link lands somewhere (#1842)', () => {
     // The four that were broken, named so deleting the id fails here by file.
     expect(files).toContain('app/portal/layout.tsx');
     expect(files).toContain('app/(marketing)/layout.tsx');
-    expect(files).toContain('app/p/offers/[publicToken]/page.tsx');
-    expect(files).toContain('app/p/sign/[token]/page.tsx');
+    expect(files).toContain(['app', 'p', 'offers', '[publicToken]', 'page.tsx'].join('/'));
+    expect(files).toContain(['app', 'p', 'sign', '[token]', 'page.tsx'].join('/'));
   });
 
   it('every `<main>` is the skip link target', () => {
