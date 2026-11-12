@@ -24,8 +24,8 @@ import { resolveApiKey } from '@/lib/webhooks/inbound-auth';
 // exists.
 import { resolveRequestedStage, resolveDefaultStage } from '@/lib/webhooks/inbound-stages';
 import { logAudit } from '@/lib/audit';
-import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
+import { devLogger } from '@/lib/dev-logger';
 import { validateJsonb } from '@/lib/validation/jsonb';
 import {
   applyFieldMappings,
@@ -117,7 +117,7 @@ function sanitizeCustomFields(raw: unknown, entity: string): Record<string, unkn
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const result = validateJsonb(raw, { label: `${entity}.customFields` });
   if (!result.valid) {
-    console.warn(`[webhook] ${result.error} — sanitizing to empty`);
+    void logError({ error: new Error(`[webhook] ${result.error} — sanitizing to empty`), context: 'webhooks/inbound sanitizeCustomFields', level: 'warning' });
     return {};
   }
   return raw as Record<string, unknown>;
