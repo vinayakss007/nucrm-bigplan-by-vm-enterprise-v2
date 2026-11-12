@@ -12,6 +12,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { isEntityId } from '@/lib/id';
 import { getFieldIdentity } from '@/lib/forms/field-shape';
+import { logError } from '@/lib/errors-server';
 
 interface FormField {
   // #2287: fields are persisted either with `key` (legacy/builder) or `id`
@@ -169,7 +170,9 @@ export const POST = withApiRoute(async (req: NextRequest,
     let body: { type?: string } = {};
     try {
       body = await readJsonBody(req);
-    } catch {}
+    } catch (err) {
+      void logError({ error: err, context: 'forms/[id]/analytics POST body parse' });
+    }
 
     if (body.type === 'submit') {
       await db

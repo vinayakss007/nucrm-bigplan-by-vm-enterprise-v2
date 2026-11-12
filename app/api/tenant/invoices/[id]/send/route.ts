@@ -48,8 +48,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
-    let body: { to_email?: string; message?: string };
-    try { body = await readJsonBody(req) as { to_email?: string; message?: string }; } catch { body = {}; }
+    let body: { to_email?: string; message?: string } = {};
+    try {
+      body = await readJsonBody(req) as { to_email?: string; message?: string };
+    } catch (err) {
+      void logError({ error: err, context: 'invoices/[id]/send POST body parse' });
+    }
 
     // Resolve email
     let toEmail = body.to_email?.trim() || null;
