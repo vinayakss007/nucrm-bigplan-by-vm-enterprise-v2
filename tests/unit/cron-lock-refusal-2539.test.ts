@@ -91,10 +91,11 @@ describe('cron dedup lock refusal (#2539)', () => {
   });
 
   it('enumerates every cron route, so the suite cannot silently shrink', () => {
-    // 22 is the measured count at main = 2d037d6a (#2539). If a route is added
-    // and this moves, the new route is picked up by the it.each below — which is
-    // the point of reading the directory instead of pasting a list.
-    expect(cronDirs).toHaveLength(22);
+    // 23 after #3409's reconcile-counters job (22 was the measured count at
+    // main = 2d037d6a, #2539). If a route is added and this moves, the new
+    // route is picked up by the it.each below — which is the point of reading
+    // the directory instead of pasting a list.
+    expect(cronDirs).toHaveLength(23);
     expect(cronDirs).toContain('recurring-invoice-generator');
   });
 

@@ -378,9 +378,10 @@ describe('the route holds no statement, and the ledger counts what is left', () 
     expect(guard.CONTEXT_HELPERS).toContain('withTrackingLookupContext');
     // The floor is the whole derived surface, so it moves when any step pins a file:
     // 106 with step 4b's two Resend libraries, 107 with step 4d's whatsapp processor,
-    // 120 once #3312 pinned the ten lib/ files an anonymous route calls, and 121 once
-    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`.
-    expect(guard.MIN_SCANNED_FILES).toBe(121);
+    // 120 once #3312 pinned the ten lib/ files an anonymous route calls, 121 once
+    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`,
+    // and 122 once #3409 added the reconcile-counters cron route.
+    expect(guard.MIN_SCANNED_FILES).toBe(122);
     // #3246 (2026-11-11): the `app/api/webhooks` deferral is gone — the inbound
     // route's 24 reads are bound now, so the directory is back in scope. The ledger
     // is the cron surface alone.
