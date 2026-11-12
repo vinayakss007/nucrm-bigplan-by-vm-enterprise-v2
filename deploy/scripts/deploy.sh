@@ -91,9 +91,11 @@ deploy() {
 # ── Migrations ──────────────────────────────────────────────────────────────
 migrate() {
     log "Running database migrations..."
-    $COMPOSE exec app npx tsx scripts/push-db.mts 2>&1 || \
-        warn "Migration output (may already be up-to-date)"
-    ok "Migrations complete"
+    if $COMPOSE exec app npx tsx scripts/migrate.ts --yes; then
+        ok "Migrations complete"
+    else
+        err "Database migrations failed"
+    fi
 }
 
 # ── Status ──────────────────────────────────────────────────────────────────
