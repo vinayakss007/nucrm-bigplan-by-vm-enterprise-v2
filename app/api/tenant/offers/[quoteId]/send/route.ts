@@ -194,8 +194,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         text: `Your offer "${quote.title}" is ready to review: ${link}`,
       });
     } catch (err) {
-      console.warn('[offers/send] email send threw:', (err as Error).message);
-      emailResult = { success: false, error: (err as Error).message };
+      void logError({ error: err, context: 'offers/send email', tenantId: ctx.tenantId, level: 'warning' });
+      emailResult = { success: false, error: err instanceof Error ? err.message : 'Email send failed' };
     }
 
     await logAudit({
