@@ -14,6 +14,7 @@ import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { canTransitionTicket } from '@/lib/tickets';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
@@ -227,16 +228,23 @@ export default function TicketDetailPage() {
           <ArrowLeft className="w-4 h-4" /> Back to tickets
         </button>
         <div className="flex items-center gap-2">
-          {['open', 'in_progress', 'resolved', 'closed'].map(s => (
-            <button key={s} onClick={() => updateStatus(s)}
-              className={cn('px-3 py-1.5 text-xs font-medium rounded-lg border transition-all capitalize',
-                ticket.status === s
-                  ? 'bg-violet-600 border-violet-600 text-white'
-                  : 'border-border text-muted-foreground hover:bg-accent'
-              )}>
-              {s.replace('_', ' ')}
-            </button>
-          ))}
+          {['open', 'in_progress', 'resolved', 'closed'].map(s => {
+            // #3407: the PATCH now refuses a move the registry does not allow
+            // (e.g. closed → resolved), so do not offer it as a live button.
+            const allowed = canTransitionTicket(ticket.status, s);
+            return (
+              <button key={s} onClick={() => updateStatus(s)} disabled={!allowed}
+                title={allowed ? undefined : `Cannot move a ${ticket.status.replace('_', ' ')} ticket to ${s.replace('_', ' ')}`}
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-lg border transition-all capitalize',
+                  ticket.status === s
+                    ? 'bg-violet-600 border-violet-600 text-white'
+                    : 'border-border text-muted-foreground hover:bg-accent',
+                  !allowed && 'opacity-40 cursor-not-allowed hover:bg-transparent'
+                )}>
+                {s.replace('_', ' ')}
+              </button>
+            );
+          })}
           <button onClick={deleteTicket} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-muted-foreground hover:text-red-600 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>

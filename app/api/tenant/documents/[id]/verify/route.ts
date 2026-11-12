@@ -133,7 +133,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     } catch (err) {
       // Object stays; the row is tombstoned anyway so the meter is honest about
       // what it can still see. A later sweep collects the orphan.
-      console.warn('[documents verify] over-quota object delete failed', err instanceof Error ? err.message : err);
+      void logError({ error: err, context: 'documents verify over-quota delete', tenantId: ctx.tenantId, level: 'warning' });
     }
     await tombstone(id, ctx.tenantId);
     await logAudit({

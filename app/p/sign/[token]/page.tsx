@@ -147,7 +147,11 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 sm:py-10 space-y-5">
+      {/* The root layout's SkipLink targets `#main-content` (#1842). This is the
+          signing surface an external signer lands on cold, so the landmark is
+          the one page where the skip link has to work for someone who did not
+          ask for it — and it had no matching id. */}
+      <main id="main-content" tabIndex={-1} className="max-w-2xl mx-auto px-4 py-6 sm:py-10 space-y-5 focus:outline-none">
         {/* What is below came out of a read that answered, and the refresh of it was refused. It is
             still the truth this session has, but the document on the server may have moved since.
             Signing stays deliberately possible: route.ts re-reads the request when the name is posted

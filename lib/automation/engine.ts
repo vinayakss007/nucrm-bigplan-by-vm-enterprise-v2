@@ -28,6 +28,7 @@ import {
   automationRuns,
   contacts,
   deals,
+  tenants,
   tasks,
   callLogs,
   integrations,
@@ -419,6 +420,11 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         assignedTo: config.assigned_to || payload.userId || null,
         createdBy: payload.userId || null,
       });
+      // #3409: an automation-created deal counts itself — `currentDeals` is what
+      // `deals/import` prices a batch against, so leaving it alone makes every
+      // later ceiling read low by the deals this rule made.
+      await dbOrTx.update(tenants).set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+        .where(eq(tenants.id, payload.tenantId));
       break;
     }
 

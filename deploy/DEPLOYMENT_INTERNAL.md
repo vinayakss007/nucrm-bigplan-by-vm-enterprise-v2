@@ -170,8 +170,9 @@ bash deploy/scripts/health-check.sh
 ## Monitoring Dashboard URLs
 
 **None of the monitoring services are reachable at `SERVER_IP`.** Every one of them
-is published to `127.0.0.1` in `docker-compose.production.yml`, and UFW allows only
-22, 80 and 443 inbound. Open an SSH tunnel first, then use the localhost URL.
+is published to `127.0.0.1` in `docker-compose.production.yml`, and the host
+firewall (UFW or firewalld) allows only 22, 80 and 443 inbound. Open an SSH
+tunnel first, then use the localhost URL.
 
 ```bash
 # One tunnel for everything (leave it running in its own terminal)
@@ -195,7 +196,7 @@ ssh -N \
 
 Prometheus, Alertmanager and Loki have **no authentication of their own**. They are
 safe only because they are not listening on a public interface. Do not publish them
-by changing the port bindings or by adding UFW rules; anyone who reaches Prometheus
+by changing the port bindings or by adding host-firewall rules; anyone who reaches Prometheus
 can read every metric, and anyone who reaches Alertmanager can silence alerts.
 
 If the team outgrows tunnels, put the services behind an authenticating proxy
@@ -253,16 +254,27 @@ bash deploy/scripts/health-check.sh
 
 ---
 
-## Firewall Rules (UFW)
+## Firewall Rules (UFW or firewalld)
+
+`deploy/scripts/setup-firewall.sh` detects the running backend automatically:
+firewalld on RHEL/Oracle Linux, UFW on Debian/Ubuntu. Force one with
+`--backend firewalld|ufw`; review with `--dry-run` first.
 
 ```bash
-# Only these ports should be public:
+# UFW (Debian/Ubuntu)
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp      # SSH
 ufw allow 80/tcp      # HTTP (redirects to HTTPS)
 ufw allow 443/tcp     # HTTPS
 ufw enable
+
+# firewalld (RHEL/Oracle Linux)
+firewall-cmd --permanent --zone=public --add-service=ssh
+firewall-cmd --permanent --zone=public --add-service=http
+firewall-cmd --permanent --zone=public --add-service=https
+firewall-cmd --permanent --zone=public --remove-service=rdp
+firewall-cmd --reload
 
 # All other ports (5432, 6379, 9000, 9001, 9090, 3001) are
 # bound to 127.0.0.1 in docker-compose.production.yml

@@ -244,7 +244,7 @@ async function cronRouteHandler(req: NextRequest) {
             .filter(r => typeof r === 'string' && r.includes('@'));
 
           if (recipients.length === 0) {
-            console.warn(`[scheduled-report] ${report.id}: no recipients, skipping send`);
+            void logError({ error: new Error(`[scheduled-report] ${report.id}: no recipients, skipping send`), context: 'cron/scheduled-report-delivery no recipients', level: 'warning' });
           } else {
             // #1614: deliver the report as a real file attachment instead of
             // inlining the CSV into the HTML body. CSV by default; render a PDF

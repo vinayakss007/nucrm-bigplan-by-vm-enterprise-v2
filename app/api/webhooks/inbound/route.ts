@@ -24,8 +24,8 @@ import { resolveApiKey } from '@/lib/webhooks/inbound-auth';
 // exists.
 import { resolveRequestedStage, resolveDefaultStage } from '@/lib/webhooks/inbound-stages';
 import { logAudit } from '@/lib/audit';
-import { devLogger } from '@/lib/dev-logger';
 import { logError } from '@/lib/errors-server';
+import { devLogger } from '@/lib/dev-logger';
 import { validateJsonb } from '@/lib/validation/jsonb';
 import {
   applyFieldMappings,
@@ -117,7 +117,7 @@ function sanitizeCustomFields(raw: unknown, entity: string): Record<string, unkn
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const result = validateJsonb(raw, { label: `${entity}.customFields` });
   if (!result.valid) {
-    console.warn(`[webhook] ${result.error} — sanitizing to empty`);
+    void logError({ error: new Error(`[webhook] ${result.error} — sanitizing to empty`), context: 'webhooks/inbound sanitizeCustomFields', level: 'warning' });
     return {};
   }
   return raw as Record<string, unknown>;
@@ -653,6 +653,16 @@ async function handleDeal(
     createdBy: userId,
     createdAt: new Date(),
   }).returning({ id: deals.id });
+
+  // #3409: a deal this webhook creates is exactly as real as one the UI creates,
+  // and `tenants.currentDeals` is what both `deals/import`'s batch ceiling and the
+  // usage panel price against — the contact branch above already counts itself
+  // this way, so the deal branch counting nothing made the counter read small by
+  // every deal any integration ever made. Same transaction as the insert.
+  await tx
+    .update(tenants)
+    .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+    .where(eq(tenants.id, tenantId));
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }

@@ -398,8 +398,9 @@ describe('the guard knows the helper and counts the file', async () => {
     expect(guard.CONTEXT_HELPERS).toContain('withWhatsAppIntegrationLookupContext');
     expect(guard.PINNED_TARGETS).toContain(PROC);
     // 120 once #3312 pinned the ten lib/ files an anonymous route calls; 121 once
-    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`.
-    expect(guard.MIN_SCANNED_FILES).toBe(121);
+    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`;
+    // 122 once #3409 added the reconcile-counters cron route.
+    expect(guard.MIN_SCANNED_FILES).toBe(122);
   });
 
   it('counts the processor and finds nothing unbound in it', async () => {

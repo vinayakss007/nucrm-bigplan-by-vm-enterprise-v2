@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, contacts, companies } from '@/drizzle/schema';
+import { deals, dealStages, contacts, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { requireApiKeyScope } from '@/lib/auth/api-key';
@@ -21,6 +21,7 @@ import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { checkLimit } from '@/lib/usage/middleware';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -123,6 +124,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       );
     }
 
+    // #3409: same ceiling the tenant door consults — see POST /api/v1/leads.
+    const overLimit = await checkLimit(ctx, 'deals');
+    if (overLimit) return overLimit;
+
     const body = await readJsonBody(request);
 
     if (!body.title) {
@@ -144,21 +149,35 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       throw new ValidationError('A valid stage_id is required');
     }
 
-    const [result] = await db.insert(deals).values({
-      tenantId: ctx.tenantId,
-      createdBy: ctx.userId,
-      title: body.title,
-      amount: String(body.value || body.amount || 0),
-      stageId: stageId,
-      closeDate: body.close_date ? new Date(body.close_date) : null,
-      contactId: body.contact_id || null,
-      companyId: body.company_id || null,
-      assignedTo: body.assigned_to || ctx.userId,
-    }).returning();
+    const [result] = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(deals).values({
+        tenantId: ctx.tenantId,
+        createdBy: ctx.userId,
+        title: body.title,
+        amount: String(body.value || body.amount || 0),
+        stageId: stageId,
+        closeDate: body.close_date ? new Date(body.close_date) : null,
+        contactId: body.contact_id || null,
+        companyId: body.company_id || null,
+        assignedTo: body.assigned_to || ctx.userId,
+      }).returning();
 
-    if (!result) {
-      throw new Error('Failed to create deal');
-    }
+      if (!created) {
+        throw new Error('Failed to create deal');
+      }
+
+      // #3409: the row this door creates is what `deals/import` prices its whole
+      // batch against (`currentDeals + rows.length > maxDeals`), and the counter
+      // is bumped in the same transaction as the insert so a failed bump cannot
+      // commit a deal nothing counts. COALESCE because the column is nullable and
+      // `NULL + 1` is NULL — a tenant that reached this state would then read as
+      // costing nothing to every later ceiling check.
+      await tx.update(tenants)
+        .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
+
+      return [created];
+    });
 
     // Trigger calculation of formula fields
     await syncCalculatedFields(ctx.tenantId, 'deal', result.id, result);

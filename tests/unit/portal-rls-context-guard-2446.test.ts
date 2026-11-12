@@ -303,11 +303,12 @@ describe('the walk is the portal surface, and it fails closed', () => {
     expect(res.unused).toEqual([]);
   }, 60_000);
 
-  it('walks the proxy-derived surface — 121 files, not the 22 the hand list reached (#3186)', async () => {
+  it('walks the proxy-derived surface — 122 files, not the 22 the hand list reached (#3186)', async () => {
     const res = await run(DEFAULT_TARGETS, ROOT, { tables: repoTables });
     // 120 after #3312 pinned the ten lib/ files an anonymous route calls; 121 once
-    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`.
-    expect(res.files).toBe(121);
+    // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`;
+    // 122 once #3409 added the reconcile-counters cron route.
+    expect(res.files).toBe(122);
     // The floor IS the surface now. Left at 22 it would still say OK the day the
     // derivation stops matching `PUBLIC_PATHS` and the walk quietly falls back to
     // the hand list — which is how #2446's sweep never looked at the capture path,

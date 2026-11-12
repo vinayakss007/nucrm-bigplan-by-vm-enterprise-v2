@@ -9,7 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
-import { contacts, activities, tenants } from '@/drizzle/schema';
+import { contacts, activities, tenants, plans } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { z } from 'zod';
@@ -23,6 +23,7 @@ import {
 } from '@/lib/field-sales/card-scanner';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { checkLimit, limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 import { enforceFieldWrite, enforceFieldRead } from '@/lib/rbac/enforce';
 
 const scanBodySchema = z.object({
@@ -45,6 +46,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const deny = requirePerm(ctx, 'contacts.create');
     if (deny) return deny;
+
+    // Plan limit — the pre-flight half. Every other door that adds a contact row
+    // (`POST /api/tenant/contacts`, import, the v1 API, inbound webhooks, the
+    // lead resolver) has asked this since #3409, and the card scanner did not: a
+    // tenant at its `maxContacts` ceiling could keep creating contacts by
+    // scanning business cards. This is also the half that records the violation
+    // and alerts the owner; the fence inside the transaction cannot do that.
+    const overLimit = await checkLimit(ctx, 'contacts');
+    if (overLimit) return overLimit;
 
     const body = await readJsonBody(request);
 
@@ -116,7 +126,28 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       Object.entries(allowedSnake).map(([k, v]) => [toCamel(k), v]),
     ) as ReturnType<typeof toContactPayload>;
 
-    const contact = await db.transaction(async (tx) => {
+    // #3409 — the pre-flight is a pre-flight: it reads a count and returns before
+    // anything is locked, so two concurrent scans both read "one seat left" and
+    // both commit. The decision that counts is taken here, against the tenant row
+    // locked FOR UPDATE, so the ceiling and the write are one atomic act.
+    const enforceLimits = limitsEnforce(ctx);
+
+    const admission = await db.transaction(async (tx) => {
+      if (enforceLimits) {
+        const [locked] = await tx
+          .select({ currentContacts: tenants.currentContacts, maxContacts: plans.maxContacts })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1)
+          .for('update');
+
+        const projected = (locked?.currentContacts ?? 0) + 1;
+        if (locked?.maxContacts != null && projected > locked.maxContacts) {
+          return { admitted: false as const, limit: locked.maxContacts, actual: projected };
+        }
+      }
+
       const [c] = await tx
         .insert(contacts)
         .values({
@@ -145,15 +176,26 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         })
         .catch((err) => { void logError({ error: err, context: 'tenant/contacts/scan POST activity log' }); });
 
-      // Increment contact counter
+      // Increment contact counter — part of the transaction, and never swallowed.
+      // #1837/#3409: a best-effort bump is what let a contact commit while the
+      // counter stayed behind it, so the tenant got a row no later ceiling check
+      // would ever price. COALESCE keeps a NULL counter from being "incremented"
+      // into NULL, which would make the tenant costless to every gate after it.
       await tx
         .update(tenants)
-        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
-        .where(eq(tenants.id, ctx.tenantId))
-        .catch((err) => logError({ error: err, context: 'contacts/scan:increment' }));
+        .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
+        .where(eq(tenants.id, ctx.tenantId));
 
-      return c;
+      return { admitted: true as const, contact: c };
     });
+
+    // The row was never inserted, so the tenant gets the same 402 body the
+    // pre-flight would have produced — a client cannot tell which half stopped it.
+    if (!admission.admitted) {
+      return planLimitReachedResponse('contacts', admission.limit, admission.actual);
+    }
+
+    const contact = admission.contact;
 
     // Audit log
     await logAudit({
@@ -161,7 +203,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       userId: ctx.userId,
       action: 'create',
       entityType: 'contact',
-      entityId: contact!.id,
+      entityId: contact.id,
       newData: {
         email: payload.email,
         name: `${payload.firstName} ${payload.lastName}`.trim(),

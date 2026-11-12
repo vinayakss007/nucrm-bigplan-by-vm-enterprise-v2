@@ -87,6 +87,38 @@ Docker is used **only for the monitoring stack**.
 its `web`/`worker` services must not be started on the production host. The
 monitoring compose and the pm2 reload step stay in `deploy.yml`.
 
+### Path A edge — the names nginx and Prometheus use (#3263)
+
+`deploy/nginx/nginx-production.conf` proxies to `app:3000` and `realtime:4001`,
+and `deploy/monitoring/prometheus.yml` scrapes `app`. Those are **compose
+service names**. On Path A the app and realtime are PM2 processes on the host,
+so neither name resolves inside a container: the edge answers 502 and the
+`nucrm-app` target list is empty while the rest of the monitoring plane looks
+healthy.
+
+The repo's decision is the **alias** fix, not templating the configs:
+`deploy/docker-compose.pm2-edge.yml` maps `app`, `realtime` and `web` to
+`host-gateway` for exactly the two containers that need them, and the
+provisioning script applies it with `--no-deps` and then proves the edge can
+reach the host process:
+
+```bash
+# Path A only. Refuses when the compose 'app' service is running, because
+# extra_hosts would shadow the container and route the edge to the host.
+bash deploy/scripts/provision-pm2-edge.sh
+```
+
+The PM2 app must listen on an address the bridge can reach — `NUCRM_HOST=0.0.0.0`
+(or the gateway address) in `ecosystem.config.cjs`, not the default `127.0.0.1`
+— and on the port the nginx upstream names. The script checks the host process
+first, then `getent hosts app` and a real `http://app:<port>/api/health` request
+from inside `nucrm-nginx`, so a loopback-only PM2 app fails loudly instead of
+leaving a green-looking edge.
+
+`app` and `realtime` stay the single spelling in both configs; the topology
+supplies the resolution. Reverting to the compose edge is the same command
+without `-f deploy/docker-compose.pm2-edge.yml`.
+
 ## Path B — Docker Compose (development only)
 
 The root `docker-compose.yml` runs the app + worker + infra as containers. It is

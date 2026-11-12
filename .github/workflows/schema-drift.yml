@@ -135,6 +135,19 @@ jobs:
     if: vars.SCHEMA_DRIFT_GUARD_ENABLED != 'false'
     runs-on: ubuntu-latest
     steps:
+      # #3266: same posture as `rls-guards` — name the missing secret before
+      # checkout/`npm ci` so the red run cannot be read as a schema regression.
+      - name: Require PREPROD_DATABASE_URL
+        env:
+          PREPROD_DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PREPROD_DATABASE_URL:-}" ]; then
+            echo "::error::PREPROD_DATABASE_URL is not configured"
+            echo "::error::#3266 add the PREPROD_DATABASE_URL repository secret (a least-privilege app role, see npm run db:provision-app-role), or set the SCHEMA_DRIFT_GUARD_ENABLED variable to 'false' to opt out deliberately. Without it this job only proves the secret is missing, not that the served database matches main."
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -155,10 +168,6 @@ jobs:
           set -uo pipefail
           RESULTS_DIR="$RUNNER_TEMP/schema-drift-results"
           mkdir -p "$RESULTS_DIR"
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::error::#2508 the nightly schema-drift guard has no live database to measure: add the PREPROD_DATABASE_URL repository secret (a least-privilege app role, see npm run db:provision-app-role), or set the SCHEMA_DRIFT_GUARD_ENABLED variable to 'false' to opt out deliberately. A guard that silently never runs is the bug this job exists to prevent."
-            exit 1
-          fi
           npm run db:drift-check 2>&1 | tee "$RESULTS_DIR/preprod.log"
           code=${PIPESTATUS[0]}
           npm run db:drift-check -- --json > "$RESULTS_DIR/preprod-summary.txt" 2>/dev/null || true

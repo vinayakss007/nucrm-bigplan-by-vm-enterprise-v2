@@ -63,7 +63,13 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     const items = await db
       .select()
       .from(dealProducts)
-      .where(and(eq(dealProducts.dealId, dealId), eq(dealProducts.tenantId, ctx.tenantId)))
+      .where(and(
+        eq(dealProducts.dealId, dealId),
+        eq(dealProducts.tenantId, ctx.tenantId),
+        // DELETE tombstones a line item; without this the list it just removed
+        // from came back on the next render (#3406).
+        isNull(dealProducts.deletedAt),
+      ))
       .orderBy(dealProducts.createdAt);
 
     // Also return the computed total so the UI can show it without re-summing.
@@ -153,6 +159,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         eq(dealProducts.id, itemId),
         eq(dealProducts.dealId, dealId),
         eq(dealProducts.tenantId, ctx.tenantId),
+        isNull(dealProducts.deletedAt),
       ))
       .returning();
 

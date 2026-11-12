@@ -14,10 +14,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
+import { ConcurrencyError } from '@/lib/concurrency';
+import { allowedFromStatus, canTransition } from '@/lib/offers';
 import { money, round2 } from '@/lib/money';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -54,6 +56,19 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
 
+    // #3407: conversion is the seller's accept-and-invoice path, but it used to
+    // accept *any* quote — a declined, expired, cancelled or still-draft quote
+    // was resurrected as 'accepted' by converting it, and the status write was
+    // keyed on the id alone. The registry's accepted from-set (sent/viewed) plus
+    // the already-accepted idempotent case is the only set this route converts.
+    const alreadyAccepted = quote.status === 'accepted';
+    if (!alreadyAccepted && !canTransition(quote.status, 'accepted')) {
+      return NextResponse.json(
+        { error: `Quote cannot be converted from '${quote.status}'.` },
+        { status: 409 },
+      );
+    }
+
     // Check if already converted
     const existing = await db.query.invoices.findFirst({
       where: and(eq(invoices.quoteId, id), isNull(invoices.deletedAt)),
@@ -62,8 +77,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       return NextResponse.json({ error: 'Quote already converted to invoice', invoiceId: existing.id }, { status: 409 });
     }
 
-    let body: { due_date?: string };
-    try { body = await readJsonBody(req) as { due_date?: string }; } catch { body = {}; }
+    let body: { due_date?: string } = {};
+    try {
+      body = await readJsonBody(req) as { due_date?: string };
+    } catch (err) {
+      void logError({ error: err, context: 'quotes/[id]/convert-to-invoice POST body parse' });
+    }
 
     const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
@@ -163,13 +182,25 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           // dies with 25P02 and the whole conversion 500s anyway — the
           // "non-fatal" warning just hides which statement actually broke.
 
-          // Update the quote status to 'accepted'
-          await tx.update(quotes).set({
+          // #3407: claim the accepted from-set in the WHERE, not just in the
+          // check above. A decline/expiry that commits between the read and this
+          // write would otherwise be overwritten by the conversion's own accept;
+          // the claim turns that into a rollback of the invoice insert (409)
+          // instead of a resurrection. `accepted` stays in the set so the
+          // already-accepted idempotent path still writes nothing away, and
+          // COALESCE keeps the original acceptance timestamp.
+          const [claimed] = await tx.update(quotes).set({
             status: 'accepted',
-            acceptedAt: new Date(),
+            acceptedAt: sql`COALESCE(${quotes.acceptedAt}, ${new Date()})`,
             updatedAt: new Date(),
             updatedBy: ctx.userId,
-          }).where(eq(quotes.id, id));
+          }).where(and(
+            eq(quotes.id, id),
+            eq(quotes.tenantId, ctx.tenantId),
+            inArray(quotes.status, [...allowedFromStatus('accepted'), 'accepted']),
+          )).returning({ id: quotes.id });
+
+          if (!claimed) throw new ConcurrencyError('Quote');
 
           return inv;
         });

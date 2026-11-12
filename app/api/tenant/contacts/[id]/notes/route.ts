@@ -33,6 +33,7 @@ async function contactVisible(ctx: AuthContext, contactId: string): Promise<bool
     .where(and(
       eq(contacts.id, contactId),
       eq(contacts.tenantId, ctx.tenantId),
+      isNull(contacts.deletedAt),
       ownerScope(ctx, 'contacts.view_all', contacts),
     ))
     .limit(1);
@@ -104,7 +105,7 @@ export const POST = withApiRoute(async (request: NextRequest,
       const [row] = await db
         .select({ assignedTo: contacts.assignedTo, createdBy: contacts.createdBy })
         .from(contacts)
-        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)))
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)))
         .limit(1);
 
       if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -145,7 +146,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 
       await tx.update(contacts)
         .set({ updatedAt: new Date() })
-        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)));
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
 
       return [r];
     });

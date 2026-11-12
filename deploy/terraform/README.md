@@ -49,7 +49,7 @@ Then finish the app bring-up (see `terraform output next_steps`):
 
 ```bash
 # Point DNS at the new IP, copy the repo + filled-in .env to the VM, then on the VM:
-bash deploy/scripts/setup-firewall.sh     # refine host firewall (+ Docker/UFW hardening)
+bash deploy/scripts/setup-firewall.sh     # refine host firewall (+ Docker edge hardening)
 bash deploy/scripts/deploy.sh             # start the Docker Compose stack
 bash deploy/scripts/setup-ssl.sh          # issue Let's Encrypt cert for $DOMAIN
 ```
