@@ -18,6 +18,7 @@ import { checksumFile, CHECKSUM_ALGORITHM } from '@/lib/backups/integrity';
 import { uploadBackupArtifact, purgeExpiredBackups, resolveRetentionDays } from '@/lib/backups/offsite';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 import { classifyBackupError, backupFailure, BACKUP_ERROR_CODES, type ClassifiedBackupError } from '@/lib/backups/backup-error';
+import { resolveBackupDir } from '@/lib/backups/paths';
 
 /**
  * The failure path of this job, in one place.
@@ -104,7 +105,7 @@ async function cronRouteHandler(request: NextRequest) {
   // Use correct extension for format: .dump for custom, .sql for INSERT format
   const extension = backupType === 'selective' ? '.sql' : '.dump';
   const filename = `nucrm_${backupType}_${timestamp}${extension}`;
-  const localDir = process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups';
+  const localDir = resolveBackupDir();
   const localPath = `${localDir}/${filename}`;
 
   // Create backup record

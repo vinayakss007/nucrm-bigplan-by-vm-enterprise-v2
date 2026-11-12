@@ -18,6 +18,7 @@ import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 import { alertSuperAdmin } from '@/lib/email/service';
 import { logger } from '@/lib/logger';
+import { resolveBackupDir } from './paths';
 
 const exec = promisify(execCb);
 
@@ -186,7 +187,7 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
   }
 
   const resolvedOutputPath = path.resolve(/*turbopackIgnore: true*/ outputPath);
-  const localDir = path.resolve(/*turbopackIgnore: true*/ process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
+  const localDir = path.resolve(/*turbopackIgnore: true*/ resolveBackupDir());
   if (!resolvedOutputPath.startsWith('/tmp/') && !resolvedOutputPath.startsWith(localDir)) {
     throw new Error('Invalid output path');
   }
@@ -236,7 +237,7 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const extension = backupType === 'selective' ? '.sql' : '.dump';
   const filename = `nucrm_${backupType}_${timestamp}${extension}`;
-  const localDir = process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups';
+  const localDir = resolveBackupDir();
   const localPath = `${localDir}/${filename}`;
 
   const [fs] = await Promise.all([import('fs')]);

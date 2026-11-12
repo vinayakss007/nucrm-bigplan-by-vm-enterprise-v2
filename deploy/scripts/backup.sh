@@ -41,7 +41,7 @@ if [[ -n "${BACKUP_DATABASE_URL:-}" ]]; then
 fi
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/nucrm}"
+BACKUP_DIR="${BACKUP_LOCAL_DIR:-${BACKUP_DIR:-/var/backups/nucrm}}"
 BACKUP_FILE="nucrm_backup_${TIMESTAMP}.dump"
 KEEP_LOCAL="${BACKUP_KEEP_LOCAL:-7}"
 PG_IMAGE="${PG_IMAGE:-postgres:18-alpine}"

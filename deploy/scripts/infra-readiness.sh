@@ -197,7 +197,7 @@ check_tls() {
 
 # ── 6. Backups exist AND are scheduled (#1038) ────────────────────────────────
 check_backups() {
-  local dir="${BACKUP_DIR:-/var/backups/nucrm}"
+  local dir="${BACKUP_LOCAL_DIR:-${BACKUP_DIR:-/var/backups/nucrm}}"
   local recent=""
   if [[ -d "$dir" ]]; then
     # newest .dump modified in the last 48h
