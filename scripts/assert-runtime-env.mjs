@@ -47,6 +47,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
+import { detectHostTopology, formatTopology } from './lib/deployment-topology.mjs';
+
 const require = createRequire(import.meta.url);
 
 /** A fill-me marker shipped by a template, not a value an operator chose. */
@@ -408,8 +410,45 @@ export function resolveEffectiveEnv(deps) {
     return { env: { ...shellEnv, ...parseProcEnviron(text) }, source: `/proc/${pid}/environ (the live worker)` };
   }
 
-  if (argv.includes('--pm2')) {
-    const name = flag('--pm2');
+  const explicitPm2 = argv.includes('--pm2');
+  let pm2Name = explicitPm2 ? flag('--pm2') : undefined;
+
+  // #3272: --auto-source asks the host which topology is running before it
+  // chooses a reading. A Compose host is refused, not graded: the host's
+  // environment is not the app container's.
+  if (!explicitPm2 && argv.includes('--auto-source')) {
+    const topology = detectHostTopology(runCommand ?? defaultRunCommand);
+    if (topology.kind === 'both') {
+      throw new Error(
+        `${formatTopology(topology)}\n`
+        + 'Both deployment paths are running. deploy/DEPLOYMENT_PATHS.md says never to run the pm2 app '
+        + 'and a Compose app on one host; stop one, then re-run the preflight.',
+      );
+    }
+    if (topology.kind === 'compose') {
+      throw new Error(
+        `${formatTopology(topology)}\n`
+        + 'The app runs in a container, so this host environment is not the app environment. '
+        + 'Run the assertion inside the app container instead: '
+        + '`docker compose -f deploy/docker-compose.production.yml exec app node scripts/assert-runtime-env.mjs --expect-production --process-only`.',
+      );
+    }
+    if (topology.kind === 'pm2') {
+      if (!topology.pm2App) {
+        throw new Error(
+          `${formatTopology(topology)}\n`
+          + 'pm2 is running, but no Next app (nucrm-prod/web) is online, so there is no worker env to read. '
+          + 'Start the app or pass --pm2 <name>; a source this tool cannot read is an error, not a pass.',
+        );
+      }
+      pm2Name = topology.pm2App;
+    }
+    // unknown: fall through to the repository env files, which is the pre-start
+    // reading the default already documents.
+  }
+
+  if (explicitPm2 || pm2Name !== undefined) {
+    const name = pm2Name;
     const runner = runCommand ?? defaultRunCommand;
     const json = runner('pm2', ['jlist']);
     if (json === null || json === undefined) {
@@ -489,12 +528,16 @@ const USAGE = `Usage: node scripts/assert-runtime-env.mjs [options]
 
 Reads the environment a Next.js server process would actually get and fails on a
 fail-closed flag that is set wrong (exit 1), or on a source it could not read
-(exit 2). Nothing here needs a database, a running app or pm2.
+(exit 2). Nothing here needs a database or a running app; --auto-source asks
+pm2/docker which deployment path this host runs.
 
   --expect-production      treat this reading as a live deploy: NODE_ENV must be
                            production, and the production-only rules engage
   --pid <pid>              read /proc/<pid>/environ (the authoritative worker env)
   --pm2 [name]             read \`pm2 jlist\` env; exits 2 where pm2 is not installed
+  --auto-source            ask pm2/docker which path this host runs, then read
+                           that path's env; refuses a Compose host (exit 2) and
+                           a host running both paths
   --process-only           read only this process's env (container entrypoints)
   --trust-proxy-optional   downgrade a missing TRUST_PROXY to a warning, for a
                            platform that terminates the proxy for you

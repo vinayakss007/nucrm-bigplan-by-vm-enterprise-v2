@@ -8,10 +8,13 @@ to the internet.
 
 Each item maps to a tracked issue. Do them in order; §1–§4 are hard blockers.
 
-> Deployment model (from `deploy/DEPLOYMENT_INTERNAL.md`): a single VM running
-> the Docker Compose stack in `deploy/docker-compose.production.yml`, behind
-> nginx (`deploy/nginx/nginx-production.conf`), with all data-plane services
-> bound to `127.0.0.1`.
+> Deployment model: **Path A — PM2 on the VM**. `deploy/DEPLOYMENT_PATHS.md` is
+> the canonical decision: app, worker, cron and realtime are PM2 processes;
+> Docker runs only the data + monitoring tier from
+> `deploy/docker-compose.production.yml`, and `nginx` is the Compose edge, with
+> `app`/`realtime` resolved to the PM2 processes on the host (see #3263). The
+> Compose **app** services are development-only (Path B) and must not run on
+> this host.
 
 ---
 
@@ -19,7 +22,7 @@ Each item maps to a tracked issue. Do them in order; §1–§4 are hard blockers
 
 ```bash
 # On the VM, from the repo root:
-npm run prod:preflight        # env + connectivity checks
+npm run prod:preflight        # topology + env + connectivity checks
 ```
 
 Fix anything it reports before continuing.
@@ -43,6 +46,13 @@ assert:runtime-env` is the same file without `--expect-production` — one scrip
 > keys, since #3279 and #3271 were separately given the same name. On pm2, `pm2 reload
 ecosystem.config.cjs --update-env` is what pushes a changed value into live workers; a
 > file edit alone does not.
+>
+> #3272: `prod:preflight` now passes `--auto-source`, so it asks the host which
+> deployment path is running before it reads an environment. On Path A it reads
+> the live pm2 `web`/`nucrm-prod` env; on a Compose host it refuses to grade the
+> host and prints the in-container command, because the host environment is not
+> the app container's. If both paths are running it stops — `DEPLOYMENT_PATHS.md`
+> says never to run them on one host.
 >
 > Note: if `prod:preflight` errors because its script file is missing, run the
 > individual checks below manually — the go/no-go checklist at the end is the
