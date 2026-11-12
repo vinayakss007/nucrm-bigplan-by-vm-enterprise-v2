@@ -10,7 +10,7 @@ import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, activities } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -51,7 +51,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       // The two owner columns ride along on a read the route already performs,
       // so the rule below can be stated the way contacts/[id]:195 states it.
       columns: { leadStatus: true, assignedTo: true, createdBy: true },
-      where: and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId))
+      where: and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt))
     });
 
     if (!prev) {
@@ -76,7 +76,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
           leadStatus: lead_status, 
           updatedAt: new Date() 
         })
-        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)))
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)))
         .returning();
 
       await tx.insert(activities).values({
