@@ -40,6 +40,7 @@ import {
   type RestorePointResult,
 } from '../lib/db/deploy-migration-run';
 import { listAppliedMigrations, readJournal, resolveRollback } from '../lib/db/rollback';
+import { resolveBackupDir } from '../lib/backups/paths';
 
 const REPO_ROOT = join(import.meta.dirname!, '..');
 const MIGRATIONS_DIR = join(REPO_ROOT, 'drizzle', 'migrations');
@@ -48,7 +49,7 @@ const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
 const allowEphemeral = process.env.DEPLOY_ALLOW_EPHEMERAL_RESTORE_POINT === '1';
 
-const RESTORE_DIR = process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups';
+const RESTORE_DIR = resolveBackupDir();
 
 function die(msg: string): never {
   console.error(`[deploy-migrate] ${msg}`);

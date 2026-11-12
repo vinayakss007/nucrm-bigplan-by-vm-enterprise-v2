@@ -19,7 +19,7 @@ set -euo pipefail
 #   BACKUP_DB_ROLE  – superuser/BYPASSRLS role used for pg_dump (see PP-014).
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKUP_DIR="/tmp/nucrm-backups"
+BACKUP_DIR="${BACKUP_LOCAL_DIR:-${BACKUP_DIR:-/tmp/nucrm-backups}}"
 TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 BACKUP_FILENAME="nucrm-${TIMESTAMP}.dump"
 BACKUP_FILE="${BACKUP_DIR}/${BACKUP_FILENAME}"

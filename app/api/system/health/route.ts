@@ -157,7 +157,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   // 3. Disk space (backup directory)
   try {
     const { statfs } = await import('fs/promises');
-    const backupDir = process.env['BACKUP_DIR'] || '/tmp/backups';
+    const backupDir = (await import('@/lib/backups/paths')).resolveBackupDir();
 
     let stats;
     try {

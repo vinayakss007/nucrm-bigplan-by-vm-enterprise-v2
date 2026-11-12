@@ -35,8 +35,9 @@ import {
   statSync,
 } from 'fs';
 import { join } from 'path';
+import { resolveBackupDir } from '../lib/backups/paths';
 
-const LOCAL_DIR = process.env['BACKUP_LOCAL_DIR'] || '/tmp/nucrm-backups';
+const LOCAL_DIR = resolveBackupDir();
 const S3_BUCKET = process.env['S3_BUCKET'] || 'nucrm-backups';
 
 async function createBackup(): Promise<void> {
