@@ -18,6 +18,10 @@ scrape_configs:
     # `app` is the compose service name; with multiple replicas Docker returns
     # every replica's IP, so Prometheus scrapes each one. Do NOT hardcode a
     # bridge-gateway IP here — the gateway is not the app and changes per host.
+    # #3263: on the PM2 topology the app is a host process, so `app` is supplied
+    # by deploy/docker-compose.pm2-edge.yml (host-gateway) via
+    # deploy/scripts/provision-pm2-edge.sh. Without it this job has zero targets
+    # while the rest of the monitoring plane looks healthy.
     dns_sd_configs:
       - names: ["app"]
         type: A
