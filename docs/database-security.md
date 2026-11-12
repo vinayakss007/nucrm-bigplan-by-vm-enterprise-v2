@@ -294,27 +294,63 @@ migrations as `nucrm_owner`. Migration `0068_force_rls_owner.sql` additionally
 applies `FORCE ROW LEVEL SECURITY`, so RLS holds even if the app ever connects
 as an owner.
 
-### The read-only ops role (#3280 ask 1) — proposed, not provisioned here
+### The read-only ops role (#3280 ask 1) - provisioned by `scripts/provision-ops-role.sql`
 
-Nothing in this repository creates this role: a `BYPASSRLS` grant is a privilege
-decision, and the standing rule from **#3246** is that a PR does not apply production
-DDL. It is written down so the decision can be made once, deliberately.
+An operator's own SQL runs as the application role, so it is filtered, and a
+filtered `0` looks exactly like an empty table. This role exists so that is not
+true: `BYPASSRLS` means a count is the real count. The file below is the
+artifact, not the callout: it provisions the role and then verifies the four
+things an operator needs to trust it — `BYPASSRLS` and not a superuser, read-only
+by default, writes refused, and not a member of the app role.
 
-```sql
--- Operator role: SELECT only, BYPASSRLS so an on-call count is the real count.
--- NEVER put this in the app's DATABASE_URL — scripts/preflight.ts fails production
--- startup when the connecting role has BYPASSRLS, which is the point.
-CREATE ROLE nucrm_ops LOGIN PASSWORD '...' BYPASSRLS;
-GRANT USAGE ON SCHEMA public TO nucrm_ops;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO nucrm_ops;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO nucrm_ops;
+```bash
+# once, as the migration owner, with the password from a secret manager:
+NUCRM_OPS_PASSWORD=… npm run db:provision-ops-role
+
+# or, without the verify step:
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+     -v ops_password="$NUCRM_OPS_PASSWORD" \
+     -v owner_role=postgres \
+     -f scripts/provision-ops-role.sql
 ```
 
-Until it exists, the honest alternatives need no new privilege:
-`PGOPTIONS='-c app.is_super_admin=true' psql "$DATABASE_URL"` arms the context the
-policies already read, and `npm run db:count -- <table>` prints both contexts and says
-which one it got (#3280). An operator SQL snippet that does neither is filtered, and a
-filtered `0` looks exactly like an empty table.
+The script provisions the role and then **verifies it against the database**:
+
+| fact                         | how it is proved                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `BYPASSRLS`, not a superuser | `pg_roles` on the role's own connection                                                               |
+| every session is read-only   | `SHOW default_transaction_read_only` → `on`                                                           |
+| the database refuses a write | a `SELECT … FOR UPDATE` is rejected as read-only                                                      |
+| the app role is untouched    | `nucrm_app` is still `NOSUPERUSER`/`NOBYPASSRLS`, and the two roles are **not members of each other** |
+
+That last row is the one that matters. `BYPASSRLS` is an **inheritable**
+attribute: `GRANT nucrm_ops TO nucrm_app` would silently hand the _application_
+role a policy bypass — the exact failure `#2253` exists to prevent — so the
+provisioning script refuses to run if the two roles are members of each other,
+and the verifier checks it again afterwards.
+
+What it grants: `USAGE` on the schema and `SELECT` on every table (plus future
+tables, through the owner's default privileges). Nothing else — no `INSERT`,
+no `UPDATE`, no `DELETE`, no ownership, no DDL.
+
+**Never put it in the app's `DATABASE_URL`.** `scripts/preflight.ts` fails
+production startup when the connecting role has `BYPASSRLS`, and that is the
+point: the application must stay inside its tenant's rows, while the operator
+sees all of them.
+
+Using it:
+
+```bash
+# the DSN is the app's DATABASE_URL with the role's user and the ops password
+psql "postgresql://nucrm_ops:$NUCRM_OPS_PASSWORD@host:5432/nucrm" \
+  -At -c 'select count(*) from users'
+```
+
+If the role has not been provisioned, the honest alternatives need no new
+privilege: `PGOPTIONS='-c app.is_super_admin=true' psql "$DATABASE_URL"` arms
+the context the policies already read, and `npm run db:count -- <table>` prints
+both contexts and says which one it got (#3280). An operator SQL snippet that
+does neither is filtered, and a filtered `0` looks exactly like an empty table.
 
 ### Fail-closed startup check
 
