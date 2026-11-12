@@ -85,6 +85,7 @@
     "guard:pm-log-paths": "node scripts/check-pm2-log-paths.mjs",
     "guard:nginx-fd-limit": "npx tsx scripts/check-nginx-fd-limit.mts",
     "guard:pool-mode": "node scripts/check-pool-mode-invariant.mjs",
+    "guard:citation-bounds": "node scripts/check-citation-bounds.mjs",
     "db:audit:jsonb-size": "node scripts/audit-jsonb-byte-overage.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
