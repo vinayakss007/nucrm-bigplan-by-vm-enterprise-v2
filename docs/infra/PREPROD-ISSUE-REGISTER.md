@@ -3372,7 +3372,7 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   (matching `.sql` file counts, 0 unjournalised on both),
   `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:134-144` (journal-count headline),
   `:175-196` (prompts), `:280-313` (the `catch` that meant "fresh DB"), `:217` (where the host URL actually
-  dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved, and again on 2026-11-01 from `:132-142`, `:177-186`, `:233-279` and `:215`, which **#3386**'s two `#3301` import lines moved), `lib/db/ssl-config.ts:33-41`,
+  dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved, and again on 2026-11-01 from `:132-142`, `:177-186`, `:233-279` and `:215`, which **#3386**'s two `#3301` import lines moved), `lib/db/ssl-config.ts:32-39`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
   `relrowsecurity/relforcerowsecurity/relowner` for 4 tables, `pg_get_viewdef('deals_by_win_probability')`,
   `pg_roles.rolbypassrls`. Related: **#43** (the same drift, 11 deep in September), **#46**, **#56**,
