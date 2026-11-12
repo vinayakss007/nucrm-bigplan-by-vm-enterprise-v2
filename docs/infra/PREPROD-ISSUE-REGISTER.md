@@ -1295,7 +1295,8 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      the cited lines. -->
 
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
-  panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
+  panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:245`
+  (re-pinned 2026-11-12: **#2540** centralized backup dir resolution)
   inserts into. `app/api/cron/auto-backup/route.ts:275` (re-pinned 2026-11-01: **#3408** bound the
   skip-alert result 9 lines above it, which moved this INSERT off `:261`; re-pinned again 2026-11-05 by
   **#3410**, whose `instrumentCronRun` export reshuffle grew five lines above it) writes
