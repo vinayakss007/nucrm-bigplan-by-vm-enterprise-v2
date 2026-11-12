@@ -194,7 +194,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
             tenant={tenant} profile={profile} roleSlug={roleSlug}
             onToggleSidebar={() => { if (window.innerWidth < 768) setMobileOpen(o=>!o); else toggle(); }}
           />
-          <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 page-enter" role="main">
+          <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 page-enter focus:outline-none" role="main">
             {/* #1118: global breadcrumb — auto-generates from the URL and renders
                 nothing on the dashboard root, so every tenant page gets a
                 consistent path-back to Dashboard without per-page wiring. */}

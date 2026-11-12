@@ -66,7 +66,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           graphite canvas instead of falling through to plain black. */}
       <div className="fixed inset-0 -z-50 bg-[#171511]" aria-hidden />
       <SiteHeader />
-      <main id="main">{children}</main>
+      {/* `main-content` is the id the root layout's SkipLink targets (#1842);
+          this landmark used to answer to `main`, which nothing links to, so the
+          skip link was inert across the whole marketing site. */}
+      <main id="main-content" tabIndex={-1} className="focus:outline-none">
+        {children}
+      </main>
       <SiteFooter />
       <CookieConsent />
     </div>
