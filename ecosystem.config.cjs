@@ -110,7 +110,7 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: setting('NUCRM_PORT') || 3000,
         DATABASE_SSL: 'true',
-        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: setting('DATABASE_SSL_REJECT_UNAUTHORIZED') || 'true',
         REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
         S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
         // #2116: nginx sends a single-hop authoritative X-Forwarded-For
@@ -151,7 +151,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         DATABASE_SSL: 'true',
-        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: setting('DATABASE_SSL_REJECT_UNAUTHORIZED') || 'true',
         // The `--import` preload in `args` makes .env.local reachable, and on this
         // VM that file carries the Docker names; dotenv will not overwrite what is
         // already set, so the host-side pair here is what keeps the sidecars
@@ -191,7 +191,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         DATABASE_SSL: 'true',
-        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: setting('DATABASE_SSL_REJECT_UNAUTHORIZED') || 'true',
         // Same host pair as worker: the preload reaches .env.local here too.
         REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
         S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
@@ -236,7 +236,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         DATABASE_SSL: 'true',
-        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: setting('DATABASE_SSL_REJECT_UNAUTHORIZED') || 'true',
         // Bind loopback explicitly (#1042's rule for `web`): nginx is the only
         // public service here, so 4001 must not reach the VM's public interface.
         REALTIME_HOST: '127.0.0.1',

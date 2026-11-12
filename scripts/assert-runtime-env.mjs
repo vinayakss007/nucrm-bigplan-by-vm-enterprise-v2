@@ -193,7 +193,7 @@ export const REQUIRED_RUNTIME_FLAGS = [
     check({ env, production }) {
       if (eq(env.DATABASE_SSL_REJECT_UNAUTHORIZED, 'false') && eq(env.DATABASE_SSL, 'true') && production) {
         return { name: 'DATABASE_SSL_REJECT_UNAUTHORIZED', value: 'false', expected: 'true (or unset)', status: 'warn',
-          note: 'TLS without cert verification is MITM-able; ecosystem.config.cjs pins false for all three pm2 apps, which is a third source for this decision' };
+          note: 'TLS without cert verification is MITM-able; defaults to true across pm2 apps (#3503) unless opted out' };
       }
       return ok('DATABASE_SSL_REJECT_UNAUTHORIZED', env.DATABASE_SSL_REJECT_UNAUTHORIZED ?? '(unset)', 'true (or unset)');
     },
