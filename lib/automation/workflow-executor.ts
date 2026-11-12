@@ -22,8 +22,9 @@ import {
   deals,
   tasks,
   callLogs,
+  tenants,
 } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import {
   evaluateCondition,
@@ -419,6 +420,11 @@ async function executeActionNode(
           assignedTo: (data.assigned_to as string) || (ctx.user_id as string) || null,
           createdBy: userId || null,
         });
+        // #3409: count the deal this action just made — same reason as the
+        // automation engine's identical branch, and the same counter.
+        await dbOrTx.update(tenants)
+          .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+          .where(eq(tenants.id, tenantId));
         break;
       }
 
