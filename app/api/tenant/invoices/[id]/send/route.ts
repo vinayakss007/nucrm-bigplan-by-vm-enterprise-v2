@@ -48,8 +48,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
-    let body: { to_email?: string; message?: string };
-    try { body = await readJsonBody(req) as { to_email?: string; message?: string }; } catch { body = {}; }
+    let body: { to_email?: string; message?: string } = {};
+    try {
+      body = await readJsonBody(req) as { to_email?: string; message?: string };
+    } catch (err) {
+      void logError({ error: err, context: 'invoices/[id]/send POST body parse' });
+    }
 
     // Resolve email
     let toEmail = body.to_email?.trim() || null;
@@ -97,8 +101,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         text: `Invoice ${invoice.invoiceNumber || invoice.title} for $${Number(invoice.totalAmount).toFixed(2)}: ${pdfUrl}`,
       });
     } catch (err) {
-      console.warn('[invoices/send] email send threw:', (err as Error).message);
-      emailResult = { success: false, error: (err as Error).message };
+      void logError({ error: err, context: 'invoices/send email', tenantId: ctx.tenantId, level: 'warning' });
+      emailResult = { success: false, error: err instanceof Error ? err.message : 'Email send failed' };
     }
 
     // Delivery failed → keep the invoice in its current status and answer a

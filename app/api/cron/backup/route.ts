@@ -195,7 +195,7 @@ async function cronRouteHandler(request: NextRequest) {
     } else {
       offsiteError = describeS3ConfigGap();
       if (offsiteError) {
-        console.warn(`[backup] Backup kept local only: ${offsiteError}`);
+        void logError({ error: new Error(`[backup] Backup kept local only: ${offsiteError}`), context: 'cron/backup offsite failure', level: 'warning' });
       }
     }
 

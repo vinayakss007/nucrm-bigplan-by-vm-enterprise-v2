@@ -86,7 +86,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     const companyId = ticket.company_id;
 
     const safe = async <T,>(fn: () => Promise<T[]>): Promise<T[]> => {
-      try { return await fn(); } catch { return []; }
+      try { return await fn(); } catch (err) { void logError({ error: err, context: 'tickets/[id] related items fetch' }); return []; }
     };
 
     // Match records belonging to this customer by contact OR company (whichever

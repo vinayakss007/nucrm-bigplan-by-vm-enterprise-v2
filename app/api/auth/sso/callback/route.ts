@@ -244,9 +244,11 @@ async function upsertUserAndMembership(args: {
         });
       } else {
         // Only an admin role exists — do NOT auto-grant admin via SSO.
-        console.warn(
-          `[sso/callback] no non-admin role in tenant ${args.tenantId}; refusing to auto-provision ${userId} as admin`,
-        );
+        void logError({
+          error: new Error(`[sso/callback] no non-admin role in tenant ${args.tenantId}; refusing to auto-provision ${userId} as admin`),
+          context: 'auth/sso/callback no non-admin role',
+          level: 'warning',
+        });
       }
     } else if (existingMember.status !== 'active' && existingMember.status !== 'removed') {
       // Reactivate members whose access simply lapsed (e.g. 'invited'/'pending'/

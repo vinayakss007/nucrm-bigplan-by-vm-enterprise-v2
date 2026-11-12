@@ -77,8 +77,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       return NextResponse.json({ error: 'Quote already converted to invoice', invoiceId: existing.id }, { status: 409 });
     }
 
-    let body: { due_date?: string };
-    try { body = await readJsonBody(req) as { due_date?: string }; } catch { body = {}; }
+    let body: { due_date?: string } = {};
+    try {
+      body = await readJsonBody(req) as { due_date?: string };
+    } catch (err) {
+      void logError({ error: err, context: 'quotes/[id]/convert-to-invoice POST body parse' });
+    }
 
     const dueDate = body.due_date ? body.due_date : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 

@@ -100,8 +100,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
   if (limited) return limited;
     await deleteObject(row.s3Key, row.s3Bucket || undefined);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'S3 delete failed';
-    console.warn('[documents DELETE] s3 delete failed (soft-deleting row anyway)', msg);
+    void logError({ error: err, context: 'documents DELETE s3', level: 'warning', tenantId: ctx.tenantId });
   }
 
   await db

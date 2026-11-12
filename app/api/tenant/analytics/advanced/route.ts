@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -14,7 +15,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     await requireAuth(request);
     return NextResponse.json({ data: {} });
-  } catch {
+  } catch (err) {
+    void logError({ error: err, context: 'analytics/advanced GET' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 });
