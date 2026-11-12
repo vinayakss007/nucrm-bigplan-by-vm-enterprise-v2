@@ -345,12 +345,15 @@ describe('#3280 the screen is wired and the census says so', () => {
     expect(banner).toContain('npm run db:count');
     expect(banner).toContain(`the other ${FILTERED.length}`);
     expect(banner).toContain(`${OPEN.length} of them carry`);
-    // Ask 1 is a proposal the repo does not apply, and the doc has to say so: a
+    // Ask 1 is provisioned by scripts/provision-ops-role.sql now, and the doc
+    // has to say both how to create it and that the app must never use it: a
     // BYPASSRLS role is exactly what the startup check refuses for the app.
     const whole = readFileSync(join(ROOT, 'docs/database-security.md'), 'utf8');
-    expect(whole).toContain('### The read-only ops role (#3280 ask 1) — proposed, not provisioned here');
-    expect(whole).toContain('CREATE ROLE nucrm_ops LOGIN PASSWORD');
-    expect(whole).toContain('NEVER put this in the app');
+    expect(whole).toContain('### The read-only ops role (#3280 ask 1)');
+    expect(whole).toContain('provisioned by `scripts/provision-ops-role.sql`');
+    expect(whole).toContain('NUCRM_OPS_PASSWORD');
+    expect(whole).toContain("Never put it in the app's `DATABASE_URL`");
+    expect(whole).toContain('BYPASSRLS');
     const ops = readFileSync(join(ROOT, 'docs/BASECRM/07-OPS-NOTES.md'), 'utf8');
     expect(ops).toContain('## Row counts as the application role (#3280)');
     expect(ops).toContain("PGOPTIONS='-c app.is_super_admin=true'");
