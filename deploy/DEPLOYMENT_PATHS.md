@@ -16,6 +16,27 @@ host at once — they both bind port 3000.
 
 The two paths are described below for reference.
 
+## Which file belongs to which path (#3272)
+
+The decision above only helps if a new operator can tell which file belongs to
+the host they are standing on. The two paths share the data tier; they do not
+share the app, its edge, its environment or its scheduler.
+
+| Concern           | Path A — production (pm2)                                                                                                                                                                                 | Path B — development (compose)                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| App process       | `ecosystem.config.cjs` (`web` = `next start`; `worker`, `cron`, `realtime` are separate apps)                                                                                                             | root `docker-compose.yml` (`web` = `nucrm-app`; `worker`; `realtime`) |
+| App port          | 3099 or 3000, whichever the pm2 app binds; `deploy.yml` probes both                                                                                                                                       | 3000 inside the container (`PORT=3000`)                               |
+| Edge              | `nucrm-nginx` from `deploy/docker-compose.production.yml`; `app`/`realtime` must resolve to the host gateway for the PM2 processes (see #3263). A host nginx must reproduce the same upstreams and ports. | direct to the `web` container; the root compose has no nginx service  |
+| App env           | pm2's captured environment (`ecosystem.config.cjs` `env:` + `.env.local`); `pm2 reload --update-env` after a change                                                                                       | compose `environment:` / `env_file` / root `.env`                     |
+| Deploy            | `.github/workflows/deploy.yml`: checkout the CI-tested SHA, `npm ci`, build, pm2 reload, health gate                                                                                                      | `docker compose up -d --build` (local only)                           |
+| Scheduler         | host crontab `deploy/cron/crontab` **or** the pm2 `cron` app — never both                                                                                                                                 | the compose `cron` service / `scripts/cron-scheduler.ts`              |
+| Health gate       | `127.0.0.1:3099/api/health` or `:3000`, as `deploy.yml` probes                                                                                                                                            | `http://app:3000/api/health` inside the compose network               |
+| Data + monitoring | `deploy/docker-compose.production.yml` (Postgres, Redis, MinIO, Prometheus, Grafana, Loki)                                                                                                                | the root compose, for a full local stack                              |
+
+`npm run prod:preflight` asks the host which path it is running before it reads
+an environment (`--auto-source`, #3272): pm2 on Path A, the app container on
+Path B, and a hard stop if both are running.
+
 ## Queue Redis memory policy
 
 The full local, scale, production, and pre-production Compose stacks use Redis
@@ -61,10 +82,10 @@ Docker is used **only for the monitoring stack**.
 - Referenced by: `PRODUCTION_CHECKLIST.md`, `.kiro/steering/scaling-strategy.md`,
   `docs/planning/MAINTENANCE_UPDATE_GUIDE.md`.
 
-**To make Path A canonical:** remove the `nucrm-enterprise-web` and
-`nucrm-enterprise-worker` services from the root `docker-compose.yml`, and stop
-building/pushing the GHCR app image in `.github/workflows/deploy.yml` (keep the
-monitoring compose + the pm2 reload step).
+**Path A is canonical.** The remaining cleanup is the root
+`docker-compose.yml`: it is the development path, not a production fallback, and
+its `web`/`worker` services must not be started on the production host. The
+monitoring compose and the pm2 reload step stay in `deploy.yml`.
 
 ### Path A edge — the names nginx and Prometheus use (#3263)
 
@@ -98,31 +119,37 @@ leaving a green-looking edge.
 supplies the resolution. Reverting to the compose edge is the same command
 without `-f deploy/docker-compose.pm2-edge.yml`.
 
-## Path B — Docker image (GHCR) on the VM
+## Path B — Docker Compose (development only)
 
-The app + worker run as containers from a published image.
+The root `docker-compose.yml` runs the app + worker + infra as containers. It is
+the local development stack; **it is not a production model** (see the decision
+at the top). The production Compose file
+`deploy/docker-compose.production.yml` is still used on Path A, but only for the
+data/monitoring services — its `app`, `worker` and `cron` services are Path B
+rows and must not be started on the production host.
 
-- App services: `docker-compose.yml` → `nucrm-enterprise-web`,
-  `nucrm-enterprise-worker` (`network_mode: host`)
-- Image: built + pushed to GHCR by `.github/workflows/deploy.yml`
-- Updates: pull the new image tag and `docker compose up -d`
-- Referenced by: the app-image build in `deploy.yml`, root `docker-compose.yml`.
+- App services: `docker-compose.yml` → `web` (`nucrm-app`), `worker`,
+  `realtime`
+- Updates: `docker compose up -d --build`
+- Env: compose `environment:` / root `.env`
+- The old GHCR app-image rollout was removed from
+  `.github/workflows/deploy.yml` (#1425); the workflow is a git-based pm2 update
+  now.
 
-**To make Path B canonical:** delete `ecosystem.config.cjs`, remove the pm2
-start/reload steps from deploy docs and `deploy.yml`, and fix the stale header
-comment in `deploy.yml` that claims "app runs via pm2 / Docker hosts only
-monitoring".
+## Historical evidence — resolved (#3272)
 
-## The contradiction to resolve
+The table below is what the tree looked like before the decision at the top was
+written down. It is kept so the next reader can see why both readings were
+defensible; it is not a live question.
 
-| Signal                                                   | Says Path A (pm2) | Says Path B (Docker) |
-| -------------------------------------------------------- | ----------------- | -------------------- |
-| `.github/workflows/deploy.yml` header comment            | ✅                |                      |
-| `.github/workflows/deploy.yml` build/push GHCR app image |                   | ✅                   |
-| root `docker-compose.yml` app services                   |                   | ✅                   |
-| `ecosystem.config.cjs`                                   | ✅                |                      |
-| `PRODUCTION_CHECKLIST.md` / scaling steering             | ✅                |                      |
+| Signal                                                   | Says Path A (pm2) | Says Path B (Docker)  |
+| -------------------------------------------------------- | ----------------- | --------------------- |
+| `.github/workflows/deploy.yml` header comment            | ✅                |                       |
+| `.github/workflows/deploy.yml` build/push GHCR app image |                   | ✅ (removed, #1425)   |
+| root `docker-compose.yml` app services                   |                   | ✅ (development only) |
+| `ecosystem.config.cjs`                                   | ✅                |                       |
+| `PRODUCTION_CHECKLIST.md` / scaling steering             | ✅                |                       |
 
-Until this is decided, treat **Path A (PM2)** as the documented default (it's
-what the checklist and runbook lead with) and do **not** also start the app
-containers from the root compose.
+`deploy.yml` now states Path A in its header and no longer builds or pushes a
+GHCR app image, so the two strongest Path B signals above are gone. The
+remaining Path B files are development-only.

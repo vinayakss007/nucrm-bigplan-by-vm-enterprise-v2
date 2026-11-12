@@ -2,6 +2,12 @@
 
 > **CONFIDENTIAL** — This document contains credentials, secret rotation procedures, and emergency access paths. Do NOT share publicly.
 
+> **Topology (#3272).** This guide documents the Compose topology: the data and
+> monitoring tier on Path A, and the development stack on Path B. Production
+> app, worker, cron and realtime run under PM2, not as containers; the canonical
+> decision and the per-file table are in `deploy/DEPLOYMENT_PATHS.md`. The
+> `App`, `Worker` and `Cron` rows in the service map below are Path B rows.
+
 ---
 
 ## Complete Service Map
