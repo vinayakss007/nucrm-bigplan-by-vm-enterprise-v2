@@ -275,7 +275,7 @@
 > (`scripts/drift-check.ts:166`), masks only what a named pending migration is already clearing
 > (`scripts/schema-drift-allowlist.json`), and is wired in both places #2508 AC3 asks for:
 > `.github/workflows/ci.yml:409` (re-pinned from `:407` on 2026-10-11 by **#2566**, which added two `ci.yml` lines above it; a `db:bootstrap` database, so the chain itself is measured on every
-> pull request) and `.github/workflows/schema-drift.yml:162` (pre-prod, nightly, with a negative
+> pull request) and `.github/workflows/schema-drift.yml:171` (re-pinned 2026-11-11: **#3266** inserted 13 lines above the live step and removed 4 from it; pre-prod, nightly, with a negative
 > control at `:105` that re-seeds the drift to prove the screen fires). Filed as **#2508**; the two
 > defect classes it found on its first run are **#2509** and **#2510**. Written as PP-064 and moved
 > to **PP-066** while open, to **PP-067** on the previous merge, and to **PP-068** here: **#2503** merged
