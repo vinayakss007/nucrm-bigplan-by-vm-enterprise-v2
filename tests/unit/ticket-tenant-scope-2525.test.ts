@@ -21,9 +21,11 @@
  *    `PgDialect.sqlToQuery` turns it into text and params, so "this statement is
  *    tenant-scoped" is a fact about the SQL the database would receive — not about a
  *    string in the source. Drop the `eq(tenantId)` and the assertion fails.
- *  - **The zero-row path.** Postgres gives a scoped `UPDATE` no rows to return for a
- *    foreign id; the mock reproduces exactly that, and the handler must answer 404 and
- *    insert nothing and send no mail. This is the half the SQL check cannot prove.
+ *  - **The zero-row path.** Postgres gives a scoped read/UPDATE no rows for a foreign
+ *    id; the mock reproduces both. #3407 added the scoped pre-read, so a foreign id is
+ *    a 404 before the write, while a zero-row UPDATE after that read is the concurrent
+ *    transition race and answers 409. Neither may insert a survey or send mail. This is
+ *    the half the SQL check cannot prove.
  *  - **Which connection ran the read.** `db` vs `tx` is the difference between a
  *    survey row and its ticket being written atomically and them being written in two
  *    different transactions.
@@ -391,8 +393,9 @@ describe("#2525 — the resolve path stops when the scoped UPDATE matches no row
 
   it("a foreign id is a 404 — no survey row, no outbound mail naming the victim", async () => {
     // This is what Postgres really does with `WHERE tenant_id = me AND id = theirs`:
-    // zero rows back. Before #2525 nobody looked, and the handler carried on.
-    harness.state.updateReturning = [];
+    // zero rows back. #3407's pre-read now applies that scope before the write, so
+    // the handler stops here rather than discovering the miss on the UPDATE.
+    harness.state.selectRows = [];
 
     const PATCH = await ticketPatch();
     const res = await PATCH(
@@ -403,6 +406,26 @@ describe("#2525 — the resolve path stops when the scoped UPDATE matches no row
     );
 
     expect(res.status).toBe(404);
+    expect(insertedInto("csat_surveys")).toHaveLength(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain(VICTIM_SUBJECT);
+  });
+
+  it("a zero-row UPDATE after the read is a 409 — no survey row, no outbound mail", async () => {
+    // #3407: the status claim lost to a concurrent transition. The pre-read saw
+    // the ticket, so this is not a 404 — and it must stop before the CSAT branch.
+    harness.state.updateReturning = [];
+
+    const PATCH = await ticketPatch();
+    const res = await PATCH(
+      request(`http://localhost/api/tenant/tickets/${TICKET_ID}`, "PATCH", {
+        status: "resolved",
+      }),
+      params,
+    );
+
+    expect(res.status).toBe(409);
     expect(insertedInto("csat_surveys")).toHaveLength(0);
     expect(sendEmail).not.toHaveBeenCalled();
     const body = await res.json();

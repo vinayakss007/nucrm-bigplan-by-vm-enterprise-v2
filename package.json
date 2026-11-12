@@ -77,6 +77,7 @@
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
+    "guard:tenant-db-context": "node scripts/check-tenant-db-context.mjs",
     "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
     "guard:app-role-counts": "node scripts/check-app-role-counts.mjs",
     "guard:pool-tls": "npx tsx scripts/check-pool-tls-policy.mts",

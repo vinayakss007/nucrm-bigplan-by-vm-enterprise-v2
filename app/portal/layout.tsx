@@ -22,7 +22,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <>
       <div className="min-h-screen bg-background">
         <PortalHeader />
-        <main className="max-w-5xl mx-auto p-4 sm:p-6">
+        {/* The root layout renders the SkipLink (#1842) on every page, and it
+            navigates to `#main-content`. Without the id the link answers with a
+            fragment that matches nothing, so a keyboard user on the portal —
+            five tabs through the header before the first control — had no skip
+            affordance at all. `tabIndex={-1}` is what lets the browser move
+            focus to the landmark itself. */}
+        <main id="main-content" tabIndex={-1} className="max-w-5xl mx-auto p-4 sm:p-6 focus:outline-none">
           {children}
         </main>
       </div>

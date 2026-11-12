@@ -18,6 +18,7 @@ import { applyTemplate } from '@/lib/templates/apply-template';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -38,8 +39,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       steps_done: stepsDone, 
       completed: isCompleted 
     });
-  } catch { 
-    return NextResponse.json({ steps_done: [], completed: false }); 
+  } catch (err) {
+    void logError({ error: err, context: 'onboarding GET' });
+    return NextResponse.json({ steps_done: [], completed: false });
   }
 });
 
@@ -226,6 +228,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       ...(modulesFailed.length > 0 ? { modulesFailed } : {}),
     }, { status: 201 });
   } catch (err: unknown) {
+    await logError({ error: err, context: 'onboarding POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -269,10 +272,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         set: { isCompleted: true, completedAt: new Date() }
       });
     }
-    return NextResponse.json({ ok: true });
- 
- 
-  } catch (err) { 
-    return apiError(err); 
+    return NextResponse.json({ ok: true });  } catch (err) {
+    await logError({ error: err, context: 'onboarding PATCH', requestMethod: 'PATCH' });
+    return apiError(err);
   }
 });
+
+

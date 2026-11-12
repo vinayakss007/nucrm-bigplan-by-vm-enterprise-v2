@@ -19,6 +19,7 @@ import { db, type DbClient } from '@/drizzle/db';
 import { supportTickets } from '@/drizzle/schema';
 import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { canTransitionTicket } from '@/lib/tickets';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -79,9 +80,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       }
     }
 
-    // Validate all IDs belong to this tenant
+    // Validate all IDs belong to this tenant. `status` rides along so the
+    // status action can claim the state it read (#3407).
     const valid = await db
-      .select({ id: supportTickets.id })
+      .select({ id: supportTickets.id, status: supportTickets.status })
       .from(supportTickets)
       .where(
         and(
@@ -96,6 +98,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }
 
     let affected = 0;
+    let skipped = 0;
 
     switch (action) {
       case 'assign': {
@@ -113,12 +116,37 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         if (!status || !VALID_STATUSES.includes(status)) {
           return NextResponse.json({ error: `payload.status must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 });
         }
+        // #3407: only tickets whose state can move to `status` are eligible;
+        // the rest are reported as skipped rather than silently rewritten.
+        const byFromStatus = new Map<string, string[]>();
+        for (const row of valid) {
+          if (!canTransitionTicket(row.status, status)) continue;
+          const ids = byFromStatus.get(row.status) ?? [];
+          ids.push(row.id);
+          byFromStatus.set(row.status, ids);
+        }
+
         const update: Record<string, unknown> = { status, updatedAt: new Date() };
         if (status === 'resolved') update.resolvedAt = new Date();
+
         await db.transaction(async (tx) => {
-          await tx.update(supportTickets).set(update).where(inArray(supportTickets.id, validIds));
-          affected = validIds.length;
-          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_status', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, status }, dbOrTx: tx as DbClient });
+          // #3407: each group claims the exact from-state it was read in.
+          // Postgres re-evaluates the WHERE under the row lock, so a ticket
+          // another agent moved in the gap is skipped instead of stomped.
+          for (const [fromStatus, ids] of byFromStatus) {
+            const rows = await tx.update(supportTickets)
+              .set(update)
+              .where(and(
+                eq(supportTickets.tenantId, ctx.tenantId),
+                inArray(supportTickets.id, ids),
+                eq(supportTickets.status, fromStatus),
+                isNull(supportTickets.deletedAt),
+              ))
+              .returning({ id: supportTickets.id });
+            affected += rows.length;
+          }
+          skipped = validIds.length - affected;
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_status', entityType: 'ticket', entityId: validIds[0], newData: { count: affected, skipped, status }, dbOrTx: tx as DbClient });
         });
         break;
       }
@@ -146,7 +174,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: true, affected, action });
+    return NextResponse.json({ ok: true, affected, skipped, action });
 
   
   } catch (err) {

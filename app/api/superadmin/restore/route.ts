@@ -19,6 +19,7 @@ import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { setSuperAdminContext } from '@/lib/db/rls';
+import { resolveBackupDir } from '@/lib/backups/paths';
 
 /**
  * Safely run pg_restore with input validation.
@@ -35,7 +36,7 @@ async function runPgRestore(inputPath: string): Promise<void> {
   }
 
   // Validate path is in allowed directories
-  const allowedDirs = ['/tmp', process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups'];
+  const allowedDirs = ['/tmp', resolveBackupDir()];
   const isAllowed = allowedDirs.some(dir => inputPath.startsWith(dir));
   if (!isAllowed) {
     throw new Error('Restore path not in allowed directories');

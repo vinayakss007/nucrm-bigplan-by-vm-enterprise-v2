@@ -21,6 +21,7 @@ import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { checkLimit } from '@/lib/usage/middleware';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -120,6 +121,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         { status: 429 }
       );
     }
+
+    // #3409: this surface writes the same `leads` row as POST /api/tenant/leads,
+    // so it has to price it the same way. The tenant door has consulted the plan
+    // ceiling since #2432 while this one checked scope and rate limit and then
+    // wrote an unbilled row — a tenant at its ceiling could keep creating leads
+    // through the API forever. Advisory unless USAGE_LIMITS=on, like every other
+    // door, so the violation is recorded either way.
+    const overLimit = await checkLimit(ctx, 'leads');
+    if (overLimit) return overLimit;
 
     const body = await readJsonBody(request);
 

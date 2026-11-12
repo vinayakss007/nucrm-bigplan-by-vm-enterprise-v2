@@ -263,7 +263,7 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   // handlers do) so genuine status transitions are never silently dropped.
   const tenantId = await resolveTenantId(subscription);
   if (!tenantId) {
-    console.warn('[Stripe] subscription.updated: could not resolve tenant from metadata or customer — skipping');
+    void logError({ error: new Error(`[Stripe] subscription.updated: could not resolve tenant from metadata or customer — skipping`), context: 'webhooks/stripe subscription.updated tenant resolution', level: 'warning' });
     return;
   }
 
@@ -361,7 +361,7 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   // without metadata are not silently dropped.
   const tenantId = await resolveTenantId(subscription);
   if (!tenantId) {
-    console.warn('[Stripe] subscription.deleted: could not resolve tenant from metadata or customer — skipping');
+    void logError({ error: new Error(`[Stripe] subscription.deleted: could not resolve tenant from metadata or customer — skipping`), context: 'webhooks/stripe subscription.deleted tenant resolution', level: 'warning' });
     return;
   }
 
@@ -389,8 +389,6 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   logger.info(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }
 
- 
- 
 // #1909: Stripe reports amounts in the smallest currency unit (integer
 // cents); the internal ledger and outbound webhook/automation payloads use
 // decimal. Normalize once here so integrations never see a 100× amount.

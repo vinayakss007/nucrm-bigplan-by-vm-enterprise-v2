@@ -1,0 +1,749 @@
+{
+  "_comment": "Exact-set ledger for scripts/check-tenant-db-context.mjs (#3405). Every file here imports the raw DB client outside lib/db, the choke point that owns the pool and the tenant GUCs. The list may only shrink: migrate a file through lib/db and delete its entry, or the guard fails on the stale entry. Do not add a file to make CI green — a statement that runs on the pool without app.current_tenant returns zero rows silently, which is the failure #3405 was filed for. Regenerate with `node scripts/check-tenant-db-context.mjs --update`.",
+  "issue": 3405,
+  "roots": ["app", "lib", "worker.ts"],
+  "chokePoint": ["lib/db/"],
+  "groups": {
+    "app/api/admin": {
+      "reason": "Platform-level admin actions (tenant restore, 2FA reset for another user) that run under the super-admin GUC, never a tenant one.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/admin/2fa/disable/route.ts",
+        "app/api/admin/tenant-restore/route.ts"
+      ]
+    },
+    "app/api/auth": {
+      "reason": "Pre-authentication handlers. The caller has no tenant yet, so each binds the narrow pre-auth arm its credential names (auth_lookup, token_issue, token_credential, oauth_client_id) before it reads.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/auth/2fa/disable/route.ts",
+        "app/api/auth/2fa/setup/route.ts",
+        "app/api/auth/2fa/verify/route.ts",
+        "app/api/auth/oauth/authorize/route.ts",
+        "app/api/auth/oauth/token/route.ts",
+        "app/api/auth/resend-verification/route.ts",
+        "app/api/auth/reset-password/route.ts",
+        "app/api/auth/verify-email/route.ts"
+      ]
+    },
+    "app/api/cron": {
+      "reason": "Scheduled jobs under the shared cron lock, running in system context with no tenant GUC by design; every job that writes tenant rows binds a tenant per iteration.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/cron/ai-auto-followup/route.ts",
+        "app/api/cron/auto-backup/route.ts",
+        "app/api/cron/backup-health/route.ts",
+        "app/api/cron/backup-verify/route.ts",
+        "app/api/cron/cleanup/route.ts",
+        "app/api/cron/contract-renewal-check/route.ts",
+        "app/api/cron/detect-missed-followups/route.ts",
+        "app/api/cron/process-at-risk/route.ts",
+        "app/api/cron/process-lead-scoring/route.ts",
+        "app/api/cron/process-sequences/route.ts",
+        "app/api/cron/recurring-invoice-generator/route.ts",
+        "app/api/cron/scheduled-report-delivery/route.ts",
+        "app/api/cron/sla-check/route.ts",
+        "app/api/cron/subscription-check/route.ts",
+        "app/api/cron/subscription-renewal-check/route.ts",
+        "app/api/cron/task-reminders/route.ts",
+        "app/api/cron/trial-check/route.ts",
+        "app/api/cron/usage-snapshot/route.ts"
+      ]
+    },
+    "app/api/dev": {
+      "reason": "Local-only dashboard endpoint guarded by a dev check; it never serves a tenant request in production.",
+      "filedAs": "#3405",
+      "files": ["app/api/dev/dashboard/route.ts"]
+    },
+    "app/api/health": {
+      "reason": "Liveness probe: reads instance metadata and a `SELECT 1`-class check, no tenant-keyed table.",
+      "filedAs": "#3405",
+      "files": ["app/api/health/route.ts"]
+    },
+    "app/api/keepalive": {
+      "reason": "Host keepalive ping that touches the pool, not tenant data.",
+      "filedAs": "#3405",
+      "files": ["app/api/keepalive/route.ts"]
+    },
+    "app/api/leads": {
+      "reason": "The public lead-capture endpoint binds the form lookup arm (form_lookup_id) before it inserts, because the caller has no session.",
+      "filedAs": "#3405",
+      "files": ["app/api/leads/public/route.ts"]
+    },
+    "app/api/metrics": {
+      "reason": "Prometheus scrape endpoint reading platform counters under the super-admin GUC; no per-tenant projection is returned.",
+      "filedAs": "#3405",
+      "files": ["app/api/metrics/route.ts"]
+    },
+    "app/api/scim": {
+      "reason": "SCIM provisioning derives its tenant from the bearer token row and binds it before touching users.",
+      "filedAs": "#3405",
+      "files": ["app/api/scim/v2/Users/[id]/route.ts"]
+    },
+    "app/api/super-admin": {
+      "reason": "Legacy super-admin handlers (audit logs, tenant list) that run in super-admin context because the whole point is cross-tenant visibility.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/super-admin/audit-logs/route.ts",
+        "app/api/super-admin/tenants/route.ts"
+      ]
+    },
+    "app/api/superadmin": {
+      "reason": "Superadmin console handlers. Cross-tenant reads are the feature, so they run under withSuperAdminContext / app.is_super_admin rather than a tenant GUC.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/superadmin/adoption/route.ts",
+        "app/api/superadmin/ai-credits/route.ts",
+        "app/api/superadmin/ai-keys/route.ts",
+        "app/api/superadmin/announcements/route.ts",
+        "app/api/superadmin/backups/[id]/download/route.ts",
+        "app/api/superadmin/backups/[id]/route.ts",
+        "app/api/superadmin/backups/route.ts",
+        "app/api/superadmin/billing/dunning/route.ts",
+        "app/api/superadmin/data-explorer/route.ts",
+        "app/api/superadmin/errors/route.ts",
+        "app/api/superadmin/health/route.ts",
+        "app/api/superadmin/impersonate/route.ts",
+        "app/api/superadmin/impersonate/stop/route.ts",
+        "app/api/superadmin/join-tenant/route.ts",
+        "app/api/superadmin/me/route.ts",
+        "app/api/superadmin/modules/bulk/route.ts",
+        "app/api/superadmin/modules/route.ts",
+        "app/api/superadmin/monitoring/route.ts",
+        "app/api/superadmin/plans/[id]/offerings/route.ts",
+        "app/api/superadmin/plans/route.ts",
+        "app/api/superadmin/rate-limits/route.ts",
+        "app/api/superadmin/recent-activity/route.ts",
+        "app/api/superadmin/restore/route.ts",
+        "app/api/superadmin/revenue/route.ts",
+        "app/api/superadmin/search/route.ts",
+        "app/api/superadmin/selective-restore/backups/route.ts",
+        "app/api/superadmin/selective-restore/execute/route.ts",
+        "app/api/superadmin/selective-restore/logs/route.ts",
+        "app/api/superadmin/selective-restore/preview/route.ts",
+        "app/api/superadmin/selective-restore/rollback/route.ts",
+        "app/api/superadmin/selective-restore/scope/route.ts",
+        "app/api/superadmin/settings/route.ts",
+        "app/api/superadmin/stats/route.ts",
+        "app/api/superadmin/templates/[id]/assign/route.ts",
+        "app/api/superadmin/templates/[id]/route.ts",
+        "app/api/superadmin/templates/route.ts",
+        "app/api/superadmin/tenant-settings/route.ts",
+        "app/api/superadmin/tenants/[id]/limits/route.ts",
+        "app/api/superadmin/tenants/[id]/route.ts",
+        "app/api/superadmin/tenants/route.ts",
+        "app/api/superadmin/tickets/route.ts",
+        "app/api/superadmin/token-control/alerts/route.ts",
+        "app/api/superadmin/token-control/budgets/route.ts",
+        "app/api/superadmin/token-control/keys/route.ts",
+        "app/api/superadmin/token-control/route.ts",
+        "app/api/superadmin/transfer-admin/route.ts",
+        "app/api/superadmin/usage/route.ts",
+        "app/api/superadmin/user-data/route.ts",
+        "app/api/superadmin/users/[id]/route.ts",
+        "app/api/superadmin/users/route.ts"
+      ]
+    },
+    "app/api/system": {
+      "reason": "Operator health screens (audit chain, backup status, cron health) that read platform tables under super-admin context.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/system/audit-verify/route.ts",
+        "app/api/system/backup-status/route.ts",
+        "app/api/system/cron-health/route.ts"
+      ]
+    },
+    "app/api/tenant": {
+      "reason": "Tenant route handlers. tenantId comes from the session (requireTenantCtx/withApiRoute) and each handler binds app.current_tenant through the lib/db helpers before querying; PR-3A replaces this convention with a branded client.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/tenant/2fa/backup-codes/route.ts",
+        "app/api/tenant/2fa/disable/route.ts",
+        "app/api/tenant/2fa/setup/route.ts",
+        "app/api/tenant/2fa/verify/route.ts",
+        "app/api/tenant/activities/route.ts",
+        "app/api/tenant/admin/ai-auto-followup/route.ts",
+        "app/api/tenant/admin/ai-providers/route.ts",
+        "app/api/tenant/admin/ai-templates/[id]/route.ts",
+        "app/api/tenant/admin/ai-templates/route.ts",
+        "app/api/tenant/admin/at-risk/[id]/route.ts",
+        "app/api/tenant/admin/at-risk/route.ts",
+        "app/api/tenant/admin/bulk-transfer/route.ts",
+        "app/api/tenant/admin/lead-scoring/[id]/route.ts",
+        "app/api/tenant/admin/lead-scoring/route.ts",
+        "app/api/tenant/admin/localization/route.ts",
+        "app/api/tenant/admin/login-policy/route.ts",
+        "app/api/tenant/admin/picklists/route.ts",
+        "app/api/tenant/admin/tags/route.ts",
+        "app/api/tenant/admin/user-defaults/route.ts",
+        "app/api/tenant/ai/activity/route.ts",
+        "app/api/tenant/ai/draft/route.ts",
+        "app/api/tenant/ai/email-draft/route.ts",
+        "app/api/tenant/ai/insights/route.ts",
+        "app/api/tenant/ai/route.ts",
+        "app/api/tenant/ai/score/route.ts",
+        "app/api/tenant/ai/status/route.ts",
+        "app/api/tenant/ai/summarize/route.ts",
+        "app/api/tenant/analytics/churn/route.ts",
+        "app/api/tenant/analytics/forecast/route.ts",
+        "app/api/tenant/analytics/overview/route.ts",
+        "app/api/tenant/analytics/scheduled-reports/route.ts",
+        "app/api/tenant/analytics/usage/route.ts",
+        "app/api/tenant/api-keys/[id]/route.ts",
+        "app/api/tenant/api-keys/route.ts",
+        "app/api/tenant/approvals/[id]/route.ts",
+        "app/api/tenant/approvals/route.ts",
+        "app/api/tenant/assignment-rules/route.ts",
+        "app/api/tenant/audit/export/route.ts",
+        "app/api/tenant/audit/route.ts",
+        "app/api/tenant/automation/workflows/route.ts",
+        "app/api/tenant/automations/[id]/route.ts",
+        "app/api/tenant/automations/route.ts",
+        "app/api/tenant/backup/config/route.ts",
+        "app/api/tenant/backup/route.ts",
+        "app/api/tenant/billing/checkout/route.ts",
+        "app/api/tenant/billing/dunning/retry/route.ts",
+        "app/api/tenant/billing/dunning/route.ts",
+        "app/api/tenant/billing/invoices/route.ts",
+        "app/api/tenant/billing/modules/route.ts",
+        "app/api/tenant/billing/portal/route.ts",
+        "app/api/tenant/billing/stripe/route.ts",
+        "app/api/tenant/billing/subscription/cancel/route.ts",
+        "app/api/tenant/billing/subscription/downgrade/route.ts",
+        "app/api/tenant/billing/subscription/resume/route.ts",
+        "app/api/tenant/billing/subscription/route.ts",
+        "app/api/tenant/billing/subscription/upgrade/route.ts",
+        "app/api/tenant/branding/route.ts",
+        "app/api/tenant/calls/[id]/route.ts",
+        "app/api/tenant/calls/route.ts",
+        "app/api/tenant/canned-responses/[id]/route.ts",
+        "app/api/tenant/canned-responses/route.ts",
+        "app/api/tenant/chat/route.ts",
+        "app/api/tenant/companies/[id]/route.ts",
+        "app/api/tenant/companies/bulk/route.ts",
+        "app/api/tenant/companies/export/route.ts",
+        "app/api/tenant/companies/import/route.ts",
+        "app/api/tenant/companies/route.ts",
+        "app/api/tenant/compliance/gdpr/route.ts",
+        "app/api/tenant/compliance/retention/route.ts",
+        "app/api/tenant/compliance/soc2/route.ts",
+        "app/api/tenant/contacts/[id]/enrich/route.ts",
+        "app/api/tenant/contacts/[id]/enroll/route.ts",
+        "app/api/tenant/contacts/[id]/leads/route.ts",
+        "app/api/tenant/contacts/[id]/lifecycle/route.ts",
+        "app/api/tenant/contacts/[id]/notes/route.ts",
+        "app/api/tenant/contacts/[id]/route.ts",
+        "app/api/tenant/contacts/[id]/status/route.ts",
+        "app/api/tenant/contacts/[id]/timeline/route.ts",
+        "app/api/tenant/contacts/bulk/route.ts",
+        "app/api/tenant/contacts/duplicates/route.ts",
+        "app/api/tenant/contacts/merge/route.ts",
+        "app/api/tenant/contacts/route.ts",
+        "app/api/tenant/contacts/scan/route.ts",
+        "app/api/tenant/contracts/[id]/pdf/route.ts",
+        "app/api/tenant/contracts/[id]/route.ts",
+        "app/api/tenant/contracts/route.ts",
+        "app/api/tenant/csat/stats/route.ts",
+        "app/api/tenant/currency/route.ts",
+        "app/api/tenant/custom-entities/[id]/route.ts",
+        "app/api/tenant/custom-entities/[id]/rows/[rowId]/route.ts",
+        "app/api/tenant/custom-entities/[id]/rows/route.ts",
+        "app/api/tenant/custom-entities/route.ts",
+        "app/api/tenant/custom-fields/route.ts",
+        "app/api/tenant/dashboard/layout/route.ts",
+        "app/api/tenant/dashboard/stats/route.ts",
+        "app/api/tenant/dashboard/widgets/activity/route.ts",
+        "app/api/tenant/dashboard/widgets/contacts/recent/route.ts",
+        "app/api/tenant/dashboard/widgets/deals/closing/route.ts",
+        "app/api/tenant/dashboard/widgets/follow-ups/route.ts",
+        "app/api/tenant/dashboard/widgets/invoices/route.ts",
+        "app/api/tenant/dashboard/widgets/leads/route.ts",
+        "app/api/tenant/dashboard/widgets/notifications/route.ts",
+        "app/api/tenant/dashboard/widgets/stats/contacts/route.ts",
+        "app/api/tenant/dashboard/widgets/stats/pipeline/route.ts",
+        "app/api/tenant/dashboard/widgets/stats/revenue/route.ts",
+        "app/api/tenant/dashboard/widgets/stats/tasks/route.ts",
+        "app/api/tenant/dashboard/widgets/tasks/route.ts",
+        "app/api/tenant/dashboard/widgets/tickets/route.ts",
+        "app/api/tenant/data-explorer/route.ts",
+        "app/api/tenant/deals/[id]/forecast/route.ts",
+        "app/api/tenant/deals/[id]/products/route.ts",
+        "app/api/tenant/deals/[id]/route.ts",
+        "app/api/tenant/deals/bulk/route.ts",
+        "app/api/tenant/deals/export/route.ts",
+        "app/api/tenant/deals/import/route.ts",
+        "app/api/tenant/deals/route.ts",
+        "app/api/tenant/documents/[id]/route.ts",
+        "app/api/tenant/documents/[id]/verify/route.ts",
+        "app/api/tenant/documents/route.ts",
+        "app/api/tenant/email-templates/[id]/route.ts",
+        "app/api/tenant/email-templates/route.ts",
+        "app/api/tenant/email-warmup/route.ts",
+        "app/api/tenant/email/analytics/route.ts",
+        "app/api/tenant/email/bulk/route.ts",
+        "app/api/tenant/email/templates/bulk-send/route.ts",
+        "app/api/tenant/email/test-send/route.ts",
+        "app/api/tenant/email/tracking/route.ts",
+        "app/api/tenant/esignature/route.ts",
+        "app/api/tenant/export/route.ts",
+        "app/api/tenant/files/route.ts",
+        "app/api/tenant/follow-ups/[id]/route.ts",
+        "app/api/tenant/follow-ups/route.ts",
+        "app/api/tenant/forms/[id]/analytics/route.ts",
+        "app/api/tenant/forms/[id]/route.ts",
+        "app/api/tenant/forms/route.ts",
+        "app/api/tenant/hierarchy/route.ts",
+        "app/api/tenant/history/[entity]/route.ts",
+        "app/api/tenant/import/route.ts",
+        "app/api/tenant/industry-templates/route.ts",
+        "app/api/tenant/integrations/[id]/route.ts",
+        "app/api/tenant/integrations/route.ts",
+        "app/api/tenant/invite/[id]/route.ts",
+        "app/api/tenant/invite/send/route.ts",
+        "app/api/tenant/invoices/[id]/payments/route.ts",
+        "app/api/tenant/invoices/[id]/pdf/route.ts",
+        "app/api/tenant/invoices/[id]/route.ts",
+        "app/api/tenant/invoices/[id]/send/route.ts",
+        "app/api/tenant/invoices/route.ts",
+        "app/api/tenant/jobs/dead-letter/route.ts",
+        "app/api/tenant/kb/articles/[id]/route.ts",
+        "app/api/tenant/kb/articles/route.ts",
+        "app/api/tenant/kb/categories/[id]/route.ts",
+        "app/api/tenant/kb/categories/route.ts",
+        "app/api/tenant/lead-warming/campaigns/[id]/route.ts",
+        "app/api/tenant/lead-warming/campaigns/route.ts",
+        "app/api/tenant/lead-warming/events/route.ts",
+        "app/api/tenant/lead-warming/replies/route.ts",
+        "app/api/tenant/lead-warming/stats/route.ts",
+        "app/api/tenant/leaderboards/route.ts",
+        "app/api/tenant/leads/[id]/assign/route.ts",
+        "app/api/tenant/leads/[id]/route.ts",
+        "app/api/tenant/leads/assign/route.ts",
+        "app/api/tenant/leads/bulk/route.ts",
+        "app/api/tenant/leads/history/route.ts",
+        "app/api/tenant/leads/import/route.ts",
+        "app/api/tenant/leads/route.ts",
+        "app/api/tenant/me/route.ts",
+        "app/api/tenant/meetings/[id]/route.ts",
+        "app/api/tenant/meetings/route.ts",
+        "app/api/tenant/members/route.ts",
+        "app/api/tenant/modules/setup/route.ts",
+        "app/api/tenant/notes/bulk/route.ts",
+        "app/api/tenant/notification-prefs/route.ts",
+        "app/api/tenant/notifications/matrix/route.ts",
+        "app/api/tenant/notifications/route.ts",
+        "app/api/tenant/notifications/stream/route.ts",
+        "app/api/tenant/notifications/unread/route.ts",
+        "app/api/tenant/oauth-clients/[id]/rotate/route.ts",
+        "app/api/tenant/oauth-clients/[id]/route.ts",
+        "app/api/tenant/oauth-clients/route.ts",
+        "app/api/tenant/offers/[quoteId]/cancel/route.ts",
+        "app/api/tenant/offers/[quoteId]/send/route.ts",
+        "app/api/tenant/offers/route.ts",
+        "app/api/tenant/onboarding/complete/route.ts",
+        "app/api/tenant/onboarding/progress/route.ts",
+        "app/api/tenant/onboarding/route.ts",
+        "app/api/tenant/orders/[id]/route.ts",
+        "app/api/tenant/orders/route.ts",
+        "app/api/tenant/permissions/approvals/route.ts",
+        "app/api/tenant/pipelines/[id]/route.ts",
+        "app/api/tenant/pipelines/route.ts",
+        "app/api/tenant/plans/route.ts",
+        "app/api/tenant/plugin-engine/actions/route.ts",
+        "app/api/tenant/plugin-engine/route.ts",
+        "app/api/tenant/plugins/[id]/execute/route.ts",
+        "app/api/tenant/plugins/[id]/logs/route.ts",
+        "app/api/tenant/plugins/[id]/route.ts",
+        "app/api/tenant/plugins/[id]/test/route.ts",
+        "app/api/tenant/plugins/route.ts",
+        "app/api/tenant/portal/clients/route.ts",
+        "app/api/tenant/portal/config/route.ts",
+        "app/api/tenant/products/[id]/route.ts",
+        "app/api/tenant/products/route.ts",
+        "app/api/tenant/projects/[id]/milestones/route.ts",
+        "app/api/tenant/projects/[id]/route.ts",
+        "app/api/tenant/projects/[id]/tasks/route.ts",
+        "app/api/tenant/projects/route.ts",
+        "app/api/tenant/quotes/[id]/convert-to-invoice/route.ts",
+        "app/api/tenant/quotes/[id]/pdf/route.ts",
+        "app/api/tenant/quotes/[id]/route.ts",
+        "app/api/tenant/quotes/route.ts",
+        "app/api/tenant/rbac/field-permissions/route.ts",
+        "app/api/tenant/rbac/record-permissions/route.ts",
+        "app/api/tenant/reports/[id]/route.ts",
+        "app/api/tenant/reports/builder/route.ts",
+        "app/api/tenant/reports/conversion-funnel/route.ts",
+        "app/api/tenant/reports/custom/route.ts",
+        "app/api/tenant/reports/deal-velocity/route.ts",
+        "app/api/tenant/reports/route.ts",
+        "app/api/tenant/reports/run/route.ts",
+        "app/api/tenant/reports/saved/route.ts",
+        "app/api/tenant/reports/scheduled/route.ts",
+        "app/api/tenant/reports/sla-compliance/route.ts",
+        "app/api/tenant/reports/team-performance/route.ts",
+        "app/api/tenant/reports/win-loss/route.ts",
+        "app/api/tenant/roles/[id]/route.ts",
+        "app/api/tenant/roles/route.ts",
+        "app/api/tenant/search/advanced/route.ts",
+        "app/api/tenant/search/route.ts",
+        "app/api/tenant/security/ip-whitelist/route.ts",
+        "app/api/tenant/segments/[id]/enroll/route.ts",
+        "app/api/tenant/segments/[id]/members/route.ts",
+        "app/api/tenant/segments/[id]/route.ts",
+        "app/api/tenant/segments/route.ts",
+        "app/api/tenant/sequences/[id]/route.ts",
+        "app/api/tenant/sequences/route.ts",
+        "app/api/tenant/services/[id]/route.ts",
+        "app/api/tenant/services/route.ts",
+        "app/api/tenant/settings-status/route.ts",
+        "app/api/tenant/sla/route.ts",
+        "app/api/tenant/sms/route.ts",
+        "app/api/tenant/sms/templates/route.ts",
+        "app/api/tenant/sso/providers/[id]/route.ts",
+        "app/api/tenant/sso/providers/route.ts",
+        "app/api/tenant/sso/route.ts",
+        "app/api/tenant/subdomain/check/route.ts",
+        "app/api/tenant/subscriptions/[id]/route.ts",
+        "app/api/tenant/subscriptions/route.ts",
+        "app/api/tenant/tasks/[id]/route.ts",
+        "app/api/tenant/tasks/bulk/route.ts",
+        "app/api/tenant/tasks/route.ts",
+        "app/api/tenant/tax/route.ts",
+        "app/api/tenant/teams/[id]/members/route.ts",
+        "app/api/tenant/teams/[id]/route.ts",
+        "app/api/tenant/teams/route.ts",
+        "app/api/tenant/territories/route.ts",
+        "app/api/tenant/tickets/[id]/replies/route.ts",
+        "app/api/tenant/tickets/[id]/route.ts",
+        "app/api/tenant/tickets/bulk/route.ts",
+        "app/api/tenant/tickets/route.ts",
+        "app/api/tenant/trash/route.ts",
+        "app/api/tenant/trash/settings/route.ts",
+        "app/api/tenant/usage-status/route.ts",
+        "app/api/tenant/user/preferences/route.ts",
+        "app/api/tenant/views/[id]/route.ts",
+        "app/api/tenant/views/route.ts",
+        "app/api/tenant/visitors/route.ts",
+        "app/api/tenant/visitors/track/route.ts",
+        "app/api/tenant/webhooks/[id]/deliveries/route.ts",
+        "app/api/tenant/webhooks/[id]/route.ts",
+        "app/api/tenant/webhooks/[id]/test/route.ts",
+        "app/api/tenant/webhooks/field-mappings/route.ts",
+        "app/api/tenant/webhooks/logs/route.ts",
+        "app/api/tenant/webhooks/retry/route.ts",
+        "app/api/tenant/webhooks/route.ts",
+        "app/api/tenant/whatsapp/messages/route.ts",
+        "app/api/tenant/whatsapp/send/route.ts",
+        "app/api/tenant/whatsapp/templates/route.ts",
+        "app/api/tenant/workflows/[id]/route.ts",
+        "app/api/tenant/workflows/[id]/run/route.ts",
+        "app/api/tenant/workflows/[id]/test/route.ts",
+        "app/api/tenant/workflows/route.ts",
+        "app/api/tenant/workspace/route.ts"
+      ]
+    },
+    "app/api/user": {
+      "reason": "Self-service handlers keyed by ctx.userId with the tenant taken from the session, so no cross-tenant predicate is possible from the request body.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/user/export/route.ts",
+        "app/api/user/out-of-office/route.ts",
+        "app/api/user/password/route.ts",
+        "app/api/user/preferences/route.ts",
+        "app/api/user/profile/route.ts",
+        "app/api/user/sessions/route.ts",
+        "app/api/user/telegram/route.ts"
+      ]
+    },
+    "app/api/v1": {
+      "reason": "Public API v1 derives the tenant from the API key row and binds it before every query.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/v1/contacts/[id]/route.ts",
+        "app/api/v1/contacts/route.ts",
+        "app/api/v1/deals/[id]/route.ts",
+        "app/api/v1/deals/route.ts",
+        "app/api/v1/leads/[id]/route.ts",
+        "app/api/v1/leads/route.ts",
+        "app/api/v1/tasks/[id]/route.ts",
+        "app/api/v1/tasks/route.ts"
+      ]
+    },
+    "app/api/webhooks": {
+      "reason": "Inbound webhook handlers authenticate the provider and bind system/inbound context (#3311) before they read the integration row.",
+      "filedAs": "#3405",
+      "files": [
+        "app/api/webhooks/stripe/route.ts",
+        "app/api/webhooks/telegram/bot/route.ts"
+      ]
+    },
+    "app/forms": {
+      "reason": "Public form renderer; the lookup goes through the form_lookup_id arm because the visitor is anonymous.",
+      "filedAs": "#3405",
+      "files": ["app/forms/public/[id]/page.tsx"]
+    },
+    "app/setup": {
+      "reason": "First-run setup page, present only while the install has no tenant.",
+      "filedAs": "#3405",
+      "files": ["app/setup/page.tsx"]
+    },
+    "app/tenant": {
+      "reason": "Tenant pages that query on the server (server components / route-level loaders). They read through lib/db helpers after the layout binds the session tenant.",
+      "filedAs": "#3405",
+      "files": [
+        "app/tenant/companies/[id]/page.tsx",
+        "app/tenant/companies/page.tsx",
+        "app/tenant/contacts/[id]/page.tsx",
+        "app/tenant/contacts/page.tsx",
+        "app/tenant/deals/[id]/page.tsx",
+        "app/tenant/deals/page.tsx",
+        "app/tenant/follow-ups/missed/page.tsx",
+        "app/tenant/layout.tsx",
+        "app/tenant/leads/[id]/page.tsx",
+        "app/tenant/leads/page.tsx",
+        "app/tenant/projects/[id]/page.tsx",
+        "app/tenant/projects/page.tsx",
+        "app/tenant/sequences/page.tsx",
+        "app/tenant/settings/team/page.tsx",
+        "app/tenant/settings/teams/page.tsx",
+        "app/tenant/tasks/[id]/page.tsx",
+        "app/tenant/tasks/page.tsx"
+      ]
+    },
+    "lib": {
+      "reason": "Top-level lib modules that take a pool/tx from their caller or open their own short transaction, binding the GUC they need at that point.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/audit.ts",
+        "lib/branding.ts",
+        "lib/chat.ts",
+        "lib/critical-data-capture.ts",
+        "lib/dev-access.ts",
+        "lib/dlp.ts",
+        "lib/esignature-internal.ts",
+        "lib/esignature.ts",
+        "lib/history.ts",
+        "lib/ip-whitelist.ts",
+        "lib/notifications.ts",
+        "lib/offers.ts",
+        "lib/rate-limit.ts",
+        "lib/record-links.ts",
+        "lib/sms.ts",
+        "lib/tax.ts",
+        "lib/tenant-data-export.ts",
+        "lib/tenant-data-import.ts",
+        "lib/territories.ts",
+        "lib/user-defaults.ts",
+        "lib/visitor-tracking.ts",
+        "lib/webhooks.ts"
+      ]
+    },
+    "lib/activity": {
+      "reason": "Activity logger: writes carry an explicit tenantId column and run inside the caller transaction.",
+      "filedAs": "#3405",
+      "files": ["lib/activity/timeline.ts"]
+    },
+    "lib/ai": {
+      "reason": "AI helpers read tenant rows inside a caller-supplied transaction; the GUC is already set by the route that invoked them.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/ai/activity-log.ts",
+        "lib/ai/at-risk.ts",
+        "lib/ai/auto-followup.ts",
+        "lib/ai/common.ts",
+        "lib/ai/credits-claim.ts",
+        "lib/ai/credits.ts",
+        "lib/ai/draft.ts",
+        "lib/ai/gateway.ts",
+        "lib/ai/lead-scoring.ts",
+        "lib/ai/plan-gate.ts",
+        "lib/ai/scoring.ts",
+        "lib/ai/secrets.ts",
+        "lib/ai/sentiment.ts",
+        "lib/ai/summarize.ts"
+      ]
+    },
+    "lib/analytics": {
+      "reason": "Analytics readers aggregate tenant rows under a caller-bound tenant context.",
+      "filedAs": "#3405",
+      "files": ["lib/analytics/entitlement.ts", "lib/analytics/store.ts"]
+    },
+    "lib/api": {
+      "reason": "Shared API helpers that resolve the tenant from the request/session before they hand a bound client to the handler.",
+      "filedAs": "#3405",
+      "files": ["lib/api/gateway.ts", "lib/api/with-transaction.ts"]
+    },
+    "lib/audit": {
+      "reason": "Audit writer: rows carry tenantId explicitly and are written in the caller transaction.",
+      "filedAs": "#3405",
+      "files": ["lib/audit/super-admin.ts"]
+    },
+    "lib/auth": {
+      "reason": "Session/permission resolution. It must read user+membership rows before a tenant is known, so it binds auth_lookup or a specific token arm per path.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/auth/api-key-membership.ts",
+        "lib/auth/api-key.ts",
+        "lib/auth/impersonation-reconcile.ts",
+        "lib/auth/middleware.ts",
+        "lib/auth/password-reset.ts",
+        "lib/auth/sso.ts"
+      ]
+    },
+    "lib/automation": {
+      "reason": "Automation executor walks workflows for one tenant and binds the context once per run before evaluating nodes.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/automation/engine.ts",
+        "lib/automation/stage-change-hooks.ts",
+        "lib/automation/workflow-executor.ts"
+      ]
+    },
+    "lib/backups": {
+      "reason": "Backup service runs in system context because it dumps/restores whole organizations.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/backups/backup-service.ts",
+        "lib/backups/script-backup-record.ts"
+      ]
+    },
+    "lib/billing": {
+      "reason": "Billing helpers resolve the tenant from the subscription/tenant row and bind it before touching invoices.",
+      "filedAs": "#3405",
+      "files": ["lib/billing/deal-invoice.ts", "lib/billing/payments.ts"]
+    },
+    "lib/calendar-sync": {
+      "reason": "Calendar sync runs per connected account; the account row names the tenant it binds.",
+      "filedAs": "#3405",
+      "files": ["lib/calendar-sync/service.ts"]
+    },
+    "lib/compliance": {
+      "reason": "Retention/GDPR/SOC2 reporters read across tenants for one organization, binding the super-admin or tenant arm their caller established.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/compliance/gdpr.ts",
+        "lib/compliance/request-lifecycle.ts",
+        "lib/compliance/soc2.ts",
+        "lib/compliance/stale-requests.ts"
+      ]
+    },
+    "lib/cron": {
+      "reason": "Cron infrastructure (lock, health, job registry) in system context; jobs bind their own tenant per unit of work.",
+      "filedAs": "#3405",
+      "files": ["lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
+    },
+    "lib/dashboard": {
+      "reason": "Dashboard aggregate helper reading tenant rows inside the route the context was opened for.",
+      "filedAs": "#3405",
+      "files": ["lib/dashboard/layout-resolver.ts"]
+    },
+    "lib/email": {
+      "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
+      "filedAs": "#3405",
+      "files": ["lib/email/warmup.ts"]
+    },
+    "lib/export": {
+      "reason": "Export builder streams tenant rows under the caller transaction so a partial export cannot outlive it.",
+      "filedAs": "#3405",
+      "files": ["lib/export/index.ts"]
+    },
+    "lib/field-sales": {
+      "reason": "Field-sales helpers read visit/route rows for the caller tenant, bound by the calling route.",
+      "filedAs": "#3405",
+      "files": ["lib/field-sales/card-scanner.ts"]
+    },
+    "lib/formula": {
+      "reason": "Formula evaluator that loads its inputs through a caller-supplied client bound to one tenant.",
+      "filedAs": "#3405",
+      "files": ["lib/formula/sync.ts"]
+    },
+    "lib/import": {
+      "reason": "Import pipeline stages rows inside one transaction per tenant so a failed import leaves nothing behind.",
+      "filedAs": "#3405",
+      "files": ["lib/import/contacts.ts"]
+    },
+    "lib/lead-scoring": {
+      "reason": "Lead scoring reads/writes scores per tenant inside the caller transaction.",
+      "filedAs": "#3405",
+      "files": ["lib/lead-scoring/auto-recalculate.ts"]
+    },
+    "lib/lead-warming": {
+      "reason": "Lead-warming campaigns are per tenant; the campaign row fixes the tenant before any contact read.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/lead-warming/engine.ts",
+        "lib/lead-warming/reply-analyzer.ts"
+      ]
+    },
+    "lib/leads": {
+      "reason": "Lead helpers take the tenant from the caller context; the route that owns the request binds it.",
+      "filedAs": "#3405",
+      "files": ["lib/leads/convert.ts"]
+    },
+    "lib/modules": {
+      "reason": "Module enablement checks read tenant_modules for the caller tenant, bound by the route.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/modules/auto-install.ts",
+        "lib/modules/gate.ts",
+        "lib/modules/registry.ts",
+        "lib/modules/sdk/loader.ts"
+      ]
+    },
+    "lib/onboarding": {
+      "reason": "Onboarding state is keyed by tenant and read after the session binds it.",
+      "filedAs": "#3405",
+      "files": ["lib/onboarding/check.ts"]
+    },
+    "lib/plugins": {
+      "reason": "Plugin engine resolves the plugin/tenant pair and binds the context before executing tenant code.",
+      "filedAs": "#3405",
+      "files": ["lib/plugins/engine.ts"]
+    },
+    "lib/rbac": {
+      "reason": "RBAC config readers/writers are scoped to one tenant and run inside the caller transaction.",
+      "filedAs": "#3405",
+      "files": [
+        "lib/rbac/approval-workflows.ts",
+        "lib/rbac/enforce.ts",
+        "lib/rbac/field-permissions.ts",
+        "lib/rbac/record-permissions.ts"
+      ]
+    },
+    "lib/restore": {
+      "reason": "Selective restore works across tenants by design and runs under the super-admin arm.",
+      "filedAs": "#3405",
+      "files": ["lib/restore/restore-executor.ts"]
+    },
+    "lib/segments": {
+      "reason": "Segment evaluation reads contact rows for one tenant, bound by the route that requested the segment.",
+      "filedAs": "#3405",
+      "files": ["lib/segments/evaluate.ts"]
+    },
+    "lib/templates": {
+      "reason": "Industry template seeding writes rows for the tenant the setup flow just created.",
+      "filedAs": "#3405",
+      "files": ["lib/templates/resolve.ts"]
+    },
+    "lib/tenant": {
+      "reason": "Tenant-scoped helper library that binds app.current_tenant itself around the work it does.",
+      "filedAs": "#3405",
+      "files": ["lib/tenant/context.ts"]
+    },
+    "lib/tenants": {
+      "reason": "Tenant administration helpers (create/update organization) that run before or above a tenant context.",
+      "filedAs": "#3405",
+      "files": ["lib/tenants/provision.ts"]
+    },
+    "lib/usage": {
+      "reason": "Usage metering writes counters for the caller tenant, inside the request transaction.",
+      "filedAs": "#3405",
+      "files": ["lib/usage/notifications.ts", "lib/usage/tracker.ts"]
+    },
+    "lib/webhooks": {
+      "reason": "Outbound webhook dispatch reads delivery config for one tenant and binds it before signing the payload.",
+      "filedAs": "#3405",
+      "files": ["lib/webhooks/inbound-auth.ts"]
+    }
+  }
+}

@@ -205,7 +205,10 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6 sm:py-10 space-y-5">
+      {/* The root layout's SkipLink targets `#main-content` (#1842); this public
+          offer page is reached cold by a buyer, so the landmark has to be
+          reachable by the one affordance that does not need a mouse. */}
+      <main id="main-content" tabIndex={-1} className="max-w-3xl mx-auto px-4 py-6 sm:py-10 space-y-5 focus:outline-none">
         {/* What is below came out of a read that answered, and the refresh of it was refused. It is
             still the truth this session has — but the offer on the server may have moved since, and
             responding is deliberately left possible: accept/route.ts re-reads the row and refuses a

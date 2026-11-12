@@ -29,10 +29,7 @@ import { join } from 'node:path';
  */
 
 /** URL → the issue carrying the missing handler. May only SHRINK, entry by entry. */
-const ALLOWLIST: Record<string, string> = {
-  '/api/tenant/rbac/approval-rules':
-    '#2597: the Approval Rules tab renders a list against an endpoint that does not exist',
-};
+const ALLOWLIST: Record<string, string> = {};
 
 const pageSources = (dir = 'app', out: string[] = []): string[] => {
   for (const name of readdirSync(dir)) {

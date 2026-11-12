@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
   if (storedUrl !== null && destination === null) {
     // A registered destination that is not a safe absolute http(s) target —
     // e.g. a `javascript:` value written before this validation existed.
-    console.warn('[track] click refused unsafe registered destination for tracking id', tracked.id);
+    void logError({ error: new Error(`Unsafe registered destination for tracking id ${tracked.id}`), context: 'track/click unsafe destination', level: 'warning' });
   }
 
   if (!rateLimited) {
