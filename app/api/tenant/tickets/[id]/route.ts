@@ -26,6 +26,7 @@ import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { canTransitionTicket } from '@/lib/tickets';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -171,6 +172,31 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    // #3407: `status` is a transition, not an assignment. Read the state this
+    // request is acting on, both to refuse an illegal move and to CLAIM that
+    // exact from-state in the UPDATE below. `concurrencyGuard` cannot close
+    // this gap: it is opt-in (the detail page and kanban send no
+    // `expectedUpdatedAt`) and its own read is a separate statement, so a
+    // close/reopen landing in between would be silently stomped.
+    const [existing] = await db
+      .select({ id: supportTickets.id, status: supportTickets.status })
+      .from(supportTickets)
+      .where(and(
+        eq(supportTickets.tenantId, ctx.tenantId),
+        eq(supportTickets.id, id),
+        isNull(supportTickets.deletedAt),
+      ))
+      .limit(1);
+
+    if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+
+    if (v.status && !canTransitionTicket(existing.status, v.status)) {
+      return NextResponse.json(
+        { error: `Ticket cannot move from '${existing.status}' to '${v.status}'.` },
+        { status: 400 },
+      );
+    }
+
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, supportTickets, id, ctx.tenantId, expectedUpdatedAt);
@@ -191,28 +217,51 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (v.priority) updates['priority'] = v.priority;
     if (v.assigned_to) updates['assignedTo'] = v.assigned_to;
 
+    // The schema no longer supplies create defaults on PATCH (#3407), so a body
+    // with nothing writable is now possible. Say so instead of handing Drizzle
+    // an empty `.set()`.
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+    }
+
     let surveyToken: string | undefined;
     let surveyContactEmail: string | undefined;
     let surveyContactName: string | undefined;
     let ticketSubject: string | undefined;
 
     let notFound = false;
+    let lostStatusClaim = false;
     await db.transaction(async (tx) => {
       // #2525: this UPDATE was already tenant-scoped, but its result was never
       // checked — so a foreign `id` matched 0 rows and execution continued into
       // the CSAT branch below. `.returning()` makes "did I own this row?" a
       // fact instead of an assumption.
+      //
+      // #3407: when this request writes `status`, the WHERE also claims the
+      // exact state the vet above read. Postgres re-evaluates it under the row
+      // lock, so a concurrent close/reopen becomes zero rows instead of a
+      // silent stomp. The `deletedAt` gate the vet applied is retained for the
+      // same reason: a soft-deleted ticket is not this handler's to edit.
       const [updated] = await tx.update(supportTickets)
         .set(updates)
-        .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)))
+        .where(and(
+          eq(supportTickets.tenantId, ctx.tenantId),
+          eq(supportTickets.id, id),
+          isNull(supportTickets.deletedAt),
+          ...(v.status ? [eq(supportTickets.status, existing.status)] : []),
+        ))
         .returning({ id: supportTickets.id });
 
       if (!updated) {
-        notFound = true;
+        if (v.status) lostStatusClaim = true;
+        else notFound = true;
         return;
       }
 
-      if (v.status === 'resolved') {
+      // #3407: only a real move into `resolved` mints a survey. Re-clicking
+      // "Resolved" on a ticket that is already resolved used to insert another
+      // `csat_surveys` row and send another email.
+      if (v.status === 'resolved' && existing.status !== 'resolved') {
         const [ticket] = await tx.select({
           contactId: supportTickets.contactId,
           subject: supportTickets.subject,
@@ -250,6 +299,16 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
         }
       }
     });
+
+    // #3407: the vet found this ticket and the write claimed the status it
+    // read, so zero rows is the race itself — refuse it, and stop before the
+    // survey insert and the outbound email.
+    if (lostStatusClaim) {
+      return NextResponse.json(
+        { error: `Ticket status changed concurrently — cannot move '${existing.status}' to '${v.status}'. Reload and retry.` },
+        { status: 409 },
+      );
+    }
 
     // #2525: a foreign id matched no row, so this is the honest answer — and it
     // stops before the survey insert and the outbound email.

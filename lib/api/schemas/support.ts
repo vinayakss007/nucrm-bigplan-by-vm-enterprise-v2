@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
+import { TICKET_STATUSES } from '@/lib/tickets';
 import { uuid, requiredString } from './common';
 
 // ── Ticket schemas ──
@@ -18,16 +19,27 @@ import { uuid, requiredString } from './common';
  * the 500. Both names are accepted, and at least one must carry text.
  */
 const ticketBodyField = z.string().trim().max(10000);
+/**
+ * The PATCH contract is this object `.partial()`d, so it must not carry create
+ * defaults: `.partial()` wraps a defaulted field in `optional()` but Zod still
+ * applies the inner default, so `updateTicketSchema.parse({ priority: 'high' })`
+ * returned `status: 'open'` and `tags: []` too. Every priority/assignee edit
+ * therefore rewrote the status to `open` (#3407). Defaults live only on
+ * `createTicketSchema` below.
+ */
 const ticketFieldsSchema = z.object({
   subject: requiredString.max(300, 'Subject too long'),
   description: ticketBodyField.nullable().optional(),
   body: ticketBodyField.nullable().optional(),
-  status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed', 'awaiting_customer', 'on_hold', 'escalated']).optional().default('open'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
+  // #3407: the DB CHECK's vocabulary (`chk_support_tickets_status`, 0050), not
+  // the old `pending`/`awaiting_customer` pair it never accepted. One list in
+  // `lib/tickets.ts` feeds both this schema and the transition registry.
+  status: z.enum(TICKET_STATUSES).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional(),
   category: z.string().trim().max(100).nullable().optional(),
   contact_id: uuid,
   assigned_to: uuid,
-  tags: z.array(z.string()).optional().default([]),
+  tags: z.array(z.string()).optional(),
 });
 
 /**
@@ -40,15 +52,21 @@ export function ticketBodyText(v: { description?: string | null; body?: string |
   return description || (v.body ?? '').trim();
 }
 
-export const createTicketSchema = ticketFieldsSchema.superRefine((v, ctx) => {
-  if (!ticketBodyText(v)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['description'],
-      message: 'description (or body) is required',
-    });
-  }
-});
+export const createTicketSchema = ticketFieldsSchema
+  .extend({
+    status: z.enum(TICKET_STATUSES).optional().default('open'),
+    priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
+    tags: z.array(z.string()).optional().default([]),
+  })
+  .superRefine((v, ctx) => {
+    if (!ticketBodyText(v)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['description'],
+        message: 'description (or body) is required',
+      });
+    }
+  });
 
 // `.partial()` refuses a refined object, so the PATCH contract is derived from
 // the unrefined fields — a status/priority-only edit stays valid.

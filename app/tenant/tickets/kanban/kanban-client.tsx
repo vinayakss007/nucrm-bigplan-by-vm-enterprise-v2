@@ -16,6 +16,7 @@ import {
   GripVertical, ArrowLeft, LifeBuoy, User, Clock, AlertCircle
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { canTransitionTicket } from '@/lib/tickets';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -189,6 +190,14 @@ export default function TicketsKanbanPage() {
     if (!validStatuses.includes(newStatus)) return;
 
     if (activeTicket.status === newStatus) return;
+
+    // #3407: the PATCH refuses a move the registry does not allow (closed is
+    // terminal except for a reopen), so refuse it here before the optimistic
+    // update puts a status on screen the server will not store.
+    if (!canTransitionTicket(activeTicket.status, newStatus)) {
+      toast.error(`Cannot move a ${activeTicket.status.replace('_', ' ')} ticket to ${newStatus.replace('_', ' ')}`);
+      return;
+    }
 
     // Optimistic update
     setTickets(prev => prev.map(t => t.id === activeTicket.id ? { ...t, status: newStatus as Ticket['status'] } : t));
