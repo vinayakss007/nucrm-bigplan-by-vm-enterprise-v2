@@ -63,6 +63,28 @@ Use `/api/health` for load-balancer liveness and `/api/system/health` for deeper
 | **Alertmanager** | Routes Prometheus alerts (thresholds defined in `deploy/monitoring/`). |
 | **Sentry**       | Notifies on new/spiking exceptions.                                    |
 
+**Ask the deployment what it actually has** (#2542): `GET /api/system/health`
+(superadmin) returns an `alerting` block:
+
+```json
+"alerting": {
+  "configured": false,
+  "channels": { "webhook": false, "discord": false, "slack": false,
+                "pagerduty": false, "telegram": false, "sentry": false, "email": false },
+  "unconfigured": ["webhook", "discord", "slack", "pagerduty", "telegram", "sentry", "email"],
+  "missingVars": ["CRITICAL_ERROR_WEBHOOK_URL", "DISCORD_WEBHOOK_URL", "..."],
+  "status": "degraded",
+  "productionExpectation": true
+}
+```
+
+It reports booleans and variable **names**, never a URL, token or DSN. `configured: false`
+in production makes the endpoint's overall `status` `degraded` — nothing can page a human,
+which is the state that let "no alert has ever been delivered" stay invisible. Sentry alone
+does not count as reaching a human (it is a dashboard, and `SENTRY_AUTH_TOKEN` cannot read
+issues — #2125), and a channel with its kill switch on (`PAGERDUTY_ENABLED=false`,
+`SENTRY_DISABLE=true`) is reported as unconfigured: presence is not enabled.
+
 ---
 
 ## What to watch
