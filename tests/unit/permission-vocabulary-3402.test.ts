@@ -223,17 +223,18 @@ describe('the vocabulary on this tree', () => {
     }
   });
 
-  it('is honest that 14 ids are still configured but unread — that is #3402 PR-2E, not this screen', () => {
-    expect(result.counts.inert).toBe(14);
+  it('is honest that 12 ids are still configured but unread — that is #3402 PR-2E, not this screen', () => {
+    expect(result.counts.inert).toBe(12);
     expect(result.inert).toContain('invoices.create');
     expect(result.inert).toContain('invoices.send');
-    expect(result.inert).toContain('subscriptions.manage');
+    expect(result.inert).not.toContain('contracts.create');
+    expect(result.inert).not.toContain('subscriptions.manage');
     expect(result.inert).not.toContain('projects.edit');
   });
 
   it('writes a reason for every floor entry, because an unnamed exemption is not reviewable', () => {
     const floor = JSON.parse(readFileSync(join(ROOT, DEFAULT_BASELINE_PATH), 'utf8'));
-    expect(floor.inert).toHaveLength(14);
+    expect(floor.inert).toHaveLength(12);
     for (const entry of floor.inert) {
       expect(typeof entry.reason).toBe('string');
       expect(entry.reason.length).toBeGreaterThan(20);
