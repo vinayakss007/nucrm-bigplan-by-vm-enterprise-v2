@@ -25,6 +25,7 @@
 
 import { getPool } from './pool';
 import { isTransientError } from './retry';
+import { assertPoolMode, isPgBouncerInUse, PoolModeInvariantError } from './pool-mode-guard';
 
 /**
  * Pre-establish connections by acquiring and releasing clients.
@@ -63,20 +64,34 @@ export async function warmPool(count?: number, timeoutMs = 10_000): Promise<numb
       if (Date.now() > deadline) return false;
       try {
         const client = await pool.connect();
-        // Run a trivial query to ensure the connection is fully established
-        // (not just TCP-connected but also authenticated and ready).
-        await client.query('SELECT 1');
+        // #3506: when PgBouncer is in use, assert SHOW pool_mode = 'session'
+        // on the warm-up connection so an unsafe transaction pooler fails fast.
+        if (isPgBouncerInUse()) {
+          await assertPoolMode(async (sql) => client.query(sql));
+        } else {
+          // Run a trivial query to ensure the connection is fully established
+          // (not just TCP-connected but also authenticated and ready).
+          await client.query('SELECT 1');
+        }
         client.release();
         warmed++;
         return true;
       } catch (err) {
+        if (err instanceof PoolModeInvariantError) {
+          throw err;
+        }
         if (isTransientError(err)) sawTransient = true;
         console.warn('[pool-warmup] Failed to warm a connection:', err instanceof Error ? err.message : err);
         return false;
       }
     });
 
-    await Promise.allSettled(promises);
+    const results = await Promise.allSettled(promises);
+    for (const res of results) {
+      if (res.status === 'rejected' && res.reason instanceof PoolModeInvariantError) {
+        throw res.reason;
+      }
+    }
 
     if (warmed > 0) {
       console.log(`[pool-warmup] Warmed ${warmed}/${target} connections (pool max: ${poolMax})`);

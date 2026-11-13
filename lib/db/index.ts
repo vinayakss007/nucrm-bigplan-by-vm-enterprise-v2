@@ -38,3 +38,13 @@ export {
 export {
   ensureSchema,
 } from './ensure-schema';
+
+// Pool mode assertion (#3506)
+export {
+  assertPoolMode,
+  guardPoolMode,
+  getPoolModeGuardStatus,
+  resetPoolModeGuardStatus,
+  isPgBouncerInUse,
+  PoolModeInvariantError,
+} from './pool-mode-guard';
