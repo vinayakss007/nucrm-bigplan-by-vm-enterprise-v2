@@ -204,6 +204,7 @@ node -e 'const b=require("fs").readFileSync(".github/workflows/ci.yml","utf8").s
 node -e 'const fs=require("fs");const a=Object.keys(require("./package.json").scripts).filter(k=>k.startsWith("guard:"));
 for(const f of fs.readdirSync(".github/workflows")){const b=fs.readFileSync(".github/workflows/"+f,"utf8");
 const n=a.filter(x=>b.includes("npm run "+x));if(n.length)console.log(f.padEnd(20),n.length+"/"+a.length);}'
+node scripts/guard-census.mjs                         # full alias-resolving census with bare-invocation detection (#3412)
 command -v pm2 || echo "pm2 not installed"           # on this host: not installed
 docker ps --format '{{.Names}}'                      # nucrm-app, nucrm-nginx, nucrm-pgbouncer + monitoring
 ```
