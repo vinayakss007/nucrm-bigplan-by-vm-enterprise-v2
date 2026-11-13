@@ -96,7 +96,10 @@ export const POST = withApiRoute(async (req: NextRequest,
 
     // Module registry rows: best-effort, mirrors pre-#2633 behaviour but now
     // resolves modules from the DB template (slug first, id fallback).
-    await installTemplateModules(v.tenant_id, template.slug ?? template.id).catch(() => ({ installed: 0, failed: [] }));
+    await installTemplateModules(v.tenant_id, template.slug ?? template.id).catch((err: unknown) => {
+      void logError({ error: err, context: 'superadmin/templates/[id]/assign installTemplateModules', level: 'warning', tenantId: v.tenant_id });
+      return { installed: 0, failed: [] };
+    });
 
     return NextResponse.json(
       { data: assignment ? { ...assignment, template_id: template.id, tenant_id: v.tenant_id } : null, created, report },

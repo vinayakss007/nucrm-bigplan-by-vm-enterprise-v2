@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -77,7 +78,12 @@ async function postJson(url: string, body: unknown, token?: string): Promise<{ o
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
-  const data = res.headers.get('content-type')?.includes('json') ? await res.json().catch(() => undefined) : undefined;
+  const data = res.headers.get('content-type')?.includes('json')
+    ? await res.json().catch((err: unknown) => {
+        void logError({ error: err, context: 'bug-report:json-parse', level: 'warning' });
+        return undefined;
+      })
+    : undefined;
   return { ok: res.ok, status: res.status, data };
 }
 
