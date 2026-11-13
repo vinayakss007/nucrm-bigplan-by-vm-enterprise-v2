@@ -144,7 +144,7 @@
     "prod:preflight": "node scripts/assert-runtime-env.mjs --expect-production --auto-source && npx tsx scripts/diagnose-production.ts",
     "deploy:verify-host": "npx tsx --import ./scripts/load-env.mjs scripts/verify-deploy-host.mts",
     "prod:start": "bash scripts/start-production.sh",
-    "prod:start:custom": "node --max-old-space-size=2048 node_modules/next/dist/bin/next start -H 127.0.0.1",
+    "prod:start:custom": "node --max-old-space-size=2048 node_modules/next/dist/bin/next start -H 0.0.0.0",
     "telegram:setup-webhook": "npx tsx scripts/telegram-setup-webhook.ts",
     "demo:setup": "npx tsx scripts/seed-dev.ts",
     "worker": "tsx worker.ts",
