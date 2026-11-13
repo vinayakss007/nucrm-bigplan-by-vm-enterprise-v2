@@ -414,12 +414,22 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:-nucrm}
-      # #3404: this service declared POOL_MODE=transaction with NO server_reset_query,
+      # #3404, #3517: this service declared POOL_MODE=transaction with NO server_reset_query,
       # which is the tenant-leak combination twice over — session-scoped
       # app.current_tenant (ADR-0003) survives the recycle, and the one setting that
       # could clear it was never declared. Nothing failed only because this file's
       # DATABASE_URL is operator-supplied: the moment it names `pgbouncer:6432` the
       # leak is live. `guard:pool-mode` now fails the build on any drift.
+      #
+      # ACTIVATION / INTENT (#3517):
+      # This service is maintained for operators wishing to enable connection pooling.
+      # To activate PgBouncer in this production compose topology:
+      #   1. Set DATABASE_URL to route to pgbouncer:6432 (e.g. postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB})
+      #   2. Add PGBOUNCER_ENABLED=true to the environment of `app` and `worker` services.
+      #   3. Size MAX_DB_CONNECTIONS against postgresql.conf max_connections.
+      # Session-mode (POOL_MODE=session) and reset query (SERVER_RESET_QUERY=DISCARD ALL)
+      # are enforced by guard:pool-mode (#3404) and validated at boot by lib/db/pool-mode-guard.ts (#3506).
+      #
       # Sizing, stated honestly because session pooling changes what the limits mean:
       # one client holds one server connection, so MAX_DB_CONNECTIONS=50 is the real
       # concurrency ceiling, and this file's own defaults can exceed it —
