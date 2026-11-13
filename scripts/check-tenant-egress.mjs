@@ -53,14 +53,14 @@
  *   node scripts/check-tenant-egress.mjs --update     # append TODO-reasoned exemptions
  */
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
 
 /** Server trust domains that can issue an outbound request on behalf of a tenant. */
-const DEFAULT_ROOTS = ['app', 'lib', 'worker.ts'];
+const DEFAULT_ROOTS = ["app", "lib", "worker.ts"];
 
 const SKIP_RE = /(^|\/)(node_modules|\.next|coverage)\//;
 const TEST_RE = /(\.test\.|\.spec\.)/;
@@ -75,54 +75,81 @@ const TEST_RE = /(\.test\.|\.spec\.)/;
 export const ALLOWED_FILES = {
   // Client-side helpers: not server egress. The URL is chosen by a component,
   // the browser enforces same-origin, and callers only pass `/api/…` paths.
-  'lib/fetch-json.ts': 'client-side same-origin data layer (#2231); imported only from client components with /api/… paths',
-  'lib/utils.ts': 'client-side helper; the URL argument comes from a component, not from tenant data',
-  'lib/analytics/client.ts': 'relative /api/track/event from a client component',
+  "lib/fetch-json.ts":
+    "client-side same-origin data layer (#2231); imported only from client components with /api/… paths",
+  "lib/utils.ts":
+    "client-side helper; the URL argument comes from a component, not from tenant data",
+  "lib/analytics/client.ts":
+    "relative /api/track/event from a client component",
 
   // Operator-configured sinks. The host comes from the deployment environment,
   // never from tenant data — moving it requires already controlling the host.
-  'lib/grafana.ts': 'OTEL/Loki push to operator-configured LOKI_URL / OTEL_ENDPOINT (#3292 scope is tenant-controlled egress)',
-  'lib/critical-error-alert.ts': 'alert webhook from CRITICAL_ERROR_WEBHOOK_URL — deployment env, not tenant data',
-  'lib/email/service.ts': 'Discord/Slack alert webhooks from DISCORD_WEBHOOK_URL / SLACK_WEBHOOK_URL — deployment env, not tenant data',
-  'lib/sms.ts': 'Twilio REST URL built from the account SID in env — deployment env, not tenant data',
-  'lib/esignature.ts': 'vendor base URL from DOCUSIGN_BASE_URL / HELLOSIGN_BASE_URL with a literal fallback — deployment env',
-  'lib/calendar-sync/google.ts': 'Google token/calendar authorities are module literals',
-  'lib/calendar-sync/outlook.ts': 'Microsoft token/graph authorities are module literals',
-  'lib/sdk/realtime.ts': 'published SDK client: baseUrl is set by the integrating developer, not by tenant data',
-  'lib/sdk/client.ts': 'published SDK client: same shape as lib/sdk/realtime.ts',
-  'lib/integrations/sdk.ts': 'the external NuCRM SDK (`createNuCRM({ baseUrl })`): runs in the integrator\'s own process, and its authority is a constructor argument, not tenant data',
+  "lib/grafana.ts":
+    "OTEL/Loki push to operator-configured LOKI_URL / OTEL_ENDPOINT (#3292 scope is tenant-controlled egress)",
+  "lib/critical-error-alert.ts":
+    "alert webhook from CRITICAL_ERROR_WEBHOOK_URL — deployment env, not tenant data",
+  "lib/email/service.ts":
+    "Discord/Slack alert webhooks from DISCORD_WEBHOOK_URL / SLACK_WEBHOOK_URL — deployment env, not tenant data",
+  "lib/sms.ts":
+    "Twilio REST URL built from the account SID in env — deployment env, not tenant data",
+  "lib/esignature.ts":
+    "vendor base URL from DOCUSIGN_BASE_URL / HELLOSIGN_BASE_URL with a literal fallback — deployment env",
+  "lib/calendar-sync/google.ts":
+    "Google token/calendar authorities are module literals",
+  "lib/calendar-sync/outlook.ts":
+    "Microsoft token/graph authorities are module literals",
+  "lib/sdk/realtime.ts":
+    "published SDK client: baseUrl is set by the integrating developer, not by tenant data",
+  "lib/sdk/client.ts":
+    "published SDK client: same shape as lib/sdk/realtime.ts",
+  "lib/integrations/sdk.ts":
+    "the external NuCRM SDK (`createNuCRM({ baseUrl })`): runs in the integrator's own process, and its authority is a constructor argument, not tenant data",
 
   // Payment wrappers: the base is a literal but the endpoint argument is
   // `endpoint.startsWith('http') ? endpoint : …`, so a caller COULD hand it a
   // full URL. Every current caller passes a path. This is the one entry that is
   // a judgement rather than a proof, so a follow-up should start here.
-  'lib/stripe.ts': "Stripe base is a literal; the ternary would accept an absolute endpoint, and today's callers pass paths",
-  'lib/razorpay.ts': 'Razorpay base is a literal; same ternary shape as lib/stripe.ts',
+  "lib/stripe.ts":
+    "Stripe base is a literal; the ternary would accept an absolute endpoint, and today's callers pass paths",
+  "lib/razorpay.ts":
+    "Razorpay base is a literal; same ternary shape as lib/stripe.ts",
 
   // Self-calls: the authority is the incoming request's own host or the app's
   // configured public URL, so the request cannot reach a new authority.
-  'app/api/v1/[...path]/route.ts': 'gateway proxies to a URL built from request.url — same host',
-  'app/api/v2/[...path]/route.ts': 'gateway proxies to a URL built from request.url — same host',
-  'app/api/tenant/backup/route.ts': "self-call to /api/cron/backup on NEXT_PUBLIC_APP_URL, the app's own public origin",
-  'app/auth/login/actions.ts': 'server-action self-call on APP_URL / NEXT_PUBLIC_APP_URL',
-  'app/api/bug-report/route.ts': "posts to the app's own /api surface via a URL built from request.url",
-  'app/api/embed/form.js/route.ts': 'serves the embeddable widget: the fetch runs in the embedder\'s browser against a literal script origin',
+  "app/api/v1/[...path]/route.ts":
+    "gateway proxies to a URL built from request.url — same host",
+  "app/api/tenant/backup/route.ts":
+    "self-call to /api/cron/backup on NEXT_PUBLIC_APP_URL, the app's own public origin",
+  "app/auth/login/actions.ts":
+    "server-action self-call on APP_URL / NEXT_PUBLIC_APP_URL",
+  "app/api/bug-report/route.ts":
+    "posts to the app's own /api surface via a URL built from request.url",
+  "app/api/embed/form.js/route.ts":
+    "serves the embeddable widget: the fetch runs in the embedder's browser against a literal script origin",
 
   // Literal authority with only credentials/ids interpolated after the first
   // `/`, so the holes cannot move the host.
-  'app/api/webhooks/telegram/bot/route.ts': 'literal api.telegram.org authority; only the bot token is interpolated',
-  'app/api/tenant/integrations/telegram/test/route.ts': 'literal api.telegram.org authority; only the bot token is interpolated',
-  'app/api/user/telegram/route.ts': 'literal api.telegram.org authority; only the bot token is interpolated',
-  'app/api/tenant/whatsapp/send/route.ts': 'literal graph.facebook.com authority; only the phone-number id and token are interpolated',
-  'app/api/tenant/whatsapp/templates/route.ts': 'literal graph.facebook.com authority; only the business account id and token are interpolated',
-  'instrumentation.ts': 'literal api.telegram.org authority at boot; the bot token comes from env',
+  "app/api/webhooks/telegram/bot/route.ts":
+    "literal api.telegram.org authority; only the bot token is interpolated",
+  "app/api/tenant/integrations/telegram/test/route.ts":
+    "literal api.telegram.org authority; only the bot token is interpolated",
+  "app/api/user/telegram/route.ts":
+    "literal api.telegram.org authority; only the bot token is interpolated",
+  "app/api/tenant/whatsapp/send/route.ts":
+    "literal graph.facebook.com authority; only the phone-number id and token are interpolated",
+  "app/api/tenant/whatsapp/templates/route.ts":
+    "literal graph.facebook.com authority; only the business account id and token are interpolated",
+  "instrumentation.ts":
+    "literal api.telegram.org authority at boot; the bot token comes from env",
 };
 
 /** `const name = …` / `let name = …` — the RHS is kept for provenance, not parsed. */
-const DECL_RE = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]{0,120})?=\s*([^\n;]{0,240})/g;
+const DECL_RE =
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]{0,120})?=\s*([^\n;]{0,240})/g;
 
 /** Same-origin self-call: the authority is the request's own host. */
-const SELF_ORIGIN_RE = /\b(?:request\.url|req\.url|nextUrl\b|new URL\([^)]*\.url)/i;
+const SELF_ORIGIN_RE =
+  /\b(?:request\.url|req\.url|nextUrl\b|new URL\([^)]*\.url)/i;
 
 function isSkipped(path) {
   return SKIP_RE.test(path) || TEST_RE.test(path);
@@ -148,21 +175,29 @@ function walk(abs, out) {
 export function firstArgument(src, openParenIndex) {
   let depth = 1;
   let quote = null;
-  let arg = '';
+  let arg = "";
   for (let i = openParenIndex + 1; i < src.length && arg.length < 400; i++) {
     const c = src[i];
     if (quote) {
-      if (c === '\\') { arg += c + (src[i + 1] ?? ''); i++; continue; }
+      if (c === "\\") {
+        arg += c + (src[i + 1] ?? "");
+        i++;
+        continue;
+      }
       if (c === quote) quote = null;
       arg += c;
       continue;
     }
-    if (c === "'" || c === '"' || c === '`') { quote = c; arg += c; continue; }
-    if (c === '(' || c === '[' || c === '{') depth++;
-    else if (c === ')' || c === ']' || c === '}') {
+    if (c === "'" || c === '"' || c === "`") {
+      quote = c;
+      arg += c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
       depth--;
       if (depth === 0) break;
-    } else if (c === ',' && depth === 1) break;
+    } else if (c === "," && depth === 1) break;
     arg += c;
   }
   return arg.trim();
@@ -175,7 +210,7 @@ export function firstArgument(src, openParenIndex) {
  * cannot move the host, while `${base}` at position 0 can move it anywhere.
  */
 export function analyzeAuthority(expr) {
-  let staticText = '';
+  let staticText = "";
   const inAuthority = [];
   let i = 0;
   while (i < expr.length && staticText.length < 300) {
@@ -186,21 +221,31 @@ export function analyzeAuthority(expr) {
       i = end === -1 ? expr.length : end + 1;
       continue;
     }
-    if (c === '`') {
+    if (c === "`") {
       let j = i + 1;
       let ended = false;
       while (j < expr.length) {
         const d = expr[j];
-        if (d === '\\') { staticText += expr[j + 1] ?? ''; j += 2; continue; }
-        if (d === '`') { ended = true; break; }
-        if (d === '$' && expr[j + 1] === '{') {
+        if (d === "\\") {
+          staticText += expr[j + 1] ?? "";
+          j += 2;
+          continue;
+        }
+        if (d === "`") {
+          ended = true;
+          break;
+        }
+        if (d === "$" && expr[j + 1] === "{") {
           let depth = 1;
           let k = j + 2;
-          let inner = '';
+          let inner = "";
           while (k < expr.length && depth > 0) {
             const e = expr[k];
-            if (e === '{') depth++;
-            else if (e === '}') { depth--; if (depth === 0) break; }
+            if (e === "{") depth++;
+            else if (e === "}") {
+              depth--;
+              if (depth === 0) break;
+            }
             inner += e;
             k++;
           }
@@ -255,29 +300,31 @@ function authorityIsComplete(staticText) {
  * would let the third fetch through the gate unnoticed.
  */
 function classifyRhs(rhs) {
-  if (SELF_ORIGIN_RE.test(rhs)) return { kind: 'self', rhs };
+  if (SELF_ORIGIN_RE.test(rhs)) return { kind: "self", rhs };
   const usesConfig = /\bconfig\b|\bconfig\[|\.config\b|\bargv\b/.test(rhs);
   const usesEnv = /process\.env/.test(rhs);
   const { staticText, inAuthority } = analyzeAuthority(rhs);
   if (inAuthority.length > 0 || !authorityIsComplete(staticText)) {
-    if (usesConfig) return { kind: 'data', rhs };
-    if (usesEnv) return { kind: 'env', rhs };
-    return { kind: 'data', rhs };
+    if (usesConfig) return { kind: "data", rhs };
+    if (usesEnv) return { kind: "env", rhs };
+    return { kind: "data", rhs };
   }
-  if (usesEnv || usesConfig) return { kind: 'env', rhs };
-  return { kind: 'literal', rhs };
+  if (usesEnv || usesConfig) return { kind: "env", rhs };
+  return { kind: "literal", rhs };
 }
 
 export function resolveName(name, decls) {
   const rhss = decls.get(name);
-  if (rhss === undefined || rhss.length === 0) return { kind: 'unknown', rhs: '' };
+  if (rhss === undefined || rhss.length === 0)
+    return { kind: "unknown", rhs: "" };
   const kinds = rhss.map(classifyRhs);
-  const unsound = kinds.find((k) => k.kind === 'data' || k.kind === 'unknown');
+  const unsound = kinds.find((k) => k.kind === "data" || k.kind === "unknown");
   if (unsound) return unsound;
-  const env = kinds.find((k) => k.kind === 'env');
+  const env = kinds.find((k) => k.kind === "env");
   if (env) return env;
-  if (kinds.every((k) => k.kind === 'self')) return { kind: 'self', rhs: rhss[0] };
-  return { kind: 'literal', rhs: rhss[0] };
+  if (kinds.every((k) => k.kind === "self"))
+    return { kind: "self", rhs: rhss[0] };
+  return { kind: "literal", rhs: rhss[0] };
 }
 
 function declarations(src) {
@@ -294,10 +341,11 @@ const IDENT_RE = /^([A-Za-z_$][\w$]*)/;
 
 export function scanFile(absPath, src) {
   if (/['"]use client['"]/.test(src.slice(0, 500))) return [];
-  const rel = relative(ROOT, absPath).replace(/\\/g, '/');
+  const rel = relative(ROOT, absPath).replace(/\\/g, "/");
   // The guard is the one file allowed to issue a bare fetch on a data-derived
   // authority — matching on the suffix keeps a fixture-scanned copy honest too.
-  if (rel === 'lib/security/ssrf.ts' || rel.endsWith('/lib/security/ssrf.ts')) return [];
+  if (rel === "lib/security/ssrf.ts" || rel.endsWith("/lib/security/ssrf.ts"))
+    return [];
   if (ALLOWED_FILES[rel]) return [];
 
   const decls = declarations(src);
@@ -307,7 +355,7 @@ export function scanFile(absPath, src) {
     if (/safeFetch\s*\($/.test(prefix)) continue;
     if (/await_fetch|globalThis\.fetch\s*\(/.test(prefix)) continue;
     const arg = firstArgument(src, m.index + m[0].length - 1);
-    if (arg === '') continue;
+    if (arg === "") continue;
 
     const { staticText, inAuthority } = analyzeAuthority(arg);
     const names = (inAuthority.length > 0 ? inAuthority : [arg])
@@ -320,7 +368,7 @@ export function scanFile(absPath, src) {
     const unproven = [];
     for (const name of names) {
       const r = resolveName(name, decls);
-      if (r.kind === 'literal' || r.kind === 'self') continue;
+      if (r.kind === "literal" || r.kind === "self") continue;
       // The file runs this exact name through the guard before fetching.
       if (new RegExp(`assertSafeUrl\\(\\s*${name}\\b`).test(src)) continue;
       unproven.push(`${name}:${r.kind}`);
@@ -330,9 +378,10 @@ export function scanFile(absPath, src) {
 
     offenders.push({
       file: rel,
-      line: src.slice(0, m.index).split('\n').length,
+      line: src.slice(0, m.index).split("\n").length,
       target: arg.slice(0, 90),
-      authorities: unproven.length > 0 ? unproven : ['(no written-out authority)'],
+      authorities:
+        unproven.length > 0 ? unproven : ["(no written-out authority)"],
     });
   }
   return offenders;
@@ -343,7 +392,7 @@ export function scanEgress({ roots = DEFAULT_ROOTS } = {}) {
   // `resolve`, not `join`: a caller pointing the scan at a fixture directory
   // (the tests do this) passes an absolute path, and join would happily append it
   // onto the repo root instead of honouring it.
-  for (const r of (Array.isArray(roots) ? roots : [roots])) {
+  for (const r of Array.isArray(roots) ? roots : [roots]) {
     const abs = resolve(ROOT, r);
     let st;
     try {
@@ -356,7 +405,7 @@ export function scanEgress({ roots = DEFAULT_ROOTS } = {}) {
   }
   const offenders = files
     .filter((f) => /\.(ts|tsx)$/.test(f))
-    .flatMap((f) => scanFile(f, readFileSync(f, 'utf8')));
+    .flatMap((f) => scanFile(f, readFileSync(f, "utf8")));
   offenders.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
   return { scanned: files.length, offenders };
 }
@@ -366,49 +415,67 @@ export function formatReport({ scanned, offenders }) {
     `[tenant-egress] ${scanned} server files scanned · ${offenders.length} fetch target(s) with an unproven authority`,
   ];
   for (const o of offenders) {
-    lines.push(`  ${o.file}:${o.line}  fetch(${o.target}  ← ${o.authorities.join(', ')}`);
+    lines.push(
+      `  ${o.file}:${o.line}  fetch(${o.target}  ← ${o.authorities.join(", ")}`,
+    );
   }
   if (offenders.length > 0) {
-    lines.push('');
-    lines.push('  A request whose authority is not provably a literal in the source must be issued');
-    lines.push('  with safeFetch() from lib/security/ssrf.ts (DNS rebinding + private/link-local');
-    lines.push('  block + redirect re-validation), or run the URL through assertSafeUrl() first (#3292).');
+    lines.push("");
+    lines.push(
+      "  A request whose authority is not provably a literal in the source must be issued",
+    );
+    lines.push(
+      "  with safeFetch() from lib/security/ssrf.ts (DNS rebinding + private/link-local",
+    );
+    lines.push(
+      "  block + redirect re-validation), or run the URL through assertSafeUrl() first (#3292).",
+    );
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 const argv = process.argv.slice(2);
 
 function main() {
-  const rootsFlag = argv.find((a) => a.startsWith('--roots='));
-  const roots = rootsFlag ? rootsFlag.split('=')[1].split(',') : DEFAULT_ROOTS;
+  const rootsFlag = argv.find((a) => a.startsWith("--roots="));
+  const roots = rootsFlag ? rootsFlag.split("=")[1].split(",") : DEFAULT_ROOTS;
 
-  if (argv.includes('--update')) {
+  if (argv.includes("--update")) {
     const { offenders } = scanEgress({ roots });
     const byFile = {};
-    for (const o of offenders) byFile[o.file] ??= `TODO justify (#3292): ${o.target}`;
+    for (const o of offenders)
+      byFile[o.file] ??= `TODO justify (#3292): ${o.target}`;
     if (Object.keys(byFile).length === 0) {
       // Rewriting the block is how the reasons get lost: `--update` regenerates it
       // with JSON, which keeps the entries but drops the comment groups that say
       // why each class of site is acceptable. Nothing to add means nothing to do.
-      console.log('nothing to allowlist — the tree is clean, and the written reasons are left alone');
+      console.log(
+        "nothing to allowlist — the tree is clean, and the written reasons are left alone",
+      );
       return;
     }
-    const path = join(ROOT, 'scripts', 'check-tenant-egress.mjs');
+    const path = join(ROOT, "scripts", "check-tenant-egress.mjs");
     writeFileSync(
       path,
-      readFileSync(path, 'utf8').replace(
+      readFileSync(path, "utf8").replace(
         /const ALLOWED_FILES = \{[\s\S]*?\n\};/,
         `const ALLOWED_FILES = ${JSON.stringify({ ...ALLOWED_FILES, ...byFile }, null, 2)};`,
       ),
     );
-    console.log(`allowlisted ${Object.keys(byFile).length} new file(s) with TODO reasons — edit them before committing`);
+    console.log(
+      `allowlisted ${Object.keys(byFile).length} new file(s) with TODO reasons — edit them before committing`,
+    );
     return;
   }
 
   const report = scanEgress({ roots });
-  console.log(argv.includes('--json') ? JSON.stringify(report, null, 2) : formatReport(report));
+  console.log(
+    argv.includes("--json")
+      ? JSON.stringify(report, null, 2)
+      : formatReport(report),
+  );
   process.exit(report.offenders.length > 0 ? 1 : 0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1])
+  main();

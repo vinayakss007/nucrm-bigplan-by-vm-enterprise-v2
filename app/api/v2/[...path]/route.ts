@@ -3,28 +3,47 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { NextRequest, NextResponse } from 'next/server';
-import { logError } from '@/lib/errors-server';
-import { resolveGatewayTenant, validateCORS } from '@/lib/api/gateway';
+import { NextRequest, NextResponse } from "next/server";
+import { resolveGatewayTenant, validateCORS } from "@/lib/api/gateway";
+import { SUNSET_DATE } from "@/lib/api/deprecation";
 
 /**
  * Catch-all handler for /api/v2/*
- * Resolves tenant via gateway and proxies to /api/tenant/* routes.
+ *
+ * #3504 / PR-7A: /api/v2 is deprecated and redirects cleanly to /api/tenant/*.
+ * The previous implementation was an internal HTTP loopback proxy that re-fetched
+ * internal routes over HTTP. That introduced latency, connection overhead,
+ * header forwarding vulnerabilities, and redundant rate-limit / auth evaluation.
+ *
+ * Routes are now redirected cleanly (308 for GET/HEAD, 307 for mutating methods)
+ * with standard IETF deprecation/sunset headers, preserving query parameters and CORS.
  */
 
-function setCORSHeaders(response: NextResponse, origin: string | null): NextResponse {
+function setCORSHeaders(
+  response: NextResponse,
+  origin: string | null,
+): NextResponse {
   if (origin) {
-    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set("Access-Control-Allow-Origin", origin);
   }
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Tenant-ID, X-Requested-With');
-  response.headers.set('Vary', 'Origin');
+  response.headers.set("Access-Control-Allow-Credentials", "true");
+  response.headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+  );
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Tenant-ID, X-Requested-With",
+  );
+  response.headers.set("Vary", "Origin");
   return response;
 }
 
-async function handleRequest(request: NextRequest, params: { path: string[] }): Promise<NextResponse> {
-  const origin = request.headers.get('origin');
+async function handleRequest(
+  request: NextRequest,
+  params: { path: string[] },
+): Promise<NextResponse> {
+  const origin = request.headers.get("origin");
 
   // Resolve tenant from gateway
   const resolution = await resolveGatewayTenant(request);
@@ -33,8 +52,8 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
     // methods (API key / X-Tenant-ID / custom domain), which aided attackers
     // in mapping the auth architecture.
     const errorResponse = NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
+      { error: "Unauthorized" },
+      { status: 401 },
     );
     return setCORSHeaders(errorResponse, origin);
   }
@@ -43,93 +62,81 @@ async function handleRequest(request: NextRequest, params: { path: string[] }): 
   const corsValid = await validateCORS(origin, resolution.tenantId);
   if (!corsValid) {
     const errorResponse = NextResponse.json(
-      { error: 'Origin not allowed for this tenant' },
-      { status: 403 }
+      { error: "Origin not allowed for this tenant" },
+      { status: 403 },
     );
     return setCORSHeaders(errorResponse, null);
   }
 
-  // Build the internal tenant API path
+  // Build the target tenant API path
   const pathSegments = params.path;
-  const internalPath = `/api/tenant/${pathSegments.join('/')}`;
+  const internalPath = `/api/tenant/${pathSegments.join("/")}`;
   const targetUrl = new URL(internalPath, request.url);
 
   // Preserve query string natively using URLSearchParams constructor
   targetUrl.search = request.nextUrl.search;
 
-  // Proxy the request to the internal path
-  const headers = new Headers(request.headers);
-  headers.set('X-NuCRM-Gateway-Tenant', resolution.tenantId);
-  // Remove host header to avoid conflicts when making loopback fetch
-  headers.delete('host');
+  // #3504: Clean redirect rather than internal loopback fetch.
+  // Preserves HTTP verb semantics (308 for GET/HEAD, 307 for mutating methods).
+  const redirectStatus =
+    request.method === "GET" || request.method === "HEAD" ? 308 : 307;
+  const response = NextResponse.redirect(targetUrl, {
+    status: redirectStatus,
+    headers: {
+      Deprecation: "true",
+      Sunset: new Date(`${SUNSET_DATE}T23:59:59Z`).toUTCString(),
+      Link: `<${internalPath}>; rel="successor-version"`,
+      "X-Deprecation-Notice": `The /api/v2 loopback proxy is deprecated. Call ${internalPath} directly.`,
+    },
+  });
 
-  try {
-    let body = undefined;
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      body = request.body; // Stream the body directly instead of fully buffering into a blob
-    }
-
-    // Explicitly casting the fetch options to bypass the duplex typing limitation in standard node fetch definitions,
-    // which is safely supported in Next.js's patched fetch for streaming.
-    const fetchOptions = {
-      method: request.method,
-      headers,
-      body,
-      redirect: 'manual',
-      duplex: 'half',
-      signal: AbortSignal.timeout(30_000),
-    } as RequestInit;
-
-    const proxyRes = await fetch(targetUrl.toString(), fetchOptions);
-
-    const responseHeaders = new Headers(proxyRes.headers);
-
-    const response = new NextResponse(proxyRes.body, {
-      status: proxyRes.status,
-      statusText: proxyRes.statusText,
-      headers: responseHeaders,
-    });
-
-    return setCORSHeaders(response, origin);
-  } catch (_error) {
-    void logError({ error: _error, context: 'api/v2 proxy' });
-    const errorResponse = NextResponse.json(
-      { error: 'Internal gateway error during proxy' },
-      { status: 502 }
-    );
-    return setCORSHeaders(errorResponse, origin);
-  }
+  return setCORSHeaders(response, origin);
 }
 
-export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const params = await context.params;
   return handleRequest(request, params);
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const params = await context.params;
   return handleRequest(request, params);
 }
 
-export async function PUT(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const params = await context.params;
   return handleRequest(request, params);
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const params = await context.params;
   return handleRequest(request, params);
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const params = await context.params;
   return handleRequest(request, params);
 }
 
 export async function OPTIONS(request: NextRequest) {
-  const origin = request.headers.get('origin');
+  const origin = request.headers.get("origin");
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response, origin);
-  response.headers.set('Access-Control-Max-Age', '86400');
+  response.headers.set("Access-Control-Max-Age", "86400");
   return response;
 }
