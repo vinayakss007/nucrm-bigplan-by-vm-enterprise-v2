@@ -20,6 +20,7 @@ vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: <T>(fn: T) => fn }));
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: () => Promise.resolve({ tenantId: TENANT, userId: 'u-1' }),
   requireCsrf: () => null,
+  requirePerm: () => null,
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: () => Promise.resolve(null) }));
 vi.mock('@/lib/errors-server', () => ({ logError: () => Promise.resolve() }));

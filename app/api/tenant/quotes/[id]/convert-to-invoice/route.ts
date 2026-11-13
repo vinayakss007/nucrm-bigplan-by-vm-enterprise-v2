@@ -11,7 +11,7 @@
  * Creates a new invoice from the quote's line items and links them.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
@@ -47,6 +47,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'invoices.create');
+    if (deny) return deny;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'Quote ID required' }, { status: 400 });

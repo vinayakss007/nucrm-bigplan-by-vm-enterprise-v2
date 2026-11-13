@@ -136,6 +136,7 @@ vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({ tenantId: TENANT, userId: 'member-1', role: 'admin' })),
   requireCsrf: vi.fn(() => null),
+  requirePerm: vi.fn(() => null),
 }));
 vi.mock('@/lib/api/with-api-route', () => ({
   withApiRoute: <H>(handler: H): H => handler,
