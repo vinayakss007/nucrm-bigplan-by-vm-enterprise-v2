@@ -159,6 +159,11 @@ describe('the two committed env templates', () => {
     expect(prod.DATABASE_SSL?.value).toBe('true');
   });
 
+  it('agrees outright on PGBOUNCER_ENABLED=false matching direct :5432 connection (#3509)', () => {
+    expect(dev.PGBOUNCER_ENABLED?.value).toBe('false');
+    expect(prod.PGBOUNCER_ENABLED?.value).toBe('false');
+  });
+
   it('explains the 503 beside the TRUST_PROXY default, because that is the flag that costs hours', () => {
     const notes = dev.TRUST_PROXY?.notes ?? '';
     expect(notes).toContain(MARKER);
