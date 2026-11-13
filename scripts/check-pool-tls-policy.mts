@@ -132,7 +132,7 @@ export function maskComments(src: string): string {
         if (e === '/' && !cls) { j++; break; }
         j++;
       }
-      while (j < n && /[dgimsuy]/.test(src[j])) j++;
+      while (j < n && /[dgimsuy]/.test(src[j]!)) j++;
       i = j;
       continue;
     }

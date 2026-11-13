@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   await withSecurityContext((tx) => tx.delete(activities).where(markerWhere(target.id)));
 
   // ── 1. The context the shipped cron uses ─────────────────────────────────
-  let securityWrite: { ok: boolean; code?: string; message: string } = { ok: true };
+  let securityWrite: { ok: boolean; code?: string; message: string } = { ok: true, message: '' };
   try {
     await withSecurityContext((tx) => tx.insert(activities).values(markerValues(target.id)));
   } catch (e) {

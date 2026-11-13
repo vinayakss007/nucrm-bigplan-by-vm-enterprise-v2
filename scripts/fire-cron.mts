@@ -66,6 +66,7 @@ function parseArgs(argv: string[]): Args {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === undefined) break;
     const next = () => {
       const v = argv[++i];
       if (v === undefined) throw new Error(`${a} needs a value\n\n${USAGE}`);

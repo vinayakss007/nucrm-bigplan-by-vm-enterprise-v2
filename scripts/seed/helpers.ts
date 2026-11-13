@@ -8,7 +8,11 @@ export const logDone = (table: string, count: number) =>
   console.log(`  \x1b[32m✓\x1b[0m ${table} (${count} rows)`);
 
 export function randomItem<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  const item = arr[Math.floor(Math.random() * arr.length)];
+  if (item === undefined) {
+    throw new Error('randomItem called on empty array');
+  }
+  return item;
 }
 
 export function futureDate(daysAhead: number): Date {

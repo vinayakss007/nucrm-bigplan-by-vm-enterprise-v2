@@ -281,7 +281,7 @@ async function main() {
     for (const f of schemaFiles) {
       const content = fs.readFileSync(path.join(schemaDir, f), 'utf8');
       const matches = content.matchAll(/pgTable\(\s*['"]([^'"]+)['"]/g);
-      for (const m of matches) expectedTables.add(m[1]);
+      for (const m of matches) if (m[1]) expectedTables.add(m[1]);
     }
 
     const actualTablesRes = await pool.query(
@@ -341,7 +341,7 @@ async function main() {
     for (const f of migrationFiles) {
       const content = fs.readFileSync(path.join(migrationsDir, f), 'utf8');
       const matches = content.matchAll(/CREATE (?:OR REPLACE )?FUNCTION\s+public\.(\w+)/g);
-      for (const m of matches) expectedFunctions.add(m[1]);
+      for (const m of matches) if (m[1]) expectedFunctions.add(m[1]);
     }
 
     const actualFunctionsRes = await pool.query(

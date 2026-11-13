@@ -123,7 +123,7 @@ function log(line: string): void {
   console.log(line);
 }
 
-function run(cmd: string, args: string[], env: NodeJS.ProcessEnv): RunOutcome {
+function run(cmd: string, args: string[], env: NodeJS.ProcessEnv | Record<string, string>): RunOutcome {
   try {
     const stdout = execFileSync(cmd, args, {
       encoding: 'utf8',
@@ -154,7 +154,8 @@ async function readCounts(dbUrl: string): Promise<ProbeCounts> {
     const one = async (sql: string): Promise<number> => {
       try {
         const res = await client.query(sql);
-        return Number(res.rows[0][Object.keys(res.rows[0])[0]]);
+        const firstKey = res.rows[0] ? Object.keys(res.rows[0])[0] : undefined;
+        return Number(firstKey && res.rows[0] ? res.rows[0][firstKey] : 0);
       } catch (err) {
         if ((err as { code?: string }).code === '42P01') return 0; // relation not there yet
         throw err;

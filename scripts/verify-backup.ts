@@ -58,7 +58,7 @@ function checksumFile(filePath: string): Promise<string> {
   });
 }
 
-function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void> {
+function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv | Record<string, string>): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       env: { ...process.env, ...env },
