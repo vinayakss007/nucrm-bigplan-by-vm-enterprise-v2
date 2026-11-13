@@ -38,6 +38,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/pool';
 import { isShuttingDown } from '@/lib/db/graceful-shutdown';
+import { getPoolModeGuardStatus } from '@/lib/db/pool-mode-guard';
 import { withDbCircuitBreaker, CircuitOpenError } from '@/lib/db/circuit-breaker';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -54,6 +55,15 @@ export async function GET(request: NextRequest) {
   if (isShuttingDown()) {
     return NextResponse.json(
       { ready: false, reason: 'shutting_down' },
+      { status: 503 }
+    );
+  }
+
+  // #3506: refuse readiness if an active PgBouncer pooler violated the session invariant
+  const poolModeStatus = getPoolModeGuardStatus();
+  if (poolModeStatus?.state === 'violation') {
+    return NextResponse.json(
+      { ready: false, reason: 'pool_mode_violation' },
       { status: 503 }
     );
   }

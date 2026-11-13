@@ -78,6 +78,18 @@ export async function register() {
         .catch((err) => {
           console.error('[instrumentation] RLS role guard failed to run:', err instanceof Error ? err.message : err);
         });
+
+      // #3506: assert SHOW pool_mode = 'session' at boot whenever PgBouncer is
+      // in use (PGBOUNCER_ENABLED=true or port 6432), to prevent silent RLS
+      // bypass in transaction poolers.
+      const { guardPoolMode } = await import("./lib/db/pool-mode-guard");
+      void guardPoolMode()
+        .then((status) => {
+          metrics.gauge('pgbouncer_pool_mode_session', status.state === 'ok' ? 1 : 0);
+        })
+        .catch((err) => {
+          console.error('[instrumentation] Pool mode guard failed to run:', err instanceof Error ? err.message : err);
+        });
     }
 
     // Auto-register Telegram bot webhook
