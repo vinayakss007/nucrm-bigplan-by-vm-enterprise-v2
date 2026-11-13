@@ -176,6 +176,14 @@ if (grown.length > 0) {
 
 if (failed) process.exit(1);
 
+if (counts.size > 0) {
+  const sorted = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+  console.log(
+    `[check-scripts-typecheck] Baselined files carrying type errors (see scripts/scripts-typecheck-baseline.json):\n` +
+      sorted.map(([file, n]) => `    - ${file}: ${n} (floor: ${baseline[file] ?? n})`).join('\n'),
+  );
+}
+
 console.log(
   `[check-scripts-typecheck] OK — ${counts.size} script file(s) still carry type errors ` +
     `(${[...counts.values()].reduce((a, b) => a + b, 0)}), all at or under the floor; ` +

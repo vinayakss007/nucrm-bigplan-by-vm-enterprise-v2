@@ -95,9 +95,11 @@ describe('#3413 the floor is a ratchet, not a mute button', () => {
   const err = (file: string, n: number) =>
     Array.from({ length: n }, (_, i) => `${file}(${i + 1},1): error TS2300: dup`);
 
-  it('an error set exactly at the floor is green', () => {
+  it('an error set exactly at the floor is green, and enumerates the baselined files (#3518)', () => {
     const r = run(['--report', report(err('scripts/a.ts', 2), 'at.txt'), '--baseline', baseline({ 'scripts/a.ts': 2 })]);
     expect(r.status).toBe(0);
+    expect(r.out).toContain('Baselined files carrying type errors');
+    expect(r.out).toMatch(/scripts\/a\.ts: 2 \(floor: 2\)/);
   });
 
   it('a baselined file that grows past its number is red, and says which', () => {

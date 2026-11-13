@@ -209,7 +209,9 @@ export function findReads(source: string, soft: Map<string, SoftTable>): Read[] 
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) !== null) {
-      const table = kind === 'raw' ? bySqlName.get(m[1]) : soft.get(m[1]);
+      const matchName = m[1];
+      if (!matchName) continue;
+      const table = kind === 'raw' ? bySqlName.get(matchName) : soft.get(matchName);
       if (!table) continue;
       const statement = spanAt(spans, m.index);
       if (!statement) continue;

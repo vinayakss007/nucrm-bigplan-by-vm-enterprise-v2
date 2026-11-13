@@ -101,8 +101,10 @@ export function enumerateHandlers(source: string, file: string): Handler[] {
   const starts: { line: number; verb: string }[] = [];
   const lines = source.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const m = VERB_RE.exec(lines[i]);
-    if (m) starts.push({ line: i, verb: m[1] });
+    const line = lines[i];
+    if (!line) continue;
+    const m = VERB_RE.exec(line);
+    if (m && m[1]) starts.push({ line: i, verb: m[1] });
   }
 
   return starts.map((s, idx) => {
@@ -112,7 +114,9 @@ export function enumerateHandlers(source: string, file: string): Handler[] {
     const dbAt = firstDbWork(body);
     const actions: string[] = [];
     const actionRe = /checkRateLimit\([^)]*?action:\s*['"]([^'"]+)['"]/g;
-    for (let m = actionRe.exec(body); m !== null; m = actionRe.exec(body)) actions.push(m[1]);
+    for (let m = actionRe.exec(body); m !== null; m = actionRe.exec(body)) {
+      if (m[1]) actions.push(m[1]);
+    }
     return {
       file,
       verb: s.verb,

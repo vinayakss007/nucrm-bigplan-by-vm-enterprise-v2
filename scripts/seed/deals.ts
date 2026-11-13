@@ -36,16 +36,16 @@ export async function seedDeals(db: SeedDb): Promise<void> {
     const isSalesPipeline = i < 20;
     const pipelineId = isSalesPipeline ? IDS.pipelines.sales : IDS.pipelines.enterprise;
     const stageId = isSalesPipeline
-      ? allStages[i % 6]
-      : allStages[6 + (i % 6)];
+      ? allStages[i % 6]!
+      : allStages[6 + (i % 6)]!;
     return {
-      id: IDS.deals[i],
+      id: IDS.deals[i]!,
       tenantId: IDS.tenant,
       contactId: IDS.contacts[i % 55],
       companyId: IDS.companies[i % 30],
       pipelineId,
       stageId,
-      title: dealTitles[i],
+      title: dealTitles[i % dealTitles.length]!,
       amount: String(5000 + (i * 14321) % 495000),
       closeDate: i % 3 === 0 ? pastDate(i * 3) : futureDate(i * 7),
       assignedTo: userIds[i % 4],

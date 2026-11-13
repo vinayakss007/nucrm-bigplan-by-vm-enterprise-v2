@@ -57,23 +57,27 @@ export async function seedContacts(db: SeedDb): Promise<void> {
 
   const userIds = Object.values(IDS.users);
 
-  const contactsValues = Array.from({ length: 55 }, (_, i) => ({
-    id: IDS.contacts[i],
-    tenantId: IDS.tenant,
-    companyId: IDS.companies[i % 30],
-    assignedTo: userIds[i % 4],
-    firstName: firstNames[i],
-    lastName: lastNames[i],
-    email: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@${companyDomains[i % 30]}`,
-    phone: `+1${String(2000000000 + i * 1111111).slice(0, 10)}`,
-    jobTitle: jobTitles[i % jobTitles.length],
-    leadStatus: leadStatuses[i % 4],
-    lifecycleStage: lifecycleStages[i % 7],
-    score: (i * 7 + 10) % 100,
-    tags: i % 4 === 0 ? ['vip', 'decision-maker'] : i % 4 === 1 ? ['technical'] : i % 4 === 2 ? ['nurture'] : ['champion'],
-    city: ['San Francisco', 'Boston', 'New York', 'Detroit', 'Chicago', 'Austin', 'Denver', 'Memphis', 'Los Angeles', 'Seattle', 'Portland', 'Raleigh', 'San Diego', 'Nashville', 'Detroit', 'Miami', 'Washington DC', 'Des Moines', 'Philadelphia', 'Denver', 'Orlando', 'Hartford', 'Cambridge', 'Chicago', 'San Jose', 'Houston', 'Brooklyn', 'Miami', 'Philadelphia', 'Oklahoma City'][i % 30],
-    country: 'US',
-  }));
+  const contactsValues = Array.from({ length: 55 }, (_, i) => {
+    const firstName = firstNames[i % firstNames.length]!;
+    const lastName = lastNames[i % lastNames.length]!;
+    return {
+      id: IDS.contacts[i]!,
+      tenantId: IDS.tenant,
+      companyId: IDS.companies[i % 30],
+      assignedTo: userIds[i % 4],
+      firstName,
+      lastName,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${companyDomains[i % 30]}`,
+      phone: `+1${String(2000000000 + i * 1111111).slice(0, 10)}`,
+      jobTitle: jobTitles[i % jobTitles.length],
+      leadStatus: leadStatuses[i % 4],
+      lifecycleStage: lifecycleStages[i % 7],
+      score: (i * 7 + 10) % 100,
+      tags: i % 4 === 0 ? ['vip', 'decision-maker'] : i % 4 === 1 ? ['technical'] : i % 4 === 2 ? ['nurture'] : ['champion'],
+      city: ['San Francisco', 'Boston', 'New York', 'Detroit', 'Chicago', 'Austin', 'Denver', 'Memphis', 'Los Angeles', 'Seattle', 'Portland', 'Raleigh', 'San Diego', 'Nashville', 'Detroit', 'Miami', 'Washington DC', 'Des Moines', 'Philadelphia', 'Denver', 'Orlando', 'Hartford', 'Cambridge', 'Chicago', 'San Jose', 'Houston', 'Brooklyn', 'Miami', 'Philadelphia', 'Oklahoma City'][i % 30],
+      country: 'US',
+    };
+  });
 
   await db.insert(schema.contacts).values(contactsValues);
   logDone('contacts', 55);

@@ -77,7 +77,7 @@ async function countPublicTables(pool: Pool): Promise<number> {
   const res = await pool.query<{ cnt: string }>(
     `SELECT COUNT(*)::text AS cnt FROM information_schema.tables WHERE table_schema = 'public'`,
   );
-  return parseInt(res.rows[0].cnt, 10);
+  return parseInt(res.rows[0]?.cnt ?? '0', 10);
 }
 
 /** Print the --dry-run plan: per journal entry, already-stamped vs would-be
@@ -375,7 +375,7 @@ async function main() {
   const count = await db.execute<{ cnt: string }>(
     sql.raw(`SELECT COUNT(*)::text AS cnt FROM "drizzle"."__drizzle_migrations"`),
   );
-  const rowCount = parseInt(count.rows[0].cnt, 10);
+  const rowCount = parseInt(count.rows[0]?.cnt ?? '0', 10);
 
   if (rowCount === 0 && journal.entries.length > 0) {
     await runRecoveryStamp({
@@ -390,14 +390,12 @@ async function main() {
 
   // Re-check ledger after potential recovery stamping: if recovery seeded
   // entries, rowCount is stale (still 0) and we must not replay.
-  const freshRowCount = parseInt(
-    (
-      await db.execute<{ cnt: string }>(
-        sql.raw(`SELECT COUNT(*)::text AS cnt FROM "drizzle"."__drizzle_migrations"`),
-      )
-    ).rows[0].cnt,
-    10,
-  );
+  const freshRows = (
+    await db.execute<{ cnt: string }>(
+      sql.raw(`SELECT COUNT(*)::text AS cnt FROM "drizzle"."__drizzle_migrations"`),
+    )
+  ).rows;
+  const freshRowCount = parseInt(freshRows[0]?.cnt ?? '0', 10);
 
   // ── Fresh migration: replay files + STAMP the ledger (#2254) ───────────
   //
@@ -555,7 +553,7 @@ async function main() {
     const buildShape = await loadProvisioningShape(pool);
     const floorIssues = checkFreshBuildFloors(buildShape);
     const buildMissing = verifyStampedLedger(
-      journal.entries.map((e) => ({ tag: e.tag, sql: readFileOrNull(e.tag) })),
+      journal.entries.map((e: { tag: string }) => ({ tag: e.tag, sql: readFileOrNull(e.tag) })),
       await loadActualState(pool),
     );
     if (floorIssues.length > 0 || buildMissing.length > 0) {
