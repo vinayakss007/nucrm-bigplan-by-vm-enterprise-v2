@@ -77,6 +77,15 @@ describe('the real tree (#3404)', () => {
     }
   });
 
+  it('production compose unused pooler annotation documents activation intent (#3517)', () => {
+    const ann = JSON.parse(readFileSync(join(ROOT, 'scripts/pool-mode-annotations.json'), 'utf8'));
+    const prod = ann['deploy/docker-compose.production.yml'];
+    expect(prod).toBeDefined();
+    expect(prod.reason).toContain('#3517');
+    expect(prod.reason).toContain('PGBOUNCER_ENABLED=true');
+    expect(prod.reason).toContain('pgbouncer:6432');
+  });
+
   it('the CLI exits 0 on the tree it guards', () => {
     const out = spawnSync('node', [SCRIPT], { cwd: ROOT, encoding: 'utf8' });
     expect(out.status, out.stderr).toBe(0);
