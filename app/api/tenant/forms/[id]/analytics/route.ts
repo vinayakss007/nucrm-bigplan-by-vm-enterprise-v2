@@ -172,7 +172,7 @@ export const POST = withApiRoute(async (req: NextRequest,
     try {
       body = await readJsonBody(req);
     } catch (err: unknown) {
-      void logError({ error: err, context: 'forms/[id]/analytics POST body parse', level: 'warning', tenantId: ctx.tenantId });
+      void logError({ error: err, context: 'forms/analytics readJsonBody', level: 'warning', tenantId: ctx.tenantId });
     }
 
     if (body.type === 'submit') {
