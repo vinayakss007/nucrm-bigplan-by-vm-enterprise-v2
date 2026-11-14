@@ -6,8 +6,34 @@
 import { Pool } from 'pg';
 import type { PoolConfig, PoolClient } from 'pg';
 import { pgSslConfig } from './ssl-config';
+export { pgSslConfig };
 
 declare global { var __pgPool: Pool | undefined; var __pgPoolCreating: boolean | undefined; }
+
+/**
+ * Factory for creating PostgreSQL connection pools with unified defaults (#3501):
+ * - Automatically injects TLS policy from `lib/db/ssl-config.ts` unless explicitly configured
+ * - Sets TCP keepalive defaults (10s initial delay)
+ * - Sets allowExitOnIdle: true
+ * - Attaches basic error logger to prevent uncaught exceptions on idle socket disconnect
+ */
+export function createPgPool(options: PoolConfig = {}): Pool {
+  const mergedOptions: PoolConfig = {
+    allowExitOnIdle: true,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+    ...options,
+    ssl: options.ssl !== undefined ? options.ssl : pgSslConfig(),
+  };
+
+  const pool = new Pool(mergedOptions);
+
+  pool.on('error', (err) => {
+    console.error('[db-pool] error:', err.message);
+  });
+
+  return pool;
+}
 
 /**
  * Maximum number of clients waiting to acquire a connection from the pool.
@@ -200,7 +226,7 @@ export function getPool(): Pool {
       statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
     };
 
-    global.__pgPool = new Pool(poolConfig);
+    global.__pgPool = createPgPool(poolConfig);
 
     // RLS isolation guard (audit C-1).
     //

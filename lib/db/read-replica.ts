@@ -28,7 +28,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '@/drizzle/schema';
 import { db as primaryDb } from '@/drizzle/db';
-import { pgSslConfig } from './ssl-config';
+import { createPgPool } from './pool';
 
 declare global {
   var __pgReadPool: Pool | undefined;
@@ -44,13 +44,11 @@ function getReadPool(): Pool {
 
     const poolSize = parseInt(process.env.DATABASE_READ_POOL_SIZE ?? '10');
 
-    global.__pgReadPool = new Pool({
+    global.__pgReadPool = createPgPool({
       connectionString: replicaUrl,
-      ssl: pgSslConfig(),
       max: poolSize,
       idleTimeoutMillis: 60_000,
       connectionTimeoutMillis: 10_000,
-      allowExitOnIdle: true,
       // Read queries can afford a longer statement timeout since they
       // run reports and aggregations.
       statement_timeout: parseInt(process.env.DATABASE_READ_STATEMENT_TIMEOUT ?? '30000'),

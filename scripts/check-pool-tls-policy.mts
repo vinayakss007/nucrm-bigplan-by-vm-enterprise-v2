@@ -183,21 +183,25 @@ export function hasTlsEntry(objText: string): boolean {
 
 export type PoolSite = {
   line: number;
-  kind: 'literal' | 'variable' | 'unresolved';
+  kind: 'literal' | 'variable' | 'unresolved' | 'factory';
   name?: string;
   hasTls: boolean;
   problem?: string;
 };
 
-const POOL_RE = /\bnew\s+(?:[A-Za-z_$][\w$]*\.)?Pool\s*\(\s*/g;
+const POOL_RE = /\b(?:new\s+(?:[A-Za-z_$][\w$]*\.)?Pool|createPgPool)\s*\(\s*/g;
 
-/** Every `new Pool(` site in one source, with its options resolved. */
+/** Every `new Pool(` or `createPgPool(` site in one source, with its options resolved. */
 export function poolSites(src: string): PoolSite[] {
   const masked = maskComments(src);
   const lineOf = (offset: number) => masked.slice(0, offset).split('\n').length;
   const sites: PoolSite[] = [];
   let m: RegExpExecArray | null;
   while ((m = POOL_RE.exec(masked)) !== null) {
+    if (m[0].startsWith('createPgPool')) {
+      sites.push({ line: lineOf(m.index), kind: 'factory', hasTls: true });
+      continue;
+    }
     const at = m.index + m[0].length;
     const c = masked[at];
     if (c === '{') {
@@ -295,7 +299,7 @@ export function run(root = ROOT): RunResult {
   let sites = 0;
   for (const file of files) {
     const src = readFileSync(file, 'utf8');
-    if (!/\bnew\s+Pool\b|\bnew\s+(?:[A-Za-z_$][\w$]*\.)?Pool\s*\(/.test(src)) continue;
+    if (!/\bnew\s+Pool\b|\bnew\s+(?:[A-Za-z_$][\w$]*\.)?Pool\s*\(|\bcreatePgPool\s*\(/.test(src)) continue;
     const found = poolSites(src);
     sites += found.length;
     findings.push(...analyzeSource(rel(file), src));
