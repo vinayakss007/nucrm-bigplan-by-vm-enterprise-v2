@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { isPayUConfigured, createPaymentLink } from '@/lib/payu';
 import crypto from 'crypto';
@@ -39,9 +39,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) {
-      return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    }
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     const limited = await rateLimitMutating(request, 'quotes', 'post');
     if (limited) return limited;

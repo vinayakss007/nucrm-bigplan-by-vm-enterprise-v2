@@ -98,6 +98,7 @@ vi.mock('drizzle-orm', () => ({
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({ tenantId: TENANT, userId: 'admin-1', isAdmin: true })),
   requireCsrf: vi.fn(() => null),
+  requirePerm: vi.fn(() => null),
 }));
 vi.mock('@/lib/api/with-api-route', () => ({
   withApiRoute: <H>(handler: H): H => handler,

@@ -22,6 +22,7 @@ vi.mock('@/lib/api/with-api-route', () => ({
 
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({ tenantId: 'tenant-1', userId: 'user-1', isAdmin: true })),
+  requirePerm: vi.fn(() => null),
 }));
 
 vi.mock('@/lib/stripe', () => ({

@@ -15,7 +15,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { isRazorpayConfigured, createOrder, getPlanAmount } from '@/lib/razorpay';
 import { z } from 'zod';
@@ -38,9 +38,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) {
-      return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    }
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     if (!isRazorpayConfigured()) {
       return NextResponse.json(

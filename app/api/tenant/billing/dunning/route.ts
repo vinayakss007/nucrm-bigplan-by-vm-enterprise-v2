@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dunningSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -31,7 +31,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.view');
+    if (permErr) return permErr;
 
     const settings = await db.query.dunningSettings.findFirst({
       where: eq(dunningSettings.tenantId, ctx.tenantId),
@@ -67,7 +68,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     const raw = await readJsonBody(request);
     const parsed = validateBody(dunningConfigSchema, raw);

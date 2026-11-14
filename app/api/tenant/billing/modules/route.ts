@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { createCheckoutSession } from '@/lib/stripe';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { db } from '@/drizzle/db';
@@ -27,7 +27,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });

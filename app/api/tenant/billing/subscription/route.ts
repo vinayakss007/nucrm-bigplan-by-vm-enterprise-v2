@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions, plans, billingEvents } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -19,6 +19,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const permErr = requirePerm(ctx, 'billing.view');
+    if (permErr) return permErr;
 
     // Get current subscription
     const subscription = await db.query.subscriptions.findFirst({
