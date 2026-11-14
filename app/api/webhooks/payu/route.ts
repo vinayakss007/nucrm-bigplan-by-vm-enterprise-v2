@@ -9,7 +9,8 @@ import { logError } from '@/lib/errors-server';
 import { isPayUConfigured, verifyPayUResponse } from '@/lib/payu';
 import { quotes, invoices, invoicePayments } from '@/drizzle/schema';
 import { recalculateInvoicePayments } from '@/lib/billing/payments';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { allowedFromStatus } from '@/lib/offers';
 import { NO_USER_SENTINEL, withTenantContext } from '@/lib/db/rls';
 import { withQuoteWebhookLookupContext } from '@/lib/db/quote-webhook-context';
 import { withTenantScope } from '@/lib/api/with-api-route';
@@ -268,11 +269,19 @@ async function handlePayu(request: NextRequest) {
 
           // A paid quote is an accepted quote — unless it already reached a
           // terminal state (declined/expired/cancelled), which we never override.
+          // #3407: the read above is not a lock, so the from-set rides in the
+          // WHERE too. A decline that commits in the gap between the read and
+          // this write now matches zero rows instead of being overwritten by a
+          // payment callback that started before it.
           if (!QUOTE_TERMINAL_STATUSES.has(quote.status)) {
             await tx
               .update(quotes)
               .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-              .where(and(eq(quotes.id, quote.id), eq(quotes.tenantId, quote.tenantId)));
+              .where(and(
+                eq(quotes.id, quote.id),
+                eq(quotes.tenantId, quote.tenantId),
+                inArray(quotes.status, allowedFromStatus('accepted')),
+              ));
           }
 
           return { processed: true };

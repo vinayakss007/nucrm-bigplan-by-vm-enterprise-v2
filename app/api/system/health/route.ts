@@ -21,6 +21,7 @@ import { checkDatabaseHealth } from '@/lib/db/safe-connection';
 import { cache } from '@/lib/cache';
 import type { DatabaseHealthResult } from '@/lib/db/safe-connection';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { summarizeAlertingConfig, type AlertingConfigSummary } from '@/lib/observability/alerting-config';
 
 // -------------------------------------------------------------------
 // Types
@@ -65,6 +66,13 @@ interface SystemHealthResponse {
   backup: BackupHealthResult;
   migration: MigrationHealthResult;
   email: EmailHealthResult;
+  /**
+   * #2542 — which alert channels can actually reach a human. Booleans and
+   * variable NAMES only, never a webhook URL, token or DSN. `configured: false`
+   * in production means nothing pages anyone, which is the state the register
+   * recorded as "no alert has ever been delivered".
+   */
+  alerting: AlertingConfigSummary;
 }
 
 // -------------------------------------------------------------------
@@ -93,6 +101,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     backup: { lastBackupTime: null, ageMinutes: null, status: 'unhealthy' },
     migration: { currentVersion: null, status: 'unknown' },
     email: { configured: false, provider: 'none', status: 'degraded' },
+    alerting: summarizeAlertingConfig(),
   };
 
   // Email provider configuration (#1041) — a missing provider in production is
@@ -108,6 +117,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   } catch {
     health.email = { configured: false, provider: 'none', status: 'degraded' };
   }
+
+  // #2542 — re-read the alerting summary now that the email provider has
+  // answered, so the email channel in this block agrees with `health.email`
+  // instead of re-deriving it (the panel and the sender disagreeing is the
+  // #1041 failure, not a second opinion).
+  health.alerting = summarizeAlertingConfig(process.env, {
+    emailConfigured: health.email.configured,
+  });
 
   // 1. Database health
   try {
@@ -140,7 +157,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   // 3. Disk space (backup directory)
   try {
     const { statfs } = await import('fs/promises');
-    const backupDir = process.env['BACKUP_DIR'] || '/tmp/backups';
+    const backupDir = (await import('@/lib/backups/paths')).resolveBackupDir();
 
     let stats;
     try {
@@ -210,6 +227,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     health.disk.status,
     health.backup.status,
     health.email.status,
+    // #2542 — "nothing can page a human" is a degraded production system, and
+    // the health endpoint is where that verdict belongs: it is the one surface
+    // an uptime check reads, so the claim stops being unverifiable.
+    health.alerting.status,
   ];
 
   if (statuses.includes('unhealthy')) {

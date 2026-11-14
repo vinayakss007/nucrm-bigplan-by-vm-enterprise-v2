@@ -50,6 +50,7 @@ function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === undefined) break;
     const next = () => {
       const v = argv[++i];
       if (v === undefined) throw new Error(`${a} needs a value\n\n${USAGE}`);
@@ -96,7 +97,7 @@ function renderTable(columns: string[], rows: Record<string, unknown>[]): void {
     Math.max(c.length, ...rows.map((r) => cell(r[c]).length)),
     60,
   ));
-  const line = (cells: string[]) => cells.map((v, i) => v.padEnd(widths[i])).join('  ');
+  const line = (cells: string[]) => cells.map((v, i) => v.padEnd(widths[i] ?? 0)).join('  ');
   console.log(line(columns));
   console.log(widths.map((w) => '-'.repeat(w)).join('  '));
   for (const r of rows) console.log(line(columns.map((c) => cell(r[c]))));

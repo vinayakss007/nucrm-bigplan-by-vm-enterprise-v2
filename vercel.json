@@ -33,6 +33,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/cron/reconcile-counters",
+      "schedule": "15 3 * * *"
+    },
+    {
       "path": "/api/cron/cleanup",
       "schedule": "0 4 * * 0"
     },

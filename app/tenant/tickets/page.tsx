@@ -110,10 +110,21 @@ export default function TicketsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Bulk action failed');
-      return { affected: data.affected as number | undefined, count: ids.length };
+      return {
+        affected: data.affected as number | undefined,
+        skipped: data.skipped as number | undefined,
+        count: ids.length,
+      };
     },
-    onSuccess: ({ affected, count }) => {
-      toast.success(`${affected || count} ticket(s) updated`);
+    onSuccess: ({ affected, skipped, count }) => {
+      // #3407: the status action skips tickets whose state cannot move to the
+      // target (e.g. Resolve on a closed ticket), so `affected` can be lower
+      // than the selection. `??`, not `||`, or a fully skipped batch would
+      // report the whole selection as updated.
+      const updated = affected ?? count;
+      toast.success(
+        `${updated} ticket(s) updated${skipped ? `; ${skipped} skipped (not eligible)` : ''}`,
+      );
       setSelectedIds(new Set());
       loadTickets();
     },

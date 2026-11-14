@@ -1,0 +1,30 @@
+# #3263 — the PM2 topology (deploy/DEPLOYMENT_PATHS.md, Path A) runs the app
+# and realtime as HOST processes, but takes its edge (nginx) and its scraper
+# (Prometheus) from the compose stack. Docker's DNS knows only compose service
+# names, so `app` and `realtime` resolve to nothing inside those containers:
+# the edge answers 502 and the `nucrm-app` scrape job reports zero targets while
+# every dashboard stays green.
+#
+# This override adds the names the shipped configs already use to the host
+# gateway, which is where the PM2 processes listen. It is deliberately NOT part
+# of docker-compose.production.yml: `extra_hosts` writes /etc/hosts, which wins
+# over Docker DNS, so applying it while the compose `app` service runs would
+# route the edge to the host instead of the container. Use
+# deploy/scripts/provision-pm2-edge.sh, which refuses that case and verifies the
+# result from inside the containers. Never pass this file to a plain
+# `docker compose up` on the compose topology.
+services:
+  nginx:
+    extra_hosts:
+      # The nginx upstreams: deploy/nginx/nginx-production.conf.
+      - "app:host-gateway"
+      - "realtime:host-gateway"
+      # `web` is the PM2 process name (ecosystem.config.cjs). No shipped config
+      # uses it as a hostname today, but an operator's own vhost might; the
+      # alias costs one /etc/hosts line and closes the third name #3263 names.
+      - "web:host-gateway"
+  prometheus:
+    extra_hosts:
+      # The `nucrm-app` job: deploy/monitoring/prometheus.yml.
+      - "app:host-gateway"
+      - "web:host-gateway"

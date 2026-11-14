@@ -144,7 +144,8 @@ export const GET = withApiRoute(async (req: NextRequest,
       timeSeries,
       fields: fieldAnalytics,
     });
-  } catch {
+  } catch (err) {
+    await logError({ error: err, context: 'forms/[id]/analytics GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -171,7 +172,7 @@ export const POST = withApiRoute(async (req: NextRequest,
     try {
       body = await readJsonBody(req);
     } catch (err: unknown) {
-      void logError({ error: err, context: 'forms/analytics readJsonBody', level: 'warning', tenantId: ctx.tenantId });
+      void logError({ error: err, context: 'forms/[id]/analytics POST body parse', level: 'warning', tenantId: ctx.tenantId });
     }
 
     if (body.type === 'submit') {
@@ -187,7 +188,8 @@ export const POST = withApiRoute(async (req: NextRequest,
     }
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (err) {
+    await logError({ error: err, context: 'forms/[id]/analytics POST', requestMethod: 'POST' });
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 });

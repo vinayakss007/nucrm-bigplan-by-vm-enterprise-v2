@@ -81,8 +81,8 @@ for (const entry of registry.constraints) {
  */
 function parseEnum(def: string): string[] | null {
   const m = def.match(/=\s*ANY\s*\(ARRAY\[(.*?)\]\s*\)/s);
-  if (!m) return null;
-  return [...m[1].matchAll(/'((?:[^']|'')*)'/g)].map((v) => v[1].replace(/''/g, "'"));
+  if (!m || !m[1]) return null;
+  return [...m[1].matchAll(/'((?:[^']|'')*)'/g)].map((v) => (v[1] ?? '').replace(/''/g, "'"));
 }
 
 const defs = await withReadonlySession({}, async (client) => {

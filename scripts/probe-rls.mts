@@ -206,8 +206,8 @@ const widths = head.map((h, i) => Math.max(
     : args.tenant && i === 4 ? r.tenant
     : null).length),
 ));
-const line = (cells: unknown[]) => cells.map((c, i) => w(c).padEnd(widths[i])).join('  ');
-console.log(head.map((h, i) => h.padEnd(widths[i])).join('  '));
+const line = (cells: unknown[]) => cells.map((c, i) => w(c).padEnd(widths[i] ?? 0)).join('  ');
+console.log(head.map((h, i) => h.padEnd(widths[i] ?? 0)).join('  '));
 console.log(widths.map((n) => '-'.repeat(n)).join('  '));
 for (const r of reportRows) {
   const cells: unknown[] = [r.blind ? `! ${r.table}` : r.table, r.liveTuples, r.app, r.admin];

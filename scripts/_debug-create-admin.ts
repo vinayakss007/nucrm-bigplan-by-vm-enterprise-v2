@@ -20,6 +20,7 @@ async function main() {
       fullName: fullNameTrim,
       isSuperAdmin: true
     }).returning();
+    if (!u) throw new Error('Failed to create user');
     console.log('   User created:', u.id);
     
     const slug = workspace_name.toLowerCase()
@@ -34,6 +35,7 @@ async function main() {
       planId: 'enterprise',
       status: 'active'
     }).returning();
+    if (!t) throw new Error('Failed to create tenant');
     console.log('   Tenant created:', t.id);
     
     console.log('3. Setting tenant context...');

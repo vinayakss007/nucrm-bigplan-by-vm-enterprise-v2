@@ -1,0 +1,23 @@
+[Unit]
+Description=Sweep orphaned Turbopack cache dirs from scratch space (#2565)
+Documentation=file:///srv/nucrm/deploy/systemd/README.md
+After=default.target
+
+[Service]
+Type=oneshot
+
+# /tmp is a 3.9 GB tmpfs on this host. Turbopack leaves one 21-character cache
+# directory behind per killed build; 661 of them held 3.6 GB and made the test
+# runner exit 1 with no summary. The script deletes only directories that match
+# the cache layout, are older than 24 h, and have no open file handle.
+ExecStart=/usr/bin/node /srv/nucrm/scripts/sweep-turbopack-tmp.mjs --root /tmp --yes
+
+# `npm run build` pins TMPDIR to the root filesystem (scripts/build.mjs). A kill
+# can still leave a cache there; it is not a tmpfs, but it should not grow
+# forever either. Missing directory is a no-op.
+ExecStart=/usr/bin/node /srv/nucrm/scripts/sweep-turbopack-tmp.mjs --root /var/tmp/nucrm-build --yes
+
+# The host has no persistent journal for these units; append the report so a
+# sweep is auditable after the fact.
+StandardOutput=append:/var/log/nucrm-tmp-sweep.log
+StandardError=append:/var/log/nucrm-tmp-sweep.log

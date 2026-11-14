@@ -45,10 +45,10 @@ async function main() {
     if (!cfg) continue;
     const entry = (code[cfg.name] ??= { columns: [], indexes: [] });
     for (const c of cfg.columns) entry.columns.push(c.name);
-    for (const i of cfg.indexes as Set<{ config: { name?: string } }>) {
+    for (const i of cfg.indexes as unknown as Array<{ config: { name?: string } }>) {
       if (i.config.name) entry.indexes.push(i.config.name);
     }
-    for (const u of cfg.uniqueConstraints as Set<{ config: { name?: string; columns: { name: string }[] } }>) {
+    for (const u of cfg.uniqueConstraints as unknown as Array<{ config: { name?: string; columns: { name: string }[] } }>) {
       entry.indexes.push(u.config.name ?? `${cfg.name}_${u.config.columns.map((c) => c.name).join('_')}_unique`);
     }
   }

@@ -230,10 +230,10 @@ export function resolveEntry(entry: string, routes: string[]): Resolution {
     if (route === entry) return { kind: 'exact', servedBy: route };
 
     if (routeSegs.length > entrySegs.length) {
-      const isAncestor = entrySegs.every((seg, idx) => segmentMatches(routeSegs[idx], seg));
+      const isAncestor = entrySegs.every((seg, idx) => segmentMatches(routeSegs[idx] ?? '', seg));
       if (isAncestor) children += 1;
     } else if (routeSegs.length === entrySegs.length) {
-      const matches = entrySegs.every((seg, idx) => segmentMatches(routeSegs[idx], seg));
+      const matches = entrySegs.every((seg, idx) => segmentMatches(routeSegs[idx] ?? '', seg));
       if (matches) dynamicMatch = route;
     }
   }

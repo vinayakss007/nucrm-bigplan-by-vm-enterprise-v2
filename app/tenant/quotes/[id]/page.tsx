@@ -254,7 +254,10 @@ export default function QuoteDetailPage() {
             <Send className="w-3 h-3" /> Send Quote
           </button>
         )}
-        {['draft', 'sent', 'viewed'].includes(quote.status) && (
+        {/* #3407: accepted/declined are transitions from sent/viewed, not from
+            draft — the API now refuses draft→accepted and draft→declined, so the
+            controls must not offer them. Send Quote is the draft's next step. */}
+        {['sent', 'viewed'].includes(quote.status) && (
           <>
             <button onClick={() => handleStatusChange('accepted')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
               <CheckCircle className="w-3 h-3" /> Accept

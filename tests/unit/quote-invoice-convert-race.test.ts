@@ -43,7 +43,11 @@ const m = vi.hoisted(() => {
       return chain;
     }),
     update: vi.fn(() => ({
-      set: () => ({ where: vi.fn(async () => undefined) }),
+      // #3407: the quote status write is now a guarded claim read back with
+      // `.returning()`, not a bare `where`.
+      set: () => ({
+        where: () => ({ returning: vi.fn(async () => [{ id: QUOTE_ID }]) }),
+      }),
     })),
   };
 
@@ -53,6 +57,7 @@ const m = vi.hoisted(() => {
         findFirst: vi.fn(async () => ({
           id: QUOTE_ID,
           tenantId: TENANT,
+          status: 'sent',
           title: 'Q1 services',
           contactId: 'contact-1',
           companyId: null,
@@ -124,6 +129,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => ({ eq: [a, b] })),
   and: vi.fn((...p: unknown[]) => ({ and: p })),
   isNull: vi.fn((a: unknown) => ({ isNull: a })),
+  inArray: vi.fn((a: unknown, values: unknown[]) => ({ inArray: [a, values] })),
   sql: vi.fn((s: unknown) => ({ sql: s })),
 }));
 vi.mock('@/lib/auth/middleware', () => ({

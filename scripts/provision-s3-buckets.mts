@@ -104,7 +104,10 @@ export async function main(argv: string[] = process.argv.slice(2), clientFactory
   const keepProbe = argv.includes('--keep-probe');
   const extra: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--bucket' && argv[i + 1]) extra.push(argv[++i]);
+    if (argv[i] === '--bucket' && argv[i + 1]) {
+      const b = argv[++i];
+      if (b) extra.push(b);
+    }
   }
 
   const cfg = getS3Config();

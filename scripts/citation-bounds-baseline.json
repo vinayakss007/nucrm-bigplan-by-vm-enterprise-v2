@@ -1,0 +1,4 @@
+{
+  "docs/planning/ALL_ISSUES_COMBINED_2026-06-05.md::next.config.mjs:93": "Frozen 2026-06-05 audit snapshot. next.config.mjs was longer than 136 lines when this finding was recorded and is 118 now, so the range describes what was measured that day, not a live pointer. Rewriting the numbers would falsify a dated record.",
+  "docs/planning/AUDIT_2026-06-05.md::next.config.mjs:93": "Same citation, same frozen 2026-06-05 audit document. The ANALYZE block the finding describes now lives at next.config.mjs:107-117, but the sentence is a record of the June audit."
+}

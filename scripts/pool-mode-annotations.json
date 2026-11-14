@@ -6,7 +6,7 @@
     "issue": "#3404"
   },
   "deploy/docker-compose.production.yml": {
-    "reason": "The production app's DATABASE_URL is operator-supplied (${DATABASE_URL:?...} at :146 and :251) and this file never sets PGBOUNCER_ENABLED=true, so the container is built and never addressed by the app. Its mode is still declared session with a reset query: the pooler is one .env edit away from being live, and before #3404 that edit would have turned on transaction pooling with no server_reset_query at all. Either wire it and size MAX_DB_CONNECTIONS against the app pools, or delete the service; that decision is the deploy owner's, not a guard's.",
+    "reason": "The production app's DATABASE_URL is operator-supplied (${DATABASE_URL:?...} at :146 and :251) and this file never sets PGBOUNCER_ENABLED=true, so the container is built and never addressed by the app. Its mode is verified as session with a DISCARD ALL reset query (#3404, #3517): the pooler remains ready for future activation via PGBOUNCER_ENABLED=true and repointing DATABASE_URL to pgbouncer:6432 with MAX_DB_CONNECTIONS sized against the app pools.",
     "issue": "#3404"
   }
 }

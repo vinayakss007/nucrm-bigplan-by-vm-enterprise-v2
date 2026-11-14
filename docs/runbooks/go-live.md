@@ -147,6 +147,8 @@ Reduce the public surface to SSH + HTTP + HTTPS only. Run **as root on the VM**:
 sudo bash deploy/scripts/setup-firewall.sh
 #   --ssh-port 2222   if you use a non-default SSH port
 #   --iface ens3      if your external NIC is not eth0 (Docker bypass hardening)
+#   --backend firewalld   force firewalld (auto-detected on RHEL/Oracle Linux)
+#   --dry-run             print the exact rules without applying them
 ```
 
 **Verify from OUTSIDE the VM** (another machine) — every internal port must be
@@ -158,8 +160,8 @@ bash deploy/scripts/setup-firewall.sh --verify <VM_PUBLIC_IP>
 ```
 
 > The script also hardens Docker's `DOCKER-USER` chain so a mis-published
-> container can't bypass UFW. If Docker wasn't running when you first ran it,
-> re-run after step 3.
+> container can't bypass the host firewall (UFW or firewalld). If Docker wasn't
+> running when you first ran it, re-run after step 3.
 
 ---
 
@@ -291,11 +293,11 @@ billing items in #1479 are verified end-to-end in Stripe test mode (#1477).
 
 ## Quick reference — what each shipped script does
 
-| Script                             | What it does                                  | Re-runnable      |
-| ---------------------------------- | --------------------------------------------- | ---------------- |
-| `deploy/generate-secrets.sh`       | Prints a fresh set of all secrets             | yes              |
-| `deploy/scripts/setup-firewall.sh` | UFW + Docker edge hardening; `--verify <ip>`  | yes (idempotent) |
-| `deploy/scripts/setup-ssl.sh`      | Let's Encrypt cert (self-signed fallback)     | yes (idempotent) |
-| `deploy/scripts/backup.sh`         | Full pg_dump → local + S3; `--restore <file>` | yes              |
-| `deploy/scripts/health-check.sh`   | Post-deploy health probes                     | yes              |
-| `npm run launch-gate`              | Consolidated pre-launch green gate            | yes              |
+| Script                             | What it does                                           | Re-runnable      |
+| ---------------------------------- | ------------------------------------------------------ | ---------------- |
+| `deploy/generate-secrets.sh`       | Prints a fresh set of all secrets                      | yes              |
+| `deploy/scripts/setup-firewall.sh` | UFW/firewalld + Docker edge hardening; `--verify <ip>` | yes (idempotent) |
+| `deploy/scripts/setup-ssl.sh`      | Let's Encrypt cert (self-signed fallback)              | yes (idempotent) |
+| `deploy/scripts/backup.sh`         | Full pg_dump → local + S3; `--restore <file>`          | yes              |
+| `deploy/scripts/health-check.sh`   | Post-deploy health probes                              | yes              |
+| `npm run launch-gate`              | Consolidated pre-launch green gate                     | yes              |

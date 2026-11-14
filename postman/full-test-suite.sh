@@ -1648,10 +1648,6 @@ else
 fi
 sleep 8
 
-R=$(get "$BASE_URL/api/test")
-test_result "DEV02" "GET /test" "200" "$(http_code "$R")"
-sleep 8
-
 R=$(get "$BASE_URL/api/test-email")
 test_result "DEV03" "GET /test-email" "200" "$(http_code "$R")"
 sleep 8

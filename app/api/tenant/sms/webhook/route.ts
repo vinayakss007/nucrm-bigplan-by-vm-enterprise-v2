@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       await logError({ error: new Error('TWILIO_AUTH_TOKEN is not set. Rejecting webhook request.'), context: 'sms-webhook config', requestMethod: 'POST' });
       return NextResponse.json({ error: 'SMS webhook secret not configured' }, { status: 403 });
     } else {
-      console.warn('[sms-webhook] TWILIO_AUTH_TOKEN is not set — skipping signature validation (dev only)');
+      void logError({ error: new Error('TWILIO_AUTH_TOKEN is not set — skipping signature validation (dev only)'), context: 'sms-webhook signature validation', level: 'warning' });
     }
 
     // Determine tenant from the 'To' number or custom parameter

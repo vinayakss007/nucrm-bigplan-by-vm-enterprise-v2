@@ -77,9 +77,11 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * lib/ files an anonymous route calls and steps 4b/4d's three libraries came
  * back as pinned targets, none of which the 103 floor had counted; 121 after
  * #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`,
- * which the walk reaches because `lib/webhooks` is a pinned target.
+ * which the walk reaches because `lib/webhooks` is a pinned target; 122 after
+ * #3409 added `app/api/cron/reconcile-counters/route.ts`, whose cross-tenant
+ * count runs inside `withSecurityContext`.
  */
-export const MIN_SCANNED_FILES = 121;
+export const MIN_SCANNED_FILES = 122;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this

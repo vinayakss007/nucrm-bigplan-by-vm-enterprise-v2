@@ -26,7 +26,7 @@ set -euo pipefail
 # sequences.sql, COPY the CSVs back, compare manifest row counts.
 
 BACKUP_URL="${BACKUP_DATABASE_URL:-${DATABASE_URL:?set BACKUP_DATABASE_URL (or DATABASE_URL)}}"
-BACKUP_DIR="${BACKUP_DIR:-/var/tmp/nucrm-backups}"
+BACKUP_DIR="${BACKUP_LOCAL_DIR:-${BACKUP_DIR:-/var/tmp/nucrm-backups}}"
 KEEP="${BACKUP_KEEP_SETS:-7}"
 TS="$(date -u +%Y-%m-%d_%H%M%S)"
 OUT="$BACKUP_DIR/$TS"

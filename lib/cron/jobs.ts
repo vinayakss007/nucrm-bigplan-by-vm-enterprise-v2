@@ -73,6 +73,11 @@ export const CRON_JOBS: readonly CronJobSpec[] = [
   { name: 'auto-backup', path: '/api/cron/auto-backup', cron: '0 2 * * *', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'backup-health', path: '/api/cron/backup-health', cron: '0 3 * * 0', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: WEEK, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'backup-verify', path: '/api/cron/backup-verify', cron: '0 4 * * *', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
+  // #3409 item 3: recompute the hand-maintained tenant counters from the rows
+  // themselves once a day, after the nightly backup and before the 04:00
+  // verification jobs. Drift is corrected and logged, so a missed write path
+  // lasts at most one interval instead of until someone notices the plan gate.
+  { name: 'reconcile-counters', path: '/api/cron/reconcile-counters', cron: '15 3 * * *', owner: 'platform', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'cleanup', path: '/api/cron/cleanup', cron: '0 4 * * 0', owner: 'platform', maxDurationMs: 120_000, expectedEveryMs: WEEK, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'warmup-emails', path: '/api/cron/warmup-emails', cron: '0 9,13,17 * * *', owner: 'email', maxDurationMs: 120_000, expectedEveryMs: 16 * HOUR, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'subscription-check', path: '/api/cron/subscription-check', cron: '0 5 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
