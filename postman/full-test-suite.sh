@@ -11,6 +11,8 @@ RESULTS_DIR="/tmp/nucrm-test-results"
 RESULTS_FILE="$RESULTS_DIR/full-test-results-$(date +%Y%m%d-%H%M%S).txt"
 COOKIE_FILE="/tmp/nucrm_cookies.txt"
 API_KEY_FILE="$RESULTS_DIR/api_key.txt"
+TEST_EMAIL="${TEST_USER_EMAIL:-admin@test.com}"
+TEST_PASSWORD="${TEST_USER_PASSWORD:-${SEED_PASSWORD:-password123}}"
 TOTAL=0
 PASSED=0
 FAILED=0
@@ -204,19 +206,19 @@ test_result "H08" "GET /api/setup/check" "200" "$(http_code "$R")"
 section "2. AUTHENTICATION"
 
 # 2.1 Login
-R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASSWORD\"}" "$BASE_URL/api/auth/login" 2>/dev/null)
 test_result "A01" "POST /auth/login (valid credentials)" "200" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/login" '{"email":"a@a.com","password":"wrongpassword"}')
+R=$(post "$BASE_URL/api/auth/login" "{\"email\":\"$TEST_EMAIL\",\"password\":\"wrongpassword\"}")
 test_result "A02" "POST /auth/login (wrong password)" "401" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/login" '{"email":"nonexistent@test.com","password":"password123"}')
+R=$(post "$BASE_URL/api/auth/login" "{\"email\":\"nonexistent@test.com\",\"password\":\"$TEST_PASSWORD\"}")
 test_result "A03" "POST /auth/login (nonexistent user)" "401" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/auth/login" '{}')
 test_result "A04" "POST /auth/login (empty body)" "400" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/login" '{"email":"not-an-email","password":"password123"}')
+R=$(post "$BASE_URL/api/auth/login" "{\"email\":\"not-an-email\",\"password\":\"$TEST_PASSWORD\"}")
 test_result "A05" "POST /auth/login (invalid email format)" "400" "$(http_code "$R")"
 
 # 2.2 Signup (password must be 12+ chars, workspace_name required)
@@ -228,7 +230,7 @@ else
     test_result "A06" "POST /auth/signup (valid)" "201" "$LC"
 fi
 
-R=$(post "$BASE_URL/api/auth/signup" '{"email":"a@a.com","password":"SecurePass1234!","full_name":"Dup User","workspace_name":"TestCo"}')
+R=$(post "$BASE_URL/api/auth/signup" "{\"email\":\"$TEST_EMAIL\",\"password\":\"SecurePass1234!\",\"full_name\":\"Dup User\",\"workspace_name\":\"TestCo\"}")
 LC=$(http_code "$R")
 if [ "$LC" = "200" ] || [ "$LC" = "409" ]; then
     test_result "A07" "POST /auth/signup (duplicate email)" "PASS" "PASS" "(200 or 409 both OK)"
@@ -246,11 +248,11 @@ LC=$(http_code "$R")
 test_result "A09" "POST /auth/logout" "200" "$LC"
 
 # Re-login after logout to restore session for protected-route tests
-R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com","password":"password123"}' "$BASE_URL/api/auth/login" 2>/dev/null)
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -c "$COOKIE_FILE" -H "Content-Type: application/json" -X POST -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASSWORD\"}" "$BASE_URL/api/auth/login" 2>/dev/null)
 
 # Get the logged-in user's ID for assign tests
 USER_ID=$(docker exec nucrm-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U nucrm -d nucrm -t -A -c "$1"' sh \
-    "SELECT id FROM users WHERE email='a@a.com' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+    "SELECT id FROM users WHERE email='$TEST_EMAIL' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
 echo "[INFO] Logged-in user ID: $USER_ID"
 
 # Create API key via session cookie + CSRF for all subsequent resource tests
@@ -270,18 +272,18 @@ R=$(get "$BASE_URL/api/auth/csrf-token")
 test_result "A10" "GET /auth/csrf-token" "200" "$(http_code "$R")"
 
 # 2.5 Password Reset
-R=$(post "$BASE_URL/api/auth/forgot-password" '{"email":"a@a.com"}')
+R=$(post "$BASE_URL/api/auth/forgot-password" "{\"email\":\"$TEST_EMAIL\"}")
 test_result "A11" "POST /auth/forgot-password (valid email)" "200" "$(http_code "$R")"
 
 R=$(post "$BASE_URL/api/auth/forgot-password" '{"email":"nonexistent@test.com"}')
 # Should still return 200 to prevent user enumeration
 test_result "A12" "POST /auth/forgot-password (nonexistent, no enum)" "200" "$(http_code "$R")"
 
-R=$(post "$BASE_URL/api/auth/password-reset/request" '{"email":"a@a.com"}')
+R=$(post "$BASE_URL/api/auth/password-reset/request" "{\"email\":\"$TEST_EMAIL\"}")
 test_result "A13" "POST /auth/password-reset/request" "200" "$(http_code "$R")"
 
 # 2.6 Email Verification — no cookies, no auth header → requireAuth returns 401
-R=$(curl -s -w "\n%{http_code}" --max-time 10 -H "Content-Type: application/json" -X POST -d '{"email":"a@a.com"}' "$BASE_URL/api/auth/resend-verification" 2>/dev/null)
+R=$(curl -s -w "\n%{http_code}" --max-time 10 -H "Content-Type: application/json" -X POST -d "{\"email\":\"$TEST_EMAIL\"}" "$BASE_URL/api/auth/resend-verification" 2>/dev/null)
 test_result "A14" "POST /auth/resend-verification (no auth)" "401" "$(http_code "$R")"
 
 # 2.7 OAuth

@@ -92,7 +92,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"a@a.com\",\n  \"password\": \"Vinayak@1234\"\n}"
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
@@ -353,9 +353,7 @@
           "name": "Create Contact",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Contact\",\n  \"email\": \"test.contact@example.com\",\n  \"phone\": \"+1-555-0199\",\n  \"jobTitle\": \"QA Engineer\",\n  \"tags\": [\"test\", \"postman\"]\n}"
@@ -399,9 +397,7 @@
           "name": "Update Contact",
           "request": {
             "method": "PUT",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"firstName\": \"Updated\",\n  \"tags\": [\"test\", \"postman\", \"updated\"]\n}"
@@ -443,9 +439,7 @@
           "name": "Bulk Create Contacts",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"contacts\": [\n    {\"firstName\": \"Bulk1\", \"lastName\": \"User\", \"email\": \"bulk1@test.com\"},\n    {\"firstName\": \"Bulk2\", \"lastName\": \"User\", \"email\": \"bulk2@test.com\"}\n  ]\n}"
@@ -475,7 +469,13 @@
             "url": {
               "raw": "{{base_url}}/api/tenant/contacts/{{contact_id}}/timeline",
               "host": ["{{base_url}}"],
-              "path": ["api", "tenant", "contacts", "{{contact_id}}", "timeline"]
+              "path": [
+                "api",
+                "tenant",
+                "contacts",
+                "{{contact_id}}",
+                "timeline"
+              ]
             }
           }
         },
@@ -504,9 +504,7 @@
               "raw": "{{base_url}}/api/tenant/leads?limit=50",
               "host": ["{{base_url}}"],
               "path": ["api", "tenant", "leads"],
-              "query": [
-                { "key": "limit", "value": "50" }
-              ]
+              "query": [{ "key": "limit", "value": "50" }]
             }
           }
         },
@@ -514,9 +512,7 @@
           "name": "Create Lead",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"firstName\": \"New\",\n  \"lastName\": \"Lead\",\n  \"email\": \"new.lead@example.com\",\n  \"source\": \"postman_test\",\n  \"status\": \"new\"\n}"
@@ -559,9 +555,7 @@
           "name": "Update Lead",
           "request": {
             "method": "PUT",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"contacted\",\n  \"notes\": \"Follow up scheduled\"\n}"
@@ -577,9 +571,7 @@
           "name": "Convert Lead to Deal",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"dealName\": \"Converted Deal\",\n  \"value\": 5000\n}"
@@ -595,9 +587,7 @@
           "name": "Bulk Import Leads",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"leads\": [\n    {\"firstName\": \"Import1\", \"lastName\": \"Lead\", \"email\": \"import1@test.com\"},\n    {\"firstName\": \"Import2\", \"lastName\": \"Lead\", \"email\": \"import2@test.com\"}\n  ]\n}"
@@ -634,9 +624,7 @@
               "raw": "{{base_url}}/api/tenant/deals?limit=50",
               "host": ["{{base_url}}"],
               "path": ["api", "tenant", "deals"],
-              "query": [
-                { "key": "limit", "value": "50" }
-              ]
+              "query": [{ "key": "limit", "value": "50" }]
             }
           }
         },
@@ -644,9 +632,7 @@
           "name": "Create Deal",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Test Deal\",\n  \"value\": 10000,\n  \"currency\": \"USD\",\n  \"stageId\": \"STAGE_ID_HERE\",\n  \"expectedCloseDate\": \"2026-07-31\"\n}"
@@ -689,9 +675,7 @@
           "name": "Update Deal",
           "request": {
             "method": "PUT",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"value\": 15000,\n  \"probability\": 75\n}"
@@ -826,9 +810,7 @@
           "name": "Create Role",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sales Rep\",\n  \"slug\": \"sales-rep\",\n  \"permissions\": {\n    \"contacts:read\": true,\n    \"contacts:write\": true,\n    \"deals:read\": true,\n    \"deals:write\": true,\n    \"leads:all\": true\n  }\n}"
@@ -952,7 +934,14 @@
             "url": {
               "raw": "{{base_url}}/api/tenant/dashboard/widgets/contacts/recent",
               "host": ["{{base_url}}"],
-              "path": ["api", "tenant", "dashboard", "widgets", "contacts", "recent"]
+              "path": [
+                "api",
+                "tenant",
+                "dashboard",
+                "widgets",
+                "contacts",
+                "recent"
+              ]
             }
           }
         },
@@ -999,9 +988,7 @@
           "name": "Create Form",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Contact Form\",\n  \"fields\": [\n    {\"name\": \"firstName\", \"type\": \"text\", \"required\": true},\n    {\"name\": \"lastName\", \"type\": \"text\", \"required\": true},\n    {\"name\": \"email\", \"type\": \"email\", \"required\": true}\n  ]\n}"
@@ -1046,9 +1033,7 @@
           "name": "Get Upload URL",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fileName\": \"test-document.pdf\",\n  \"contentType\": \"application/pdf\"\n}"
@@ -1125,7 +1110,11 @@
               "type": "apikey",
               "apikey": [
                 { "key": "key", "value": "Authorization", "type": "string" },
-                { "key": "value", "value": "Bearer ak_invalid_key_12345", "type": "string" },
+                {
+                  "key": "value",
+                  "value": "Bearer ak_invalid_key_12345",
+                  "type": "string"
+                },
                 { "key": "in", "value": "header", "type": "string" }
               ]
             },
