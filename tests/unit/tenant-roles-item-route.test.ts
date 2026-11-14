@@ -66,6 +66,7 @@ vi.mock('@/lib/auth/middleware', () => ({
     isSuperAdmin: false,
     user: { email: 'admin@example.com' },
   })),
+  requirePerm: vi.fn(() => null),
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: vi.fn(async () => null) }));
 vi.mock('@/lib/cache/sessions', () => ({

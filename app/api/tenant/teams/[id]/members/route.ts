@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { teams, teamMembers } from '@/drizzle/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -75,6 +75,10 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const deny = requirePerm(ctx, 'team.remove');
+    if (deny) return deny;
+
     const teamId = (await params).id;
 
     const userId = new URL(req.url).searchParams.get('userId');

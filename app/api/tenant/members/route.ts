@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { inviteMemberSchema, updateMemberSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db, type DbClient } from '@/drizzle/db';
 import { 
   tenantMembers, users, roles, invitations, 
@@ -140,6 +140,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
+    const deny = requirePerm(ctx, 'team.view');
+    if (deny) return deny;
+
     const [members, invites] = await Promise.all([
       db.select({
         id: tenantMembers.id,
@@ -235,6 +238,9 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (target.userId === ctx.userId && action === 'remove') return NextResponse.json({ error: 'Cannot remove yourself — transfer ownership first' }, { status: 400 });
 
     if (action === 'change_role') {
+      const denyRole = requirePerm(ctx, 'team.manage_roles');
+      if (denyRole) return denyRole;
+
       if (!roleSlug) return NextResponse.json({ error: 'roleSlug required' }, { status: 400 });
       const [role] = await db.select()
         .from(roles)
@@ -268,6 +274,9 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       await deleteUserSessions(target.userId);
 
     } else if (action === 'remove') {
+      const denyRemove = requirePerm(ctx, 'team.remove');
+      if (denyRemove) return denyRemove;
+
       const reassignUserId = reassignTo || ctx.userId;
 
       const [[cCount], [dCount], [tCount]] = await Promise.all([

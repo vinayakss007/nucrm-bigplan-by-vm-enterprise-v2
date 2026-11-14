@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { teams, teamMembers } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -18,6 +18,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'team.view');
+    if (deny) return deny;
 
     const rows = await db
       .select({
