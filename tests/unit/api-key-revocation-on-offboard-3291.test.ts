@@ -137,6 +137,9 @@ vi.mock('@/lib/auth/middleware', () => ({
     isAdmin: true, isSuperAdmin: false,
   }),
   can: () => true,
+  requirePerm: () => null,
+  requireRole: () => null,
+  requireCsrf: () => null,
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: () => Promise.resolve(null) }));
 vi.mock('@/lib/cache/sessions', () => ({
