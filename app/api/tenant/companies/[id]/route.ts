@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateCompanySchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -23,6 +23,9 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'companies.view');
+    if (deny) return deny;
 
     const id = (await params).id;
 
@@ -50,6 +53,14 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // RBAC: if user lacks view_all, only allow access to own records
+    if (!can(ctx, 'companies.view_all')) {
+      const isOwner = row.assignedTo === ctx.userId || row.createdBy === ctx.userId;
+      if (!isOwner) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
     // #2597 A2: project the detail response through the read restrictions.
     const [projected] = await enforceFieldRead(ctx, 'companies', [row]);
     return NextResponse.json({ data: projected });
@@ -72,6 +83,19 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (deny) return deny;
 
     const id = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow editing own records
+    if (!can(ctx, 'companies.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: companies.assignedTo, createdBy: companies.createdBy })
+        .from(companies)
+        .where(and(eq(companies.id, id), eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
+        .limit(1);
+      if (!existing || (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId)) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
     const rawBody = await readJsonBody(req);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
     // The synthetic `expectedUpdatedAt` concurrency key is unrestricted and survives.
@@ -167,6 +191,18 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     if (deny) return deny;
 
     const id = (await params).id;
+
+    // RBAC: if user lacks view_all, only allow deleting own records
+    if (!can(ctx, 'companies.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: companies.assignedTo, createdBy: companies.createdBy })
+        .from(companies)
+        .where(and(eq(companies.id, id), eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
+        .limit(1);
+      if (!existing || (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId)) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
 
     const [row] = await db.update(companies)
       .set({ 

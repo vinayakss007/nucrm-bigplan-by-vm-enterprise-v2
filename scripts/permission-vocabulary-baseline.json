@@ -2,18 +2,6 @@
   "note": "Shrink-only floor of catalog ids that no handler enforces yet (#3402). A new inert id is red; an id that becomes enforced is red until its entry comes down.",
   "inert": [
     {
-      "id": "contacts.merge",
-      "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
-    },
-    {
-      "id": "companies.view_all",
-      "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
-    },
-    {
-      "id": "settings.view",
-      "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
-    },
-    {
       "id": "team.view",
       "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
     },

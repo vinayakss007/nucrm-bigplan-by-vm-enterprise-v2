@@ -17,6 +17,7 @@ import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -36,10 +37,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (query instanceof NextResponse) return query;
     const { offset, limit, q, industry } = query.data;
 
+    const scope = ownerScope(ctx, 'companies.view_all', companies);
     const filters = [
       eq(companies.tenantId, ctx.tenantId),
       isNull(companies.deletedAt)
     ];
+    if (scope) {
+      filters.push(scope);
+    }
 
     if (q) {
       filters.push(ilike(companies.name, `%${escapeLike(q)}%`));
