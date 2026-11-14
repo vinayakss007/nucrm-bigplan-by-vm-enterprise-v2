@@ -126,6 +126,7 @@ vi.mock('@/drizzle/db', () => ({
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => ({ tenantId: TENANT, userId: 'member-1' })),
   requireCsrf: vi.fn(() => null),
+  requirePerm: vi.fn(() => null),
 }));
 vi.mock('@/lib/api/with-api-route', () => ({
   withApiRoute: <H>(handler: H): H => handler,
