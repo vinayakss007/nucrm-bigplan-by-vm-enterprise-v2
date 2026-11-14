@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateFollowUpSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -24,6 +24,9 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tasks.edit');
+    if (deny) return deny;
 
     const id = (await params).id;
     const body = await readJsonBody(req);
@@ -86,6 +89,9 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tasks.delete');
+    if (deny) return deny;
 
     const id = (await params).id;
 
