@@ -9,6 +9,8 @@
 BASE_URL="http://localhost:3000"
 COOKIE_FILE="/tmp/nucrm_cookies.txt"
 RESULTS_DIR="/tmp/nucrm-test-results"
+TEST_EMAIL="${TEST_USER_EMAIL:-admin@test.com}"
+TEST_PASSWORD="${TEST_USER_PASSWORD:-${SEED_PASSWORD:-password123}}"
 mkdir -p "$RESULTS_DIR"
 
 # Colors
@@ -116,7 +118,7 @@ login_org_admin() {
     RESPONSE=$(curl -s -c "$COOKIE_FILE" -w "\n%{http_code}" \
         -X POST "$BASE_URL/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d '{"email":"a@a.com","password":"Vinayak@1234"}')
+        -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASSWORD\"}")
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | head -n -1)
