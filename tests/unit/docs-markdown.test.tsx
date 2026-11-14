@@ -4,10 +4,10 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import React from 'react';
-import { DocsMarkdown } from '@/components/tenant/docs-markdown';
+import { DocsMarkdown, resolveDocLink } from '@/components/tenant/docs-markdown';
 
 // Mock clipboard
 Object.assign(navigator, {
@@ -24,6 +24,9 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 describe('DocsMarkdown Component', () => {
+  afterEach(() => {
+    cleanup();
+  });
   it('renders headings and paragraph text', () => {
     const md = `
 # Main Title
@@ -134,5 +137,77 @@ npm run dev
     const link = screen.getByRole('link', { name: /NuCRM Repo/i });
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('resolves relative .md links to internal NuCRM documentation slugs', () => {
+    expect(resolveDocLink('./user-guide/contacts-and-companies.md')).toEqual({
+      href: '/docs/users/contacts',
+      isExternal: false,
+      isAnchor: false,
+      slug: 'users/contacts',
+    });
+
+    expect(resolveDocLink('./user-guide/deals-and-pipelines.md#forecasting')).toEqual({
+      href: '/docs/users/deals#forecasting',
+      isExternal: false,
+      isAnchor: false,
+      slug: 'users/deals',
+    });
+
+    expect(resolveDocLink('../admin-guide/security-settings.md')).toEqual({
+      href: '/docs/security/overview',
+      isExternal: false,
+      isAnchor: false,
+      slug: 'security/overview',
+    });
+
+    expect(resolveDocLink('../customer-portal.md')).toEqual({
+      href: '/docs/support/faq',
+      isExternal: false,
+      isAnchor: false,
+      slug: 'support/faq',
+    });
+
+    expect(resolveDocLink('../../../public/api/openapi.yaml')).toEqual({
+      href: '/api-docs',
+      isExternal: false,
+      isAnchor: false,
+    });
+  });
+
+  it('invokes onNavigate when clicking an internal documentation link', () => {
+    const onNavigate = vi.fn();
+    const md = `See [Contacts Guide](./user-guide/contacts-and-companies.md) for details.`;
+    render(<DocsMarkdown content={md} onNavigate={onNavigate} />);
+
+    const link = screen.getByRole('link', { name: /Contacts Guide/i });
+    expect(link.getAttribute('href')).toBe('/docs/users/contacts');
+
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith('users/contacts');
+  });
+
+  it('renders extended alert types and handles leading whitespace', () => {
+    const md = `
+>  [!NOTE]
+> Leading space note text.
+
+> [!INFO]
+> Informational notice.
+
+> [!DANGER]
+> Hazardous action.
+
+> **Warning:** This is an inline warning.
+`;
+    render(<DocsMarkdown content={md} />);
+
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.length).toBe(4);
+
+    expect(screen.getByText('Leading space note text.')).toBeDefined();
+    expect(screen.getByText('Informational notice.')).toBeDefined();
+    expect(screen.getByText('Hazardous action.')).toBeDefined();
+    expect(screen.getByText('This is an inline warning.')).toBeDefined();
   });
 });

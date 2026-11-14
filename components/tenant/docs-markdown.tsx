@@ -22,10 +22,167 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-interface DocsMarkdownProps {
+export interface DocsMarkdownProps {
   content: string;
   className?: string;
+  onNavigate?: (slug: string) => void;
 }
+
+export interface ResolvedDocLink {
+  href: string;
+  isExternal: boolean;
+  isAnchor: boolean;
+  slug?: string;
+}
+
+const DOC_PATH_MAP: Record<string, string> = {
+  // User Guide
+  'user-guide/contacts-and-companies': 'users/contacts',
+  'contacts-and-companies': 'users/contacts',
+  'user-guide/deals-and-pipelines': 'users/deals',
+  'deals-and-pipelines': 'users/deals',
+  'user-guide/leads': 'users/leads',
+  'leads': 'users/leads',
+  'user-guide/tasks-and-activities': 'users/tasks',
+  'tasks-and-activities': 'users/tasks',
+  'user-guide/sales-documents': 'billing/invoices',
+  'sales-documents': 'billing/invoices',
+  'user-guide/support-and-kb': 'support/faq',
+  'user-guide/communication': 'users/activities',
+  'communication': 'users/activities',
+  'user-guide/automation': 'automation/workflows',
+  'automation': 'automation/workflows',
+  'user-guide/reports-and-dashboards': 'reports/dashboard',
+  'reports-and-dashboards': 'reports/dashboard',
+  'user-guide/ai-features': 'marketing/lead-scoring',
+  'ai-features': 'marketing/lead-scoring',
+  'user-guide/README': 'QUICKSTART',
+  'user-guide': 'QUICKSTART',
+
+  // Admin Guide
+  'admin-guide/team-and-roles': 'settings/team',
+  'team-and-roles': 'settings/team',
+  'roles': 'settings/roles',
+  'admin-guide/billing-and-plans': 'billing/invoices',
+  'billing-and-plans': 'billing/invoices',
+  'admin-guide/branding-and-customization': 'settings/tenant',
+  'branding-and-customization': 'settings/tenant',
+  'admin-guide/integrations': 'integrations/whatsapp',
+  'integrations': 'integrations/whatsapp',
+  'admin-guide/security-settings': 'security/overview',
+  'security-settings': 'security/overview',
+  'admin-guide/README': 'users/tenant-basics',
+  'admin-guide': 'users/tenant-basics',
+
+  // Developer & API
+  'developer/README': 'automation/api',
+  'developer/rest-api': 'automation/api',
+  'rest-api': 'automation/api',
+  'developer/webhooks': 'automation/webhooks',
+  'webhooks': 'automation/webhooks',
+  'developer/sdk': 'automation/api',
+  'sdk': 'automation/api',
+  'developer/authentication': 'settings/api-keys',
+  'authentication': 'settings/api-keys',
+  'api-keys': 'settings/api-keys',
+  'developer/embeds-and-forms': 'marketing/forms',
+  'embeds-and-forms': 'marketing/forms',
+  'developer': 'automation/api',
+
+  // Support & General
+  'faq': 'support/faq',
+  'glossary': 'support/faq',
+  'troubleshooting': 'support/troubleshooting',
+  'error-codes': 'support/error-codes',
+  'customer-portal': 'support/faq',
+  'getting-started': 'QUICKSTART',
+  'README': 'QUICKSTART',
+  'README_FINAL': 'README_FINAL',
+
+  // Platform & Deployment
+  'admin/deployment': 'deployment/guide',
+  'admin/security': 'security/overview',
+  'admin/configuration': 'deployment/env',
+  'admin/README': 'security/overview',
+  'admin': 'security/overview',
+  'API-TESTING-GUIDE': 'automation/api',
+  'API_MIGRATION_v1_to_v2': 'automation/api',
+  'TROUBLESHOOTING': 'support/troubleshooting',
+};
+
+export function resolveDocLink(rawHref: string | undefined): ResolvedDocLink {
+  if (!rawHref) {
+    return { href: '#', isExternal: false, isAnchor: false };
+  }
+
+  // External URLs
+  if (rawHref.startsWith('http://') || rawHref.startsWith('https://')) {
+    return { href: rawHref, isExternal: true, isAnchor: false };
+  }
+
+  // Pure page anchors
+  if (rawHref.startsWith('#')) {
+    return { href: rawHref, isExternal: false, isAnchor: true };
+  }
+
+  // OpenAPI spec link
+  if (rawHref.includes('openapi.yaml')) {
+    return { href: '/api-docs', isExternal: false, isAnchor: false };
+  }
+
+  // Split path and hash
+  const [pathPart, hashPart] = rawHref.split('#');
+  const hashSuffix = hashPart ? `#${hashPart}` : '';
+
+  // Clean relative prefix and .md extension
+  const normalized = pathPart.replace(/^(\.\.?\/)+/, '').replace(/\.md$/, '');
+
+  // Check map
+  const mappedSlug = DOC_PATH_MAP[normalized] || (normalized.includes('/') ? normalized : undefined);
+  if (mappedSlug) {
+    return {
+      href: `/docs/${mappedSlug}${hashSuffix}`,
+      isExternal: false,
+      isAnchor: false,
+      slug: mappedSlug,
+    };
+  }
+
+  // Absolute paths in app
+  if (pathPart.startsWith('/')) {
+    return { href: rawHref, isExternal: false, isAnchor: false };
+  }
+
+  // Default fallback
+  return {
+    href: `/docs/${normalized}${hashSuffix}`,
+    isExternal: false,
+    isAnchor: false,
+    slug: normalized,
+  };
+}
+
+const ALERT_REGEX = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|DANGER|SUCCESS)\]/i;
+const INLINE_ALERT_REGEX = /^\s*\*{0,2}(Note|Warning|Caution|Important|Tip|Hint|Danger|Info):\*{0,2}\s*/i;
+
+const ALERT_CONFIGS: Record<
+  string,
+  {
+    variant: 'info' | 'tip' | 'warning' | 'destructive' | 'success';
+    icon: typeof Info;
+    title: string;
+  }
+> = {
+  NOTE: { variant: 'info', icon: Info, title: 'Note' },
+  INFO: { variant: 'info', icon: Info, title: 'Info' },
+  TIP: { variant: 'tip', icon: Lightbulb, title: 'Tip' },
+  HINT: { variant: 'tip', icon: Lightbulb, title: 'Hint' },
+  IMPORTANT: { variant: 'warning', icon: AlertCircle, title: 'Important' },
+  WARNING: { variant: 'warning', icon: AlertTriangle, title: 'Warning' },
+  CAUTION: { variant: 'destructive', icon: ShieldAlert, title: 'Caution' },
+  DANGER: { variant: 'destructive', icon: ShieldAlert, title: 'Danger' },
+  SUCCESS: { variant: 'success', icon: Check, title: 'Success' },
+};
 
 /**
  * Extracts plain text from React nodes recursively to inspect alert markers.
@@ -46,17 +203,32 @@ function extractText(node: React.ReactNode): string {
  */
 function cleanAlertChildren(node: React.ReactNode): React.ReactNode {
   if (typeof node === 'string') {
-    return node.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, '');
+    return node
+      .replace(ALERT_REGEX, '')
+      .replace(INLINE_ALERT_REGEX, '');
   }
   if (Array.isArray(node)) {
     let cleaned = false;
-    return node.map((child) => {
+    const result: React.ReactNode[] = [];
+    for (const child of node) {
       if (!cleaned && ((typeof child === 'string' && child.trim().length > 0) || React.isValidElement(child))) {
         cleaned = true;
-        return cleanAlertChildren(child);
+        const cleanedChild = cleanAlertChildren(child);
+        if (typeof cleanedChild === 'string') {
+          if (cleanedChild.length > 0) result.push(cleanedChild);
+        } else if (React.isValidElement(cleanedChild)) {
+          const innerText = extractText(cleanedChild).trim();
+          if (innerText.length > 0) {
+            result.push(cleanedChild);
+          }
+        } else if (cleanedChild) {
+          result.push(cleanedChild);
+        }
+      } else {
+        result.push(child);
       }
-      return child;
-    });
+    }
+    return result;
   }
   if (React.isValidElement(node)) {
     const props = (node.props as { children?: React.ReactNode }) || {};
@@ -106,7 +278,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
-export function DocsMarkdown({ content, className }: DocsMarkdownProps) {
+export function DocsMarkdown({ content, className, onNavigate }: DocsMarkdownProps) {
   return (
     <div className={cn('docs-markdown prose-headings:scroll-m-20', className)}>
       <ReactMarkdown
@@ -176,17 +348,32 @@ export function DocsMarkdown({ content, className }: DocsMarkdownProps) {
             </td>
           ),
           a: ({ href, children, ...props }) => {
-            const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
+            const link = resolveDocLink(href);
             return (
               <a
-                href={href}
+                href={link.href}
                 className="text-violet-600 dark:text-violet-400 hover:underline font-medium inline-flex items-center gap-0.5"
-                target={isExternal ? '_blank' : undefined}
-                rel={isExternal ? 'noopener noreferrer' : undefined}
+                target={link.isExternal ? '_blank' : undefined}
+                rel={link.isExternal ? 'noopener noreferrer' : undefined}
+                onClick={(e) => {
+                  if (
+                    link.slug &&
+                    onNavigate &&
+                    !e.defaultPrevented &&
+                    e.button === 0 &&
+                    !e.metaKey &&
+                    !e.ctrlKey &&
+                    !e.altKey &&
+                    !e.shiftKey
+                  ) {
+                    e.preventDefault();
+                    onNavigate(link.slug);
+                  }
+                }}
                 {...props}
               >
                 {children}
-                {isExternal && <ExternalLink className="w-3 h-3 inline-block ml-0.5 opacity-70" />}
+                {link.isExternal && <ExternalLink className="w-3 h-3 inline-block ml-0.5 opacity-70" />}
               </a>
             );
           },
@@ -210,35 +397,14 @@ export function DocsMarkdown({ content, className }: DocsMarkdownProps) {
           blockquote: ({ children }) => {
             const text = extractText(children).trim();
 
-            // Detect GitHub markdown alert syntax: [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
-            const alertMatch = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+            const alertMatch = text.match(ALERT_REGEX);
+            const inlineMatch = !alertMatch ? text.match(INLINE_ALERT_REGEX) : null;
+            const matchedTag = alertMatch?.[1] || inlineMatch?.[1];
 
-            if (alertMatch && alertMatch[1]) {
-              const type = alertMatch[1].toUpperCase();
+            if (matchedTag) {
+              const type = matchedTag.toUpperCase();
               const cleanContent = cleanAlertChildren(children);
-
-              const defaultAlert = {
-                variant: 'info' as const,
-                icon: Info,
-                title: 'Note',
-              };
-
-              const alertConfigs: Record<
-                string,
-                {
-                  variant: 'info' | 'tip' | 'warning' | 'destructive';
-                  icon: typeof Info;
-                  title: string;
-                }
-              > = {
-                NOTE: defaultAlert,
-                TIP: { variant: 'tip', icon: Lightbulb, title: 'Tip' },
-                IMPORTANT: { variant: 'warning', icon: AlertCircle, title: 'Important' },
-                WARNING: { variant: 'warning', icon: AlertTriangle, title: 'Warning' },
-                CAUTION: { variant: 'destructive', icon: ShieldAlert, title: 'Caution' },
-              };
-
-              const config = alertConfigs[type] ?? defaultAlert;
+              const config = ALERT_CONFIGS[type] || ALERT_CONFIGS.NOTE;
               const Icon = config.icon;
 
               return (
