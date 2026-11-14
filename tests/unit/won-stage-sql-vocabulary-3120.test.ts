@@ -132,7 +132,7 @@ const {
 
 const AUTH = {
   userId: MINE, tenantId: TENANT, roleSlug: 'manager',
-  permissions: { 'deals.view': true, 'deals.view_all': true, 'contacts.view': true },
+  permissions: { 'deals.view': true, 'deals.view_all': true, 'contacts.view': true, 'reports.view': true },
   isAdmin: false, isSuperAdmin: false,
 } as unknown as AuthContext;
 

@@ -123,7 +123,7 @@ const dealVelocity = await import('@/app/api/tenant/reports/deal-velocity/route'
 
 const AUTH = {
   userId: MINE, tenantId: TENANT, roleSlug: 'manager',
-  permissions: { 'deals.view': true, 'deals.view_all': true, 'contacts.view': true },
+  permissions: { 'deals.view': true, 'deals.view_all': true, 'contacts.view': true, 'reports.view': true },
   isAdmin: false, isSuperAdmin: false,
 } as unknown as AuthContext;
 
