@@ -61,7 +61,7 @@
  */
 
 import { AsyncLocalStorage } from 'async_hooks';
-import type { PoolClient } from 'pg';
+import { Client, type PoolClient } from 'pg';
 import { getPool } from './pool';
 import { trackClient, releaseClient } from './leak-detector';
 
@@ -196,6 +196,9 @@ async function drainClientQueries(client: PoolClient): Promise<void> {
  * - Acquires ONE client from getPool(), wraps it so its queries are serialized
  *   (see serializeClientQueries), and enters an AsyncLocalStorage scope so
  *   getPinnedClient() (and therefore the `db` proxy) route queries to it.
+ * - When `options.lazy` is true (#3538), pool checkout is deferred until the first
+ *   query actually executes. Handlers that return early (e.g. 401 Unauthorized
+ *   from requireAuth or 400 validation error) never check out a connection.
  * - In a finally block, DRAINS any outstanding serialized queries, resets the
  *   tenant GUCs on the client (defense-in-depth, in addition to the pool's own
  *   release handler) and releases the client back to the pool.
@@ -209,13 +212,79 @@ async function drainClientQueries(client: PoolClient): Promise<void> {
  * request is what session pooling expects and is the only way the tenant
  * context survives the whole request.
  */
-export async function withPinnedConnection<T>(fn: () => Promise<T>): Promise<T> {
+export interface PinnedConnectionOptions {
+  /**
+   * When true (#3538), defer pool checkout until client.query() is invoked.
+   * Prevents connection exhaustion on unauthenticated / early-rejection requests.
+   */
+  lazy?: boolean;
+}
+
+export async function withPinnedConnection<T>(
+  fn: () => Promise<T>,
+  options?: PinnedConnectionOptions
+): Promise<T> {
   // If a client is already pinned for this scope (e.g. nested wrapping), reuse
   // it rather than acquiring a second connection — keeps the "one connection
   // per request" guarantee.
   const existing = getPinnedClient();
   if (existing) {
     return fn();
+  }
+
+  if (options?.lazy) {
+    let rawClient: PoolClient | undefined;
+    let leakId: number | undefined;
+    let serialized: PoolClient | undefined;
+
+    const ensureConnected = async (): Promise<PoolClient> => {
+      if (!rawClient) {
+        rawClient = await getPool().connect();
+        leakId = trackClient(new Error('pinned-connection acquired'));
+        serialized = serializeClientQueries(rawClient);
+      }
+      return rawClient;
+    };
+
+    const target = Object.create(Client.prototype) as PoolClient;
+    const lazyClient = new Proxy(target, {
+      get(target, prop, receiver) {
+        if (prop === 'query') {
+          type QueryArgs = Parameters<PoolClient['query']>;
+          return async (...args: QueryArgs) => {
+            await ensureConnected();
+            return (serialized!.query as (...a: QueryArgs) => Promise<unknown>)(...args);
+          };
+        }
+        if (prop === 'release') {
+          return () => {
+            if (rawClient) rawClient.release();
+          };
+        }
+        if (rawClient) {
+          const val = Reflect.get(rawClient, prop, receiver);
+          return typeof val === 'function' ? val.bind(rawClient) : val;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    try {
+      return await pinnedConnectionStorage.run({ client: lazyClient }, fn);
+    } finally {
+      if (rawClient) {
+        try {
+          await drainClientQueries(rawClient);
+        } catch {
+        }
+        try {
+          await rawClient.query(RESET_TENANT_GUCS_SQL);
+        } catch {
+        }
+        rawClient.release();
+        if (leakId) releaseClient(leakId);
+      }
+    }
   }
 
   const rawClient = await getPool().connect();

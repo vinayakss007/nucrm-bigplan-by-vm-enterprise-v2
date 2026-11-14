@@ -125,9 +125,11 @@ export function withApiRoute<C = unknown>(
       // PP-027: tenant-carrier scope wraps the pinned connection so the identity
       // requireAuth() proves stays visible to bare db.transaction() calls whatever
       // mode the pooler runs in (no-op cost without PgBouncer; #3404 pins session).
+      // #3538: lazy connection pinning defers pool checkout until the first query executes,
+      // so unauthenticated requests (401 from requireAuth) never burn a pool connection.
       const response = await runWithHttpMethod(metricMethod, () =>
         runWithTenantCarrier(() =>
-          withPinnedConnection(async () => handler(request, context))
+          withPinnedConnection(async () => handler(request, context), { lazy: true })
         )
       );
       metricStatus = response instanceof Response ? response.status : 500;
