@@ -10,7 +10,7 @@ import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { contracts } from '@/drizzle/schema';
 import { eq, and, desc, count, isNull } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -20,6 +20,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'contracts.view');
+    if (deny) return deny;
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -52,6 +54,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'contracts.create');
+    if (deny) return deny;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);
