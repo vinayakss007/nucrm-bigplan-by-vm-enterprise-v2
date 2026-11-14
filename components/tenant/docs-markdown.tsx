@@ -131,7 +131,9 @@ export function resolveDocLink(rawHref: string | undefined): ResolvedDocLink {
   }
 
   // Split path and hash
-  const [pathPart, hashPart] = rawHref.split('#');
+  const parts = rawHref.split('#');
+  const pathPart = parts[0] ?? '';
+  const hashPart = parts[1] ?? '';
   const hashSuffix = hashPart ? `#${hashPart}` : '';
 
   // Clean relative prefix and .md extension
@@ -165,15 +167,20 @@ export function resolveDocLink(rawHref: string | undefined): ResolvedDocLink {
 const ALERT_REGEX = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|DANGER|SUCCESS)\]/i;
 const INLINE_ALERT_REGEX = /^\s*\*{0,2}(Note|Warning|Caution|Important|Tip|Hint|Danger|Info):\*{0,2}\s*/i;
 
-const ALERT_CONFIGS: Record<
-  string,
-  {
-    variant: 'info' | 'tip' | 'warning' | 'destructive' | 'success';
-    icon: typeof Info;
-    title: string;
-  }
-> = {
-  NOTE: { variant: 'info', icon: Info, title: 'Note' },
+interface AlertConfig {
+  variant: 'info' | 'tip' | 'warning' | 'destructive' | 'success';
+  icon: typeof Info;
+  title: string;
+}
+
+const DEFAULT_ALERT_CONFIG: AlertConfig = {
+  variant: 'info',
+  icon: Info,
+  title: 'Note',
+};
+
+const ALERT_CONFIGS: Record<string, AlertConfig> = {
+  NOTE: DEFAULT_ALERT_CONFIG,
   INFO: { variant: 'info', icon: Info, title: 'Info' },
   TIP: { variant: 'tip', icon: Lightbulb, title: 'Tip' },
   HINT: { variant: 'tip', icon: Lightbulb, title: 'Hint' },
@@ -404,7 +411,7 @@ export function DocsMarkdown({ content, className, onNavigate }: DocsMarkdownPro
             if (matchedTag) {
               const type = matchedTag.toUpperCase();
               const cleanContent = cleanAlertChildren(children);
-              const config = ALERT_CONFIGS[type] || ALERT_CONFIGS.NOTE;
+              const config = ALERT_CONFIGS[type] ?? DEFAULT_ALERT_CONFIG;
               const Icon = config.icon;
 
               return (
