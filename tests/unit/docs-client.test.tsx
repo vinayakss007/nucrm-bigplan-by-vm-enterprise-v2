@@ -8,7 +8,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import DocsClient from '@/components/tenant/docs-client';
-import { DEPLOYMENT_DOCS } from '@/components/tenant/docs-content-deployment';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
