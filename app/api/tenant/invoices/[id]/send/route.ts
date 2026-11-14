@@ -20,7 +20,7 @@
  * activity, and reports the status the ledger actually holds.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, contacts, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
@@ -39,6 +39,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     if (ctx instanceof NextResponse) return ctx;
     const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
     if (csrf) return csrf;
+
+    const deny = requirePerm(ctx, 'invoices.send');
+    if (deny) return deny;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'Invoice ID required' }, { status: 400 });

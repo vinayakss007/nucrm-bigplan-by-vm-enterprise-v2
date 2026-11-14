@@ -10,7 +10,7 @@ import { sumLineItems, lineTotal, money, round2 } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
-import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -20,6 +20,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'invoices.view');
+    if (deny) return deny;
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -85,6 +87,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // gets a 401, matching the middleware/handler contract.
     const csrf = requireCsrf(request);
     if (csrf) return csrf;
+    const deny = requirePerm(ctx, 'invoices.create');
+    if (deny) return deny;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);
