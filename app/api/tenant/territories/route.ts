@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { territories } from '@/drizzle/schema/territories';
@@ -58,6 +58,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
 
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
+
     const raw = await readJsonBody(req);
     const parsed = validateBody(createTerritorySchema, raw);
     if (parsed instanceof NextResponse) return parsed;
@@ -85,6 +88,9 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
+
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
 
     const raw = await readJsonBody(req);
     const parsed = validateBody(updateTerritorySchema, raw);
@@ -127,6 +133,9 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     const gate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (gate) return gate;
+
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
