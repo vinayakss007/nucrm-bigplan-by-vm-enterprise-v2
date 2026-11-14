@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -25,7 +25,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const deny = requirePerm(ctx, 'team.manage_roles');
+    if (deny) return deny;
     const { id } = await params;
     const rawBody = await readJsonBody(request);
     const validated = validateBody(updateRoleSchema, rawBody);
@@ -95,7 +97,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+
+    const deny = requirePerm(ctx, 'team.manage_roles');
+    if (deny) return deny;
     
     const { id } = await params;
 

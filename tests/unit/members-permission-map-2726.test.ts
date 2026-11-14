@@ -109,7 +109,7 @@ const route = await import('@/app/api/tenant/members/route');
 function ctx(admin: boolean): AuthContext {
   return {
     userId: ME, tenantId: TENANT, roleSlug: admin ? 'admin' : 'member',
-    permissions: admin ? { all: true } : { 'contacts.view': true },
+    permissions: admin ? { all: true } : { 'contacts.view': true, 'team.view': true },
     isAdmin: admin, isSuperAdmin: false,
   } as unknown as AuthContext;
 }

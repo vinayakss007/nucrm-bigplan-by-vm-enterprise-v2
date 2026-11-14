@@ -41,7 +41,7 @@ const dbMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/drizzle/db', () => ({ db: dbMock }));
-vi.mock('@/lib/auth/middleware', () => ({ requireAuth: vi.fn(async () => mockCtx) }));
+vi.mock('@/lib/auth/middleware', () => ({ requireAuth: vi.fn(async () => mockCtx), requirePerm: vi.fn(() => null) }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: vi.fn(async () => null) }));
 vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: <T,>(h: T) => h }));
 
