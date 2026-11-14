@@ -38,14 +38,6 @@
       "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
     },
     {
-      "id": "invoices.create",
-      "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
-    },
-    {
-      "id": "invoices.send",
-      "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
-    },
-    {
       "id": "contracts.sign",
       "reason": "PR-2E of #3402: the Roles UI offers this id and no handler requires it. Enforcement is the entity-by-entity policy change the issue asks for, so this entry doubles as its to-do list."
     }
