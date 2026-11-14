@@ -76,6 +76,8 @@ vi.mock('@/lib/auth/middleware', () => ({
     permissions: { all: true },
     roleSlug: 'admin',
   })),
+  requirePerm: vi.fn(() => null),
+  requireRole: vi.fn(() => null),
 }));
 
 vi.mock('@/lib/api-error', () => ({

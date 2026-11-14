@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, desc, and, isNull } from 'drizzle-orm';
@@ -25,6 +25,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
+    const deny = requirePerm(ctx, 'reports.view');
+    if (deny) return deny;
+
     // Soft-deleted schedules (deletedAt) must not keep showing up as active
     // entries in the analytics/reporting list (#2236).
     const reports = await db.select().from(scheduledReports)
@@ -42,6 +45,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'reports.create');
+    if (deny) return deny;
 
     const body = await readJsonBody(request);
     const { name, type, frequency, recipients, config } = body;

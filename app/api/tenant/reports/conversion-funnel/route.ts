@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -29,6 +29,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'reports.view');
+    if (deny) return deny;
     const tid = ctx.tenantId;
 
     const { searchParams } = new URL(req.url);

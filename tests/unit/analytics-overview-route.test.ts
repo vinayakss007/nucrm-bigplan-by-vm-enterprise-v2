@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // assert the reshaped output, numeric coercion of the decimal-as-string revenue,
 // the tasks total/completed/open/overdue math, and the 8-bucket weekly fill.
 
-const fakeCtx = { tenantId: 'tenant-123', userId: 'user-1' };
+const fakeCtx = { tenantId: 'tenant-123', userId: 'user-1', isAdmin: true, permissions: { 'reports.view': true } };
 // #2713: the route authenticates with requireAuth(), not requireTenantCtx() —
 // the latter lives in lib/tenant/context and refuses by throwing a redirect(),
 // which this handler's catch used to report as a 500.

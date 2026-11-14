@@ -16,7 +16,10 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 const mockCtx = { tenantId: 'tenant-1', userId: 'user-1', isAdmin: true };
 const mockRequireAuth = vi.fn();
 
-vi.mock('@/lib/auth/middleware', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
+vi.mock('@/lib/auth/middleware', () => ({
+  requireAuth: (...a: unknown[]) => mockRequireAuth(...a),
+  requirePerm: () => null,
+}));
 vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: <T>(fn: T) => fn }));
 vi.mock('@/lib/api/rate-limit', () => ({ checkRateLimit: async () => null }));
 vi.mock('server-only', () => ({}));

@@ -52,8 +52,16 @@ vi.mock('@/lib/auth/middleware', () => ({
     const { getPinnedClient } = await import('../../lib/db/request-connection');
     pinnedWhenRouteRan = getPinnedClient();
     await (pinnedWhenRouteRan as { query: (sql: string) => Promise<unknown> }).query('SELECT 7');
-    return { tenantId: 't-1', userId: 'u-1' };
+    return {
+      tenantId: 't-1',
+      userId: 'u-1',
+      isAdmin: true,
+      roleSlug: 'admin',
+      permissions: { all: true },
+    };
   }),
+  requirePerm: vi.fn(() => null),
+  requireRole: vi.fn(() => null),
 }));
 
 describe('a real converted route runs inside the pinned scope (#1615)', () => {
