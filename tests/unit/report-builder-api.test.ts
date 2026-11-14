@@ -23,6 +23,7 @@ vi.mock('@/lib/auth/middleware', () => ({
     permissions: { all: true },
     roleSlug: 'admin',
   })),
+  requirePerm: vi.fn(() => null),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({

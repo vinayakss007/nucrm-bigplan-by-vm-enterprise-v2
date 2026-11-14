@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, count } from 'drizzle-orm';
@@ -37,6 +37,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // "not signed in" into a 500. requireAuth answers it with a 401.
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'reports.view');
+    if (deny) return deny;
 
     // The client previously built 8 weekly buckets as
     //   weekStart = now - (7 - i) * 7 days, weekEnd = now - (6 - i) * 7 days
