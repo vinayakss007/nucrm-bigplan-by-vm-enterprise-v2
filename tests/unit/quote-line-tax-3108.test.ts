@@ -35,7 +35,7 @@ vi.mock('@/drizzle/db', () => ({
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: async () => ({ tenantId: 'tenant-1', userId: 'user-1', isSuperAdmin: false }),
   requireModule: async () => null,
-  requirePerm: async () => null,
+  requirePerm: () => null,
 }));
 vi.mock('@/lib/api/mutating-rate-limit', () => ({ rateLimitMutating: async () => null }));
 vi.mock('@/lib/errors-server', () => ({ logError: async () => undefined }));

@@ -11,7 +11,7 @@ import { sumLineItems, documentTotal, lineTotal } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
-import { requireAuth, requireModule } from '@/lib/auth/middleware';
+import { requireAuth, requireModule, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -21,6 +21,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'quotes.view');
+    if (deny) return deny;
 
     const modErr = await requireModule(ctx, 'sales-quotes');
     if (modErr) return modErr;
@@ -63,6 +66,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'quotes.manage');
+    if (deny) return deny;
 
     const modErr = await requireModule(ctx, 'sales-quotes');
     if (modErr) return modErr;

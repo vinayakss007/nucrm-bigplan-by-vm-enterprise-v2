@@ -155,7 +155,7 @@ vi.mock('@/lib/offers', async () => {
 });
 
 const ctx: AuthContext = {
-  userId: USER, tenantId: TENANT, roleSlug: 'rep', permissions: { 'quotes.edit': true },
+  userId: USER, tenantId: TENANT, roleSlug: 'rep', permissions: { 'quotes.edit': true, 'quotes.manage': true },
   isAdmin: false, isSuperAdmin: false,
 } as unknown as AuthContext;
 

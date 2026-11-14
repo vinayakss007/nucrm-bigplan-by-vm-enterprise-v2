@@ -13,7 +13,7 @@
  * Returns just enough for the list page; detail goes through /api/tenant/quotes/[id].
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
@@ -26,6 +26,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'quotes.view');
+    if (deny) return deny;
 
     const sp = req.nextUrl.searchParams;
     const status = sp.get('status');

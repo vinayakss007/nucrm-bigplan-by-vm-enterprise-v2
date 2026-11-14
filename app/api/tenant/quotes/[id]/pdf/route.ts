@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, contacts, companies, tenants } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
@@ -24,6 +24,9 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'quotes.view');
+    if (deny) return deny;
 
     const { id } = await params;
 
