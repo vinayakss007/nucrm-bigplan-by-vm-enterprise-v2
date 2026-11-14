@@ -10,7 +10,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailTemplates } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -59,6 +59,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
     const { id } = await params;
     const rawBody = await readJsonBody(request);
     const validated = validateBody(updateEmailTemplateSchema, rawBody);
@@ -123,6 +126,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
     const { id } = await params;
 
     const [row] = await db.update(emailTemplates)

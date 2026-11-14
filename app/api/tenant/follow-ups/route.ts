@@ -8,7 +8,7 @@ import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createFollowUpSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
@@ -20,6 +20,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tasks.view');
+    if (deny) return deny;
 
     const { searchParams } = new URL(request.url);
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
@@ -101,6 +104,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tasks.create');
+    if (deny) return deny;
 
     const body = await readJsonBody(request);
     const validated = validateBody(createFollowUpSchema, body);
