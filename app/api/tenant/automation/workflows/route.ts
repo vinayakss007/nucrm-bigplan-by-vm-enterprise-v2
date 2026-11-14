@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requireModule } from '@/lib/auth/middleware';
+import { requireAuth, requireModule, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { automationWorkflows } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -18,6 +18,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'automations.view');
+    if (deny) return deny;
 
     const modErr = await requireModule(ctx, 'automation-basic');
     if (modErr) return modErr;
@@ -60,6 +63,9 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'automations.manage');
+    if (deny) return deny;
 
     const modErr = await requireModule(ctx, 'automation-basic');
     if (modErr) return modErr;

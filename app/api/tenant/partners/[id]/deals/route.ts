@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import {
   registerDeal,
   getPartnerDealRegistrations,
@@ -51,6 +51,9 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'partners.create');
+    if (deny) return deny;
 
     const partnerId = (await params).id;
     const body = await readJsonBody(request);
