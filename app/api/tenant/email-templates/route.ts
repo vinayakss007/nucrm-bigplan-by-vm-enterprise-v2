@@ -9,7 +9,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createEmailTemplateSchema } from '@/lib/api/schemas';
@@ -62,6 +62,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'settings.manage');
+    if (deny) return deny;
 
     const raw = await readJsonBody(request);
     const validated = validateBody(createEmailTemplateSchema, raw);

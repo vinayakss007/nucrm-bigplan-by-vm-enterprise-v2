@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createKbCategorySchema } from '@/lib/api/schemas';
@@ -18,6 +18,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tickets.view');
+    if (deny) return deny;
     const data = await db.select()
       .from(kbCategories)
       .where(and(eq(kbCategories.tenantId, ctx.tenantId), isNull(kbCategories.deletedAt)))
@@ -36,6 +39,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tickets.manage');
+    if (deny) return deny;
     const body = await readJsonBody(request);
     const validated = validateBody(createKbCategorySchema, body);
     if (validated instanceof NextResponse) return validated;

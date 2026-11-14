@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { SUPPORT_DOCS } from './docs-content-support';
+import { DEPLOYMENT_DOCS } from './docs-content-deployment';
+import { DocsMarkdown } from './docs-markdown';
 
 // Documentation structure based on actual files
 const DOCS_STRUCTURE = {
@@ -362,133 +364,59 @@ or the interactive Swagger UI at \`/api-docs\` on a running instance._
     },
     'users/first-setup': {
       title: 'First Time Setup',
-      content: `# Getting Started with NuCRM
+      content: `# First-Time Workspace Setup Guide
 
-This guide takes you from zero to a working NuCRM workspace with your first records.
+Step-by-step onboarding for workspace administrators to configure NuCRM for their organization.
 
-> **Audience:** new users and the person who creates a workspace.
-> **Time:** about 10 minutes.
-
----
-
-## What is NuCRM?
-
-NuCRM is a **multi-tenant customer relationship management (CRM) platform**. Each organization
-gets its own isolated **workspace** (also called a *tenant*) containing its contacts, deals,
-communications, and settings. Within a workspace, people are invited as **members** and given
-**roles** that control what they can see and do.
-
-NuCRM covers the full customer lifecycle:
-
-- **Sell** — contacts, companies, leads, deals, pipelines, forecasts
-- **Quote to cash** — quotes, invoices, orders, contracts, subscriptions, products
-- **Communicate** — email, SMS, WhatsApp, calls, live chat
-- **Support** — tickets, SLAs, a public knowledge base
-- **Automate** — workflows, email sequences, assignment rules, lead warming
-- **Understand** — dashboards, reports, analytics, and AI-powered insights
+> [!TIP]
+> Complete these essential configuration steps before inviting your broader team to ensure a smooth launch.
 
 ---
 
-## Step 1 — Create your workspace
+## 1. Company Profile & Regional Settings
 
-There are two ways a workspace comes into existence.
-
-### Option A — Self-service signup
-
-If signups are enabled, go to the sign-up page and provide your email, a password, your name, and
-a workspace name. You become the **owner** of the new workspace.
-
-- Page: **Sign up** (\`/auth/signup\`)
-- You'll receive a verification email — confirm it to unlock all features.
-
-### Option B — Invited to an existing workspace
-
-If a colleague invited you, you'll receive an email with an invite link. Opening it lets you set a
-password and join their workspace with the role they assigned.
-
-- Page: **Accept invite** (\`/auth/invite\`)
-
-> **Operators:** the very first admin on a brand-new installation is bootstrapped by the platform
-> operator. See the [Super-Admin deployment guide](../admin/deployment.md) for \`create-admin\`.
+Set up your organization's core business identity under **Settings → Tenant**:
+- **Company Name & Logo** — Displayed across invoices, customer portal, and email headers.
+- **Default Currency & Timezone** — Determines revenue calculation currency and scheduled task timestamps.
+- **Fiscal Year Start** — Powers quarterly revenue projections and sales quota reporting.
 
 ---
 
-## Step 2 — Log in
+## 2. Configure Email & Outbound Comms
 
-Go to the **Login** page (\`/auth/login\`), enter your email and password, and you'll land on your
-**Dashboard**.
-
-- If your workspace requires **two-factor authentication (2FA)**, you'll be prompted for a code
-  from your authenticator app after your password.
-- If your workspace uses **Single Sign-On (SSO)**, use the SSO button and authenticate with your
-  identity provider instead.
-
-Your session is kept in a secure, http-only cookie and stays valid for up to 30 days unless you
-log out or an admin revokes it.
+Email delivery is vital for team invitations, notifications, and customer communication:
+- Navigate to **Settings → Integrations → Email**.
+- Enter your SMTP credentials (or configure Resend, SendGrid, or AWS SES).
+- Send a test email to verify domain authorization and SPF/DKIM verification.
 
 ---
 
-## Step 3 — Learn the interface
+## 3. Customize Your Sales Pipeline
 
-Once inside, the main areas are:
-
-| Area | What it's for |
-| --- | --- |
-| **Dashboard** | Your at-a-glance widgets: pipeline, tasks, activity |
-| **Left navigation** | Jump between modules (Contacts, Deals, Tasks, …) |
-| **Global search** | Find any record fast |
-| **Command palette** | Press **⌘K / Ctrl+K** for quick actions and navigation |
-| **Notifications** | Real-time updates (new assignments, mentions, replies) |
-| **Settings** | Your profile, preferences, and — for admins — workspace configuration |
-
-**Handy shortcuts**
-
-- **⌘K / Ctrl+K** — command palette
-- **⌘1–6** — jump to top modules
-- Destructive actions show a **10-second undo** toast, so mistakes are easy to reverse.
+Tailor deal stages to match your company's actual selling process:
+- Go to **CRM → Deals → Pipeline Settings**.
+- Define your sales stages (e.g. Lead In, Discovery, Proposal Sent, Negotiation, Closed Won, Closed Lost).
+- Assign stage probabilities to enable weighted pipeline forecasting.
 
 ---
 
-## Step 4 — Add your first data
+## 4. Invite Your Team Members
 
-Pick whichever matches how you work:
-
-1. **Add a contact** — Contacts → *New Contact*. This is the person you're building a
-   relationship with. See [Contacts & Companies](./user-guide/contacts-and-companies.md).
-2. **Import in bulk** — Contacts / Leads → *Import* to upload a CSV. Duplicate detection warns you
-   about likely matches.
-3. **Create a deal** — Deals → *New Deal*, then drag it across your pipeline stages. See
-   [Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-4. **Log a lead** — capture inbound interest and let scoring and assignment rules route it. See
-   [Leads](./user-guide/leads.md).
+Bring your team into the workspace under **Settings → Team**:
+- Click **Invite Member** and specify their email address.
+- Select the appropriate role:
+  - **Owner** — Full administrative access, billing, and security settings.
+  - **Admin** — User management, pipelines, and integrations.
+  - **Member** — Standard CRM access to manage assigned leads, contacts, and deals.
+  - **Viewer** — Read-only access to records and reports.
 
 ---
 
-## Step 5 — Invite your team (admins)
+## 5. Security Policies & 2FA
 
-If you're the owner/admin, go to **Settings → Team** to invite colleagues by email and assign each
-one a role (\`admin\`, \`manager\`, \`sales_rep\`, \`viewer\`, or a custom role). Full details in
-[Team & Roles](./admin-guide/team-and-roles.md).
-
----
-
-## Where to go next
-
-- **Everyday usage** → [User Guide](./user-guide/README.md)
-- **Configuring the workspace** → [Workspace Admin Guide](./admin-guide/README.md)
-- **Building an integration** → [Developer & API Reference](./developer/README.md)
-- **Stuck?** → [FAQ](./faq.md) · [Glossary](./glossary.md)
-
----
-
-## Requirements & compatibility
-
-- **Browser:** any current version of Chrome, Edge, Firefox, or Safari. Internet Explorer is not
-  supported.
-- **Mobile:** NuCRM is mobile-responsive and installable as a Progressive Web App (PWA), with
-  offline-capable views.
-- **Accessibility:** built to WCAG guidelines — keyboard navigation, skip links, and screen-reader
-  support are included.
+Ensure enterprise account security under **Settings → Security**:
+- Enforce **Two-Factor Authentication (2FA)** across all team accounts.
+- Configure session timeout and IP allowlisting policies.
 `
     },
     'users/tenant-basics': {
@@ -4158,460 +4086,7 @@ See [Team & Roles](./team-and-roles.md#advanced-access-control).
 - [Super-Admin → Security & Compliance](../../admin/security.md) — platform-level security (operators)
 `
     },
-    'deployment/guide': {
-      title: 'Deployment Guide',
-      content: `# Getting Started with NuCRM
-
-This guide takes you from zero to a working NuCRM workspace with your first records.
-
-> **Audience:** new users and the person who creates a workspace.
-> **Time:** about 10 minutes.
-
----
-
-## What is NuCRM?
-
-NuCRM is a **multi-tenant customer relationship management (CRM) platform**. Each organization
-gets its own isolated **workspace** (also called a *tenant*) containing its contacts, deals,
-communications, and settings. Within a workspace, people are invited as **members** and given
-**roles** that control what they can see and do.
-
-NuCRM covers the full customer lifecycle:
-
-- **Sell** — contacts, companies, leads, deals, pipelines, forecasts
-- **Quote to cash** — quotes, invoices, orders, contracts, subscriptions, products
-- **Communicate** — email, SMS, WhatsApp, calls, live chat
-- **Support** — tickets, SLAs, a public knowledge base
-- **Automate** — workflows, email sequences, assignment rules, lead warming
-- **Understand** — dashboards, reports, analytics, and AI-powered insights
-
----
-
-## Step 1 — Create your workspace
-
-There are two ways a workspace comes into existence.
-
-### Option A — Self-service signup
-
-If signups are enabled, go to the sign-up page and provide your email, a password, your name, and
-a workspace name. You become the **owner** of the new workspace.
-
-- Page: **Sign up** (\`/auth/signup\`)
-- You'll receive a verification email — confirm it to unlock all features.
-
-### Option B — Invited to an existing workspace
-
-If a colleague invited you, you'll receive an email with an invite link. Opening it lets you set a
-password and join their workspace with the role they assigned.
-
-- Page: **Accept invite** (\`/auth/invite\`)
-
-> **Operators:** the very first admin on a brand-new installation is bootstrapped by the platform
-> operator. See the [Super-Admin deployment guide](../admin/deployment.md) for \`create-admin\`.
-
----
-
-## Step 2 — Log in
-
-Go to the **Login** page (\`/auth/login\`), enter your email and password, and you'll land on your
-**Dashboard**.
-
-- If your workspace requires **two-factor authentication (2FA)**, you'll be prompted for a code
-  from your authenticator app after your password.
-- If your workspace uses **Single Sign-On (SSO)**, use the SSO button and authenticate with your
-  identity provider instead.
-
-Your session is kept in a secure, http-only cookie and stays valid for up to 30 days unless you
-log out or an admin revokes it.
-
----
-
-## Step 3 — Learn the interface
-
-Once inside, the main areas are:
-
-| Area | What it's for |
-| --- | --- |
-| **Dashboard** | Your at-a-glance widgets: pipeline, tasks, activity |
-| **Left navigation** | Jump between modules (Contacts, Deals, Tasks, …) |
-| **Global search** | Find any record fast |
-| **Command palette** | Press **⌘K / Ctrl+K** for quick actions and navigation |
-| **Notifications** | Real-time updates (new assignments, mentions, replies) |
-| **Settings** | Your profile, preferences, and — for admins — workspace configuration |
-
-**Handy shortcuts**
-
-- **⌘K / Ctrl+K** — command palette
-- **⌘1–6** — jump to top modules
-- Destructive actions show a **10-second undo** toast, so mistakes are easy to reverse.
-
----
-
-## Step 4 — Add your first data
-
-Pick whichever matches how you work:
-
-1. **Add a contact** — Contacts → *New Contact*. This is the person you're building a
-   relationship with. See [Contacts & Companies](./user-guide/contacts-and-companies.md).
-2. **Import in bulk** — Contacts / Leads → *Import* to upload a CSV. Duplicate detection warns you
-   about likely matches.
-3. **Create a deal** — Deals → *New Deal*, then drag it across your pipeline stages. See
-   [Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-4. **Log a lead** — capture inbound interest and let scoring and assignment rules route it. See
-   [Leads](./user-guide/leads.md).
-
----
-
-## Step 5 — Invite your team (admins)
-
-If you're the owner/admin, go to **Settings → Team** to invite colleagues by email and assign each
-one a role (\`admin\`, \`manager\`, \`sales_rep\`, \`viewer\`, or a custom role). Full details in
-[Team & Roles](./admin-guide/team-and-roles.md).
-
----
-
-## Where to go next
-
-- **Everyday usage** → [User Guide](./user-guide/README.md)
-- **Configuring the workspace** → [Workspace Admin Guide](./admin-guide/README.md)
-- **Building an integration** → [Developer & API Reference](./developer/README.md)
-- **Stuck?** → [FAQ](./faq.md) · [Glossary](./glossary.md)
-
----
-
-## Requirements & compatibility
-
-- **Browser:** any current version of Chrome, Edge, Firefox, or Safari. Internet Explorer is not
-  supported.
-- **Mobile:** NuCRM is mobile-responsive and installable as a Progressive Web App (PWA), with
-  offline-capable views.
-- **Accessibility:** built to WCAG guidelines — keyboard navigation, skip links, and screen-reader
-  support are included.
-`
-    },
-    'deployment/docker': {
-      title: 'Docker Deployment',
-      content: `# Getting Started with NuCRM
-
-This guide takes you from zero to a working NuCRM workspace with your first records.
-
-> **Audience:** new users and the person who creates a workspace.
-> **Time:** about 10 minutes.
-
----
-
-## What is NuCRM?
-
-NuCRM is a **multi-tenant customer relationship management (CRM) platform**. Each organization
-gets its own isolated **workspace** (also called a *tenant*) containing its contacts, deals,
-communications, and settings. Within a workspace, people are invited as **members** and given
-**roles** that control what they can see and do.
-
-NuCRM covers the full customer lifecycle:
-
-- **Sell** — contacts, companies, leads, deals, pipelines, forecasts
-- **Quote to cash** — quotes, invoices, orders, contracts, subscriptions, products
-- **Communicate** — email, SMS, WhatsApp, calls, live chat
-- **Support** — tickets, SLAs, a public knowledge base
-- **Automate** — workflows, email sequences, assignment rules, lead warming
-- **Understand** — dashboards, reports, analytics, and AI-powered insights
-
----
-
-## Step 1 — Create your workspace
-
-There are two ways a workspace comes into existence.
-
-### Option A — Self-service signup
-
-If signups are enabled, go to the sign-up page and provide your email, a password, your name, and
-a workspace name. You become the **owner** of the new workspace.
-
-- Page: **Sign up** (\`/auth/signup\`)
-- You'll receive a verification email — confirm it to unlock all features.
-
-### Option B — Invited to an existing workspace
-
-If a colleague invited you, you'll receive an email with an invite link. Opening it lets you set a
-password and join their workspace with the role they assigned.
-
-- Page: **Accept invite** (\`/auth/invite\`)
-
-> **Operators:** the very first admin on a brand-new installation is bootstrapped by the platform
-> operator. See the [Super-Admin deployment guide](../admin/deployment.md) for \`create-admin\`.
-
----
-
-## Step 2 — Log in
-
-Go to the **Login** page (\`/auth/login\`), enter your email and password, and you'll land on your
-**Dashboard**.
-
-- If your workspace requires **two-factor authentication (2FA)**, you'll be prompted for a code
-  from your authenticator app after your password.
-- If your workspace uses **Single Sign-On (SSO)**, use the SSO button and authenticate with your
-  identity provider instead.
-
-Your session is kept in a secure, http-only cookie and stays valid for up to 30 days unless you
-log out or an admin revokes it.
-
----
-
-## Step 3 — Learn the interface
-
-Once inside, the main areas are:
-
-| Area | What it's for |
-| --- | --- |
-| **Dashboard** | Your at-a-glance widgets: pipeline, tasks, activity |
-| **Left navigation** | Jump between modules (Contacts, Deals, Tasks, …) |
-| **Global search** | Find any record fast |
-| **Command palette** | Press **⌘K / Ctrl+K** for quick actions and navigation |
-| **Notifications** | Real-time updates (new assignments, mentions, replies) |
-| **Settings** | Your profile, preferences, and — for admins — workspace configuration |
-
-**Handy shortcuts**
-
-- **⌘K / Ctrl+K** — command palette
-- **⌘1–6** — jump to top modules
-- Destructive actions show a **10-second undo** toast, so mistakes are easy to reverse.
-
----
-
-## Step 4 — Add your first data
-
-Pick whichever matches how you work:
-
-1. **Add a contact** — Contacts → *New Contact*. This is the person you're building a
-   relationship with. See [Contacts & Companies](./user-guide/contacts-and-companies.md).
-2. **Import in bulk** — Contacts / Leads → *Import* to upload a CSV. Duplicate detection warns you
-   about likely matches.
-3. **Create a deal** — Deals → *New Deal*, then drag it across your pipeline stages. See
-   [Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-4. **Log a lead** — capture inbound interest and let scoring and assignment rules route it. See
-   [Leads](./user-guide/leads.md).
-
----
-
-## Step 5 — Invite your team (admins)
-
-If you're the owner/admin, go to **Settings → Team** to invite colleagues by email and assign each
-one a role (\`admin\`, \`manager\`, \`sales_rep\`, \`viewer\`, or a custom role). Full details in
-[Team & Roles](./admin-guide/team-and-roles.md).
-
----
-
-## Where to go next
-
-- **Everyday usage** → [User Guide](./user-guide/README.md)
-- **Configuring the workspace** → [Workspace Admin Guide](./admin-guide/README.md)
-- **Building an integration** → [Developer & API Reference](./developer/README.md)
-- **Stuck?** → [FAQ](./faq.md) · [Glossary](./glossary.md)
-
----
-
-## Requirements & compatibility
-
-- **Browser:** any current version of Chrome, Edge, Firefox, or Safari. Internet Explorer is not
-  supported.
-- **Mobile:** NuCRM is mobile-responsive and installable as a Progressive Web App (PWA), with
-  offline-capable views.
-- **Accessibility:** built to WCAG guidelines — keyboard navigation, skip links, and screen-reader
-  support are included.
-`
-    },
-    'deployment/env': {
-      title: 'Environment Variables',
-      content: `# Getting Started with NuCRM
-
-This guide takes you from zero to a working NuCRM workspace with your first records.
-
-> **Audience:** new users and the person who creates a workspace.
-> **Time:** about 10 minutes.
-
----
-
-## What is NuCRM?
-
-NuCRM is a **multi-tenant customer relationship management (CRM) platform**. Each organization
-gets its own isolated **workspace** (also called a *tenant*) containing its contacts, deals,
-communications, and settings. Within a workspace, people are invited as **members** and given
-**roles** that control what they can see and do.
-
-NuCRM covers the full customer lifecycle:
-
-- **Sell** — contacts, companies, leads, deals, pipelines, forecasts
-- **Quote to cash** — quotes, invoices, orders, contracts, subscriptions, products
-- **Communicate** — email, SMS, WhatsApp, calls, live chat
-- **Support** — tickets, SLAs, a public knowledge base
-- **Automate** — workflows, email sequences, assignment rules, lead warming
-- **Understand** — dashboards, reports, analytics, and AI-powered insights
-
----
-
-## Step 1 — Create your workspace
-
-There are two ways a workspace comes into existence.
-
-### Option A — Self-service signup
-
-If signups are enabled, go to the sign-up page and provide your email, a password, your name, and
-a workspace name. You become the **owner** of the new workspace.
-
-- Page: **Sign up** (\`/auth/signup\`)
-- You'll receive a verification email — confirm it to unlock all features.
-
-### Option B — Invited to an existing workspace
-
-If a colleague invited you, you'll receive an email with an invite link. Opening it lets you set a
-password and join their workspace with the role they assigned.
-
-- Page: **Accept invite** (\`/auth/invite\`)
-
-> **Operators:** the very first admin on a brand-new installation is bootstrapped by the platform
-> operator. See the [Super-Admin deployment guide](../admin/deployment.md) for \`create-admin\`.
-
----
-
-## Step 2 — Log in
-
-Go to the **Login** page (\`/auth/login\`), enter your email and password, and you'll land on your
-**Dashboard**.
-
-- If your workspace requires **two-factor authentication (2FA)**, you'll be prompted for a code
-  from your authenticator app after your password.
-- If your workspace uses **Single Sign-On (SSO)**, use the SSO button and authenticate with your
-  identity provider instead.
-
-Your session is kept in a secure, http-only cookie and stays valid for up to 30 days unless you
-log out or an admin revokes it.
-
----
-
-## Step 3 — Learn the interface
-
-Once inside, the main areas are:
-
-| Area | What it's for |
-| --- | --- |
-| **Dashboard** | Your at-a-glance widgets: pipeline, tasks, activity |
-| **Left navigation** | Jump between modules (Contacts, Deals, Tasks, …) |
-| **Global search** | Find any record fast |
-| **Command palette** | Press **⌘K / Ctrl+K** for quick actions and navigation |
-| **Notifications** | Real-time updates (new assignments, mentions, replies) |
-| **Settings** | Your profile, preferences, and — for admins — workspace configuration |
-
-**Handy shortcuts**
-
-- **⌘K / Ctrl+K** — command palette
-- **⌘1–6** — jump to top modules
-- Destructive actions show a **10-second undo** toast, so mistakes are easy to reverse.
-
----
-
-## Step 4 — Add your first data
-
-Pick whichever matches how you work:
-
-1. **Add a contact** — Contacts → *New Contact*. This is the person you're building a
-   relationship with. See [Contacts & Companies](./user-guide/contacts-and-companies.md).
-2. **Import in bulk** — Contacts / Leads → *Import* to upload a CSV. Duplicate detection warns you
-   about likely matches.
-3. **Create a deal** — Deals → *New Deal*, then drag it across your pipeline stages. See
-   [Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-4. **Log a lead** — capture inbound interest and let scoring and assignment rules route it. See
-   [Leads](./user-guide/leads.md).
-
----
-
-## Step 5 — Invite your team (admins)
-
-If you're the owner/admin, go to **Settings → Team** to invite colleagues by email and assign each
-one a role (\`admin\`, \`manager\`, \`sales_rep\`, \`viewer\`, or a custom role). Full details in
-[Team & Roles](./admin-guide/team-and-roles.md).
-
----
-
-## Where to go next
-
-- **Everyday usage** → [User Guide](./user-guide/README.md)
-- **Configuring the workspace** → [Workspace Admin Guide](./admin-guide/README.md)
-- **Building an integration** → [Developer & API Reference](./developer/README.md)
-- **Stuck?** → [FAQ](./faq.md) · [Glossary](./glossary.md)
-
----
-
-## Requirements & compatibility
-
-- **Browser:** any current version of Chrome, Edge, Firefox, or Safari. Internet Explorer is not
-  supported.
-- **Mobile:** NuCRM is mobile-responsive and installable as a Progressive Web App (PWA), with
-  offline-capable views.
-- **Accessibility:** built to WCAG guidelines — keyboard navigation, skip links, and screen-reader
-  support are included.
-`
-    },
-    'deployment/backup': {
-      title: 'Backup & Restore',
-      content: `# Workspace Admin Guide — Overview
-
-For **workspace owners and administrators** who configure NuCRM for their team. This is *tenant*
-administration — it does not cover operating the platform itself (that's the
-[Super-Admin Docs](../../admin/README.md)).
-
-> 👤 **Tenant admin** — most actions here require an admin or owner role in your workspace.
-
----
-
-## What a workspace admin does
-
-| Responsibility | Guide |
-| --- | --- |
-| Add people and control what they can do | [Team & Roles](./team-and-roles.md) |
-| Manage the subscription, plan, and invoices | [Billing & Plans](./billing-and-plans.md) |
-| Make NuCRM look and behave like your business | [Branding & Customization](./branding-and-customization.md) |
-| Connect email, messaging, calendar, and other tools | [Integrations](./integrations.md) |
-| Enforce security and access policies | [Security Settings](./security-settings.md) |
-
----
-
-## The Settings area
-
-Almost all admin configuration lives under **Settings**. Common sections include:
-
-- **General** — workspace name, defaults, localization
-- **Profile & Preferences** — per-user settings
-- **Team, Roles, Permissions** — access control
-- **Pipelines, Custom fields, Tags, Picklists** — data model customization
-- **Email, SMS, Webhooks, Integrations, Plugins, API keys** — connectivity
-- **Branding** — logo, colors, custom domain, portal branding
-- **Billing** — plan and payment
-- **Security, SSO, Login policy, Sessions, IP allowlist** — protection
-- **Backup, Audit, Compliance** — governance
-- **Tax, Currency** — financial configuration
-- **SLA, Territories, Hierarchy** — operations
-- **Import/Export** — data movement
-
----
-
-## Recommended setup order
-
-1. **Branding & data model** — set your logo/colors, pipelines, and custom fields so records match
-   your business. → [Branding & Customization](./branding-and-customization.md)
-2. **Team & roles** — invite people and assign roles. → [Team & Roles](./team-and-roles.md)
-3. **Integrations** — connect email first (needed for invites and notifications), then messaging
-   and calendar. → [Integrations](./integrations.md)
-4. **Security** — enforce 2FA/SSO and set login policy. → [Security Settings](./security-settings.md)
-5. **Billing** — confirm your plan and payment method. → [Billing & Plans](./billing-and-plans.md)
-
----
-
-## Related
-
-- [User Guide](../user-guide/README.md) — how the features you're configuring are used
-- [Developer & API Reference](../developer/README.md) — API keys and programmatic access
-`
-    },
+    ...DEPLOYMENT_DOCS,
     ...SUPPORT_DOCS,
   };
 
@@ -4662,10 +4137,10 @@ const slugFromPath = (pathname: string | null): string | null => {
 
 const categoryOfSlug = (slug: string): string | null => slug.split('/')[0] ?? null;
 
-export default function DocsClient() {
+export default function DocsClient({ initialDoc: initialDocProp }: { initialDoc?: string } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const initialDoc = slugFromPath(pathname);
+  const initialDoc = initialDocProp || slugFromPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(initialDoc ? categoryOfSlug(initialDoc) : null);
   const [selectedDoc, setSelectedDoc] = useState<string | null>(initialDoc);
@@ -5241,9 +4716,7 @@ export default function DocsClient() {
                     <FileText className="w-4 h-4" />
                     Last updated: {new Date(currentDocContent.lastUpdated).toLocaleDateString()}
                   </div>
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {currentDocContent.content}
-                  </div>
+                  <DocsMarkdown content={currentDocContent.content} />
                 </div>
               </div>
             </div>

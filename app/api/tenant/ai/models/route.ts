@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -109,7 +110,10 @@ export const GET = withApiRoute(async (req: NextRequest) => {
           // Sort alphabetically
           models.sort((a, b) => a.id.localeCompare(b.id));
         } else {
-          const text = await res.text().catch(() => '');
+          const text = await res.text().catch((err: unknown) => {
+            void logError({ error: err, context: 'tenant/ai/models:text-parse', level: 'warning' });
+            return '';
+          });
           return NextResponse.json({
             models: [],
             error: `Provider returned ${res.status}: ${text.slice(0, 200)}`,

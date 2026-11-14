@@ -9,7 +9,7 @@ import { createSubscriptionSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions } from '@/drizzle/schema';
 import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -18,6 +18,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'subscriptions.view');
+    if (deny) return deny;
     const { tenantId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -49,6 +51,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'subscriptions.manage');
+    if (deny) return deny;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);
