@@ -113,6 +113,7 @@ vi.mock("@/lib/auth/middleware", () => ({
     isAdmin: true,
   })),
   requireCsrf: vi.fn(() => null),
+  requirePerm: vi.fn(() => null),
 }));
 vi.mock("@/lib/api/with-api-route", () => ({
   withApiRoute: <H>(handler: H): H => handler,

@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { createCheckoutSession, createPortalSession, getPriceId, isStripeConfigured } from '@/lib/stripe';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -44,7 +44,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     if (!isStripeConfigured()) {
       return NextResponse.json({ error: 'Payment processing is not configured. Contact support.' }, { status: 503 });
@@ -96,7 +97,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.view');
+    if (permErr) return permErr;
 
     if (!isStripeConfigured()) {
       return NextResponse.json({ error: 'Payment processing is not configured.' }, { status: 503 });

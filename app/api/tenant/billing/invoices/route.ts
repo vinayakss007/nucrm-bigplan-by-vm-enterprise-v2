@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { billingEvents } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
@@ -16,6 +16,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const permErr = requirePerm(ctx, 'billing.view');
+    if (permErr) return permErr;
 
     const events = await db.select({
       id: billingEvents.id,

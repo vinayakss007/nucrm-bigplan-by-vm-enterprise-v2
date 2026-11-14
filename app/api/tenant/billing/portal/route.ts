@@ -13,7 +13,7 @@
  * Response: { url: string }
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -29,9 +29,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isAdmin) {
-      return NextResponse.json({ error: 'Only workspace admins can manage billing.' }, { status: 403 });
-    }
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     if (!isStripeConfigured()) {
       return NextResponse.json(

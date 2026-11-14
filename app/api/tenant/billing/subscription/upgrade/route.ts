@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions, plans, billingEvents } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -70,7 +70,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth (after auth)
     if (csrf) return csrf;
-    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    const permErr = requirePerm(ctx, 'billing.manage');
+    if (permErr) return permErr;
 
     if (!isStripeConfigured()) {
       return NextResponse.json({ error: 'Payment processing is not configured.' }, { status: 503 });
