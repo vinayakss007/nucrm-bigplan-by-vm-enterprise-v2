@@ -98,4 +98,36 @@ describe('DocsClient', () => {
 
     expect(screen.getByText(/search results for "docker"/i)).toBeDefined();
   });
+
+  it('displays distinct billing documentation sections', () => {
+    const { unmount: u1 } = render(<DocsClient initialDoc="billing/services" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /services & product catalog/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /price books & multi-currency/i }).length).toBeGreaterThan(0);
+    u1();
+
+    const { unmount: u2 } = render(<DocsClient initialDoc="billing/invoices" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /invoices & billing/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /invoice lifecycle/i }).length).toBeGreaterThan(0);
+    u2();
+
+    const { unmount: u3 } = render(<DocsClient initialDoc="billing/orders" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /sales orders & fulfillment/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /order management workflow/i }).length).toBeGreaterThan(0);
+    u3();
+
+    const { unmount: u4 } = render(<DocsClient initialDoc="billing/contracts" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /contracts & sla agreements/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /automated renewal alerts/i }).length).toBeGreaterThan(0);
+    u4();
+
+    const { unmount: u5 } = render(<DocsClient initialDoc="billing/subscriptions" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /subscriptions & recurring revenue/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /subscription models/i }).length).toBeGreaterThan(0);
+    u5();
+
+    const { unmount: u6 } = render(<DocsClient initialDoc="billing/payments" />);
+    expect(screen.getAllByRole('heading', { level: 1, name: /payments & ledger/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 2, name: /append-only payment ledger/i }).length).toBeGreaterThan(0);
+    u6();
+  });
 });

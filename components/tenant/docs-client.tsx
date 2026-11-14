@@ -1035,633 +1035,260 @@ rates so pipeline totals and forecasts roll up consistently in your base currenc
 `
     },
     'billing/services': {
-      title: 'Services Catalog',
-      content: `# Sales Documents
+      title: 'Services & Product Catalog',
+      content: `# Services & Product Catalog
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
-
----
-
-## Products & price books
-
-The **product catalog** holds the items and services you sell.
-
-| Feature | Description |
-| --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
-
-Products flow into deals, quotes, orders, and invoices as **line items**.
+The **Services Catalog** defines the items, service packages, and billable offerings your workspace delivers to clients.
 
 ---
 
-## Quotes
+## Service Types & Pricing Models
 
-A **quote** proposes pricing to a customer.
+NuCRM supports multiple commercial models for services:
 
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
-
----
-
-## Orders
-
-**Orders** capture confirmed purchases.
-
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
+| Model | Description | Common Use Case |
+| --- | --- | --- |
+| **Fixed Price** | Single one-time charge per delivery | Setup fee, onboarding package, audit |
+| **Hourly / Time & Materials** | Billed per unit of time logged | Consulting, engineering, custom development |
+| **Retainer** | Fixed monthly or quarterly commitment | Managed services, ongoing advisory |
+| **Usage / Unit Based** | Price per unit, license, or milestone | Per-seat licensing, data volume processing |
 
 ---
 
-## Invoices
+## Price Books & Multi-Currency
 
-**Invoices** bill the customer and track payment.
+- **Price Books** — Create tailored price books for different markets, enterprise tiers, or customer segments.
+- **Multi-Currency** — Define standard prices in your primary currency, with automatic exchange-rate conversions for foreign billing.
+- **Tax Classification** — Assign default tax categories (standard, reduced, exempt) per service line.
 
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
-
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
+> [!TIP]
+> Keep your default pricing aligned with your standard sales pipeline deals to streamline quote generation.
 
 ---
 
-## Contracts
+## Attaching Services to Deals & Invoices
 
-**Contracts** manage agreements over time:
+Services flow directly into the quote-to-cash pipeline:
 
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
+1. **Deals & Quotes** — Add services as line items on opportunities to automatically calculate total contract value (TCV).
+2. **Orders** — Selected services convert into confirmed delivery orders upon customer acceptance.
+3. **Invoicing** — Services populate recurring or milestone invoices with correct unit rates and tax rules.
 
 ---
 
-## Offers
+## Related Guides
 
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Invoices & Billing](./billing/invoices.md) — Bill customers for delivered services
+- [Subscriptions](./billing/subscriptions.md) — Automate recurring service renewals
+- [Deals & Pipelines](./user-guide/deals-and-pipelines.md) — Attach catalog services to opportunities
 `
     },
     'billing/invoices': {
-      title: 'Invoices',
-      content: `# Sales Documents
+      title: 'Invoices & Billing',
+      content: `# Invoices & Billing
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
-
----
-
-## Products & price books
-
-The **product catalog** holds the items and services you sell.
-
-| Feature | Description |
-| --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
-
-Products flow into deals, quotes, orders, and invoices as **line items**.
+Manage customer invoices, automated billing cycles, tax calculations, and payment tracking in one unified interface.
 
 ---
 
-## Quotes
+## Invoice Lifecycle
 
-A **quote** proposes pricing to a customer.
+NuCRM enforces an explicit invoice lifecycle with audit-logged state transitions:
 
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
+\`\`\`
+Draft ──> Sent ──> Partially Paid ──> Paid
+  │         │
+  └──> Void └──> Overdue
+\`\`\`
 
----
-
-## Orders
-
-**Orders** capture confirmed purchases.
-
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
+- **Draft** — Line items, discounts, and customer details can be freely adjusted.
+- **Sent** — Issued to the customer; updates the customer balance and triggers payment reminders.
+- **Partially Paid** — A recorded payment covers part of the balance due.
+- **Paid** — Balance due reaches zero.
+- **Overdue** — Due date passes with an outstanding balance.
+- **Void** — Cancelled invoice; entries remain in the audit ledger for financial compliance.
 
 ---
 
-## Invoices
+## Line Items, Tax & Calculations
 
-**Invoices** bill the customer and track payment.
+Every invoice calculates line totals, subtotals, tax distributions, and final totals:
 
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
+- **Automatic Tax Calculations** — Multi-jurisdiction tax engine supports state, federal, GST, and VAT rules.
+- **Discounts** — Apply percentage-based or fixed amount discounts at the line item or invoice level.
+- **PDF Generation** — One-click export to branded, professional PDF invoices.
+- **Customer Portal** — Customers can securely view, download, and pay invoices directly via the [Customer Portal](./customer-portal.md).
 
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
+> [!IMPORTANT]
+> Invoice payments are stored as an append-only ledger. The invoice's paid amount and outstanding balance are always derived from the recorded payments.
 
 ---
 
-## Contracts
+## Related Guides
 
-**Contracts** manage agreements over time:
-
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
-
----
-
-## Offers
-
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Payments](./billing/payments.md) — Record and reconcile customer payments
+- [Orders](./billing/orders.md) — Convert confirmed orders into invoices
+- [Contracts](./billing/contracts.md) — Manage SLA agreements and terms
 `
     },
     'billing/orders': {
-      title: 'Orders',
-      content: `# Sales Documents
+      title: 'Sales Orders & Fulfillment',
+      content: `# Sales Orders & Fulfillment
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
+**Sales Orders** represent confirmed customer commitments following deal approval or quote acceptance.
 
 ---
 
-## Products & price books
+## Order Management Workflow
 
-The **product catalog** holds the items and services you sell.
+Orders bridge the gap between sales and billing:
 
-| Feature | Description |
+1. **Conversion from Quote** — An accepted quote or won deal instantly converts to an Order with all line items preserved.
+2. **Fulfillment Tracking** — Track order stages from **Pending**, to **In Progress**, **Fulfilled**, and **Closed**.
+3. **Delivery & Milestones** — Track physical shipping or digital service milestone completion.
+4. **Billing Generation** — Generate partial or full invoices directly from fulfilled order items.
+
+---
+
+## Key Features
+
+| Capability | What It Does |
 | --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
+| **Line Item Presets** | Pulls confirmed products, quantities, and pricing from approved quotes |
+| **Fulfillment Milestones** | Track delivery status across departments or delivery teams |
+| **One-Click Invoicing** | Creates single or milestone-based invoices when items are fulfilled |
+| **Audit History** | Complete timeline of approvals, status updates, and modifications |
 
-Products flow into deals, quotes, orders, and invoices as **line items**.
-
----
-
-## Quotes
-
-A **quote** proposes pricing to a customer.
-
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
+> [!NOTE]
+> Converting a quote to an order locks the agreed pricing so changes to price books do not impact in-flight deliveries.
 
 ---
 
-## Orders
+## Related Guides
 
-**Orders** capture confirmed purchases.
-
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
-
----
-
-## Invoices
-
-**Invoices** bill the customer and track payment.
-
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
-
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
-
----
-
-## Contracts
-
-**Contracts** manage agreements over time:
-
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
-
----
-
-## Offers
-
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Invoices](./billing/invoices.md) — Generate invoices from fulfilled orders
+- [Services Catalog](./billing/services.md) — Configure standard offerings
+- [Deals & Pipelines](./user-guide/deals-and-pipelines.md) — Progress opportunities to orders
 `
     },
     'billing/contracts': {
-      title: 'Contracts',
-      content: `# Sales Documents
+      title: 'Contracts & SLA Agreements',
+      content: `# Contracts & SLA Agreements
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
-
----
-
-## Products & price books
-
-The **product catalog** holds the items and services you sell.
-
-| Feature | Description |
-| --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
-
-Products flow into deals, quotes, orders, and invoices as **line items**.
+Manage long-term customer agreements, legal terms, service level agreements (SLAs), and automated renewal notifications.
 
 ---
 
-## Quotes
+## Contract Lifecycle
 
-A **quote** proposes pricing to a customer.
+Contracts track agreements across their active lifespan:
 
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
-
----
-
-## Orders
-
-**Orders** capture confirmed purchases.
-
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
+- **Draft** — Drafting legal clauses, terms, and payment schedules.
+- **Under Review** — Internal or customer stakeholder approval workflow.
+- **Active** — In effect and governing active services and billing.
+- **Expiring** — Approaching completion within the renewal reminder window.
+- **Renewed** — Extended for an additional term.
+- **Terminated** — Closed early or concluded without renewal.
 
 ---
 
-## Invoices
+## Automated Renewal Alerts
 
-**Invoices** bill the customer and track payment.
+Never miss a renewal deadline with NuCRM's automated notification triggers:
 
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
+- **90-Day Warning** — Alert account managers to start renewal discussions.
+- **60-Day Reminder** — Trigger task assignments and proposal preparation.
+- **30-Day Critical Notice** — High-priority notification for account owners.
+- **Auto-Renewal Execution** — Automatically generate successor contracts for evergreen agreements.
 
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
+> [!TIP]
+> Configure contract renewal notifications under **Settings → Automation** to route renewal tasks directly to assigned account executives.
 
 ---
 
-## Contracts
+## Related Guides
 
-**Contracts** manage agreements over time:
-
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
-
----
-
-## Offers
-
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Subscriptions](./billing/subscriptions.md) — Recurring billing management
+- [Invoices](./billing/invoices.md) — Contract-driven invoice schedules
+- [Companies](./users/companies.md) — Manage company accounts and active contracts
 `
     },
     'billing/subscriptions': {
-      title: 'Subscriptions',
-      content: `# Sales Documents
+      title: 'Subscriptions & Recurring Revenue',
+      content: `# Subscriptions & Recurring Revenue
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
-
----
-
-## Products & price books
-
-The **product catalog** holds the items and services you sell.
-
-| Feature | Description |
-| --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
-
-Products flow into deals, quotes, orders, and invoices as **line items**.
+Automate recurring billing, plan management, trial conversions, and customer lifecycle proration.
 
 ---
 
-## Quotes
+## Subscription Models
 
-A **quote** proposes pricing to a customer.
+NuCRM supports recurring revenue business models:
 
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
-
----
-
-## Orders
-
-**Orders** capture confirmed purchases.
-
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
+| Cycle | Description | Example |
+| --- | --- | --- |
+| **Monthly Billing** | Billed every 30 days or calendar month | SaaS user seats, support plans |
+| **Quarterly Billing** | Billed every 3 months with volume discounts | Business tier retainers |
+| **Annual Billing** | Annual upfront payment with term commitments | Enterprise licenses |
 
 ---
 
-## Invoices
+## Upgrades, Downgrades & Proration
 
-**Invoices** bill the customer and track payment.
+- **Mid-Cycle Upgrades** — Instantly upgrade customer plans with automated calculation of prorated charges for remaining days.
+- **Downgrades & Cancellations** — Schedule downgrades for the end of the current billing cycle to avoid mid-term credits.
+- **Trial Periods** — Configure automated trials with expiration reminders and seamless conversion to paid plans.
+- **Automated Invoicing** — NuCRM automatically generates and sends invoices on each renewal date.
 
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
-
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
+> [!IMPORTANT]
+> Proration calculations strictly respect your workspace timezone and configured billing calendar settings.
 
 ---
 
-## Contracts
+## Related Guides
 
-**Contracts** manage agreements over time:
-
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
-
----
-
-## Offers
-
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Invoices](./billing/invoices.md) — View recurring invoices generated by subscriptions
+- [Contracts](./billing/contracts.md) — Master service agreements backing subscriptions
+- [Reports & Analytics](./reports/dashboard.md) — Track Monthly Recurring Revenue (MRR) and churn
 `
     },
     'billing/payments': {
-      title: 'Payments',
-      content: `# Sales Documents
+      title: 'Payments & Ledger',
+      content: `# Payments & Ledger
 
-NuCRM covers the full **quote-to-cash** flow: products, quotes, orders, invoices, contracts, and
-subscriptions.
-
----
-
-## Products & price books
-
-The **product catalog** holds the items and services you sell.
-
-| Feature | Description |
-| --- | --- |
-| **SKU & pricing** | Each product has a code and price. |
-| **Tax rates** | Assign tax treatment per product. |
-| **Price books** | Maintain multiple price lists (e.g. by region or customer tier). |
-| **Product templates** | Reusable product definitions for quick entry. |
-
-Products flow into deals, quotes, orders, and invoices as **line items**.
+Record, verify, and reconcile customer payments with an immutable, append-only transaction ledger.
 
 ---
 
-## Quotes
+## Append-Only Payment Ledger
 
-A **quote** proposes pricing to a customer.
+In NuCRM, payments cannot be silently edited or deleted. Instead, financial integrity is guaranteed through an **append-only ledger**:
 
-- Build quotes from **line items** (products with quantity, price, and tax).
-- Generate a **PDF** to send to the customer.
-- Route quotes through an **approval workflow** when discounts or terms need sign-off.
-- Share a **public offer link** so customers can view — and accept or decline — without logging in.
-  See [Offers](#offers).
+- **Payment Recording** — Each transaction is logged with timestamp, payment method, reference number, and amount.
+- **Automatic Balance Derivation** — The unpaid balance on every invoice is dynamically computed from total charges minus total ledger payments.
+- **Refunds & Adjustments** — Refunds are logged as negative balancing entries, ensuring a clean audit trail for accounting.
 
 ---
 
-## Orders
+## Supported Payment Methods
 
-**Orders** capture confirmed purchases.
+| Method | Tracking | Receipt Generation |
+| --- | --- | --- |
+| **Bank Wire / ACH** | Reference ID and deposit confirmation | Automatic |
+| **Credit Card** | Gateway transaction ID and last 4 digits | Automatic |
+| **Stripe Integration** | Automated webhook synchronization | Instant |
+| **Manual / Check** | Check number and depositor notes | Optional |
 
-- Line items, shipping details, and **status tracking** through fulfillment.
-- Created from accepted quotes or directly.
-
----
-
-## Invoices
-
-**Invoices** bill the customer and track payment.
-
-| Feature | Description |
-| --- | --- |
-| **Line items & tax** | Automatic tax calculation across jurisdictions. |
-| **Payment tracking** | Payments are recorded against the invoice; balance due and status update automatically. |
-| **Recurring invoices** | Generate invoices on a schedule for ongoing services. |
-| **PDF generation** | Produce a professional PDF for sending. |
-
-> Payments are stored as an append-only ledger, so the invoice's paid amount, balance, and status
-> are always derived from the recorded payments and can't silently drift.
-
-Customers can view and download their invoices through the
-[Customer Portal](../customer-portal.md).
+> [!CAUTION]
+> Because the payment ledger is append-only for regulatory compliance, corrections must be made by recording an offsetting adjustment entry rather than deleting historical transactions.
 
 ---
 
-## Contracts
+## Related Guides
 
-**Contracts** manage agreements over time:
-
-- **Renewal tracking** with automatic reminders before expiry.
-- **Approval workflow** for sign-off.
-
----
-
-## Subscriptions
-
-**Subscriptions** handle recurring revenue:
-
-- Recurring billing cycles.
-- **Trial management**.
-- **Plan upgrades / downgrades** with proration handled by billing.
-
----
-
-## Offers
-
-**Offers** are shareable, public proposals. Send a customer a link (no login required) where they
-can review the offer and **accept** or **decline** it. The response is recorded back in NuCRM.
-
----
-
-## Tax & currency
-
-- **Tax** — configurable tax rates, exemptions, and multi-jurisdiction calculation applied
-  automatically to line items.
-- **Currency** — multi-currency documents with exchange-rate conversion.
-
----
-
-## Related
-
-- [Deals & Pipelines](./deals-and-pipelines.md) — deals become quotes and orders
-- [Billing & Plans](../admin-guide/billing-and-plans.md) — your workspace's own subscription
-- [Customer Portal Guide](../customer-portal.md) — where customers view invoices
+- [Invoices](./billing/invoices.md) — Invoice statuses and outstanding balances
+- [Customer Portal](./customer-portal.md) — Where customers view receipts and payment history
+- [Security & Audit](./security/overview.md) — Financial audit logs and permissions
 `
     },
     'marketing/sequences': {
@@ -4716,7 +4343,7 @@ export default function DocsClient({ initialDoc: initialDocProp }: { initialDoc?
                     <FileText className="w-4 h-4" />
                     Last updated: {new Date(currentDocContent.lastUpdated).toLocaleDateString()}
                   </div>
-                  <DocsMarkdown content={currentDocContent.content} />
+                  <DocsMarkdown content={currentDocContent.content} onNavigate={handleDocClick} />
                 </div>
               </div>
             </div>
