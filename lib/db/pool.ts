@@ -273,3 +273,33 @@ export function getPool(): Pool {
     global.__pgPoolCreating = false;
   }
 }
+
+export { pgSslConfig };
+
+/**
+ * Factory for creating PostgreSQL connection pools with unified defaults (#3501):
+ * - Automatically injects TLS policy from `lib/db/ssl-config.ts` unless explicitly configured
+ * - Sets TCP keepalive defaults (10s initial delay)
+ * - Sets allowExitOnIdle: true
+ * - Attaches basic error logger to prevent uncaught exceptions on idle socket disconnect
+ */
+export function createPgPool(options: PoolConfig = {}): Pool {
+  const mergedOptions: PoolConfig = {
+    allowExitOnIdle: true,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+    ...options,
+    ssl: options.ssl !== undefined ? options.ssl : pgSslConfig(),
+  };
+
+  const pool = new Pool(mergedOptions);
+
+  if (typeof pool?.on === 'function') {
+    pool.on('error', (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[db-pool] error:', message);
+    });
+  }
+
+  return pool;
+}
