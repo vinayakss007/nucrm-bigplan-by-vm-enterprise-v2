@@ -12,8 +12,7 @@ import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { withSecurityContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
-import { Pool } from 'pg';
-import { pgSslConfig } from '@/lib/db/ssl-config';
+import { createPgPool } from '@/lib/db/pool';
 import { pgLibpqEnv } from '@/lib/backups/backup-service';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
@@ -195,7 +194,7 @@ async function cronRouteHandler(request: NextRequest) {
   let scratchDb: string | null = null;
   // SSL: match the shared pgSslConfig() TLS policy (on by default, verified in
   // production) so the backup-verify path never transits the DB in plaintext.
-  const mainPool = new Pool({ connectionString: databaseUrl, max: 1, ssl: pgSslConfig() });
+  const mainPool = createPgPool({ connectionString: databaseUrl, max: 1 });
 
   try {
     // Find the most recent completed backup.
@@ -333,7 +332,7 @@ async function cronRouteHandler(request: NextRequest) {
     }
 
     // ── 4. Validate content ──────────────────────────────────────────────────
-    const scratchPool = new Pool({ connectionString: scratchUrl.toString(), max: 1, ssl: pgSslConfig() });
+    const scratchPool = createPgPool({ connectionString: scratchUrl.toString(), max: 1 });
     try {
       const tables = await scratchPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM information_schema.tables

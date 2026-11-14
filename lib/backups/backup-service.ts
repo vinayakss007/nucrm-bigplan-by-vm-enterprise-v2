@@ -10,8 +10,7 @@ import { eq, sql } from 'drizzle-orm';
 import { spawn, exec as execCb } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-import { Pool } from 'pg';
-import { pgSslConfig } from '@/lib/db/ssl-config';
+import { createPgPool } from '@/lib/db/pool';
 import { checksumFile, CHECKSUM_ALGORITHM } from './integrity';
 import { uploadBackupArtifact } from './offsite';
 import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
@@ -90,9 +89,8 @@ export class BackupConfigurationError extends Error {
  * undetectable data-loss outcome into an error that names the fix.
  */
 export async function assertDumpRoleCanReadAllTenants(dbUrl: string): Promise<void> {
-  const pool = new Pool({
+  const pool = createPgPool({
     connectionString: dbUrl,
-    ssl: pgSslConfig(),
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
