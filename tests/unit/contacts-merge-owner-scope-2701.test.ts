@@ -173,8 +173,8 @@ function ctxWith(permissions: Record<string, boolean>): AuthContext {
   } as unknown as AuthContext;
 }
 
-// sales_rep: contacts.edit on, contacts.view_all off.
-const REP = { 'contacts.view': true, 'contacts.edit': true };
+// sales_rep with merge permission granted: contacts.merge on, contacts.view_all off.
+const REP = { 'contacts.view': true, 'contacts.edit': true, 'contacts.merge': true };
 const MANAGER = { ...REP, 'contacts.view_all': true };
 
 async function call(ctx: AuthContext) {
@@ -283,3 +283,13 @@ describe('the contact writes state the tenant they were gated on (#2701)', () =>
     for (const write of related) expect(write.params, write.sql).toContain(TENANT);
   });
 });
+
+describe('contacts.merge permission gate (#3402)', () => {
+  it('a caller without contacts.merge is refused with 403', async () => {
+    const unprivileged = { 'contacts.view': true, 'contacts.edit': true };
+    const res = await call(ctxWith(unprivileged));
+    expect(res.status).toBe(403);
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+});
+

@@ -51,6 +51,7 @@ vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => {
     const { getPinnedClient } = await import('../../lib/db/request-connection');
     pinnedWhenRouteRan = getPinnedClient();
+    await (pinnedWhenRouteRan as { query: (sql: string) => Promise<unknown> }).query('SELECT 7');
     return { tenantId: 't-1', userId: 'u-1' };
   }),
 }));
@@ -79,7 +80,6 @@ describe('a real converted route runs inside the pinned scope (#1615)', () => {
     // and delegates to the fake rather than being it by reference identity.
     expect(pinnedWhenRouteRan).toBeDefined();
     expect(pinnedWhenRouteRan).not.toBe('sentinel');
-    await (pinnedWhenRouteRan as { query: (sql: string) => Promise<unknown> }).query('SELECT 7');
     expect(fakeClient.query).toHaveBeenCalledWith('SELECT 7');
     // Response is preserved unchanged by the wrapper.
     expect(res).toBeDefined();

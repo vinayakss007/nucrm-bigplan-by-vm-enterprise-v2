@@ -426,7 +426,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     requestContext.set(requestId, { ...ctx, cachedAt: Date.now() });
 
     return ctx;
-  }));
+  }), { lazy: true });
 }
 
 export function can(ctx: AuthContext, perm: string): boolean {

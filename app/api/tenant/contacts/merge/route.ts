@@ -33,7 +33,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const deny = requirePerm(ctx, 'contacts.edit');
+    const deny = requirePerm(ctx, 'contacts.merge');
     if (deny) return deny;
 
     const body = await readJsonBody(request);

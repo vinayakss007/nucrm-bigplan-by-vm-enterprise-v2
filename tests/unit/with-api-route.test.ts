@@ -76,7 +76,11 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     const { withApiRoute } = await import('../../lib/api/with-api-route');
     const { getPinnedClient } = await import('../../lib/db/request-connection');
 
-    const GET = withApiRoute(async () => new Response('done'));
+    const GET = withApiRoute(async () => {
+      const client = getPinnedClient();
+      await (client as { query: (s: string) => Promise<unknown> })?.query('SELECT 1');
+      return new Response('done');
+    });
     await GET({} as never, undefined as never);
 
     // GUC reset issued and client released exactly once in the finally block.
@@ -85,6 +89,18 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     );
     expect(fakeClient.release).toHaveBeenCalledTimes(1);
     // Scope has closed: no pin leaks past the handler.
+    expect(getPinnedClient()).toBeUndefined();
+  });
+
+  it('does not checkout or release a pool connection if handler returns without queries (#3538)', async () => {
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const { getPinnedClient } = await import('../../lib/db/request-connection');
+
+    const GET = withApiRoute(async () => new Response('unauthorized', { status: 401 }));
+    await GET({} as never, undefined as never);
+
+    expect(fakeClient.query).not.toHaveBeenCalled();
+    expect(fakeClient.release).not.toHaveBeenCalled();
     expect(getPinnedClient()).toBeUndefined();
   });
 
@@ -112,9 +128,12 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
 
   it('propagates thrown errors while still releasing the pinned client', async () => {
     const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const { getPinnedClient } = await import('../../lib/db/request-connection');
 
     const boom = new Error('handler blew up');
     const GET = withApiRoute(async () => {
+      const client = getPinnedClient();
+      await (client as { query: (s: string) => Promise<unknown> })?.query('SELECT 1');
       throw boom;
     });
 
@@ -130,6 +149,7 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     let pinnedInside: unknown = 'sentinel';
     const GET = withApiRoute(async () => {
       pinnedInside = getPinnedClient();
+      await (pinnedInside as { query: (s: string) => Promise<unknown> })?.query('SELECT 1');
       return new Response('pgbouncer');
     });
 
