@@ -347,7 +347,10 @@ async function cronRouteHandler(request: NextRequest) {
       if (backup.backupType !== 'schema' && tableCount > 0) {
         const tenants = await scratchPool.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM tenants`
-        ).catch(() => null);
+        ).catch((err: unknown) => {
+          void logError({ error: err, context: 'backup-verify:query-tenants', level: 'warning' });
+          return null;
+        });
         if (tenants && parseInt(tenants.rows[0]?.count ?? '0', 10) === 0) {
           failures.push('Restored database has zero tenants — backup may be schema-only despite being marked full');
         }
@@ -442,7 +445,8 @@ async function cronRouteHandler(request: NextRequest) {
   } finally {
     // Always clean up the scratch database.
     if (scratchDb) {
-      await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}" WITH (FORCE)`).catch(async () => {
+      await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}" WITH (FORCE)`).catch(async (forceErr: unknown) => {
+        void logError({ error: forceErr, context: 'backup-verify:drop-force-fallback', level: 'warning' });
         await mainPool.query(`DROP DATABASE IF EXISTS "${scratchDb}"`).catch((err) => logError({ error: err, context: 'backup-verify:scratch-cleanup' }));
       });
     }

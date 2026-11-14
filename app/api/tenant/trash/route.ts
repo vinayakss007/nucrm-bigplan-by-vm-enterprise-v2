@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies, leads, projects, tenants } from '@/drizzle/schema';
 import { eq, and, isNotNull, sql, desc, type Column } from 'drizzle-orm';
 import { setIncludeDeleted, clearIncludeDeleted } from '@/lib/db/rls';
+import { logError } from '@/lib/errors-server';
 import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -208,7 +209,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
  
   } catch (err) {
-    await clearIncludeDeleted().catch(() => {});
+    await clearIncludeDeleted().catch((e: unknown) => void logError({ error: e, context: 'trash:clearIncludeDeleted GET', level: 'warning' }));
     return apiError(err);
   }
 });
@@ -313,7 +314,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
  
  
   } catch (err) {
-    await clearIncludeDeleted().catch(() => {});
+    await clearIncludeDeleted().catch((e: unknown) => void logError({ error: e, context: 'trash:clearIncludeDeleted PATCH', level: 'warning' }));
     return apiError(err);
   }
 });
@@ -424,7 +425,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
  
  
   } catch (err) {
-    await clearIncludeDeleted().catch(() => {});
+    await clearIncludeDeleted().catch((e: unknown) => void logError({ error: e, context: 'trash:clearIncludeDeleted DELETE', level: 'warning' }));
     return apiError(err);
   }
 });

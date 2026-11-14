@@ -9,10 +9,10 @@ import { forms, formSubmissions } from '@/drizzle/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { isEntityId } from '@/lib/id';
 import { getFieldIdentity } from '@/lib/forms/field-shape';
-import { logError } from '@/lib/errors-server';
 
 interface FormField {
   // #2287: fields are persisted either with `key` (legacy/builder) or `id`
@@ -171,8 +171,8 @@ export const POST = withApiRoute(async (req: NextRequest,
     let body: { type?: string } = {};
     try {
       body = await readJsonBody(req);
-    } catch (err) {
-      void logError({ error: err, context: 'forms/[id]/analytics POST body parse' });
+    } catch (err: unknown) {
+      void logError({ error: err, context: 'forms/analytics readJsonBody', level: 'warning', tenantId: ctx.tenantId });
     }
 
     if (body.type === 'submit') {

@@ -123,7 +123,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         await db.execute(sql`
           INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
           VALUES ${sql.join(values, sql`, `)}
-        `).catch(async () => {
+        `).catch(async (batchErr: unknown) => {
+          void logError({ error: batchErr, context: 'tenant/leads/assign batch-fallback', level: 'warning', tenantId: ctx.tenantId });
           // Fallback to sequential inserts for this chunk if batch fails
           for (const cid of chunk) {
             await db.execute(sql`
