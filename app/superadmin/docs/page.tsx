@@ -5,7 +5,10 @@
  */
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Book, Shield, Database, RefreshCw, AlertTriangle, ChevronDown, ChevronRight, FileText, ExternalLink } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { DocsMarkdown } from '@/components/tenant/docs-markdown';
 
 const SECTIONS = [
   {
@@ -117,14 +120,13 @@ export default function DocsPage() {
             Backup/restore, migration safety, container persistence, disaster recovery
           </p>
         </div>
-        <a
-          href="/docs/database-security.md"
-          target="_blank"
+        <Link
+          href="/docs/security/overview"
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/50 hover:text-white transition-colors"
         >
           <ExternalLink className="w-3 h-3" />
-          Raw Markdown
-        </a>
+          Full Docs
+        </Link>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/[0.02] divide-y divide-white/5">
@@ -147,9 +149,7 @@ export default function DocsPage() {
               </button>
               {isOpen && (
                 <div className="px-5 pb-5">
-                  <pre className="text-xs text-white/60 leading-relaxed whitespace-pre-wrap font-sans">
-                    {sec.content}
-                  </pre>
+                  <DocsMarkdown content={sec.content} />
                 </div>
               )}
             </div>
@@ -157,17 +157,13 @@ export default function DocsPage() {
         })}
       </div>
 
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-amber-400">Before any migration or schema change</p>
-            <p className="text-xs text-white/40 mt-1">
-              Always run <code className="text-amber-300">pg_dump</code> first. One command, two seconds, full insurance.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Alert variant="warning" className="border-amber-500/30 bg-amber-500/10">
+        <AlertTriangle className="w-4 h-4 text-amber-400" />
+        <AlertTitle className="text-amber-400">Before any migration or schema change</AlertTitle>
+        <AlertDescription className="text-white/60">
+          Always run <code className="text-amber-300 font-mono">pg_dump</code> first. One command, two seconds, full insurance.
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }

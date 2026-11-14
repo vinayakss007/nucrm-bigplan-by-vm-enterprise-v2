@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Book, Search, ChevronDown, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -133,9 +134,18 @@ export default function DocsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl">
-      <div>
-        <h1 className="text-lg font-bold flex items-center gap-2"><Book className="w-5 h-5" />API Reference</h1>
-        <p className="text-sm text-muted-foreground">{totalEndpoints} endpoints across {ENDPOINTS.length} sections</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-lg font-bold flex items-center gap-2"><Book className="w-5 h-5 text-violet-500" />API Reference</h1>
+          <p className="text-sm text-muted-foreground">{totalEndpoints} endpoints across {ENDPOINTS.length} sections</p>
+        </div>
+        <Link
+          href="/docs"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
+        >
+          <Book className="w-3.5 h-3.5 text-violet-500" />
+          User Guide & Docs
+        </Link>
       </div>
 
       <div className="relative max-w-md">

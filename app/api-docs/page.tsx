@@ -43,11 +43,11 @@ export default function ApiDocsPage() {
             <h2 className="text-lg font-semibold mb-4">Base URLs</h2>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between p-2 bg-muted rounded">
-                <span className="font-mono text-xs">https://api.nucrm.com/api/v2</span>
+                <span className="font-mono text-xs">https://api.nucrm.com/api/tenant</span>
                 <span className="text-xs text-muted-foreground">Production</span>
               </div>
               <div className="flex items-center justify-between p-2 bg-muted rounded">
-                <span className="font-mono text-xs">http://localhost:3000/api/v2</span>
+                <span className="font-mono text-xs">http://localhost:3000/api/tenant</span>
                 <span className="text-xs text-muted-foreground">Development</span>
               </div>
             </div>
