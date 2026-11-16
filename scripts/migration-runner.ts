@@ -18,7 +18,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import { program } from 'commander';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,7 +110,7 @@ class MigrationRunner {
 
     // Split UP and DOWN sections
     const upDownSplit = content.split(/--\s*DOWN\s*\n/);
-    const up = upDownSplit[0].replace(/--\s*(?:Migration ID|Name|Dependencies):.*\n/g, '').trim();
+    const up = (upDownSplit[0] ?? '').replace(/--\s*(?:Migration ID|Name|Dependencies):.*\n/g, '').trim();
 
     const checksum = crypto.createHash('sha256').update(up).digest('hex').substring(0, 16);
 
@@ -169,7 +168,7 @@ class MigrationRunner {
       }
     }
 
-    if (sorted.length !== migrations.size) {
+    if (sorted.length !== migrations.length) {
       throw new Error('Circular dependency detected in migrations');
     }
 
@@ -220,7 +219,7 @@ class MigrationRunner {
     }
 
     // Sort by dependencies
-    const sorted = this.topologicalSort(new Map(pending.map(m => [m.id, m])));
+    const sorted = this.topologicalSort(pending);
 
     console.log('\n📦 Pending Migrations (dependency-ordered):');
     for (const m of sorted) {
@@ -361,54 +360,79 @@ class MigrationRunner {
 }
 
 // CLI
-program
-  .name('migrate')
-  .description('NuCRM Migration Runner')
-  .requiredOption('-d, --database <url>', 'Database URL');
+async function main() {
+  const argv = process.argv.slice(2);
+  let command = '';
+  let databaseUrl = process.env.DATABASE_URL || '';
+  let dryRun = false;
+  let force = false;
+  let target: string | undefined;
 
-program
-  .command('up')
-  .description('Run pending migrations')
-  .option('--dry-run', 'Show what would run without executing')
-  .option('--target <id>', 'Run up to specific migration')
-  .option('--force', 'Force execution even with checksum mismatches')
-  .action(async (options) => {
-    const runner = new MigrationRunner(program.opts().database);
-    await runner.init();
-    await runner.runMigrations({ dryRun: options.dryRun, target: options.target, force: options.force });
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] ?? '';
+    if (arg === '-d' || arg === '--database') {
+      databaseUrl = argv[++i] ?? '';
+    } else if (arg === '--dry-run') {
+      dryRun = true;
+    } else if (arg === '--force') {
+      force = true;
+    } else if (arg === '--target') {
+      target = argv[++i] ?? '';
+    } else if (!arg.startsWith('-') && !command) {
+      command = arg;
+    }
+  }
+
+  if (!databaseUrl) {
+    console.error('Error: Database URL is required (-d, --database <url> or DATABASE_URL env var)');
+    process.exit(1);
+  }
+
+  const runner = new MigrationRunner(databaseUrl);
+  await runner.init();
+
+  try {
+    switch (command) {
+      case 'up':
+        await runner.runMigrations({ dryRun, target, force });
+        break;
+      case 'down':
+        if (!target) {
+          console.error('Error: --target <id> is required for down command');
+          process.exit(1);
+        }
+        await runner.rollback(target, dryRun);
+        break;
+      case 'status':
+        await runner.status();
+        break;
+      case 'validate':
+        await runner.validateDependencies();
+        break;
+      default:
+        console.log(`
+Usage: migrate [command] [options]
+
+Commands:
+  up        Run pending migrations
+  down      Rollback migrations
+  status    Show migration status
+  validate  Validate FK dependencies match migrations
+
+Options:
+  -d, --database <url>  Database URL (or DATABASE_URL env var)
+  --dry-run             Show what would run without executing
+  --target <id>         Target migration ID
+  --force               Force execution
+`);
+        process.exit(command ? 1 : 0);
+    }
+  } finally {
     await runner.close();
-  });
+  }
+}
 
-program
-  .command('down')
-  .description('Rollback migrations')
-  .requiredOption('--target <id>', 'Rollback to migration ID (inclusive)')
-  .option('--dry-run', 'Show what would rollback without executing')
-  .action(async (options) => {
-    const runner = new MigrationRunner(program.opts().database);
-    await runner.init();
-    await runner.rollback(options.target, options.dryRun);
-    await runner.close();
-  });
-
-program
-  .command('status')
-  .description('Show migration status')
-  .action(async () => {
-    const runner = new MigrationRunner(program.opts().database);
-    await runner.init();
-    await runner.status();
-    await runner.close();
-  });
-
-program
-  .command('validate')
-  .description('Validate FK dependencies match migrations')
-  .action(async () => {
-    const runner = new MigrationRunner(program.opts().database);
-    await runner.init();
-    await runner.validateDependencies();
-    await runner.close();
-  });
-
-program.parse();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
