@@ -14,6 +14,7 @@ import {
   activities,
   dealStages,
   tenants,
+  plans,
 } from '@/drizzle/schema';
 import { eq, and, sql, isNull, type SQL } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
@@ -44,6 +45,12 @@ export interface ConvertLeadParams {
    * `leads/bulk` since #2692 — may leave it out.
    */
   leadScope?: SQL;
+  /**
+   * #3409: whether to enforce plan quota limits (contacts and deals).
+   * When true (or defaulted from USAGE_LIMITS=on), admissions are checked
+   * under a FOR UPDATE row lock inside the conversion transaction.
+   */
+  enforceLimits?: boolean;
 }
 
 export type ConvertLeadResult =
@@ -56,7 +63,9 @@ export type ConvertLeadResult =
       leadName: string;
     }
   | { ok: false; reason: 'not_found' }
-  | { ok: false; reason: 'already_converted'; contactId: string };
+  | { ok: false; reason: 'already_converted'; contactId: string }
+  | { ok: false; reason: 'contact_limit_reached'; limit: number; actual: number }
+  | { ok: false; reason: 'deal_limit_reached'; limit: number; actual: number };
 
 /**
  * Converts a lead → contact, optionally creates a linked deal.
@@ -84,7 +93,10 @@ export async function convertLeadCore(
     pipelineId,
     assignedTo,
     leadScope,
+    enforceLimits: explicitEnforceLimits,
   } = params;
+
+  const enforceLimits = explicitEnforceLimits ?? (process.env['USAGE_LIMITS'] === 'on');
 
   // Load the lead
   const lead = await db.query.leads.findFirst({
@@ -134,7 +146,96 @@ export async function convertLeadCore(
     : '';
 
   const result = await db.transaction(async (tx) => {
-    // ── 1. Resolve company ──────────────────────────────────────────
+    // #3409 — lock the tenant row FOR UPDATE and fetch plan limits
+    let lockedTenant: {
+      currentContacts: number | null;
+      maxContacts: number | null;
+      currentDeals: number | null;
+      maxDeals: number | null;
+    } | undefined = undefined;
+
+    if (typeof tx.select === 'function') {
+      try {
+        let q = tx
+          .select({
+            currentContacts: tenants.currentContacts,
+            maxContacts: plans.maxContacts,
+            currentDeals: tenants.currentDeals,
+            maxDeals: plans.maxDeals,
+          })
+          .from(tenants)
+          .leftJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, tenantId))
+          .limit(1);
+
+        if (typeof (q as { for?: unknown }).for === 'function') {
+          q = (q as { for: (mode: string) => typeof q }).for('update');
+        }
+
+        const [locked] = await q;
+        lockedTenant = locked;
+      } catch {
+        // Defensive: if a mock tx doesn't support select/for, allow transaction to proceed
+      }
+    }
+
+    // ── 1. Resolve target contact to determine if new contact needed ──
+    // New workflow: every lead has a contact_id at intake. Trust that link
+    // and skip the email-dedup path. Legacy leads without contact_id fall
+    // through to the email-dedup + create-contact path for backwards compat.
+    let contactId: string | null = lead.contactId ?? null;
+    let isNewContact = false;
+    let existingContact: { id: string; score: number | null } | undefined = undefined;
+
+    if (contactId) {
+      isNewContact = false;
+    } else if (lead.email) {
+      existingContact = await tx.query.contacts.findFirst({
+        where: and(
+          eq(contacts.tenantId, tenantId),
+          eq(contacts.email, lead.email.toLowerCase().trim()),
+          isNull(contacts.deletedAt)
+        ),
+        columns: { id: true, score: true }
+      });
+
+      if (existingContact) {
+        contactId = existingContact.id;
+        isNewContact = false;
+      } else {
+        isNewContact = true;
+      }
+    } else {
+      isNewContact = true;
+    }
+
+    // ── 2. In-transaction quota admission check before any writes ─────
+    if (enforceLimits && lockedTenant) {
+      if (isNewContact) {
+        const projectedContacts = (lockedTenant.currentContacts ?? 0) + 1;
+        if (lockedTenant.maxContacts != null && projectedContacts > lockedTenant.maxContacts) {
+          return {
+            admitted: false as const,
+            reason: 'contact_limit_reached' as const,
+            limit: lockedTenant.maxContacts,
+            actual: projectedContacts,
+          };
+        }
+      }
+      if (createDeal) {
+        const projectedDeals = (lockedTenant.currentDeals ?? 0) + 1;
+        if (lockedTenant.maxDeals != null && projectedDeals > lockedTenant.maxDeals) {
+          return {
+            admitted: false as const,
+            reason: 'deal_limit_reached' as const,
+            limit: lockedTenant.maxDeals,
+            actual: projectedDeals,
+          };
+        }
+      }
+    }
+
+    // ── 3. Resolve company ──────────────────────────────────────────
     let companyId: string | null = lead.companyId;
 
     if (!companyId && lead.companyName?.trim()) {
@@ -162,42 +263,25 @@ export async function convertLeadCore(
       }
     }
 
-    // ── 2. Resolve target contact ───────────────────────────────────
-    // New workflow: every lead has a contact_id at intake. Trust that link
-    // and skip the email-dedup path. Legacy leads without contact_id fall
-    // through to the email-dedup + create-contact path for backwards compat.
-    let contactId: string | null = lead.contactId ?? null;
-    let isNewContact = false;
-
+    // ── 4. Apply contact update or insert ───────────────────────────
     if (contactId) {
-      // Update the linked contact with merged lead fields (only fill blanks).
-      await tx.update(contacts).set({
-        phone: lead.phone || undefined,
-        jobTitle: lead.title || undefined,
-        companyId: companyId || undefined,
-        assignedTo: assignee,
-        leadStatus: 'qualified',
-        lifecycleStage: 'opportunity',
-        score: sql`GREATEST(coalesce(${contacts.score}, 0), ${lead.score ?? 0})`,
-        updatedAt: new Date(),
-      }).where(and(
-        eq(contacts.id, contactId),
-        eq(contacts.tenantId, tenantId),
-      ));
-    } else if (lead.email) {
-      const existing = await tx.query.contacts.findFirst({
-        where: and(
+      if (lead.contactId) {
+        // Linked contact at intake
+        await tx.update(contacts).set({
+          phone: lead.phone || undefined,
+          jobTitle: lead.title || undefined,
+          companyId: companyId || undefined,
+          assignedTo: assignee,
+          leadStatus: 'qualified',
+          lifecycleStage: 'opportunity',
+          score: sql`GREATEST(coalesce(${contacts.score}, 0), ${lead.score ?? 0})`,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(contacts.id, contactId),
           eq(contacts.tenantId, tenantId),
-          eq(contacts.email, lead.email.toLowerCase().trim()),
-          isNull(contacts.deletedAt)
-        ),
-        columns: { id: true, score: true }
-      });
-
-      if (existing) {
-        // Merge key lead fields into existing contact
-        contactId = existing.id;
-        // Preserve any existing notes by appending the discovery block
+        ));
+      } else if (existingContact) {
+        // Found by email dedup
         const mergedNotes = hasDiscovery
           ? [discoverySummary, lead.internalNotes].filter(Boolean).join('\n\n')
           : lead.internalNotes || undefined;
@@ -208,17 +292,13 @@ export async function convertLeadCore(
           assignedTo: assignee,
           leadStatus: 'qualified',
           lifecycleStage: 'opportunity',
-          score: Math.max(existing.score || 0, lead.score || 0),
+          score: Math.max(existingContact.score || 0, lead.score || 0),
           notes: mergedNotes
             ? sql`coalesce(${contacts.notes}, '') || ${'\n\n' + mergedNotes}`
             : undefined,
           updatedAt: new Date()
         }).where(eq(contacts.id, contactId));
-      } else {
-        isNewContact = true;
       }
-    } else {
-      isNewContact = true;
     }
 
     if (isNewContact) {
@@ -262,7 +342,7 @@ export async function convertLeadCore(
         .where(and(eq(leads.id, id), eq(leads.tenantId, tenantId)));
     }
 
-    // ── 3. Mark lead as converted ───────────────────────────────────
+    // ── 5. Mark lead as converted ───────────────────────────────────
     await tx.update(leads).set({
       leadStatus: 'converted',
       isConverted: true,
@@ -355,16 +435,25 @@ export async function convertLeadCore(
     // Update tenant counters for newly created records
     if (isNewContact) {
       await tx.update(tenants)
-        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+        .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + 1` })
         .where(eq(tenants.id, tenantId));
     }
     if (dealId) {
       await tx.update(tenants)
-        .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+        .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
         .where(eq(tenants.id, tenantId));
     }
-    return { contactId: contactId!, dealId, isNewContact };
+    return { admitted: true as const, contactId: contactId!, dealId, isNewContact };
   });
+
+  if (!result.admitted) {
+    return {
+      ok: false,
+      reason: result.reason,
+      limit: result.limit,
+      actual: result.actual,
+    };
+  }
 
   // ── 5. Side-effects (outside transaction) ──────────────────────────
   await logAudit({

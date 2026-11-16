@@ -309,7 +309,7 @@ export async function processContactImport(
     if (results.imported > 0) {
       await tx
         .update(tenants)
-        .set({ currentContacts: sql`${tenants.currentContacts} + ${results.imported}`, updatedAt: new Date() })
+        .set({ currentContacts: sql`COALESCE(${tenants.currentContacts}, 0) + ${results.imported}`, updatedAt: new Date() })
         .where(eq(tenants.id, tenantId));
     }
 

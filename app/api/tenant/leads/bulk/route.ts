@@ -20,6 +20,7 @@ import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { convertLeadCore } from '@/lib/leads/convert';
+import { limitsEnforce } from '@/lib/usage/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
 import { ownerScope } from '@/lib/api/owner-scope';
@@ -126,14 +127,19 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
           let convertedCount = 0;
           const convertedIds: string[] = [];
+          const enforceLimits = limitsEnforce(ctx);
           for (const leadId of toConvert) {
             try {
               const result = await convertLeadCore({
                 tenantId: ctx.tenantId,
                 actorId: ctx.userId,
                 leadId,
+                enforceLimits,
               });
               if (result.ok) { convertedCount += 1; convertedIds.push(leadId); }
+              else if (result.reason === 'contact_limit_reached' || result.reason === 'deal_limit_reached') {
+                break;
+              }
             } catch (err) {
               await logError({ error: err, context: 'leads/bulk:convert', tenantId: ctx.tenantId });
             }
