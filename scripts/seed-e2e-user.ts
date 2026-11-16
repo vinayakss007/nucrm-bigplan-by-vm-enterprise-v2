@@ -40,14 +40,14 @@ const DEAL_DATA = [
 async function ensureUserAndTenant(tx: RlsTransaction) {
   const existingUser = await tx.select().from(users).where(eq(users.email, EMAIL)).limit(1);
 
-  if (existingUser.length > 0) {
+  if (existingUser.length > 0 && existingUser[0]) {
     const user = existingUser[0];
     const existingMembership = await tx.select()
       .from(tenantMembers)
       .where(eq(tenantMembers.userId, user.id))
       .limit(1);
 
-    if (existingMembership.length > 0) {
+    if (existingMembership.length > 0 && existingMembership[0]) {
       return { userId: user.id, tenantId: existingMembership[0].tenantId, created: false };
     }
     return { userId: user.id, tenantId: null, created: false };
@@ -112,14 +112,15 @@ async function ensurePipelineAndStages(tx: RlsTransaction, tenantId: string) {
 
   if (!pipeline) {
     const pipelineId = crypto.randomUUID();
-    await tx.insert(pipelines).values({
+    const [inserted] = await tx.insert(pipelines).values({
       id: pipelineId,
       tenantId,
       name: 'Default Sales Pipeline',
       description: 'Standard B2B sales pipeline',
       isDefault: true,
-    });
-    pipeline = { id: pipelineId, tenantId, name: 'Default Sales Pipeline', description: 'Standard B2B sales pipeline', isDefault: true };
+    }).returning();
+    if (!inserted) throw new Error('Failed to insert pipeline');
+    pipeline = inserted;
   }
 
   const existingStages = await tx.select()
@@ -145,9 +146,12 @@ async function ensurePipelineAndStages(tx: RlsTransaction, tenantId: string) {
         order: sd.order,
       });
     } else {
-      await tx.update(dealStages)
-        .set({ order: sd.order })
-        .where(and(eq(dealStages.id, stageIds[sd.name]), eq(dealStages.pipelineId, pipeline.id)));
+      const existingStageId = stageIds[sd.name];
+      if (existingStageId) {
+        await tx.update(dealStages)
+          .set({ order: sd.order })
+          .where(and(eq(dealStages.id, existingStageId), eq(dealStages.pipelineId, pipeline.id)));
+      }
     }
   }
 
@@ -203,7 +207,9 @@ async function ensureDeals(tenantId: string, pipelineId: string, stageIds: Recor
     if (!existingTitles.has(dd.title)) {
       const contactId = contactIds[dd.contactIdx];
       if (!contactId) continue;
-      const stageId = stageIds[STANDARD_STAGES[dd.stageIdx].name];
+      const stageDef = STANDARD_STAGES[dd.stageIdx];
+      if (!stageDef) continue;
+      const stageId = stageIds[stageDef.name];
       if (!stageId) continue;
 
       await db.insert(deals).values({
