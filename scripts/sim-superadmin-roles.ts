@@ -126,9 +126,11 @@ async function main(): Promise<void> {
       },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
-    const mod = (await import(which === 'collection' ? COLLECTION : ITEM)) as Record<string, Handler>;
-    const params = which === 'collection' ? { id: target!.id } : { id: target!.id, roleId: opts.roleId! };
-    const res = await mod[verb](request, { params: Promise.resolve(params) });
+    const mod = (await import(which === 'collection' ? COLLECTION : ITEM)) as Record<string, Handler | undefined>;
+    const params: Record<string, string> = which === 'collection' ? { id: target!.id } : { id: target!.id, roleId: opts.roleId! };
+    const handler = mod[verb];
+    if (!handler) throw new Error(`No handler for ${verb}`);
+    const res = await handler(request, { params: Promise.resolve(params) });
     const text = await res.text();
     let json: Record<string, unknown> = {};
     try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* non-JSON body */ }
@@ -199,7 +201,8 @@ async function main(): Promise<void> {
     method: 'GET',
     headers: { authorization: `Bearer ${token}` },
   });
-  const collection = (await import(COLLECTION)) as Record<string, Handler>;
+  const collection = (await import(COLLECTION)) as { GET?: Handler };
+  if (!collection.GET) throw new Error('No GET handler in collection');
   const badRes = await collection.GET(badRequest, { params: Promise.resolve({ id: 'not-a-uuid' }) });
   check('a non-uuid tenant segment answers 400, not 500', badRes.status === 400, `status=${badRes.status}`);
 

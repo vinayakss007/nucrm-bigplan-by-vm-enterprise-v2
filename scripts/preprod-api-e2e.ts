@@ -178,6 +178,7 @@ type RunState = {
   a: { email: string; client: Client; userId: string; tenantId: string };
   b: { email: string; client: Client; userId: string; tenantId: string };
   contactId: string;
+  contactEmail: string;
   skippedBootstrap: boolean;
 };
 
@@ -871,6 +872,7 @@ async function main(): Promise<void> {
     a: { email: mkEmail('alpha-owner'), client: new Client(mkIp()), userId: '', tenantId: '' },
     b: { email: mkEmail('beta-owner'), client: new Client(mkIp()), userId: '', tenantId: '' },
     contactId: '',
+    contactEmail: '',
     skippedBootstrap: false,
   };
 

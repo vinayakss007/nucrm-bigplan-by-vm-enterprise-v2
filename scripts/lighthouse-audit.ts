@@ -12,7 +12,7 @@
  */
 
 import lighthouse from 'lighthouse';
-import chromeLauncher from 'chrome-launcher';
+import * as chromeLauncher from 'chrome-launcher';
 import { mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import path from 'path';
@@ -44,6 +44,9 @@ async function main() {
       logLevel: 'error',
     });
 
+    if (!runnerResult) {
+      throw new Error('Lighthouse returned no result');
+    }
     const report = runnerResult.lhr;
     const cats = report.categories as Record<string, { score: number }>;
     const scores: Record<string, number> = {};
@@ -77,8 +80,10 @@ async function main() {
         onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
         logLevel: 'error',
       });
-      await writeFile(htmlPath, htmlResult.report);
-      console.log(`  HTML:   ${htmlPath}`);
+      if (htmlResult?.report) {
+        await writeFile(htmlPath, htmlResult.report);
+        console.log(`  HTML:   ${htmlPath}`);
+      }
     }
 
     // Exit code based on thresholds
