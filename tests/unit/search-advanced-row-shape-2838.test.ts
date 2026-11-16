@@ -48,7 +48,13 @@ vi.mock('@/drizzle/db', () => ({
 }));
 vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: (fn: unknown) => fn }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => null }));
-vi.mock('@/lib/api/validate', () => ({ readJsonBody: async () => state.body }));
+vi.mock('@/lib/api/validate', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api/validate')>('@/lib/api/validate');
+  return {
+    ...actual,
+    readJsonBody: async () => state.body,
+  };
+});
 vi.mock('@/lib/auth/middleware', async () => {
   const actual = await vi.importActual<typeof import('@/lib/auth/middleware')>('@/lib/auth/middleware');
   return {
