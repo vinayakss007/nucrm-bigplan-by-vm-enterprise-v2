@@ -135,14 +135,16 @@ export function enumerateHandlers(source: string, file: string): { file: string;
   const lines = source.split('\n');
   const starts: { line: number; verb: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const m = VERB_RE.exec(lines[i]);
-    if (m) starts.push({ line: i, verb: m[1] });
+    const lineText = lines[i];
+    if (!lineText) continue;
+    const m = VERB_RE.exec(lineText);
+    if (m && m[1]) starts.push({ line: i, verb: m[1] });
   }
   return starts.map((s, idx) => ({
     file,
     verb: s.verb,
     line: s.line + 1,
-    body: lines.slice(s.line, starts[idx + 1] ? starts[idx + 1].line : lines.length).join('\n'),
+    body: lines.slice(s.line, starts[idx + 1]?.line ?? lines.length).join('\n'),
   }));
 }
 
@@ -163,6 +165,7 @@ export function stripComments(source: string): string {
   let quote = '';
   while (i < source.length) {
     const c = source[i];
+    if (c === undefined) break;
     const next = source[i + 1];
     if (mode === 'code') {
       if (c === '/' && next === '/') { mode = 'line'; out.push(' ', ' '); i += 2; continue; }
@@ -223,12 +226,13 @@ export function findExemptMarkers(source: string, file: string): ExemptMarker[] 
   let inBlock = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (line === undefined) continue;
     const isCommentLine = /^\s*\/\//.test(line);
     if (!inBlock && isCommentLine) {
       const m = MARKER_RE.exec(line);
-      if (m) {
+      if (m && m[1]) {
         const issue = CITED_ISSUE_RE.exec(m[1]);
-        out.push({ file, line: i + 1, issue: issue ? issue[1] : null });
+        out.push({ file, line: i + 1, issue: issue?.[1] ?? null });
       }
       // A line comment opens and closes nothing.
       continue;
@@ -408,7 +412,7 @@ const RELATIONAL_RE = /\.query\s*\.\s*([a-zA-Z_$][\w$]*)\s*\.\s*(findFirst|findM
  */
 export function relationalOptions(text: string): string | null {
   let i = 0;
-  while (i < text.length && /\s/.test(text[i])) i++;
+  while (i < text.length && /\s/.test(text[i] ?? '')) i++;
   if (text[i] !== '{') return null;
   let depth = 0;
   for (let j = i; j < text.length; j++) {
@@ -445,11 +449,11 @@ export function hasTopLevelColumns(options: string): boolean {
     }
     if (c === '{' || c === '(' || c === '[') { depth++; continue; }
     if (c === '}' || c === ')' || c === ']') { depth--; continue; }
-    if (depth !== 0 || !/[A-Za-z_$]/.test(c)) continue;
+    if (depth !== 0 || !c || !/[A-Za-z_$]/.test(c)) continue;
     let end = i;
-    while (end < options.length && /[\w$]/.test(options[end])) end++;
+    while (end < options.length && /[\w$]/.test(options[end] ?? '')) end++;
     let colon = end;
-    while (colon < options.length && /\s/.test(options[colon])) colon++;
+    while (colon < options.length && /\s/.test(options[colon] ?? '')) colon++;
     if (options[colon] === ':') {
       if (options.slice(i, end) === 'columns') return true;
       i = colon;
@@ -494,7 +498,7 @@ export function findRelationalReadSites(
       file,
       verb,
       line: line + code.slice(0, m.index).split('\n').length - 1,
-      table: m[1],
+      table: m[1] ?? '',
       method: m[2] as 'findFirst' | 'findMany',
       unprojected: !projected,
     });
@@ -571,8 +575,11 @@ export function publicApiPaths(proxySource: string): string[] {
   const out = new Set<string>();
   const arrays = /const PUBLIC_(?:PATHS|PREFIXES)\s*=\s*\[([\s\S]*?)\];/g;
   for (let m = arrays.exec(code); m !== null; m = arrays.exec(code)) {
-    for (const q of m[1].matchAll(/'([^']*)'/g)) {
-      if (q[1].startsWith('/api/')) out.add(q[1]);
+    const list = m[1];
+    if (list) {
+      for (const q of list.matchAll(/'([^']*)'/g)) {
+        if (q[1]?.startsWith('/api/')) out.add(q[1]);
+      }
     }
   }
   return [...out].sort();
