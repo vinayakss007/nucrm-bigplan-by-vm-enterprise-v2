@@ -9,9 +9,9 @@ import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { checkLimit } from '@/lib/usage/middleware';
+import { checkLimit, limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, users, tenants, activities, dealStages, tasks } from '@/drizzle/schema';
+import { deals, contacts, companies, users, tenants, plans, activities, dealStages, tasks } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -172,7 +172,28 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const overLimit = await checkLimit(ctx, 'deals');
     if (overLimit) return overLimit;
 
-    const [deal] = await db.transaction(async (tx) => {
+    // #3409: the pre-flight checkLimit above records the violation and alerts the
+    // owner, but cannot prevent two concurrent requests from seeing "1 slot
+    // left" and both committing. Here the tenant row is locked FOR UPDATE and the
+    // quota decision is priced against the locked counter inside the write
+    // transaction; if that ceiling is hit we return the exact 402 checkLimit
+    // would have returned, and write nothing.
+    const outcome = await db.transaction(async (tx) => {
+      if (limitsEnforce(ctx)) {
+        const [locked] = await tx
+          .select({ currentDeals: tenants.currentDeals, maxDeals: plans.maxDeals })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1)
+          .for('update');
+
+        const projected = (locked?.currentDeals ?? 0) + 1;
+        if (locked?.maxDeals != null && projected > locked.maxDeals) {
+          return { admitted: false as const, limit: locked.maxDeals, actual: projected };
+        }
+      }
+
       const [d] = await tx.insert(deals)
         .values({
           tenantId: ctx.tenantId,
@@ -192,7 +213,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       if (!d) throw new Error('Failed to create deal');
 
       await tx.update(tenants)
-        .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+        .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
         .where(eq(tenants.id, ctx.tenantId));
 
       // Activity log
@@ -226,8 +247,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           createdBy: ctx.userId,
         });
 
-      return [d];
+      return { admitted: true as const, deal: d };
     });
+
+    if (!outcome.admitted) {
+      return planLimitReachedResponse('deals', outcome.limit, outcome.actual);
+    }
+    const deal = outcome.deal;
 
     if (v.assigned_to && v.assigned_to !== ctx.userId) {
       createNotification({

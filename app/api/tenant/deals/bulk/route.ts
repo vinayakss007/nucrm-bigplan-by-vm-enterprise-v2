@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
-import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
+import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
@@ -25,6 +25,8 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
 import { wonAtPatch } from '@/lib/deals/won-stage';
+import { restoreBulkDeals } from '@/lib/deals/bulk-restore';
+import { limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 
 const MAX_BULK = 500;
 
@@ -402,68 +404,22 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
 
-        // Restore targets SOFT-DELETED rows. The `validIds` set above is built
-        // with `deletedAt IS NULL`, so it never contains a trashed deal — reusing
-        // it made bulk restore a no-op (and, when it did match live rows, wrongly
-        // re-incremented currentDeals). Re-resolve against deletedAt IS NOT NULL.
-        const restorable = await db
-          .select({ id: deals.id })
-          .from(deals)
-          .where(
-            and(
-              inArray(deals.id, deal_ids),
-              eq(deals.tenantId, ctx.tenantId),
-              sql`${deals.deletedAt} IS NOT NULL`,
-              mine
-            )
-          );
-        const restorableIds = restorable.map(r => r.id);
-        auditIds = restorableIds;
-        if (!restorableIds.length) return NextResponse.json({ error: 'No deleted deals found to restore' }, { status: 404 });
+        const outcome = await restoreBulkDeals(db, {
+          tenantId: ctx.tenantId,
+          ids: deal_ids,
+          scope: mine,
+          enforceLimits: limitsEnforce(ctx),
+        });
 
-        // Plan limit check: restoring deals could push count over limit
-        const [tenantWithPlan] = await db
-          .select({
-            currentDeals: tenants.currentDeals,
-            maxDeals: plans.maxDeals,
-          })
-          .from(tenants)
-          .innerJoin(plans, eq(plans.id, tenants.planId))
-          .where(eq(tenants.id, ctx.tenantId));
-
-        if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + restorableIds.length) > tenantWithPlan.maxDeals) {
-          return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxDeals} deals.` }, { status: 403 });
+        if (!outcome.ok) {
+          if (outcome.reason === 'over-plan-limit') {
+            return planLimitReachedResponse('deals', outcome.maxDeals, outcome.actual);
+          }
+          return NextResponse.json({ error: 'No deleted deals found to restore' }, { status: 404 });
         }
 
-        // Wrap the restore + tenant-counter re-increment so the two writes
-        // succeed or fail together (H7), the inverse of the 'delete' case.
-        affected = await db.transaction(async (tx) => {
-          const res = await tx
-            .update(deals)
-            .set({
-              deletedAt: null,
-              deletedBy: null,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                inArray(deals.id, restorableIds),
-                eq(deals.tenantId, ctx.tenantId),
-                sql`${deals.deletedAt} IS NOT NULL`
-              )
-            );
-          const restored = res.rowCount ?? 0;
-
-          // Re-increment the tenant's usage counter only for rows actually
-          // restored (mirrors single restore in trash route).
-          if (restored > 0) {
-            await tx
-              .update(tenants)
-              .set({ currentDeals: sql`${tenants.currentDeals} + ${restored}` })
-              .where(eq(tenants.id, ctx.tenantId));
-          }
-          return restored;
-        });
+        affected = outcome.restored;
+        auditIds = outcome.ids;
         break;
       }
       case 'add_to_segment': {

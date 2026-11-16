@@ -7,9 +7,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createLeadSchema, leadQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
-import { checkLimit } from '@/lib/usage/middleware';
+import { checkLimit, limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { leads, users, companies, leadActivities, activities, contacts } from '@/drizzle/schema';
+import { leads, users, companies, leadActivities, activities, contacts, tenants, plans } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
@@ -259,12 +259,48 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
     }
 
+    // #3409: When intake will create a new contact, preflight checkLimit on contacts
+    // records the violation and alerts the owner before opening the write transaction.
+    if (!v.contact_id) {
+      let isExistingContact = false;
+      if (v.email) {
+        const [existingContact] = await db.select({ id: contacts.id })
+          .from(contacts)
+          .where(and(
+            eq(contacts.tenantId, ctx.tenantId),
+            sql`lower(${contacts.email}) = lower(${v.email})`,
+            isNull(contacts.deletedAt)
+          ))
+          .limit(1);
+        if (existingContact) isExistingContact = true;
+      }
+      if (!isExistingContact) {
+        const overContactLimit = await checkLimit(ctx, 'contacts');
+        if (overContactLimit) return overContactLimit;
+      }
+    }
+
     // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
     // #2343: lead_oid now collides loudly against the unique
     // idx_leads_tenant_oid. generateLeadOid holds the tenant-row FOR UPDATE
     // lock so a collision is a vanishingly rare residual race — retry the
     // whole create so it still lands instead of surfacing a 500.
     const createLeadTx = () => db.transaction(async (tx) => {
+      let lockedTenant: { currentContacts: number | null; maxContacts: number | null } | undefined;
+      if (limitsEnforce(ctx)) {
+        const [locked] = await tx
+          .select({
+            currentContacts: tenants.currentContacts,
+            maxContacts: plans.maxContacts,
+          })
+          .from(tenants)
+          .innerJoin(plans, eq(plans.id, tenants.planId))
+          .where(eq(tenants.id, ctx.tenantId))
+          .limit(1)
+          .for('update');
+        lockedTenant = locked;
+      }
+
       let contactId: string;
       let companyId: string | null = null;
       let isNewContact = false;
@@ -299,6 +335,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         contactId = resolve.contactId;
         companyId = resolve.companyId;
         isNewContact = resolve.isNewContact;
+      }
+
+      // #3409: In-transaction quota admission check for new contact under FOR UPDATE lock.
+      if (isNewContact && limitsEnforce(ctx)) {
+        const projected = (lockedTenant?.currentContacts ?? 0) + 1;
+        if (lockedTenant?.maxContacts != null && projected > lockedTenant.maxContacts) {
+          return { admitted: false as const, limit: lockedTenant.maxContacts, actual: projected };
+        }
       }
 
       // Generate human-readable lead OID (per tenant, per year)
@@ -386,14 +430,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         metadata: { lead_oid: leadOid, lead_status: v.status, lead_source: v.source ?? 'website' },
       });
 
-      return inserted;
+      return { admitted: true as const, lead: inserted };
     });
 
     let newLead: typeof leads.$inferSelect | undefined;
     const MAX_LEAD_CREATE_RETRIES = 3;
     for (let attempt = 0; attempt < MAX_LEAD_CREATE_RETRIES; attempt++) {
       try {
-        newLead = await createLeadTx();
+        const outcome = await createLeadTx();
+        if (!outcome.admitted) {
+          return planLimitReachedResponse('contacts', outcome.limit, outcome.actual);
+        }
+        newLead = outcome.lead;
         break;
       } catch (err: unknown) {
         if (isLeadOidCollision(err) && attempt < MAX_LEAD_CREATE_RETRIES - 1) continue;
