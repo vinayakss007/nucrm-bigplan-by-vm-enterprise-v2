@@ -151,6 +151,9 @@ async function main() {
       fullName: 'Super Admin',
       isSuperAdmin: true,
     }).returning();
+    if (!admin) {
+      throw new Error('[seed-fresh] Failed to insert admin user');
+    }
     console.log(`[seed-fresh] Created admin: ${admin.id}`);
 
     const [tenant] = await db.insert(tenants).values({
@@ -160,6 +163,9 @@ async function main() {
       planId: 'enterprise',
       status: 'active',
     }).returning();
+    if (!tenant) {
+      throw new Error('[seed-fresh] Failed to insert tenant');
+    }
     console.log(`[seed-fresh] Created tenant: ${tenant.id}`);
 
     const [adminRole] = await db.insert(roles).values({
@@ -169,6 +175,9 @@ async function main() {
       permissions: { all: true },
       isSystem: true,
     }).returning();
+    if (!adminRole) {
+      throw new Error('[seed-fresh] Failed to insert admin role');
+    }
 
     await db.insert(roles).values({
       tenantId: tenant.id,
@@ -196,6 +205,9 @@ async function main() {
       name: 'Sales Pipeline',
       isDefault: true,
     }).returning();
+    if (!pipeline) {
+      throw new Error('[seed-fresh] Failed to insert pipeline');
+    }
 
     const stageRows = [
       { name: 'Lead', order: 1 },
