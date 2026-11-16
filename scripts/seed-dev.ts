@@ -182,7 +182,14 @@ const logDone = (table: string, count: number) =>
   console.log(`  \x1b[32m✓\x1b[0m ${table} (${count} rows)`);
 
 function randomItem<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  if (arr.length === 0) {
+    throw new Error('randomItem called with empty array');
+  }
+  const item = arr[Math.floor(Math.random() * arr.length)];
+  if (item === undefined) {
+    throw new Error('randomItem encountered undefined item');
+  }
+  return item;
 }
 
 function futureDate(daysAhead: number): Date {
@@ -603,18 +610,18 @@ async function main() {
     const leadSources = ['website', 'referral', 'linkedin', 'cold_call', 'trade_show', 'webinar', 'partner'];
 
     const leadsValues = Array.from({ length: 25 }, (_, i) => ({
-      id: IDS.leads[i],
+      id: IDS.leads[i]!,
       tenantId: IDS.tenant,
-      firstName: firstNames[54 - i] || firstNames[i],
-      lastName: lastNames[54 - i] || lastNames[i],
+      firstName: firstNames[54 - i] || firstNames[i] || 'Lead',
+      lastName: lastNames[54 - i] || lastNames[i] || 'Contact',
       email: `lead${i + 1}@example-${i % 10}.com`,
       phone: `+1${String(3000000000 + i * 1234567).slice(0, 10)}`,
-      companyName: companiesData[(i + 15) % 30].name,
-      source: leadSources[i % leadSources.length],
-      leadStatus: leadStatusOptions[i % 6],
+      companyName: companiesData[(i + 15) % 30]?.name ?? 'Acme Corp',
+      source: leadSources[i % leadSources.length] ?? 'website',
+      leadStatus: leadStatusOptions[i % 6] ?? 'new',
       score: (i * 11 + 20) % 100,
       value: String((i + 1) * 5000),
-      assignedTo: userIds[i % 4],
+      assignedTo: userIds[i % 4]!,
       tags: i % 3 === 0 ? ['hot', 'inbound'] : i % 3 === 1 ? ['cold'] : ['warm', 'referral'],
     }));
 
@@ -670,18 +677,18 @@ async function main() {
     ];
 
     const tasksValues = Array.from({ length: 18 }, (_, i) => ({
-      id: IDS.tasks[i],
+      id: IDS.tasks[i]!,
       tenantId: IDS.tenant,
-      title: taskTitles[i],
-      description: `Task details for: ${taskTitles[i]}`,
-      priority: taskPriorities[i % 4],
-      status: taskStatuses[i % 3],
+      title: taskTitles[i] ?? 'Task',
+      description: `Task details for: ${taskTitles[i] ?? 'Task'}`,
+      priority: taskPriorities[i % 4] ?? 'medium',
+      status: taskStatuses[i % 3] ?? 'pending',
       dueDate: i % 2 === 0 ? futureDate(i + 1) : pastDate(i),
       completed: taskStatuses[i % 3] === 'completed',
       completedAt: taskStatuses[i % 3] === 'completed' ? pastDate(1) : null,
-      contactId: IDS.contacts[i % 55],
-      dealId: IDS.deals[i % 35],
-      assignedTo: userIds[i % 4],
+      contactId: IDS.contacts[i % 55]!,
+      dealId: IDS.deals[i % 35]!,
+      assignedTo: userIds[i % 4]!,
     }));
 
     await db.insert(schema.tasks).values(tasksValues);
@@ -703,15 +710,15 @@ async function main() {
     ];
 
     const ticketsValues = Array.from({ length: 12 }, (_, i) => ({
-      id: IDS.tickets[i],
+      id: IDS.tickets[i]!,
       tenantId: IDS.tenant,
-      contactId: IDS.contacts[i % 55],
-      subject: ticketSubjects[i],
-      body: `Detailed description for ticket: ${ticketSubjects[i]}. This needs attention.`,
-      status: ticketStatuses[i % 4],
-      priority: ticketPriorities[i % 4],
-      category: ticketCategories[i % 4],
-      assignedTo: userIds[i % 4],
+      contactId: IDS.contacts[i % 55]!,
+      subject: ticketSubjects[i] ?? 'Support Ticket',
+      body: `Detailed description for ticket: ${ticketSubjects[i] ?? 'Support Ticket'}. This needs attention.`,
+      status: ticketStatuses[i % 4] ?? 'open',
+      priority: ticketPriorities[i % 4] ?? 'medium',
+      category: ticketCategories[i % 4] ?? 'general',
+      assignedTo: userIds[i % 4]!,
       resolvedAt: ticketStatuses[i % 4] === 'resolved' ? pastDate(2) : null,
     }));
 
@@ -720,9 +727,9 @@ async function main() {
 
     // Ticket replies
     const repliesValues = Array.from({ length: 20 }, (_, i) => ({
-      ticketId: IDS.tickets[i % 12],
+      ticketId: IDS.tickets[i % 12]!,
       tenantId: IDS.tenant,
-      userId: userIds[i % 4],
+      userId: userIds[i % 4]!,
       body: `Reply #${i + 1}: Working on this issue. ${i % 2 === 0 ? 'Escalated to engineering.' : 'Will update shortly.'}`,
       isInternal: i % 3 === 0,
     }));
@@ -741,14 +748,14 @@ async function main() {
 
     const activitiesValues = Array.from({ length: 25 }, (_, i) => ({
       tenantId: IDS.tenant,
-      userId: userIds[i % 4],
-      entityType: entityTypes[i % 3],
-      entityId: entityTypes[i % 3] === 'contact' ? IDS.contacts[i % 55] : entityTypes[i % 3] === 'deal' ? IDS.deals[i % 35] : IDS.companies[i % 30],
-      contactId: i % 3 === 0 ? IDS.contacts[i % 55] : null,
-      dealId: i % 3 === 1 ? IDS.deals[i % 35] : null,
-      companyId: i % 3 === 2 ? IDS.companies[i % 30] : null,
-      eventType: eventTypes[i % eventTypes.length],
-      description: `Activity: ${eventTypes[i % eventTypes.length]} by user ${i % 4 + 1}`,
+      userId: userIds[i % 4]!,
+      entityType: entityTypes[i % 3] ?? 'contact',
+      entityId: (entityTypes[i % 3] === 'contact' ? IDS.contacts[i % 55] : entityTypes[i % 3] === 'deal' ? IDS.deals[i % 35] : IDS.companies[i % 30])!,
+      contactId: i % 3 === 0 ? IDS.contacts[i % 55]! : null,
+      dealId: i % 3 === 1 ? IDS.deals[i % 35]! : null,
+      companyId: i % 3 === 2 ? IDS.companies[i % 30]! : null,
+      eventType: eventTypes[i % eventTypes.length] ?? 'note_added',
+      description: `Activity: ${eventTypes[i % eventTypes.length] ?? 'note_added'} by user ${(i % 4) + 1}`,
     }));
 
     await db.insert(schema.activities).values(activitiesValues);
@@ -761,11 +768,11 @@ async function main() {
 
     const emailLogValues = Array.from({ length: 8 }, (_, i) => ({
       tenantId: IDS.tenant,
-      contactId: IDS.contacts[i % 55],
+      contactId: IDS.contacts[i % 55]!,
       fromEmail: 'noreply@nucrm-demo.com',
-      toEmail: `${firstNames[i].toLowerCase()}@${companiesData[i % 30].domain}`,
-      subject: `Follow up - ${companiesData[i % 30].name}`,
-      body: `Hi ${firstNames[i]}, just following up on our conversation...`,
+      toEmail: `${(firstNames[i] ?? 'contact').toLowerCase()}@${companiesData[i % 30]?.domain ?? 'example.com'}`,
+      subject: `Follow up - ${companiesData[i % 30]?.name ?? 'Acme Corp'}`,
+      body: `Hi ${firstNames[i] ?? 'there'}, just following up on our conversation...`,
       status: i % 3 === 0 ? 'failed' : 'sent',
       provider: 'resend',
       sentAt: i % 3 === 0 ? null : pastDate(i),
@@ -858,7 +865,7 @@ async function main() {
     logDone('forms', 3);
 
     const submissionsValues = Array.from({ length: 8 }, (_, i) => ({
-      formId: IDS.forms[i % 3],
+      formId: IDS.forms[i % 3]!,
       tenantId: IDS.tenant,
       data: { name: `Submitter ${i + 1}`, email: `submitter${i + 1}@example.com`, message: `Form submission #${i + 1}` },
       submittedBy: `submitter${i + 1}@example.com`,
@@ -896,10 +903,10 @@ async function main() {
     const enrollmentsValues = Array.from({ length: 8 }, (_, i) => ({
       tenantId: IDS.tenant,
       sequenceId: i < 5 ? IDS.sequences.onboarding : IDS.sequences.reengagement,
-      contactId: IDS.contacts[i + 10],
+      contactId: IDS.contacts[i + 10]!,
       status: i % 3 === 0 ? 'completed' : 'active',
       currentStep: (i % 4) + 1,
-      enrolledBy: userIds[i % 4],
+      enrolledBy: userIds[i % 4]!,
     }));
 
     await db.insert(schema.sequenceEnrollments).values(enrollmentsValues);
@@ -932,13 +939,13 @@ async function main() {
     logDone('products', 6);
 
     const quotesValues = Array.from({ length: 5 }, (_, i) => ({
-      id: IDS.quotes[i],
+      id: IDS.quotes[i]!,
       tenantId: IDS.tenant,
-      contactId: IDS.contacts[i],
-      dealId: IDS.deals[i],
-      title: `Quote for ${companiesData[i].name}`,
+      contactId: IDS.contacts[i]!,
+      dealId: IDS.deals[i]!,
+      title: `Quote for ${companiesData[i]?.name ?? 'Acme Corp'}`,
       quoteNumber: `Q-2024-${String(i + 1).padStart(4, '0')}`,
-      status: ['draft', 'sent', 'accepted', 'sent', 'declined'][i],
+      status: (['draft', 'sent', 'accepted', 'sent', 'declined'] as const)[i] ?? 'draft',
       subtotal: String(5000 + i * 3000),
       tax: String((5000 + i * 3000) * 0.08),
       totalAmount: String((5000 + i * 3000) * 1.08),
@@ -949,13 +956,13 @@ async function main() {
     logDone('quotes', 5);
 
     const lineItemsValues = Array.from({ length: 12 }, (_, i) => ({
-      quoteId: IDS.quotes[i % 5],
+      quoteId: IDS.quotes[i % 5]!,
       tenantId: IDS.tenant,
-      productId: IDS.products[i % 6],
-      description: productsData[i % 6].name,
+      productId: IDS.products[i % 6]!,
+      description: productsData[i % 6]?.name ?? 'Product',
       quantity: String(Math.ceil((i + 1) / 2)),
-      unitPrice: productsData[i % 6].basePrice,
-      total: String(parseFloat(productsData[i % 6].basePrice) * Math.ceil((i + 1) / 2)),
+      unitPrice: productsData[i % 6]?.basePrice ?? '0.00',
+      total: String(parseFloat(productsData[i % 6]?.basePrice ?? '0') * Math.ceil((i + 1) / 2)),
     }));
 
     await db.insert(schema.quoteLineItems).values(lineItemsValues);
@@ -990,9 +997,9 @@ async function main() {
 
     const aiActivityValues = Array.from({ length: 8 }, (_, i) => ({
       tenantId: IDS.tenant,
-      userId: userIds[i % 4],
-      action: aiActions[i % aiActions.length],
-      provider: aiProviders[i % 2],
+      userId: userIds[i % 4]!,
+      action: aiActions[i % aiActions.length] ?? 'draft',
+      provider: aiProviders[i % 2] ?? 'anthropic',
       model: i % 2 === 0 ? 'claude-3-5-sonnet' : 'gpt-4o-mini',
       status: i === 5 ? 'error' : 'success',
       tokensIn: 200 + i * 50,
@@ -1000,7 +1007,7 @@ async function main() {
       tokensUsed: 500 + i * 130,
       latencyMs: 800 + i * 200,
       entityType: i % 2 === 0 ? 'contact' : 'deal',
-      entityId: i % 2 === 0 ? IDS.contacts[i] : IDS.deals[i],
+      entityId: (i % 2 === 0 ? IDS.contacts[i] : IDS.deals[i])!,
       errorMessage: i === 5 ? 'Rate limit exceeded' : null,
       accepted: i % 3 !== 0,
     }));
@@ -1203,10 +1210,10 @@ async function main() {
 
     const notifsValues = Array.from({ length: 12 }, (_, i) => ({
       tenantId: IDS.tenant,
-      userId: userIds[i % 4],
-      title: notifTitles[i],
-      body: `Details about: ${notifTitles[i]}`,
-      type: notifTypes[i % 3],
+      userId: userIds[i % 4]!,
+      title: notifTitles[i] ?? 'Notification',
+      body: `Details about: ${notifTitles[i] ?? 'Notification'}`,
+      type: notifTypes[i % 3] ?? 'info',
       link: i % 2 === 0 ? `/deals/${IDS.deals[i % 35]}` : null,
       readAt: i < 5 ? pastDate(i) : null,
     }));
@@ -1224,10 +1231,10 @@ async function main() {
 
     const auditValues = Array.from({ length: 15 }, (_, i) => ({
       tenantId: IDS.tenant,
-      userId: userIds[i % 4],
-      action: auditActions[i % 3],
-      entityType: auditEntityTypes[i % 5],
-      entityId: IDS.contacts[i % 55],
+      userId: userIds[i % 4]!,
+      action: auditActions[i % 3] ?? 'create',
+      entityType: auditEntityTypes[i % 5] ?? 'contact',
+      entityId: IDS.contacts[i % 55]!,
       oldData: i % 3 === 1 ? { status: 'old_value' } : null,
       newData: i % 3 !== 2 ? { status: 'new_value' } : null,
       ipAddress: '127.0.0.1',

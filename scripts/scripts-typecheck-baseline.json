@@ -1,5 +1,3 @@
 {
-  "_comment": "#3413 floor: operator scripts no typechecker ever read. Each value is that file's error count when the floor was cut. The screen fails if a file outside this list gains an error, or if a listed file grows past its number. Lower an entry as you fix a file; delete it when it reaches 0. Re-measure with: node scripts/check-scripts-typecheck.mjs --write-baseline",
-  "scripts/seed-dev.ts": 20,
-  "scripts/seed-fresh.ts": 17
+  "_comment": "#3413 floor: operator scripts no typechecker ever read. Each value is that file's error count when the floor was cut. The screen fails if a file outside this list gains an error, or if a listed file grows past its number. Lower an entry as you fix a file; delete it when it reaches 0. Re-measure with: node scripts/check-scripts-typecheck.mjs --write-baseline"
 }
