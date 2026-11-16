@@ -21,6 +21,7 @@ import { ownerScope } from '@/lib/api/owner-scope';
 import { leads } from '@/drizzle/schema';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { checkLimit, limitsEnforce, planLimitReachedResponse } from '@/lib/usage/middleware';
 
 export const POST = withApiRoute(async (request: NextRequest, 
   { params }: { params: Promise<{ id: string }> | { id: string } }) => {
@@ -38,6 +39,12 @@ export const POST = withApiRoute(async (request: NextRequest,
     const validated = validateBody(convertLeadSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // #3409 — pre-flight deal check if deal creation is requested
+    if (v.create_deal) {
+      const overDealLimit = await checkLimit(ctx, 'deals');
+      if (overDealLimit) return overDealLimit;
+    }
 
     // #2618 — convert optionally writes deals.amount / deals.stage_id /
     // assigned_to straight from body keys. Unlike the assign routes the
@@ -68,16 +75,25 @@ export const POST = withApiRoute(async (request: NextRequest,
       // `assigned_to`, so the scope belongs on the core's lookup, where a lead
       // the caller may not touch reads as absent (404 below).
       leadScope: ownerScope(ctx, 'leads.view_all', leads),
+      enforceLimits: limitsEnforce(ctx),
     });
 
     if (!result.ok) {
       if (result.reason === 'not_found') {
         return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       }
-      return NextResponse.json({
-        error: 'Lead already converted',
-        contact_id: result.contactId,
-      }, { status: 409 });
+      if (result.reason === 'already_converted') {
+        return NextResponse.json({
+          error: 'Lead already converted',
+          contact_id: result.contactId,
+        }, { status: 409 });
+      }
+      if (result.reason === 'contact_limit_reached') {
+        return planLimitReachedResponse('contacts', result.limit, result.actual);
+      }
+      if (result.reason === 'deal_limit_reached') {
+        return planLimitReachedResponse('deals', result.limit, result.actual);
+      }
     }
 
     // #2620 signal: the caller learns which keys the gate dropped.
