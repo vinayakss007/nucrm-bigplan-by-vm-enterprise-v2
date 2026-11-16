@@ -16,6 +16,7 @@ import { ownerScopeAlias, ownerScopeSql } from '@/lib/api/owner-scope';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { logError } from '@/lib/errors-server';
 import { parsePageLimit } from '@/lib/api/query-params';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const ENTITY_CONFIG: Record<string, {
   label: string;
@@ -199,8 +200,10 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       }
     }
 
+    const projectedRows = await enforceFieldRead(ctx, type, (dataRes.rows || []) as Record<string, unknown>[]);
+
     return NextResponse.json({
-      data: dataRes.rows,
+      data: projectedRows,
       total: totalRows,
       page,
       limit,
@@ -300,6 +303,14 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     if (!ctx.isAdmin && ADMIN_ONLY_FIELDS[table]?.has(field)) {
       return NextResponse.json(
         { error: `Field '${field}' requires admin access` },
+        { status: 403 },
+      );
+    }
+    // #2597: check configured RBAC field write restrictions
+    const { stripped } = await enforceFieldWrite(ctx, table, { [field]: value });
+    if (stripped.includes(field)) {
+      return NextResponse.json(
+        { error: `Field '${field}' is not editable for your role` },
         { status: 403 },
       );
     }

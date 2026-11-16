@@ -17,6 +17,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { ownerScope } from '@/lib/api/owner-scope';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -200,14 +201,29 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-    const total = [contactResults, leadResults, dealResults, companyResults, taskResults]
+    // #2597: project fields through caller's role restrictions
+    const [
+      projectedContacts,
+      projectedLeads,
+      projectedDeals,
+      projectedCompanies,
+      projectedTasks,
+    ] = await Promise.all([
+      enforceFieldRead(ctx, 'contacts', (contactResults || []) as Record<string, unknown>[]),
+      enforceFieldRead(ctx, 'leads', (leadResults || []) as Record<string, unknown>[]),
+      enforceFieldRead(ctx, 'deals', (dealResults || []) as Record<string, unknown>[]),
+      enforceFieldRead(ctx, 'companies', (companyResults || []) as Record<string, unknown>[]),
+      enforceFieldRead(ctx, 'tasks', (taskResults || []) as Record<string, unknown>[]),
+    ]);
+
+    const total = [projectedContacts, projectedLeads, projectedDeals, projectedCompanies, projectedTasks]
       .reduce((acc, r) => acc + (Array.isArray(r) ? r.length : 0), 0);
     return NextResponse.json({ 
-      contacts: contactResults, 
-      leads: leadResults, 
-      deals: dealResults, 
-      companies: companyResults, 
-      tasks: taskResults, 
+      contacts: projectedContacts, 
+      leads: projectedLeads, 
+      deals: projectedDeals, 
+      companies: projectedCompanies, 
+      tasks: projectedTasks, 
       total, 
       query: q 
     });
