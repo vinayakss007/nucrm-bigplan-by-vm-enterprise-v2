@@ -47,8 +47,10 @@ async function main() {
     const [existing] = await db.select().from(companies).where(eq(companies.name, c.name)).limit(1);
     if (existing) { companyIds.push(existing.id); continue; }
     const [ins] = await db.insert(companies).values({ ...c, tenantId, createdBy: userId }).returning();
-    companyIds.push(ins.id);
-    console.log(`  Company: ${c.name} (${ins.id})`);
+    if (ins) {
+      companyIds.push(ins.id);
+      console.log(`  Company: ${c.name} (${ins.id})`);
+    }
   }
 
   // Contacts
@@ -69,8 +71,10 @@ async function main() {
     const [existing] = await db.select().from(contacts).where(eq(contacts.email, c.email)).limit(1);
     if (existing) { contactIds.push(existing.id); continue; }
     const [ins] = await db.insert(contacts).values({ ...c, tenantId, assignedTo: userId, createdBy: userId }).returning();
-    contactIds.push(ins.id);
-    console.log(`  Contact: ${c.firstName} ${c.lastName} (${ins.id})`);
+    if (ins) {
+      contactIds.push(ins.id);
+      console.log(`  Contact: ${c.firstName} ${c.lastName} (${ins.id})`);
+    }
   }
 
   // Leads
@@ -102,10 +106,12 @@ async function main() {
   for (const d of dealData) {
     const [existing] = await db.select().from(deals).where(eq(deals.title, d.title)).limit(1);
     if (existing) continue;
+    const stage = stages[d.stageIdx] ?? stages[0];
+    if (!stage) continue;
     await db.insert(deals).values({
       title: d.title,
-      amount: d.amount,
-      stageId: stages[d.stageIdx].id,
+      amount: String(d.amount),
+      stageId: stage.id,
       pipelineId: pipeline.id,
       contactId: contactIds[d.contactIdx],
       companyId: companyIds[d.companyIdx],
@@ -121,10 +127,10 @@ async function main() {
   const [lCount] = await db.select({ count: count() }).from(leads);
   const [dCount] = await db.select({ count: count() }).from(deals);
   const [coCount] = await db.select({ count: count() }).from(companies);
-  console.log(`  Companies: ${coCount.count}`);
-  console.log(`  Contacts: ${cCount.count}`);
-  console.log(`  Leads: ${lCount.count}`);
-  console.log(`  Deals: ${dCount.count}`);
+  console.log(`  Companies: ${coCount?.count ?? 0}`);
+  console.log(`  Contacts: ${cCount?.count ?? 0}`);
+  console.log(`  Leads: ${lCount?.count ?? 0}`);
+  console.log(`  Deals: ${dCount?.count ?? 0}`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
