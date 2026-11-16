@@ -154,15 +154,20 @@ export function schemaReExports(root = '.'): { star: Set<string>; explicit: Map<
   const src = maskComments(readFileSync(join(root, 'drizzle/schema/index.ts'), 'utf8'));
   const star = new Set<string>();
   const explicit = new Map<string, Map<string, string>>();
-  for (const m of src.matchAll(/export\s*\*\s*from\s*'\.\/([\w-]+)'/g)) star.add(m[1]);
+  for (const m of src.matchAll(/export\s*\*\s*from\s*'\.\/([\w-]+)'/g)) {
+    if (m[1]) star.add(m[1]);
+  }
   for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*'\.\/([\w-]+)'/g)) {
-    const map = explicit.get(m[2]) ?? new Map<string, string>();
-    for (const item of m[1].split(',')) {
+    const mod = m[2];
+    const items = m[1];
+    if (!mod || !items) continue;
+    const map = explicit.get(mod) ?? new Map<string, string>();
+    for (const item of items.split(',')) {
       const parts = item.split(/\s+as\s+/);
       const local = parts[0]?.trim();
       if (local) map.set(local, (parts[1] ?? local).trim());
     }
-    explicit.set(m[2], map);
+    explicit.set(mod, map);
   }
   return { star, explicit };
 }
@@ -189,7 +194,7 @@ export function tenantKeyedTables(
       continue; // relations, enums, helpers — not a table
     }
     if (!columns) continue;
-    if (!Object.values(columns).some((c) => c?.name === 'tenant_id')) continue;
+    if (!Object.values(columns).some((c) => (c as { name?: string })?.name === 'tenant_id')) continue;
     let sql: string;
     try {
       sql = getTableName(value as never);
@@ -281,7 +286,7 @@ export function maskComments(src: string): string {
         if (e === '/' && !cls) { j++; break; }
         j++;
       }
-      while (j < n && /[dgimsuy]/.test(src[j])) j++;
+      while (j < n && /[dgimsuy]/.test(src[j] ?? '')) j++;
       i = j;
       continue;
     }
@@ -391,7 +396,7 @@ export function boundHandles(src: string): { names: Set<string>; handleFirstFns:
     if (!params || !HANDLE_TYPE.test(params)) continue;
     for (const raw of params.split(',')) {
       const name = raw.trim().split(/[:?\s]/)[0];
-      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
+      if (name && /^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
     }
     const fnName = d[1] ?? d[3];
     if (fnName && HANDLE_TYPE.test(params.split(',')[0] ?? '')) handleFirstFns.push(fnName);
@@ -431,7 +436,7 @@ export function handleFor(statement: string, refOffset: number): string | undefi
   let last: { index: number; name: string } | undefined;
   while ((m = HANDLE_RE.exec(statement)) !== null) {
     if (m.index >= refOffset) break;
-    last = { index: m.index, name: m[1] };
+    if (m[1]) last = { index: m.index, name: m[1] };
   }
   return last?.name;
 }
@@ -460,25 +465,35 @@ export function findReads(src: string, tables: Map<string, TenantTable>): Read[]
   const colRef = new RegExp(`\\b(${jsAlt})\\s*\\.`, 'g');
   let m: RegExpExecArray | null;
   while ((m = colRef.exec(src)) !== null) {
-    const t = tables.get(m[1]);
-    if (t) push(t.js, t.sql, m.index);
+    const tableIdent = m[1];
+    if (tableIdent) {
+      const t = tables.get(tableIdent);
+      if (t) push(t.js, t.sql, m.index);
+    }
   }
   // `tx.update(quotes)` / `.from(invoices)` name the table with no column after
   // it, so the pattern above never sees them.
   const chainRef = /\.(?:from|update|insert|delete)\s*\(\s*([A-Za-z][\w]*)\s*\)/g;
   while ((m = chainRef.exec(src)) !== null) {
-    const t = tables.get(m[1]);
-    if (t) push(t.js, t.sql, m.index + m[0].indexOf(m[1]));
+    const tableIdent = m[1];
+    if (tableIdent) {
+      const t = tables.get(tableIdent);
+      if (t) push(t.js, t.sql, m.index + m[0].indexOf(tableIdent));
+    }
   }
   const queryRef = /\.query\s*\.\s*([A-Za-z][\w]*)/g;
   while ((m = queryRef.exec(src)) !== null) {
     const js = m[1];
-    const t = tables.get(js) ?? [...bySql.values()].find((x) => x.sql === snakeCase(js));
-    if (t) push(t.js, t.sql, m.index);
+    if (js) {
+      const t = tables.get(js) ?? [...bySql.values()].find((x) => x.sql === snakeCase(js));
+      if (t) push(t.js, t.sql, m.index);
+    }
   }
   const rawRef = /\b(?:from|join|into|update)\s+([a-z][a-z0-9_]*)\b/gi;
   while ((m = rawRef.exec(src)) !== null) {
-    const t = bySql.get(m[1]);
+    const sqlName = m[1];
+    if (!sqlName) continue;
+    const t = bySql.get(sqlName);
     if (!t) continue;
     const statement = spanAt(spans, m.index);
     // Only raw SQL that actually reaches the database; a `FROM` in an error
@@ -490,7 +505,7 @@ export function findReads(src: string, tables: Map<string, TenantTable>): Read[]
   const seen = new Set<string>();
   const out: Read[] = [];
   for (const f of found.sort((a, b) => a.offset - b.offset)) {
-    const key = `${f.stmtStart}:${f.js}`;
+    const key = `${f.stmtStart}:${(f as { js?: string }).js}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(f.read);
