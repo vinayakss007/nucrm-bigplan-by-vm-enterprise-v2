@@ -53,6 +53,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
 
   # ── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
@@ -65,9 +67,12 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
-      - "ci"
     commit-message:
       prefix: "chore(ci)"
+    ignore:
+      # #3459 / b9ead0608: CLI versions > 1.1.0 download ~31 docker images (~20GB),
+      # exhausting runner disk space and hitting the 20m timeout. Kept pinned.
+      - dependency-name: "codacy/codacy-analysis-cli-action"
     groups:
       actions:
         patterns:
