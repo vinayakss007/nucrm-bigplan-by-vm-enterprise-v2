@@ -113,6 +113,7 @@ async function resolveRoleId(tenantId: string, roleSlug: string): Promise<string
   const key = `${tenantId}:${roleSlug}`;
   const hit = roleIdCache.get(key);
   if (hit && Date.now() - hit.at < ROLE_TTL_MS) return hit.id;
+  if (typeof db?.select !== 'function') return null;
   const [role] = await db
     .select({ id: roles.id })
     .from(roles)
@@ -213,6 +214,7 @@ export async function enforceFieldRead<T extends Record<string, unknown>>(
   rows: T[],
 ): Promise<T[]> {
   if (ctx.isSuperAdmin) return rows;
+  if (!rows || rows.length === 0) return rows;
   const map = await getFieldRestrictions(ctx.tenantId, ctx.roleSlug, entity);
   if (!map) return rows;
   return rows.map((r) => stripRowForRead(entity, map, r));
@@ -230,6 +232,7 @@ export async function enforceFieldWrite(
   body: Record<string, unknown>,
 ): Promise<{ body: Record<string, unknown>; stripped: string[] }> {
   if (ctx.isSuperAdmin) return { body, stripped: [] };
+  if (!body || Object.keys(body).length === 0) return { body, stripped: [] };
   const map = await getFieldRestrictions(ctx.tenantId, ctx.roleSlug, entity);
   if (!map) return { body, stripped: [] };
   const out: Record<string, unknown> = {};

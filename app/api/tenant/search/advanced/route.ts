@@ -14,6 +14,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
 // Postgres' default LIKE escape character is a backslash, and this database runs
 // with standard_conforming_strings=on, so the `ESCAPE '\\'` clause every ILIKE
@@ -456,8 +457,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
 
+    // #2597: project fields through caller's role restrictions
+    const projectedData = await enforceFieldRead(ctx, type, data);
+
     return NextResponse.json({
-      data,
+      data: projectedData,
       pagination: {
         total,
         page,
