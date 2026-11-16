@@ -91,7 +91,8 @@ const ENTITY_CANDIDATES: Record<string, string[]> = {
   tasks: ['tasks', 'task'],
 };
 
-const normalize = (key: string): string => key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+const normalize = (key?: string | null): string =>
+  typeof key === 'string' ? key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`) : '';
 
 const roleIdCache = new Map<string, { id: string | null; at: number }>();
 const ROLE_TTL_MS = 60_000;
@@ -157,7 +158,9 @@ export async function getFieldRestrictions(
     if (rows.length > 0) {
       map = new Map();
       for (const r of rows) {
-        map.set(normalize(r.fieldName), r.accessLevel as FieldAccess);
+        if (r.fieldName && r.accessLevel) {
+          map.set(normalize(r.fieldName), r.accessLevel as FieldAccess);
+        }
       }
     }
   }
