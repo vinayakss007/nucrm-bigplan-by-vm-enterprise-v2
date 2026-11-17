@@ -25,6 +25,8 @@ interface DLQEntry {
   createdAt: string;
 }
 
+import { postDlqAction } from '@/lib/api/dlq-client';
+
 const limit = 20;
 
 export default function WebhookDLQPage() {
@@ -53,19 +55,13 @@ export default function WebhookDLQPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const retryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/webhooks/dlq', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'retry', ids: [id] }),
-      });
-      const d = await res.json().catch(() => ({}));
-      return d as { succeeded?: number; failed?: number };
-    },
+    mutationFn: (id: string) =>
+      postDlqAction<{ succeeded?: number; failed?: number }>({ action: 'retry', ids: [id] }),
     onSuccess: (d) => {
       if ((d.succeeded ?? 0) > 0) { toast.success('Retried successfully'); reload(); }
       else toast.error((d.failed ?? 0) > 0 ? 'Retry failed' : 'No entry found');
     },
+    onError: (e) => toast.error(`Retry failed: ${e.message}`),
   });
   // Track which specific row is retrying so only that button shows a spinner.
   const retrying = retryMutation.isPending && retryMutation.variables
@@ -74,29 +70,19 @@ export default function WebhookDLQPage() {
   const retryEntry = (id: string) => retryMutation.mutate(id);
 
   const retryAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/tenant/webhooks/dlq', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'retry_all' }),
-      });
-      return (await res.json().catch(() => ({}))) as { succeeded?: number; failed?: number };
-    },
+    mutationFn: () =>
+      postDlqAction<{ succeeded?: number; failed?: number }>({ action: 'retry_all' }),
     onSuccess: (d) => { toast.success(`Retried ${d.succeeded ?? 0} entries, ${d.failed ?? 0} failed`); reload(); },
+    onError: (e) => toast.error(`Retry all failed: ${e.message}`),
   });
   const purging = retryAllMutation.isPending;
   const retryAll = () => retryAllMutation.mutate();
 
   const purgeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/webhooks/dlq', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'purge', ids: [id] }),
-      });
-      return (await res.json().catch(() => ({}))) as { purged?: number };
-    },
+    mutationFn: (id: string) =>
+      postDlqAction<{ purged?: number }>({ action: 'purge', ids: [id] }),
     onSuccess: (d) => { if ((d.purged ?? 0) > 0) { toast.success('Purged'); reload(); } },
+    onError: (e) => toast.error(`Purge failed: ${e.message}`),
   });
 
   const purgeEntry = async (id: string) => {
