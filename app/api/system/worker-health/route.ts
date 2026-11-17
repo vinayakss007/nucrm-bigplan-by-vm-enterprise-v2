@@ -15,6 +15,25 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  */
 
 /**
+ * #3580 — the queue probe is part of the verdict, not just a response field.
+ *
+ * The endpoint used to publish `queues.accessible: false` while answering
+ * `healthy: true`, so a BullMQ outage behind a still-fresh heartbeat was green.
+ * A queue that cannot be read is an outage for whatever is in it.
+ */
+export function workerHealthVerdict(inputs: {
+  redisHealthy: boolean;
+  heartbeatPresent: boolean;
+  workersRunning: boolean;
+  queuesHealthy: boolean;
+}): boolean {
+  return inputs.redisHealthy
+    && inputs.heartbeatPresent
+    && inputs.workersRunning
+    && inputs.queuesHealthy;
+}
+
+/**
  * #3566 — the Redis endpoint the queue check must probe.
  *
  * Every real consumer (lib/queue, lib/cache, lib/feature-flags,
@@ -114,7 +133,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       ? Object.values(heartbeat.workers).every(Boolean)
       : false;
 
-    const healthy = redisHealthy && heartbeatPresent && workersRunning;
+    const healthy = workerHealthVerdict({
+      redisHealthy, heartbeatPresent, workersRunning, queuesHealthy,
+    });
 
     const payload = {
       data: {
