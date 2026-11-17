@@ -1051,6 +1051,13 @@
       "when": 1793500200000,
       "tag": "0147_audit_logs_superadmin_read",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1793500400000,
+      "tag": "0149_churn_risk_activity_recency",
+      "breakpoints": true
     }
   ]
 }

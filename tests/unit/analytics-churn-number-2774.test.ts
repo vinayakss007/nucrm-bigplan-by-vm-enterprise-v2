@@ -21,17 +21,16 @@
  *    are green at `origin/main`: they are a regression pin, not new behaviour.
  *    What is red at base is half 2.
  *
- * 2. honest source. `public.calculate_churn_risk`
- *    (`drizzle/migrations/0032_missing_db_functions.sql`) is `RETURN 0.1;` — it
- *    ignores `p_contact_id` and reads no `contacts`, activity or
- *    `churn_predictions` row, so every contact in every tenant scores the same
- *    stored constant. The response used to call that bare `probability` and the
- *    handler's doc comment called it "Calculate". Writing the real scoring rule
- *    is the product decision #2774 says the owner owes, so this file does not
- *    make it: the response now names where the number came from
- *    (`probabilitySource`, `probabilitySourceFunction`) and states that it was
- *    not modelled (`isModelled: false`), additively — every key that was there
- *    before is still there, unchanged in name, type and meaning.
+ * 2. honest source. `public.calculate_churn_risk` was `RETURN 0.1;` in 0032 —
+ *    it ignored `p_contact_id` and read no `contacts`, activity or
+ *    `churn_predictions` row, so every contact in every tenant scored the same
+ *    stored constant. #3203 made the response name that source and state that
+ *    it was not modelled; migration 0149 then supplied the scoring rule (a
+ *    deterministic activity-recency model). These tests pin both halves of the
+ *    contract: the response still reports where the number came from
+ *    (`probabilitySource`, `probabilitySourceFunction`) and now says
+ *    `isModelled: true`. Every key that was there before is still there,
+ *    unchanged in name, type and meaning.
  *
  * The fake hands back what the driver really hands back (a string), not the
  * `{ probability: 0.42 }` number that `churn-soft-deleted-2556.test.ts` claims
@@ -229,24 +228,24 @@ describe('POST /api/tenant/analytics/churn — the numeric half of #2774', () =>
 });
 
 describe('POST /api/tenant/analytics/churn — honest source, the other half of #2774', () => {
-  it('the response says the score is a stored placeholder, not a modelled prediction', async () => {
+  it('the response names the model that produced the score', async () => {
     h.rpcRows = [{ probability: '0.1' }];
     const { status, json } = await post();
 
     expect(status).toBe(200);
-    expect(json['probabilitySource']).toBe('database_placeholder');
+    expect(json['probabilitySource']).toBe('activity_recency_model');
     expect(json['probabilitySourceFunction']).toBe('public.calculate_churn_risk');
-    expect(json['isModelled'], 'nothing computes this value; it is RETURN 0.1').toBe(false);
+    expect(json['isModelled'], '0149 replaced the RETURN 0.1 placeholder').toBe(true);
     expect(typeof json['isModelled']).toBe('boolean');
   });
 
-  it('the placeholder is reported as such even when the value is the fallback', async () => {
+  it('the model is named even when the value falls back to 0', async () => {
     h.rpcRows = [{ probability: 'abc' }];
     const { json } = await post();
 
     expect(json['probability']).toBe(0);
-    expect(json['probabilitySource']).toBe('database_placeholder');
-    expect(json['isModelled']).toBe(false);
+    expect(json['probabilitySource']).toBe('activity_recency_model');
+    expect(json['isModelled']).toBe(true);
   });
 
   it('is additive — no key that the response carried before is removed or retyped', async () => {
@@ -279,11 +278,11 @@ describe('POST /api/tenant/analytics/churn — honest source, the other half of 
     // Rewriting it here would make POST disagree with GET over one column; the
     // repo-wide numeric contract is the setTypeParser question, not this route's.
     expect(typeof (json['prediction'] as Record<string, unknown>)['churnProbability']).toBe('string');
-    expect(json['isModelled']).toBe(false);
+    expect(json['isModelled']).toBe(true);
   });
 
   it('the two halves may disagree, and the route reconciles neither', async () => {
-    // the constant 0.1 from the placeholder vs a stored 0.85 for this contact
+    // the modelled score vs a stored 0.85 for this contact
     h.rpcRows = [{ probability: '0.1' }];
     h.predictionRows = [predictionRow()];
     const { json } = await post();
@@ -291,13 +290,13 @@ describe('POST /api/tenant/analytics/churn — honest source, the other half of 
     expect(json['probability']).toBe(0.1);
     expect((json['prediction'] as Record<string, unknown>)['churnProbability']).toBe('0.85');
     expect((json['prediction'] as Record<string, unknown>)['churnRisk']).toBe('high');
-    // neither value was overwritten by the other, and the disagreement is not
-    // presented as a computed score
-    expect(json['isModelled']).toBe(false);
-    expect(json['probabilitySource']).toBe('database_placeholder');
+    // neither value was overwritten by the other; the route does not reconcile
+    // the modelled score with the tenant's stored prediction
+    expect(json['isModelled']).toBe(true);
+    expect(json['probabilitySource']).toBe('activity_recency_model');
   });
 
-  it('a contact with no stored prediction still reports the placeholder honestly', async () => {
+  it('a contact with no stored prediction still reports the model honestly', async () => {
     h.rpcRows = [{ probability: '0.1' }];
     h.predictionRows = [];
     const { status, json } = await post();
@@ -305,7 +304,7 @@ describe('POST /api/tenant/analytics/churn — honest source, the other half of 
     expect(status).toBe(200);
     expect('prediction' in json, 'undefined is dropped by JSON, as before').toBe(false);
     expect(json['probability']).toBe(0.1);
-    expect(json['probabilitySource']).toBe('database_placeholder');
+    expect(json['probabilitySource']).toBe('activity_recency_model');
   });
 
   it('the RPC is never consulted for a contact the caller may not touch', async () => {

@@ -301,9 +301,16 @@ describe('#3406 the live repo reads clean, and the census is the published one',
     // files at one number, so the ledger became 0145 and the chain grew to 148.
     // This PR's own 0146 (the RLS tombstone arm) made it 149; #3577's 0147
     // (superadmin SELECT on audit_logs so chain verification sees other
-    // tenants) makes it 150.
+    // tenants) made it 150; #2774's 0149 (replaces the churn placeholder
+    // function — no tables or indexes, so only the migration count moves)
+    // makes it 151.
+    //
+    // NOTE for the merge of #2597's 0148: when both in-flight migrations land,
+    // this pin becomes migrations: 152, softTables: 205, uniqueOnSoft: 60,
+    // partial: 35. Both PRs touch this assertion, so the merge conflict is the
+    // prompt to apply the combined numbers.
     expect(report.totals).toEqual({
-      migrations: 150,
+      migrations: 151,
       softTables: 204,
       uniqueOnSoft: 59,
       partial: 34,

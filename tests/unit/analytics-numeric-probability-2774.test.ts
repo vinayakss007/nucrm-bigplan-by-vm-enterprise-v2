@@ -14,11 +14,11 @@
  * fire, because every non-empty string is truthy. `"0"` stayed `"0"`, and a
  * future `'NaN'`-ish value would sail straight into the response.
  *
- * Only the read is fixed here. What the score should *be* is the product
- * question #2774 still carries: `public.calculate_churn_risk` and
- * `public.calculate_deal_win_probability` are both `RETURN 0.1;` placeholders
- * (`drizzle/migrations/0032_missing_db_functions.sql`), and inventing a scoring
- * rule is not this PR's call.
+ * Only the read is fixed here. `public.calculate_churn_risk` got its scoring
+ * rule in migration 0149 (deterministic activity recency); the sibling
+ * `public.calculate_deal_win_probability` is still `RETURN 0.1;` in
+ * 0032_missing_db_functions.sql and remains a separate product decision. Neither
+ * function's definition changes what the driver hands back, so this pin stands.
  *
  * The existing harnesses for these routes (`churn-soft-deleted-2556.test.ts`)
  * hand back `{ probability: 0.42 }` — a number. That fiction is exactly why the
