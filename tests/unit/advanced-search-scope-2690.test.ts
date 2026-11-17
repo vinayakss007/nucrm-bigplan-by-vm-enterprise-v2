@@ -97,7 +97,10 @@ const ownsBoth = (table: string) => (clause: { sql: string; params: unknown[] })
   && clause.params.filter(p => p === MINE).length === 2;
 
 const REP = {
+  // #3402 — the route now demands the entity's view permission too; this
+  // fixture is a role that can search all five entities, so it holds all five.
   'contacts.view': true, 'deals.view': true, 'tasks.view': true, 'leads.view': true,
+  'companies.view': true,
 };
 const MANAGER = {
   ...REP,
