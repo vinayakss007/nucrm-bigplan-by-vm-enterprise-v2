@@ -60,9 +60,11 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   //             index.ts re-export).
   // 226 -> 227: cron_runs (0145_cron_runs, #3410) — the persisted ledger that
   //             proves a cron job actually ran.
-  it('should have exactly 227 tables defined in schema', () => {
+  // 227 -> 228: approval_rules (0148_approval_rules, #2597) — persisted RBAC
+  //             approval rules replacing the settings tab's hardcoded empty list.
+  it('should have exactly 228 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(227);
+    expect(schemaTables.size).toBe(228);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {
