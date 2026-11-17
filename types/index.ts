@@ -131,7 +131,7 @@ export interface TenantContext {
   permissions: Record<string, boolean>;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  tenant: Pick<Tenant, 'id' | 'name' | 'plan_id' | 'primary_color' | 'settings' | 'current_users' | 'current_contacts' | 'status' | 'trial_ends_at'>;
+  tenant: Pick<Tenant, 'id' | 'name' | 'plan_id' | 'primary_color' | 'settings' | 'current_users' | 'current_contacts' | 'current_deals' | 'status' | 'trial_ends_at'>;
   plan: Pick<Plan, 'id' | 'name' | 'max_users' | 'max_contacts' | 'max_deals' | 'max_automations' | 'features'>;
 }
 

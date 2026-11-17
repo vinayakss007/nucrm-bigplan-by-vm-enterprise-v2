@@ -85,7 +85,11 @@ vi.mock('@/lib/auth/middleware', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/usage/middleware', () => ({ checkLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/usage/middleware', () => ({
+  checkLimit: vi.fn(async () => null),
+  // #3409's in-transaction quota gate asks the same policy, not a second env read.
+  limitsEnforce: vi.fn(() => false),
+}));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
 vi.mock('@/lib/webhooks', () => ({ fireWebhooks: vi.fn(async () => undefined) }));
 vi.mock('@/lib/notifications', () => ({ createNotification: vi.fn(async () => undefined) }));

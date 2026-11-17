@@ -166,6 +166,7 @@ function makeTenantContext(overrides: Partial<TenantContext> = {}): TenantContex
       settings: {} as TenantContext['tenant']['settings'],
       current_users: 3,
       current_contacts: 100,
+      current_deals: 50,
     },
     plan: {
       id: 'pro',
@@ -263,6 +264,22 @@ describe('isAtLimit()', () => {
       tenant: { ...makeTenantContext().tenant, current_contacts: 100 },
     });
     expect(isAtLimit(ctx, 'contacts')).toBe(false);
+  });
+
+  it('returns true when deals at limit', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_deals: 50 },
+      tenant: { ...makeTenantContext().tenant, current_deals: 50 },
+    });
+    expect(isAtLimit(ctx, 'deals')).toBe(true);
+  });
+
+  it('returns false when deals under limit', () => {
+    const ctx = makeTenantContext({
+      plan: { ...makeTenantContext().plan, max_deals: 100 },
+      tenant: { ...makeTenantContext().tenant, current_deals: 10 },
+    });
+    expect(isAtLimit(ctx, 'deals')).toBe(false);
   });
 
   it('returns false when limit is 0 or negative (unlimited)', () => {
