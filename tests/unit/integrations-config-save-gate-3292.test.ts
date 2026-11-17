@@ -8,15 +8,14 @@
  * `integrations.config` must refuse an out-of-policy bag *before* the insert, so
  * nothing is left to clean up and the caller gets a field-level 400.
  *
- * Both writers are covered because both are reachable, and the issue's premise
- * that "creating the instance needs a tenant admin" is only true of
- * `POST /api/tenant/integrations` — `POST /api/tenant/plugin-engine` gates on
- * `requireAuth` and CSRF but never on `isAdmin` (measured: `grep -n isAdmin` over
- * that file returns nothing), so a plain member could store the malicious
- * `base_url` there without any admin at all. Fixing only the admin route would
- * leave the wider door open, which is why the policy lives in one helper that
- * both handlers call, and why the PATCH merge is validated too (it is the other
- * way a stored value changes).
+ * Both writers are covered because both are reachable. The issue's premise that
+ * "creating the instance needs a tenant admin" used to be true only of
+ * `POST /api/tenant/integrations`: `POST /api/tenant/plugin-engine` answered to a
+ * bare `requireAuth`, so a plain member could store the malicious `base_url`
+ * there without any admin at all. #3402 now gates that writer with
+ * `settings.manage` (the admin route already required an admin), so the policy
+ * below is the second line of defence and applies to every authorized caller.
+ * The PATCH merge is validated too — it is the other way a stored value changes.
  *
  * The provider definition is the real `mailgunProvider`, not a stub: the point of
  * the gate is that the *declared* options are what the server enforces.
@@ -96,7 +95,7 @@ vi.mock('@/lib/auth/middleware', () => ({
     tenantId: TENANT_ID,
     userId: USER_ID,
     // `member: true` is the shape of a non-admin with no extra permissions:
-    // `can()` in lib/auth/middleware.ts returns false for settings.manage here.
+    // `can()` returns false for settings.manage here, so #3402's gate refuses them.
     // `isAdmin` is derived the way `lib/auth/middleware.ts:423` derives it, because
     // `POST /api/tenant/integrations` gates on it and a fixture that said false for
     // an `admin` role would be testing a context the server cannot produce.
@@ -108,6 +107,13 @@ vi.mock('@/lib/auth/middleware', () => ({
     user: { email: 'rep@example.com' },
   })),
   requireCsrf: vi.fn(() => null),
+  // Keep the real `can()` semantics for the route the #3402 gate was added to:
+  // an admin passes, a role holding settings.manage passes, everyone else 403s.
+  requirePerm: vi.fn((ctx: { isAdmin?: boolean; isSuperAdmin?: boolean; permissions?: Record<string, boolean> }, perm: string) =>
+    (ctx.isAdmin || ctx.isSuperAdmin || ctx.permissions?.['all'] || ctx.permissions?.[perm])
+      ? null
+      : NextResponse.json({ error: `Permission denied: ${perm} required` }, { status: 403 }),
+  ),
   requireModule: vi.fn(async () => null),
   requireFeature: vi.fn(async () => null),
 }));
@@ -219,14 +225,15 @@ describe('POST /api/tenant/integrations enforces the declared config policy', ()
 });
 
 describe('POST /api/tenant/plugin-engine — the door that needed no admin', () => {
-  it('refuses an out-of-policy base_url even for a plain member', async () => {
+  it('refuses a plain member before the config policy is even reached (#3402)', async () => {
     asMember();
     const res = await postPluginEngine({
       provider_id: 'mailgun',
       name: 'Mailgun',
       config: { api_key: 'key-1', domain: 'x', base_url: METADATA_URL },
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(await res.json())).toContain('settings.manage');
     expect(harness.inserted).toEqual([]);
   });
 
