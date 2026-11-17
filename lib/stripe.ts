@@ -280,18 +280,11 @@ export async function updateCustomer(customerId: string, params: {
 
 // ── Checkout Sessions ────────────────────────────────────────────────────────
 
-export interface CheckoutParams {
-  tenantId: string;
-  customerId?: string;
-  customerEmail?: string;
-  priceId: string;
-  mode: 'subscription' | 'payment';
-  successUrl?: string;
-  cancelUrl?: string;
-  trialDays?: number;
-  metadata?: Record<string, string>;
-  quantity?: number;
-}
+// #3583: the line-item contract lives in its own leaf module so this
+// grandfathered file keeps shrinking under the #1843 ratchet.
+import { buildCheckoutLineItem, type CheckoutParams } from './stripe/checkout-line-item';
+export { buildCheckoutLineItem } from './stripe/checkout-line-item';
+export type { CheckoutParams, CheckoutPriceData } from './stripe/checkout-line-item';
 
 export async function createCheckoutSession(params: CheckoutParams): Promise<{ id: string; url: string }> {
   const appUrl = getAppUrl();
@@ -299,12 +292,7 @@ export async function createCheckoutSession(params: CheckoutParams): Promise<{ i
     mode: params.mode,
     success_url: params.successUrl || `${appUrl}/tenant/settings/billing?session_id={CHECKOUT_SESSION_ID}&success=true`,
     cancel_url: params.cancelUrl || `${appUrl}/tenant/settings/billing?cancelled=true`,
-    line_items: [
-      {
-        price: params.priceId,
-        quantity: params.quantity || 1,
-      },
-    ],
+    line_items: [buildCheckoutLineItem(params)],
     metadata: {
       tenant_id: params.tenantId,
       ...params.metadata,

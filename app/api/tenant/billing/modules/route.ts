@@ -74,7 +74,16 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       tenantId: ctx.tenantId,
       customerId: tenant.stripeCustomerId ?? undefined,
       customerEmail: !tenant.stripeCustomerId ? (tenant.billingEmail ?? undefined) : undefined,
-      priceId: `price_module_${module_id}`, // Module-specific price ID from Stripe
+      // #3583: no Stripe Price exists for module add-ons (there is no module
+      // price catalog in .env.example), so a fabricated module price id was
+      // rejected by Stripe on every call. Use inline price_data with the price computed
+      // from the module manifest above; module prices are whole USD/month.
+      priceData: {
+        currency: 'usd',
+        unitAmount: priceInCents,
+        productName: `${manifest.name} add-on`,
+        recurringInterval: 'month',
+      },
       mode: 'subscription',
       metadata: { module_id, type: 'module_addon' },
     });
