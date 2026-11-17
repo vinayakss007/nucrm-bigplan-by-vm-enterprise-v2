@@ -129,6 +129,12 @@ export const PERMISSIONS: Permission[] = [
   { id: 'subscriptions.edit',     label: 'Edit Subscriptions',description: 'Change an existing subscription', category: 'Sales',dangerLevel: 'moderate' },
   { id: 'subscriptions.delete',   label: 'Delete Subscriptions',description: 'Remove a subscription permanently',category: 'Sales',dangerLevel: 'danger' },
 
+  // ── Products & Services (catalog used by quotes and invoices) ──
+  { id: 'products.view',       label: 'View Products',       description: 'See the tenant product catalog',   category: 'Sales',   dangerLevel: 'safe' },
+  { id: 'products.manage',     label: 'Manage Products',     description: 'Create, edit or delete products',   category: 'Sales',   dangerLevel: 'moderate' },
+  { id: 'services.view',       label: 'View Services',       description: 'See the tenant service catalog',   category: 'Service', dangerLevel: 'safe' },
+  { id: 'services.manage',     label: 'Manage Services',     description: 'Create, edit or delete services',   category: 'Service', dangerLevel: 'moderate' },
+
   // ── Segments ──────────────────────────────────────────────
   { id: 'segments.view',       label: 'View Segments',       description: 'Access contact segments',       category: 'Marketing', dangerLevel: 'safe' },
   { id: 'segments.manage',     label: 'Manage Segments',     description: 'Create/edit segments',          category: 'Marketing', dangerLevel: 'moderate' },
@@ -144,6 +150,10 @@ export const PERMISSIONS: Permission[] = [
 
   // ── Calendar ─────────────────────────────────────────────
   { id: 'calendar.manage',        label: 'Manage Calendar',   description: 'Sync and write to external calendars',category: 'Calendar',dangerLevel: 'moderate' },
+
+  // ── Documents ─────────────────────────────────────────────
+  { id: 'documents.view',      label: 'View Documents',     description: 'See tenant documents and their metadata', category: 'Settings', dangerLevel: 'safe' },
+  { id: 'documents.manage',    label: 'Manage Documents',   description: 'Upload, edit, verify or delete tenant documents', category: 'Settings', dangerLevel: 'moderate' },
 
   // ── Partners ─────────────────────────────────────────────
   { id: 'partners.create',        label: 'Create Partners',   description: 'Add partner records and their deals',category: 'Partners',dangerLevel: 'moderate' },
@@ -169,6 +179,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     'orders.view': true, 'orders.create': true,
     'contracts.view': true, 'contracts.create': true,
     'subscriptions.view': true,
+    // #3402 — reps can see the catalogs and documents they reference in quotes
+    // and tickets; writing those tenant-wide records stays with admin/manager.
+    'products.view': true, 'services.view': true, 'documents.view': true,
     'team.view': true, 'reports.view': false,
   },
   viewer: Object.fromEntries(PERMISSIONS.map(p => [p.id, p.id.endsWith('.view') || p.id.endsWith('.view_all')])),

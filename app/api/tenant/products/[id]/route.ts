@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { products } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -32,6 +32,9 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: RouteCo
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'products.view');
+    if (denied) return denied;
 
     const { id } = await params;
 
@@ -64,6 +67,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: Route
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'products.manage');
+    if (denied) return denied;
 
     const { id } = await params;
 
@@ -128,6 +134,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: Rout
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'products.manage');
+    if (denied) return denied;
 
     const { id } = await params;
 

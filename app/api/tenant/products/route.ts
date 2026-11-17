@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { products } from '@/drizzle/schema';
@@ -32,6 +32,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'products.view');
+    if (denied) return denied;
 
     const { searchParams } = new URL(request.url);
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
@@ -86,6 +89,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'products.manage');
+    if (denied) return denied;
 
     const body = await readJsonBody(request);
     const validated = validateBody(createProductSchema, body);

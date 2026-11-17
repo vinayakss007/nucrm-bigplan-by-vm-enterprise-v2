@@ -61,6 +61,9 @@ vi.mock('@/lib/api-error', () => ({ apiError: (e: unknown) => NextResponse.json(
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => {}) }));
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: (...a: unknown[]) => { h.calls.push('requireAuth'); return mockRequireAuth(...a as []); },
+  // #3402 gates this route with documents.manage; this fixture is a tenant
+  // admin, so the gate passes. The gate itself is pinned in the 3402 catalog spec.
+  requirePerm: () => null,
 }));
 vi.mock('@/lib/usage/middleware', () => ({
   checkLimit: (...a: unknown[]) => { h.calls.push('checkLimit'); return mockCheckLimit(...a as []); },

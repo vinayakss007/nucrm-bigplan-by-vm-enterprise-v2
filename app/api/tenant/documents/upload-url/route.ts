@@ -18,7 +18,7 @@
  * objects are cheap and can be swept later if the prefix grows.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
@@ -63,6 +63,9 @@ const BLOCKED_EXTENSIONS = new Set([
 export const POST = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  // #3402 — role gate on the catalog/document surface, checked before any DB work.
+  const denied = requirePerm(ctx, 'documents.manage');
+  if (denied) return denied;
 
   let raw;
   try { raw = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

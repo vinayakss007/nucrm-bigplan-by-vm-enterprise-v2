@@ -10,7 +10,7 @@ import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
 import { eq, and, desc, like, isNull, type SQL} from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -18,6 +18,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'services.view');
+    if (denied) return denied;
     const { tenantId, userId: _userId, isSuperAdmin, noWorkspace } = ctx;
 
     // Superadmin without tenant needs to use a real tenant
@@ -64,6 +67,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'services.manage');
+    if (denied) return denied;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);
