@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, companies, tasks, leads, dealStages } from '@/drizzle/schema';
 import { eq, and, or, gte, lte, desc, sql, inArray, isNull, type SQL, type SQLWrapper } from 'drizzle-orm';
@@ -53,6 +53,12 @@ function likePattern(value: string): string {
  *   limit?: number,
  * }
  */
+/** #3402 — ownerScope narrows rows but does not stop a role that may not view an entity; the list/detail routes already ask for `<entity>.view`. */
+const SEARCH_VIEW_PERMISSION: Record<string, string> = {
+  contacts: 'contacts.view', leads: 'leads.view', deals: 'deals.view',
+  companies: 'companies.view', tasks: 'tasks.view',
+};
+
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -70,6 +76,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       page = 1,
       limit: rawLimit = 25,
     } = body;
+
+    // #3402 — an unknown `type` still takes the existing 400 branch below;
+    // only a known entity is gated, with the same permission its list route uses.
+    const viewPermission = SEARCH_VIEW_PERMISSION[type as string];
+    if (viewPermission) {
+      const denied = requirePerm(ctx, viewPermission);
+      if (denied) return denied;
+    }
 
     const limit = Math.min(100, Math.max(1, rawLimit));
     const offset = (Math.max(1, page) - 1) * limit;
