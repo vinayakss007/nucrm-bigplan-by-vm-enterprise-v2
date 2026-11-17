@@ -185,8 +185,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const { getPool } = await import('@/lib/db/pool');
     const pool = getPool();
+    // #3569: the catalog is `backup_records`, not `backups` (no such table or
+    // view exists), and completion is stamped in `completed_at` — `created_at`
+    // is not a column on it. Querying the old names threw on every request, so
+    // this section was permanently `unhealthy` for a reason unrelated to
+    // backups and a genuinely stale backup could never be reported.
     const backupResult = await pool.query(
-      `SELECT MAX(created_at) AS last_backup FROM backups WHERE status = 'completed'`
+      `SELECT MAX(completed_at) AS last_backup FROM backup_records WHERE status = 'completed'`
     );
     const lastBackup = backupResult.rows[0]?.last_backup;
     if (lastBackup) {
