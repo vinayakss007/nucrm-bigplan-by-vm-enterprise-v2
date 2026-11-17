@@ -12,6 +12,7 @@
  */
 
 import crypto from 'crypto';
+import { utcDayBounds } from '@/lib/cron/renewal-windows';
 
 export interface CheckIn {
   id: string;
@@ -208,10 +209,9 @@ export function getTeamCheckInsToday(
 ): CheckIn[] {
   if (!tenantId) throw new Error('tenantId is required');
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // #2429/#2997 — a local-midnight window moves a day on hosts east of
+  // Greenwich; the shared helper returns UTC, exclusive-end bounds.
+  const { start: today, nextStart: tomorrow } = utcDayBounds(new Date());
 
   const results: CheckIn[] = [];
   for (const checkIn of checkInStore.values()) {
