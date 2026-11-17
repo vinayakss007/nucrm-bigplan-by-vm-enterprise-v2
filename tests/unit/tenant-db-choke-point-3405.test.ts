@@ -85,6 +85,43 @@ describe('what counts as reaching the raw client (#3405)', () => {
     }
   });
 
+  it('sees dynamic imports and require, which used to bypass the ledger entirely', () => {
+    const forms = [
+      "const { db } = await import('@/drizzle/db');",
+      "void import('@/drizzle/db');",
+      "const { db } = require('@/drizzle/db');",
+      "const { db } = await import('../../drizzle/db');",
+      "await Promise.all([import('@/drizzle/db'), import('@/drizzle/schema')]);",
+    ];
+    for (const form of forms) {
+      expect(importsRawClient(form), form).toHaveLength(1);
+    }
+  });
+
+  it('does not count a typeof-import type query, which the compiler erases too', () => {
+    expect(importsRawClient("type AppDb = (typeof import('@/drizzle/db'))['db'];")).toEqual([]);
+  });
+
+  it('admits the real dynamic-import call sites the widened scanner found (#3405)', () => {
+    // These eight files reach the raw client only through a lazy import (module
+    // cycles / deferred setup). Before the scanner was widened they were
+    // invisible, so this pins that the newly found debt is on the record.
+    const ledger = JSON.parse(readFileSync(join(ROOT, 'scripts/tenant-db-ledger.json'), 'utf8'));
+    const listed = new Set(Object.values(ledger.groups).flatMap((g: { files: string[] }) => g.files));
+    for (const file of [
+      'app/api/tenant/calendar-sync/route.ts',
+      'app/api/tenant/calendar-sync/google/callback/route.ts',
+      'app/api/tenant/calendar-sync/outlook/callback/route.ts',
+      'lib/automation/workflows.ts',
+      'lib/cron/cron-lock.ts',
+      'lib/email/service.ts',
+      'lib/email/tracking.ts',
+      'lib/errors-server.ts',
+    ]) {
+      expect(listed, file).toContain(file);
+    }
+  });
+
   it('does not count a type import, which the compiler erases', () => {
     expect(importsRawClient("import type { Database } from '@/drizzle/db';")).toEqual([]);
   });
