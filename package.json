@@ -76,6 +76,7 @@
     "cron:manifest": "npx tsx scripts/gen-cron-manifest.mts",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
+    "guard:mutating-route-permissions": "node scripts/check-mutating-route-permissions.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
     "guard:tenant-db-context": "node scripts/check-tenant-db-context.mjs",
     "guard:jsonb-size": "node scripts/check-jsonb-size-unit.mjs",
