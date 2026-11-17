@@ -14,6 +14,23 @@
  * result never depends on the host timezone.
  */
 
+/**
+ * UTC boundaries of the calendar day containing `now`. #2429/#2997 — a local
+ * `setHours(0,0,0,0)` window shifts a day on hosts east of Greenwich.
+ *
+ * Both closes are offered because the two consumers differ: the check-in list
+ * filters `checkedInAt <= to` (inclusive) while the team view filters `< nextStart`
+ * (exclusive). Keeping both here stops a caller from re-deriving one incorrectly.
+ */
+export function utcDayBounds(now: Date): { start: Date; end: Date; nextStart: Date } {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  const nextStart = new Date(start);
+  nextStart.setUTCDate(nextStart.getUTCDate() + 1);
+  const end = new Date(nextStart.getTime() - 1);
+  return { start, end, nextStart };
+}
+
 export interface ReminderWindow {
   days: number;
   /** Target calendar date as `yyyy-mm-dd`, UTC-based. */
