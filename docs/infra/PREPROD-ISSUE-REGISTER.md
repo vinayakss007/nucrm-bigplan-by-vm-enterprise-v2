@@ -2208,8 +2208,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:83`
   (re-pinned 2026-11-04: **#3409** landed `limitsEnforce` and `planLimitReachedResponse` above it, and the
   sentinel read moved into the former so the two cannot disagree; was `:43`),
-  `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
-  no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
+  `app/api/tenant/services/route.ts:27` (re-pinned 2026-11-17 from `:24` — #3582's `services.view` gate added three lines above the superadmin check; guard:register-drift) (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:64` is now gated with `services.manage` by #3402), `app/api/superadmin/join-tenant/route.ts:139`.
+  Pinned as intended behaviour by
   `tests/unit/auth-middleware-require-auth.test.ts:549-558` (re-pinned 2026-10-22 from `:550-559`: `3bf7f648c` (#3073) deleted this file's top-of-file `eslint-disable @typescript-eslint/no-explicit-any` header, which moved every line beneath it up by one).
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
@@ -2218,7 +2218,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   existing; a blanket 403 would change behaviour for all 239 files, not the 120 that fail. The narrow version is a
   verb-scoped guard in `withApiRoute` (which already owns the request scope and the 23503 mapping) firing only for
   `isSuperAdmin && noWorkspace` on POST/PUT/PATCH: one site, no route edits, and it replaces a bare 400 with the
-  message that already exists in-tree at `app/api/tenant/services/route.ts:25`.
+  message that already exists in-tree at `app/api/tenant/services/route.ts:30` (re-pinned 2026-11-17 from `:25` — #3582's `services.view` role gate added five lines above the string; guard:register-coords).
 - **Option (b) — give the account a workspace, costed — is already shipped and unreachable.**
   `POST /api/superadmin/join-tenant` does exactly this: opens a transaction, calls `setTenantContext(tenant.id, …,
 tx)`, runs `provisionTenantWorkspace`, then `update users set lastTenantId = tenant.id`

@@ -41,7 +41,7 @@
  * exactly that case and the route answers 502 without writing.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { documents } from '@/drizzle/schema';
@@ -56,6 +56,9 @@ export const POST = withApiRoute(async (request: NextRequest,
   context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  // #3402 — role gate on the catalog/document surface, checked before any DB work.
+  const denied = requirePerm(ctx, 'documents.manage');
+  if (denied) return denied;
 
   // Its own counter (`documents-verify_post`), not `documents_post`: every upload is
   // now two POSTs, and sharing the create bucket would halve how many files a member

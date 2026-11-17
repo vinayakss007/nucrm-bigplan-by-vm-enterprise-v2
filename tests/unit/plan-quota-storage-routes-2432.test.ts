@@ -49,7 +49,11 @@ function authedCtx() {
   };
 }
 
-vi.mock('@/lib/auth/middleware', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
+vi.mock('@/lib/auth/middleware', () => ({
+  requireAuth: (...a: unknown[]) => mockRequireAuth(...a),
+  // #3402 documents.manage gate: this fixture is an admin, so it passes.
+  requirePerm: () => null,
+}));
 vi.mock('@/lib/usage/middleware', () => ({ checkLimit: (...a: unknown[]) => mockCheckLimit(...a) }));
 vi.mock('@/lib/modules/gate', () => ({
   requireModule: async () => null,
