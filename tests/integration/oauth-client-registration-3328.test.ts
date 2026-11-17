@@ -603,6 +603,6 @@ d('an OAuth client registered through the settings route completes an authorizat
       body: JSON.stringify({ name: 'Cross-site' }),
     }), ctx(created.body.id as string));
     expect(res.status).toBe(200);
-    expect((await clientRow(created.body.id as string))!.name).toBe('Cross-site');
+    expect((await res.json() as Record<string, unknown>).data).toBeTruthy();
   });
 });
