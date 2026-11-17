@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { getPriceId, isStripeConfigured, scheduleDowngradeAtPeriodEnd } from '@/lib/stripe';
+import { billingEventAmount } from '@/lib/billing/plan-price';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -121,7 +122,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await tx.insert(billingEvents).values({
         tenantId: ctx.tenantId,
         eventType: 'subscription.downgrade_scheduled',
-        amount: String(newPlan.priceMonthly || '0'),
+        // #3586 — downgrades are monthly-only (`getPriceId(planId, 'month')`
+        // above), so the helper is given that interval explicitly.
+        amount: billingEventAmount(newPlan, 'month'),
         // #2551: a scheduled downgrade never talks to the PSP, so no currency is
         // known at this point — NULL beats an asserted 'usd'.
         currency: null,

@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSubscription, getPriceId, isStripeConfigured, getSubscriptionPeriodStart, getSubscriptionPeriodEnd } from '@/lib/stripe';
+import { billingEventAmount } from '@/lib/billing/plan-price';
 import { deriveUpgradeIdempotencyKey } from '@/lib/billing-idempotency';
 import { currencyFromProvider } from '@/lib/billing-currency';
 import { logError } from '@/lib/errors-server';
@@ -212,7 +213,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         await tx.insert(billingEvents).values({
           tenantId: ctx.tenantId,
           eventType: 'subscription.upgraded',
-          amount: String(newPlan.priceMonthly || '0'),
+          // #3586 — record the price for the interval Stripe actually charged.
+          amount: billingEventAmount(newPlan, interval),
           currency: currencyFromProvider(stripeSub),
           stripeSubscriptionId: currentSub.stripeSubscriptionId,
           metadata: {
