@@ -209,8 +209,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const { getPool } = await import('@/lib/db/pool');
     const pool = getPool();
+    // #3572: the ledger lives in the `drizzle` schema (see scripts/migrate.ts
+    // and scripts/migration-status.ts); public's search_path cannot see it, so
+    // the unqualified name threw on every request and this section was stuck
+    // at `unknown` — a monitor that never reported the deployed version.
     const vResult = await pool.query(
-      `SELECT MAX(id)::text AS version FROM "__drizzle_migrations"`
+      `SELECT MAX(id)::text AS version FROM "drizzle"."__drizzle_migrations"`
     );
     health.migration = {
       currentVersion: vResult.rows[0]?.version || null,
