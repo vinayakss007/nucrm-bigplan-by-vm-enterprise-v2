@@ -704,6 +704,100 @@ export function buildTargets(root: string): string[] {
   return [...new Set([...publicScopeDirs(root), ...PINNED_TARGETS])].sort();
 }
 
+// ── following imports (#3312 ask 1) ─────────────────────────────────────────
+//
+// `buildTargets()` names the anonymous ROUTES, but a route that hands its
+// payload to `lib/...` is only as safe as that library's own reads. #3312 found
+// 15 such reads by hand-naming the helpers; the next audit found 167 MORE
+// reachable `lib/` files, 38 of them carrying 200 unbound statements, none of
+// which the hand list could ever see. A guard whose scope stops at the route
+// file answers "OK" over a leak it never looked at — the exact failure #3186
+// fixed for the edge list, one layer down.
+//
+// So the walk now follows `@/…` and relative imports from every current target,
+// recursively, with a visited set, and folds every `lib/` file it reaches into
+// the scope. Restricting to `lib/` is deliberate: it is the shared, reusable
+// surface whose callers are unbounded; following into `app/` would pull in the
+// whole application and turn this focused screen into a full-tree scan. A new
+// anonymous route still arrives through `publicScopeDirs()`; a new library
+// called by an anonymous route arrives here, without anyone remembering a name.
+
+/** Import specifiers from TS/TSX source, covering static, type and dynamic forms. */
+export function importSpecifiers(src: string): string[] {
+  const specs: string[] = [];
+  // `from '…'` (covers import/export, including `import type { X } from '…'`).
+  for (const m of src.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) specs.push(m[1]!);
+  // Bare `import '…'` and `import('…')` (dynamic).
+  for (const m of src.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1]!);
+  for (const m of src.matchAll(/\bimport\s+['"]([^'"]+)['"]/g)) specs.push(m[1]!);
+  return specs;
+}
+
+/** Resolve one specifier to a real TS file under `root`, or null if it is not one. */
+export function resolveImportFile(
+  spec: string,
+  importer: string,
+  root: string,
+  exists: (p: string) => boolean = existsSync,
+): string | null {
+  let base: string;
+  if (spec.startsWith('@/')) base = join(root, spec.slice(2));
+  else if (spec.startsWith('.')) base = join(dirname(importer), spec);
+  else return null; // package import — not our source tree
+
+  const candidates = [
+    base,
+    `${base}.ts`, `${base}.tsx`, `${base}.mts`, `${base}.cts`,
+    `${base}.js`, `${base}.jsx`, `${base}.mjs`,
+    join(base, 'index.ts'), join(base, 'index.tsx'), join(base, 'index.mts'),
+  ];
+  for (const c of candidates) {
+    if (!exists(c)) continue;
+    // Only a file — a directory that happens to match `base` is not a module.
+    // Skip the stat for an injected predicate: a fixture's `exists` knows what
+    // its virtual files are without anything on the real filesystem.
+    if (exists === existsSync) {
+      try {
+        if (!statSync(c).isFile()) continue;
+      } catch { continue; }
+    }
+    return c;
+  }
+  return null;
+}
+
+/**
+ * Every target the guard should walk: the named anonymous surface plus every
+ * `lib/` module reachable from it through imports. Async because the walk reads
+ * files; `buildTargets()` stays synchronous for callers that only need the base.
+ */
+export async function deriveTargets(root: string): Promise<string[]> {
+  const base = buildTargets(root);
+  // Targets are a mix of files and directories; expand the directories the same
+  // way `run()` does, or a target like `app/api/public` never contributes its
+  // imports and the walk silently stays narrow.
+  const queue = base.flatMap((t) => tsFiles(join(root, t)));
+  const visited = new Set<string>(queue);
+  const found: string[] = [];
+
+  while (queue.length > 0) {
+    const file = queue.shift()!;
+    let src: string;
+    try { src = readFileSync(file, 'utf8'); } catch { continue; }
+    for (const spec of importSpecifiers(src)) {
+      const resolved = resolveImportFile(spec, file, root);
+      if (!resolved || visited.has(resolved)) continue;
+      visited.add(resolved);
+      const rel = relative(root, resolved).split(sep).join('/');
+      // Only shared library code extends the portal's reach. See the note above.
+      if (!rel.startsWith('lib/')) continue;
+      found.push(rel);
+      queue.push(resolved);
+    }
+  }
+  return [...new Set([...base, ...found])].sort();
+}
+
 /**
  * Findings the walk reports on a caller this guard cannot judge yet, deferred by
  * directory and RATCHETTED by count.
@@ -823,6 +917,31 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     maxFindings: 59,
   },
 ];
+
+/**
+ * #3312 ask 1 — the import-reachable `lib/` surface the named targets never
+ * reached. The 200 statements across 38 files below were INVISIBLE before the
+ * walk followed imports, so this is newly counted debt, not a regression: a
+ * file that reaches the anonymous surface through a helper chain is now in the
+ * guard's sight, and its unbound reads are pinned here rather than silently
+ * passing. The pin is a ceiling, not a permit: a NEW read above it fails the
+ * run, and the OK line prints the actual/ceiling pair so a bound read is
+ * visible and the ceiling must be lowered deliberately. Kept apart from
+ * `SCOPE_DEFERRALS` because that ledger is the named-route surface whose last
+ * entry #3246 verified; this one belongs to the derived walk alone.
+ */
+export const LIB_IMPORT_DEFERRAL: ScopeDeferral = {
+  dir: 'lib',
+  deferredTo: '#3312',
+  why: '#3312 ask 1: 200 tenant-keyed reads across 38 lib/ files are reachable from anonymous '
+    + 'routes through imports the old guard never followed. They are newly VISIBLE debt, deferred '
+    + 'to #3312 for binding (or a per-file decision); the count is a ceiling that may only shrink.',
+  maxFindings: 200,
+};
+
+/** Floors for the import-following walk, re-pinned when #3312 widened the scope. */
+export const MIN_DERIVED_FILES = 297;
+export const MIN_DERIVED_READS = 539;
 
 /** Why a deferral is not admissible; returns the reason, or null. */
 export function verifyDeferral(entry: ScopeDeferral): string | null {
@@ -948,7 +1067,28 @@ async function main() {
   const argv = process.argv.slice(2);
   const json = argv.includes('--json');
   const targets = argv.filter((a) => !a.startsWith('--'));
-  const { violations, files, reads, unused, tableCount, deferred } = await run(targets.length > 0 ? targets : DEFAULT_TARGETS);
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  // #3312 ask 1: the real walk follows imports from the anonymous surface into
+  // shared lib/ code. A caller that supplies explicit targets keeps the old
+  // named-only walk, so a unit test can still exercise a narrow fixture.
+  const walkTargets = targets.length > 0 ? targets : await deriveTargets(root);
+  const deferrals = targets.length > 0 ? SCOPE_DEFERRALS : [...SCOPE_DEFERRALS, LIB_IMPORT_DEFERRAL];
+  const { violations, files, reads, unused, tableCount, deferred } = await run(walkTargets, root, { deferrals });
+
+  if (targets.length === 0) {
+    if (files < MIN_DERIVED_FILES) {
+      throw new Error(
+        `import-following walk reached ${files} file(s); expected at least ${MIN_DERIVED_FILES} — `
+        + 'the import resolver stopped following the anonymous surface, so this run proves nothing',
+      );
+    }
+    if (reads < MIN_DERIVED_READS) {
+      throw new Error(
+        `import-following walk examined ${reads} statement(s); expected at least ${MIN_DERIVED_READS} — `
+        + 'the read patterns stopped matching, so this run proves nothing',
+      );
+    }
+  }
 
   if (json) {
     console.log(JSON.stringify({
