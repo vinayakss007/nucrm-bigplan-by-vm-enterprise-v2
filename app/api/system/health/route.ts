@@ -76,6 +76,28 @@ interface SystemHealthResponse {
 }
 
 // -------------------------------------------------------------------
+// Verdict
+// -------------------------------------------------------------------
+
+/**
+ * #3575 — collapse the component statuses into the top-level verdict.
+ *
+ * Every component can report `unhealthy` (disk >90%, a failed backup query,
+ * Redis down, an unconfigured production email/alert channel). The old code
+ * downgraded ALL of those to `degraded` whenever the database was up, so the
+ * endpoint emitted sub-statuses it could never reflect in its own verdict and
+ * answered HTTP 200 for a full disk. The database is not a special case: it is
+ * one component among six, and `unhealthy` means `unhealthy`.
+ */
+export function overallHealthStatus(
+  statuses: ReadonlyArray<'healthy' | 'degraded' | 'unhealthy'>,
+): 'healthy' | 'degraded' | 'unhealthy' {
+  if (statuses.includes('unhealthy')) return 'unhealthy';
+  if (statuses.includes('degraded')) return 'degraded';
+  return 'healthy';
+}
+
+// -------------------------------------------------------------------
 // Handler
 // -------------------------------------------------------------------
 
@@ -221,7 +243,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   }
 
   // Compute overall status
-  const statuses = [
+  const statuses: Array<'healthy' | 'degraded' | 'unhealthy'> = [
     health.database.healthy ? 'healthy' : 'unhealthy',
     health.redis.status,
     health.disk.status,
@@ -233,13 +255,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     health.alerting.status,
   ];
 
-  if (statuses.includes('unhealthy')) {
-    health.status = health.database.healthy ? 'degraded' : 'unhealthy';
-  } else if (statuses.includes('degraded')) {
-    health.status = 'degraded';
-  } else {
-    health.status = 'healthy';
-  }
+  health.status = overallHealthStatus(statuses);
 
   const statusCode = health.status === 'unhealthy' ? 503 : 200;
   return NextResponse.json(health, { status: statusCode });
