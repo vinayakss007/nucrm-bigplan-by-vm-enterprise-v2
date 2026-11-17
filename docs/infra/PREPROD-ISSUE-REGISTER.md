@@ -5740,7 +5740,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   **200 with a log**, and a visible-but-refused row answering **500 with the claim released**.
 - **The integration proof the issue asked for, and the two things it had to discover first.**
   `tests/integration/webhooks-under-force-rls.test.ts` (**8**) replays **signed** payloads —
-  `lib/razorpay.ts:179` and `lib/stripe.ts:505` are both local hex HMAC-SHA256, so the front door is
+  `lib/razorpay.ts:179` and `lib/stripe.ts:493` (re-pinned 2026-11-17 from `:505` — #3584 replaced the Stripe price construction above and shed 12 lines; guard:register-drift) are both local hex HMAC-SHA256, so the front door is
   not stubbed — through both real handlers under a `NOSUPERUSER NOBYPASSRLS` role (**#2446**'s
   technique as **#3328** uses it) with `DATABASE_URL` re-pointed and `vi.resetModules()`, then reads
   `tenants` / `subscriptions` back on the **owner** connection, because "the handler said ok" is
