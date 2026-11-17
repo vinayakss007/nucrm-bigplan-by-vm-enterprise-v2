@@ -69,6 +69,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
           settings: (demoTenant.settings as TenantSettings) || {} as TenantSettings,
           current_users: demoTenant.currentUsers || 1,
           current_contacts: demoTenant.currentContacts || 0,
+          current_deals: demoTenant.currentDeals || 0,
         },
         plan: {
           id: plan?.id || 'free',
@@ -119,6 +120,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
       trial_ends_at: tenants.trialEndsAt,
       current_users: tenants.currentUsers,
       current_contacts: tenants.currentContacts,
+      current_deals: tenants.currentDeals,
       plan_name: plans.name,
       max_users: plans.maxUsers,
       max_contacts: plans.maxContacts,
@@ -187,6 +189,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
       settings: (row.tenant_settings as TenantSettings) ?? {} as TenantSettings,
       current_users: row.current_users ?? 0,
       current_contacts: row.current_contacts ?? 0,
+      current_deals: row.current_deals ?? 0,
     },
     plan: {
       id: row.plan_id || 'free',
@@ -207,15 +210,17 @@ export function can(ctx: TenantContext, perm: string): boolean {
 }
 
 /** Whether the tenant is at or over a resource limit */
-export function isAtLimit(ctx: TenantContext, resource: 'contacts' | 'users'): boolean {
+export function isAtLimit(ctx: TenantContext, resource: 'contacts' | 'users' | 'deals'): boolean {
   if (ctx.plan.id === 'enterprise') return false;
-  const limits: Record<string, number> = {
+  const limits: Record<'contacts' | 'users' | 'deals', number> = {
     contacts: ctx.plan.max_contacts,
     users: ctx.plan.max_users,
+    deals: ctx.plan.max_deals,
   };
-  const current: Record<string, number> = {
+  const current: Record<'contacts' | 'users' | 'deals', number> = {
     contacts: ctx.tenant.current_contacts,
     users: ctx.tenant.current_users,
+    deals: ctx.tenant.current_deals ?? 0,
   };
   const limit = limits[resource];
   if (!limit || limit < 0) return false;

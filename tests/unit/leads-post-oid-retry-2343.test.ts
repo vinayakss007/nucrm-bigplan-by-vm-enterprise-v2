@@ -99,7 +99,11 @@ vi.mock('@/lib/auth/middleware', () => ({
   can: vi.fn(() => true),
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => undefined) }));
-vi.mock('@/lib/usage/middleware', () => ({ checkLimit: vi.fn(async () => undefined) }));
+vi.mock('@/lib/usage/middleware', () => ({
+  checkLimit: vi.fn(async () => undefined),
+  // #3409's in-transaction quota gate asks the same policy, not a second env read.
+  limitsEnforce: vi.fn(() => false),
+}));
 vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: <H>(h: H): H => h }));
 vi.mock('@/lib/api/validate', () => ({
   readJsonBody: vi.fn(async (req: { json(): Promise<unknown> }) => req.json()),
