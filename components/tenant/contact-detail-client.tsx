@@ -13,7 +13,7 @@ import {
   Clock, User, History, Ticket, ListChecks,
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
 } from 'lucide-react';
-import { clientLogError } from '@/lib/client-logger';
+import { loadPanelList } from './contact-detail-panel-loader';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ContactTimeline from '@/components/tenant/contact-timeline';
@@ -262,8 +262,12 @@ export default function ContactDetailClient({
   const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'calls' | 'history' | 'billing'
   const [history, setHistory]           = useState<HistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyFailed, setHistoryFailed] = useState(false);
   const [contactLeads, setContactLeads]            = useState<ContactLeadRow[]>([]);
   const [loadingContactLeads, setLoadingContactLeads] = useState(false);
+  const leadsFetching = useRef(false);
+  const [leadsFailed, setLeadsFailed] = useState(false);
+  const [callsFailed, setCallsFailed] = useState(false);
   const [editing, setEditing]       = useState(false);
   const [editForm, setEditForm]     = useState<ContactFormState>({ ...initialContact, tags: Array.isArray(initialContact.tags) ? initialContact.tags.join(', ') : '' });
   const [noteText, setNoteText]     = useState('');
@@ -285,10 +289,12 @@ export default function ContactDetailClient({
     if (activeTab === 'history' && history.length === 0) {
       const abort = new AbortController();
       setLoadingHistory(true);
-      fetch(`/api/tenant/history/contact?entity_id=${contact.id}&limit=50`, { signal: abort.signal })
-        .then(res => res.json())
-        .then(data => { if (!abort.signal.aborted) setHistory(data.data || []); })
-        .catch(err => { if (!abort.signal.aborted) clientLogError('contact-detail:load-history', err); })
+      loadPanelList<HistoryEntry>(`/api/tenant/history/contact?entity_id=${contact.id}&limit=50`, 'contact-detail:load-history', abort.signal)
+        .then(({ rows, failed }) => {
+          if (abort.signal.aborted) return;
+          setHistory(rows);
+          setHistoryFailed(failed);
+        })
         .finally(() => { if (!abort.signal.aborted) setLoadingHistory(false); });
       return () => abort.abort();
     }
@@ -296,17 +302,24 @@ export default function ContactDetailClient({
 
   // Fetch the contact's leads (one contact, many leads) on first open
   useEffect(() => {
-    if (activeTab === 'leads' && contactLeads.length === 0 && !loadingContactLeads) {
+    if (activeTab === 'leads' && contactLeads.length === 0 && !leadsFetching.current) {
       const abort = new AbortController();
+      leadsFetching.current = true;
       setLoadingContactLeads(true);
-      fetch(`/api/tenant/contacts/${contact.id}/leads`, { signal: abort.signal })
-        .then(res => res.json())
-        .then(data => { if (!abort.signal.aborted) setContactLeads(data.data || []); })
-        .catch(err => { if (!abort.signal.aborted) clientLogError('contact-detail:load-leads', err); })
-        .finally(() => { if (!abort.signal.aborted) setLoadingContactLeads(false); });
+      loadPanelList<ContactLeadRow>(`/api/tenant/contacts/${contact.id}/leads`, 'contact-detail:load-leads', abort.signal)
+        .then(({ rows, failed }) => {
+          if (abort.signal.aborted) return;
+          setContactLeads(rows);
+          setLeadsFailed(failed);
+        })
+        .finally(() => {
+          leadsFetching.current = false;
+          if (!abort.signal.aborted) setLoadingContactLeads(false);
+        });
       return () => abort.abort();
     }
-  }, [activeTab, contact.id, contactLeads.length, loadingContactLeads]);
+    // #3408: loading state is not a dep — adding it re-ran the effect and stuck "Loading…".
+  }, [activeTab, contact.id, contactLeads.length]);
 
   // ── Add activity / note ──────────────────────────────────────
   const addNote = async (e: React.SyntheticEvent) => {
@@ -898,13 +911,19 @@ export default function ContactDetailClient({
                   companyId={contact.company_id ?? undefined}
                   teamMembers={teamMembers}
                   onLogged={() => {
-                    fetch(`/api/tenant/calls?contact_id=${contact.id}`)
-                      .then(r => r.json())
-                      .then(d => setCallLogs(d.data || []))
-                      .catch((err) => clientLogError('contact:call-logs', err));
+                    void loadPanelList<CallLogRow>(`/api/tenant/calls?contact_id=${contact.id}`, 'contact:call-logs')
+                      .then(({ rows, failed }) => {
+                        // Keep the rows already on screen when the refresh fails.
+                        if (failed) { setCallsFailed(true); return; }
+                        setCallsFailed(false);
+                        setCallLogs(rows);
+                      });
                   }}
                 />
               </div>
+              {callsFailed && (
+                <div className="px-5 py-2 text-center text-xs text-red-600">Could not load call logs</div>
+              )}
               {!callLogs.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No calls logged yet</div>
               ) : (
@@ -928,7 +947,7 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading…</div>
               ) : !contactLeads.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                  No leads linked to this contact yet
+                  {leadsFailed ? 'Could not load leads' : 'No leads linked to this contact yet'}
                 </div>
               ) : (
                 <div className="divide-y divide-border">
@@ -1027,7 +1046,9 @@ export default function ContactDetailClient({
               {loadingHistory ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading...</div>
               ) : !history.length ? (
-                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No edit history yet</div>
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  {historyFailed ? 'Could not load edit history' : 'No edit history yet'}
+                </div>
               ) : (
                 <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
                   {history.map((h) => (
