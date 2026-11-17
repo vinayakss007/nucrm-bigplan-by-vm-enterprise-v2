@@ -121,12 +121,17 @@ function ctxWith(permissions: Record<string, boolean>): AuthContext {
   } as unknown as AuthContext;
 }
 
-// sales_rep: the four entity view_all flags are off (definitions.ts:132-144), and
-// this route checks nothing else, so an empty grant set is the rep's position here.
-const REP: Record<string, boolean> = {};
+// sales_rep: the four entity view_all flags are off (definitions.ts:132-144).
+// #3402 adds a per-entity role gate, so this fixture also holds the five `edit`
+// ids — this file pins the *owner scope*, not the role check (see 3402's spec).
+const REP: Record<string, boolean> = {
+  'contacts.edit': true, 'deals.edit': true, 'leads.edit': true,
+  'companies.edit': true, 'tasks.edit': true,
+};
 
 // manager: every non-danger permission, so all five view_all flags are on.
 const MANAGER = {
+  ...REP,
   'contacts.view_all': true, 'deals.view_all': true, 'leads.view_all': true,
   'companies.view_all': true, 'tasks.view_all': true,
 };
