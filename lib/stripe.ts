@@ -280,17 +280,53 @@ export async function updateCustomer(customerId: string, params: {
 
 // ── Checkout Sessions ────────────────────────────────────────────────────────
 
-export interface CheckoutParams {
+/**
+ * #3583 — an inline Stripe Price for catalog items with no pre-created Price
+ * (module add-ons). Stripe accepts `price` OR `price_data`, never both.
+ */
+export interface CheckoutPriceData {
+  /** Three-letter ISO currency code, lowercase — Stripe's requirement. */
+  currency: string;
+  /** Amount in the smallest currency unit (cents for usd). */
+  unitAmount: number;
+  productName: string;
+  recurringInterval?: 'month' | 'year';
+}
+
+export type CheckoutParams = {
   tenantId: string;
   customerId?: string;
   customerEmail?: string;
-  priceId: string;
   mode: 'subscription' | 'payment';
   successUrl?: string;
   cancelUrl?: string;
   trialDays?: number;
   metadata?: Record<string, string>;
   quantity?: number;
+} & (
+  | { priceId: string; priceData?: never }
+  | { priceData: CheckoutPriceData; priceId?: never }
+);
+
+/**
+ * Build the single line item for a checkout session. Kept pure and exported so
+ * the price/price-data contract is unit-testable without a Stripe round trip.
+ */
+export function buildCheckoutLineItem(params: CheckoutParams): Record<string, unknown> {
+  const lineItem: Record<string, unknown> = { quantity: params.quantity || 1 };
+  if (params.priceData) {
+    lineItem['price_data'] = {
+      currency: params.priceData.currency,
+      unit_amount: params.priceData.unitAmount,
+      product_data: { name: params.priceData.productName },
+      ...(params.priceData.recurringInterval
+        ? { recurring: { interval: params.priceData.recurringInterval } }
+        : {}),
+    };
+  } else {
+    lineItem['price'] = params.priceId;
+  }
+  return lineItem;
 }
 
 export async function createCheckoutSession(params: CheckoutParams): Promise<{ id: string; url: string }> {
@@ -299,12 +335,7 @@ export async function createCheckoutSession(params: CheckoutParams): Promise<{ i
     mode: params.mode,
     success_url: params.successUrl || `${appUrl}/tenant/settings/billing?session_id={CHECKOUT_SESSION_ID}&success=true`,
     cancel_url: params.cancelUrl || `${appUrl}/tenant/settings/billing?cancelled=true`,
-    line_items: [
-      {
-        price: params.priceId,
-        quantity: params.quantity || 1,
-      },
-    ],
+    line_items: [buildCheckoutLineItem(params)],
     metadata: {
       tenant_id: params.tenantId,
       ...params.metadata,
