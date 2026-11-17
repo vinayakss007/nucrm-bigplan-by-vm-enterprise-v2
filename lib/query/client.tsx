@@ -34,13 +34,80 @@ export class ApiQueryError extends Error {
   }
 }
 
+/**
+ * #3408 — a failure is a value, not a status code alone.
+ *
+ * `withApiRoute` returns `NextResponse.json({...}, {status: 4xx/5xx})` for the
+ * errors it maps, but several handlers answer **200** with a failure body —
+ * `{ ok: false }`, `{ success: false }`, or `{ error: { code, message } }`.
+ * `apiFetcher` used to look only at `res.ok`, so those bodies were handed to
+ * the panel as ordinary data and rendered as "no data"/"0 items" — exactly the
+ * false-empty state the panel-error guards (#2829/#2872) exist to prevent.
+ *
+ * The shapes below are the four legacy envelopes the estate still emits. This
+ * helper is pure (body, status in; error or null out) so the unit tests can
+ * plant all four without a fetch mock. A body with BOTH a success marker and a
+ * failure marker is treated as a failure: a handler that says `ok:true` while
+ * carrying an `error` is lying, and the UI must not be the last to find out.
+ */
+export type ApiFailure = {
+  /** The legacy shape that was recognised, for tests and telemetry. */
+  shape: 'ok-false' | 'success-false' | 'error-object';
+  message: string;
+  code?: string;
+};
+
+export function failureFromBody(body: unknown, status: number): ApiFailure | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const record = body as Record<string, unknown>;
+
+  const err = record.error;
+  if (err && typeof err === 'object' && !Array.isArray(err)) {
+    const detail = err as Record<string, unknown>;
+    if (typeof detail.message === 'string') {
+      return {
+        shape: 'error-object',
+        message: detail.message,
+        ...(typeof detail.code === 'string' ? { code: detail.code } : {}),
+      };
+    }
+  }
+
+  if (record.ok === false) {
+    const message = typeof record.error === 'string'
+      ? record.error
+      : `Request failed (${status})`;
+    return { shape: 'ok-false', message };
+  }
+
+  if (record.success === false) {
+    const message = typeof record.error === 'string'
+      ? record.error
+      : `Request failed (${status})`;
+    return { shape: 'success-false', message };
+  }
+
+  // A bare `{ error: "..." }` is deliberately NOT treated as a transport
+  // failure: 29 panels read that shape as a body-level refusal and render its
+  // text (CSAT closing a survey is the clearest example). Only the explicit
+  // boolean failure markers and a structured `{ error: { code, message } }`
+  // are unambiguous. Widening this list means auditing those 29 panels first.
+  return null;
+}
+
 export async function apiFetcher<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url);
+  const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const info = await res.json().catch(() => ({}));
     throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
   }
-  return res.json() as Promise<T>;
+  // A 200 is not proof of success: see failureFromBody above.
+  const failure = failureFromBody(body, res.status);
+  if (failure) {
+    throw new ApiQueryError(failure.message, res.status, body);
+  }
+  return body as T;
 }
 
 /** Sensible defaults: no refetch-on-focus spam, short stale window, 2 retries. */

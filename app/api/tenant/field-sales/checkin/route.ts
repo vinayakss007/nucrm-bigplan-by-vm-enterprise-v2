@@ -15,6 +15,7 @@ import {
   getUserCheckIns,
 } from '@/lib/field-sales/geo-checkin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { utcDayBounds } from '@/lib/cron/renewal-windows';
 
 const createCheckInSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -62,15 +63,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
 
-    // Default to today if no range provided
-    const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Default to today if no range provided. #2429/#2997 — the bounds are UTC,
+    // not the server's local midnight, so the window cannot shift by a day on a
+    // host east of Greenwich. `end` keeps the old 23:59:59.999 shape because
+    // `getUserCheckIns` filters `checkedInAt <= to` (inclusive).
+    const { start, end } = utcDayBounds(new Date());
 
-    const from = fromParam ? new Date(fromParam) : startOfDay;
-    const to = toParam ? new Date(toParam) : endOfDay;
+    const from = fromParam ? new Date(fromParam) : start;
+    const to = toParam ? new Date(toParam) : end;
 
     if (isNaN(from.getTime()) || isNaN(to.getTime())) {
       return NextResponse.json(

@@ -56,13 +56,13 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **37** of the `guard:*` aliases by name —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **38** of the `guard:*` aliases by name —
 `guard:any-suppressions`, `guard:app-role-counts`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:citation-bounds`, `guard:coords`, `guard:counters`, `guard:cron-auth`, `guard:cron-lock`, `guard:cron-manifest`,
-`guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:nginx-fd-limit`, `guard:override-ranges`,
+`guard:csrf`, `guard:csv`, `guard:destructive-gate`, `guard:field-permissions`, `guard:filesize`, `guard:jsonb-size`, `guard:migration-rls`, `guard:mutating-route-permissions`, `guard:nginx-fd-limit`, `guard:override-ranges`,
 `guard:panel-error-state`, `guard:partial-unique`, `guard:permission-vocabulary`, `guard:pm-log-paths`, `guard:pool-mode`, `guard:pool-tls`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
 `guard:raw-sql`, `guard:rls`, `guard:rollback-coverage`, `guard:seed-credential`, `guard:schemas`, `guard:tenant-db-context` and `guard:vocab` — plus **3** run as bare commands (`ci.yml:221`, `:254`, `:447`)
 and **5** more by alias in `nightly-soak.yml` (`guard:catalog-grants`, `guard:compose-ports`, `guard:pg-hba`, `guard:register-drift`, `guard:running-config`).
-`package.json` defines **46** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
+`package.json` defines **47** aliases in total, so exactly **1** — `guard:migration-redecl` — has no workflow step, and its
 redeclaration screen is asserted from a unit test instead (`tests/unit/super-admin-audit-text-2510.test.ts:139`, which re-derives
 the whole set against the migration directory). `guard:vocab` joined the wired set on 2026-10-25, when **#3241** appended the
 `constraint-vocab` job; the paragraph said **16 + 2** on 2026-10-10 and **20 + 3** on 2026-10-19 (it said 7 when first written),
