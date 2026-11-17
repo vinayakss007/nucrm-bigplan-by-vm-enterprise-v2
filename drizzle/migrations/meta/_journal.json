@@ -1051,6 +1051,13 @@
       "when": 1793500200000,
       "tag": "0147_audit_logs_superadmin_read",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1793500300000,
+      "tag": "0148_approval_rules",
+      "breakpoints": true
     }
   ]
 }
