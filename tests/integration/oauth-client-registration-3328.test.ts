@@ -143,7 +143,6 @@ let sessionB = '';
 let originalUrl = '';
 let originalTrustProxy: string | undefined;
 let originalRedisUrl: string | undefined;
-let originalCsrfCentral: string | undefined;
 const restoreFailures: string[] = [];
 
 type Handlers = {
@@ -166,8 +165,9 @@ const CSRF = randomBytes(16).toString('hex');
 
 /**
  * A settings request as the panel sends it: the session cookie plus the double-submit
- * CSRF pair `apiFetch` attaches. `CSRF_ENFORCE_CENTRAL=true` is set for the whole suite so
- * a handler that only worked on a bare curl would be caught here.
+ * CSRF pair `apiFetch` attaches, so the request shape matches the panel. With
+ * the dead central backstop removed (#2580) these direct-handler calls no longer
+ * validate CSRF — proxy.ts does that in production.
  */
 function tenantReq(
   actor: string,
@@ -248,12 +248,9 @@ d('an OAuth client registered through the settings route completes an authorizat
     originalUrl = process.env.DATABASE_URL as string;
     originalTrustProxy = process.env.TRUST_PROXY;
     originalRedisUrl = process.env.REDIS_URL;
-    originalCsrfCentral = process.env.CSRF_ENFORCE_CENTRAL;
     process.env.TRUST_PROXY = 'true';
-    // Every rate-limit action in this file must be confined to this worker, and the CSRF
-    // branch of requireAuth only runs when central enforcement is on (#2630).
+    // Every rate-limit action in this file must be confined to this worker.
     delete process.env.REDIS_URL;
-    process.env.CSRF_ENFORCE_CENTRAL = 'true';
 
     admin = new Pool({ connectionString: originalUrl, connectionTimeoutMillis: 5000 });
     adminDb = drizzle(admin, { schema: appSchema });
@@ -317,7 +314,6 @@ d('an OAuth client registered through the settings route completes an authorizat
     process.env.DATABASE_URL = originalUrl;
     for (const [key, value] of [
       ['TRUST_PROXY', originalTrustProxy], ['REDIS_URL', originalRedisUrl],
-      ['CSRF_ENFORCE_CENTRAL', originalCsrfCentral],
     ] as [string, string | undefined][]) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
