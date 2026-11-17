@@ -235,9 +235,12 @@ const PLAN_ROWS = [
     sortOrder: 1,
   },
   {
-    id: 'professional',
+    // #3592: the canonical plan id is `pro` everywhere (checkout enum,
+    // modules registry pricing, Stripe price catalog, billing UI). Seeding
+    // `professional` created a plan the app could never resolve.
+    id: 'pro',
     name: 'Professional',
-    slug: 'professional',
+    slug: 'pro',
     description: 'For scaling businesses',
     priceMonthly: '79',
     priceYearly: '790',
