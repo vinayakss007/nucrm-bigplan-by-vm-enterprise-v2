@@ -19,12 +19,12 @@
  *     covers a route on the paths the proxy passes through early: a
  *     `Bearer ak_*` request on an API-key-allowed path returns at
  *     proxy.ts:466 — before the CSRF block — and requireAuth() then falls back
- *     to the ambient session cookie (lib/auth/middleware.ts:262). New state-
+ *     to the ambient session cookie (lib/auth/middleware.ts:246). New state-
  *     changing routes that write tenant data should call it, as
  *     app/api/tenant/integrations/route.ts:76 (#1835) and now plugin-engine do.
- *   - requireAuth()'s own backstop (lib/auth/middleware.ts:220-227) is behind
- *     `CSRF_ENFORCE_CENTRAL`, which no file in this repo sets, so it never runs.
- *     It is not the reason a requireAuth-only route is safe — the proxy is.
+ *   - requireAuth() has no in-handler CSRF check. #2580 removed the dead
+ *     `CSRF_ENFORCE_CENTRAL` backstop; the proxy above is the only thing that
+ *     makes a requireAuth-only route safe.
  *
  * So this guard asserts three things and reports a fourth:
  *   1. (fail) a route file exposing a mutating handler (POST/PUT/PATCH/DELETE)
@@ -43,9 +43,9 @@
  * are CSRF-covered today (assertion 2 is what protects them), so a growing
  * count is not a growing hole, and capping it would push authors toward an
  * in-handler call chosen for the number rather than for the ak_ pass-through
- * that actually needs one. #2561 filed the flag question — set
- * CSRF_ENFORCE_CENTRAL, or stop calling the middleware.ts branch a backstop —
- * as an owner decision instead.
+ * that actually needs one. #2561 filed the flag question, and #2580 answered
+ * it by deleting the dead flag path rather than turning it on (turning it on
+ * would 403 every cookie mutator that does not go through apiFetch()).
  *
  * The exempt lists mirror needsCsrfValidation(): webhooks, cron, public forms,
  * public leads, setup, and the pre-auth auth routes. These
@@ -157,9 +157,9 @@ for (const file of files) {
  * The edge check that the requireAuth-only population rests on must still exist
  * and still be unconditional. Both failure modes are ones this repo has already
  * shipped: a check that quietly stops being called, and a check that stays in the
- * source behind an env flag nobody sets (lib/auth/middleware.ts:220-227,
- * `CSRF_ENFORCE_CENTRAL`). ~300 routes pass this guard today because of that
- * call, and nothing else in CI notices if a refactor drops it.
+ * source behind an env flag nobody sets (the deleted `CSRF_ENFORCE_CENTRAL`
+ * branch in lib/auth/middleware.ts, #2580). ~300 routes pass this guard today
+ * because of that call, and nothing else in CI notices if a refactor drops it.
  */
 function edgeCheckProblems() {
   const problems = [];

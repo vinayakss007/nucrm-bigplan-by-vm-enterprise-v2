@@ -11,7 +11,7 @@
  *
  * What the last pass found, and what this file therefore pins:
  *
- *  - `03` cited `requireAuth` at `middleware.ts:341`. `:341` is the
+ *  - `03` cited `requireAuth` at `middleware.ts:325`. `:341` is the
  *    `COALESCE(roles.permissions, …)` select line — the very line `01:51` cites,
  *    correctly, for the select — while `01`'s heading and `06` step 5 both said
  *    `:200`. A wrong number inside a 500-line file still lands on plausible code,
@@ -88,9 +88,9 @@ const PINNED: Array<{
   },
   {
     doc: 'docs/BASECRM/01-ARCHITECTURE.md',
-    cite: 'lib/auth/middleware.ts:341',
+    cite: 'lib/auth/middleware.ts:325',
     src: 'lib/auth/middleware.ts',
-    line: 341,
+    line: 325,
     has: 'COALESCE(',
     why: ':341 is a real pointer for the permissions select and nothing else',
   },
@@ -232,9 +232,9 @@ const PINNED: Array<{
   },
   {
     doc: 'docs/BASECRM/06-REBUILD-GUIDE.md',
-    cite: 'middleware.ts:432-442',
+    cite: 'middleware.ts:416-442',
     src: 'lib/auth/middleware.ts',
-    line: 437,
+    line: 421,
     has: 'export function requirePerm',
     why: 'the range covers both can() and requirePerm(), which is what step 6 claims',
   },
@@ -263,7 +263,7 @@ describe('#3244 follow-up — pinned BASECRM citations resolve to what they name
   it('no pinned pointer still cites the pre-drill numbers', () => {
     // Negative where the old number is gone from the file entirely…
     const stale = [
-      ['docs/BASECRM/03-RBAC-AUTHZ.md', 'middleware.ts:341)'],
+      ['docs/BASECRM/03-RBAC-AUTHZ.md', 'middleware.ts:325)'],
       ['docs/BASECRM/05-BUSINESS-FLOWS.md', 'resolve-stage.ts:117'],
     ];
     for (const [doc, needle] of stale) {

@@ -143,7 +143,6 @@ let sessionB = '';
 let originalUrl = '';
 let originalTrustProxy: string | undefined;
 let originalRedisUrl: string | undefined;
-let originalCsrfCentral: string | undefined;
 const restoreFailures: string[] = [];
 
 type Handlers = {
@@ -166,8 +165,9 @@ const CSRF = randomBytes(16).toString('hex');
 
 /**
  * A settings request as the panel sends it: the session cookie plus the double-submit
- * CSRF pair `apiFetch` attaches. `CSRF_ENFORCE_CENTRAL=true` is set for the whole suite so
- * a handler that only worked on a bare curl would be caught here.
+ * CSRF pair `apiFetch` attaches, so the request shape matches the panel. With
+ * the dead central backstop removed (#2580) these direct-handler calls no longer
+ * validate CSRF — proxy.ts does that in production.
  */
 function tenantReq(
   actor: string,
@@ -248,12 +248,9 @@ d('an OAuth client registered through the settings route completes an authorizat
     originalUrl = process.env.DATABASE_URL as string;
     originalTrustProxy = process.env.TRUST_PROXY;
     originalRedisUrl = process.env.REDIS_URL;
-    originalCsrfCentral = process.env.CSRF_ENFORCE_CENTRAL;
     process.env.TRUST_PROXY = 'true';
-    // Every rate-limit action in this file must be confined to this worker, and the CSRF
-    // branch of requireAuth only runs when central enforcement is on (#2630).
+    // Every rate-limit action in this file must be confined to this worker.
     delete process.env.REDIS_URL;
-    process.env.CSRF_ENFORCE_CENTRAL = 'true';
 
     admin = new Pool({ connectionString: originalUrl, connectionTimeoutMillis: 5000 });
     adminDb = drizzle(admin, { schema: appSchema });
@@ -317,7 +314,6 @@ d('an OAuth client registered through the settings route completes an authorizat
     process.env.DATABASE_URL = originalUrl;
     for (const [key, value] of [
       ['TRUST_PROXY', originalTrustProxy], ['REDIS_URL', originalRedisUrl],
-      ['CSRF_ENFORCE_CENTRAL', originalCsrfCentral],
     ] as [string, string | undefined][]) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
@@ -593,18 +589,20 @@ d('an OAuth client registered through the settings route completes an authorizat
     expect(await countOf(), 'an unauthenticated POST wrote nothing').toBe(before);
   });
 
-  it('a mutation whose request carries the session but not the CSRF pair is refused', async () => {
-    // The panel's `apiFetch` attaches `x-csrf-token` from the readable CSRF cookie; a
-    // cross-site form post cannot, and this is the state where that difference is the
-    // only thing between the caller and another workspace's redirect URIs.
+  it('CSRF is decided at the edge, not by requireAuth (#2580)', async () => {
+    // #2580 deleted the env-gated central backstop in requireAuth, and these
+    // handlers are imported directly — proxy.ts is not in this call path. So a
+    // session-only mutation is no longer rejected *here*; in production the
+    // edge double-submit check (proxy.ts:548-564, asserted by guard:csrf) answers
+    // 403 before the handler runs. This pins that the handler owns no second,
+    // env-dependent CSRF implementation.
     const created = await register(sessionA, `CSRF target ${RUN}`, [CB]);
     const res = await H.item.PATCH(new NextRequest(`http://localhost:3000/api/tenant/oauth-clients/${created.body.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'x-forwarded-for': nextIp(), cookie: `nucrm_session=${sessionA}` },
       body: JSON.stringify({ name: 'Cross-site' }),
     }), ctx(created.body.id as string));
-    expect(res.status).toBe(403);
-    expect(String((await res.json() as Record<string, unknown>).error)).toMatch(/CSRF token missing or invalid/);
-    expect((await clientRow(created.body.id as string))!.redirect_uris).toBe(CB);
+    expect(res.status).toBe(200);
+    expect((await res.json() as Record<string, unknown>).data).toBeTruthy();
   });
 });

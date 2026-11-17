@@ -1,7 +1,7 @@
 # 06 — Rebuild Guide
 
 An ordered path from an empty repository to a running base CRM that satisfies the
-acceptance harness. It is a *build order* + *checkpoint list*, not a tutorial —
+acceptance harness. It is a _build order_ + _checkpoint list_, not a tutorial —
 each step names the file(s) that must exist and the invariant that proves it. Read
 01–05 first; this stitches them into a sequence.
 
@@ -33,7 +33,7 @@ each step names the file(s) that must exist and the invariant that proves it. Re
 ## Phase 1 — Schema (no RLS yet)
 
 1. `drizzle/schema/utils.ts` — the column factories `pk / tenantId / lifecycle /
-   audit / metadata` (02 § factories). Reuse them everywhere.
+audit / metadata` (02 § factories). Reuse them everywhere.
 2. Core tables in `core.ts`: `tenants`, `users` (global-unique email, no
    tenant_id), `tenant_members` (`UNIQUE(tenant_id,user_id)`), `roles`
    (`UNIQUE(tenant_id,slug)`, `permissions jsonb default '{}'`), `sessions`,
@@ -62,7 +62,7 @@ handler trusts "the app filters by tenant".
 1. **FORCE RLS** on every tenant table; app role is owner-but-not-superuser, no
    `BYPASSRLS` (model: 0054/0068/0088).
 2. Baseline **`tenant_isolation`** policy FOR ALL, auto-applied to every public
-   table with a uuid `tenant_id` (model: 0037:238-252 — and note it ships *two*
+   table with a uuid `tenant_id` (model: 0037:238-252 — and note it ships _two_
    USING shapes, strict at `0037:239` and global-row-permitting at `0037:241`).
 3. **Fail-closed** USING via
    `NULLIF(current_setting('app.current_tenant', true),'')::uuid` (model: the
@@ -87,8 +87,8 @@ handler trusts "the app filters by tenant".
    - `lib/db/unsubscribe-contact-context.ts:120` — `withUnsubscribeContactContext`,
      together with `portal-lookup-context.ts` and `form-capture-context.ts` the
      modules that are **not** re-exported and are imported from their own file.
-   All SET LOCAL, narrow scope (03). Clear GUCs on pool return + `DISCARD ALL`
-   (PgBouncer).
+     All SET LOCAL, narrow scope (03). Clear GUCs on pool return + `DISCARD ALL`
+     (PgBouncer).
 5. **Named platform policies** only where genuinely needed (users, tenants,
    product_templates, login_blocks — 03 § asymmetry). Do **not** add
    super-admin bypass to deals/leads/contacts/companies/tasks/members/roles.
@@ -96,7 +96,7 @@ handler trusts "the app filters by tenant".
    `tenant_members_self_read` + `roles_tenant_member_read` policies so login can
    resolve membership pre-tenant. Do NOT use `app.is_super_admin` for this.
 7. **Pre-auth credential arms (0134–0138)** — the forgot-password / verify-email /
-   OAuth / unsubscribe reads have *no* `app.current_user`, so a `*_user_own` policy
+   OAuth / unsubscribe reads have _no_ `app.current_user`, so a `*_user_own` policy
    cannot serve them. Give each such table (a) a lookup arm that **names the
    credential** (`<token_col> = current_setting('app.token_credential')`, never the
    bare `app.auth_lookup` boolean), (b) a claim-context SELECT arm so the UPDATE can
@@ -124,7 +124,7 @@ handler trusts "the app filters by tenant".
    exemptions.
 5. `requireAuth()` (`lib/auth/middleware.ts:200`) → `AuthContext`
    `{tenantId,userId,roleSlug,permissions,isSuperAdmin}` + central CSRF backstop.
-6. `can(ctx, perm)` / `requirePerm` (`middleware.ts:432-442`) + the `view_all`
+6. `can(ctx, perm)` / `requirePerm` (`middleware.ts:416-442`) + the `view_all`
    **404** ownership gate (03 § 2).
 
 **Checkpoint:** signup creates tenant+admin `{all:true}` and logs in; a second
@@ -149,12 +149,13 @@ entity route** — this is where the original app was incomplete:
    companies, tasks** — all of them, not just the two deals handlers that had it.
 7. The **bulk/assign 403 exception** via `BULK_WATCHED_FIELDS` (column-is-the-action).
 8. Add the CI screen `test(rbac): fail CI if an entity route drops
-   field-permission enforcement` (landed as #2655) — a lint/test that fails if an
+field-permission enforcement` (landed as #2655) — a lint/test that fails if an
    entity route exists without `enforceField*`. This is what keeps coverage from
    regressing.
 
 **Checkpoint (the P6 matrix):** as a rep with `deals.amount:none` +
 `deals.stage_id:none`:
+
 - list/PATCH **strip** amount (200 + `X-Stripped-Fields`), not 403;
 - bulk `action=stage` where stage is restricted → **403**, DB untouched;
 - export CSV header has **no** `amount`/`stage`/`stageName` columns;
@@ -205,7 +206,7 @@ Per 05:
    that carries `deletedAt` (any `utils.lifecycle()` / `utils.audit()` table, 02 §
    factories) must add `isNull(<table>.deletedAt)` to its `WHERE`. The write half
    (DELETE sets `deletedAt`) is **not** enough: FORCE RLS hides cross-tenant rows but
-   never hides your *own* tombstones, so a list / hydration / outbound-send read that
+   never hides your _own_ tombstones, so a list / hydration / outbound-send read that
    omits the filter re-surfaces deleted rows — the exact #3224/#3228 class, both of
    which shipped with the write half correct. The reference tree carries **403** such
    predicates across `app/` + `lib/`; match that discipline.
@@ -221,7 +222,7 @@ Per 03 § 6: `getClientIp` returns `unknown` unless `TRUST_PROXY`; auth actions
 into `login_blocks`.
 
 **Checkpoint (P8):** no proxy trust → 503; with trust + spoofed IPs → repA blocks
-to 429 after 5 fails from a *different* clean IP, repB fresh IP still 200.
+to 429 after 5 fails from a _different_ clean IP, repB fresh IP still 200.
 
 ## Phase 8 — Live acceptance harness (the definition of done)
 
@@ -232,15 +233,16 @@ checks through `withSecurityContext` + tenant/user GUCs, and prints a PASS/FAIL
 ledger, exiting non-zero on any failure.
 
 Design rules baked in that make it re-runnable — keep them:
+
 - **NONCE identities**: every run uses `@basecrm-acceptance.test` emails and
   nonce-unique titles (`Acc Import <NONCE>`) so it never collides or skips.
 - **TEST-NET-2 randomized IP base** per run — otherwise the prior run's 30-min
   `login_blocks` re-triggers 429s (07 § gotchas).
 - **Super-admin bootstrap** = DB upsert (`INSERT … ON CONFLICT(email) DO UPDATE`
-  with `hashPassword`, `is_super_admin=true`, `email_verified=true`) *then* an
+  with `hashPassword`, `is_super_admin=true`, `email_verified=true`) _then_ an
   HTTP login with **one retry from a fresh IP**.
 - **Rep role caps pre-granted** via `UPDATE roles SET permissions =
-  COALESCE(permissions,'{}'::jsonb) || {…}` scoped to the tenant, so the P6 matrix
+COALESCE(permissions,'{}'::jsonb) || {…}` scoped to the tenant, so the P6 matrix
   starts from a working rep.
 - **DB-truth assertions** (read the row back) for anything that matters — never
   trust the response echo for "did the strip/preserve actually happen".

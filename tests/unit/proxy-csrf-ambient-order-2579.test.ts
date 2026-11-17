@@ -4,7 +4,7 @@
  * `proxy.ts` answers the CSRF double-submit check for every `/api/` mutation, but the
  * `Bearer ak_*` pass-through sat *above* it. A request carrying both a junk API key and a
  * live session cookie therefore left this file unchecked, and `requireAuth()` then
- * authenticated it with the cookie anyway: `lib/auth/middleware.ts:241` tries
+ * authenticated it with the cookie anyway: `lib/auth/middleware.ts:225` tries
  * `tryApiKeyAuth()` first, a key absent from `api_keys` returns null, and `:262` falls back
  * to `extractToken()`, which prefers `nucrm_session`. Net effect: a cookie-authenticated
  * mutation with no CSRF validation anywhere in the stack, reachable for anything on the

@@ -48,13 +48,13 @@ The single gate a handler calls to learn _who_ is making the request:
 
 - Reads the `nucrm_session` cookie, verifies the JWT, loads the user, and loads
   the role's permissions: `COALESCE(roles.permissions,'{}'::jsonb)`
-  (`lib/auth/middleware.ts:341`).
-- Returns an **`AuthContext`** (`lib/auth/middleware.ts:408-411`):
+  (`lib/auth/middleware.ts:325`).
+- Returns an **`AuthContext`** (`lib/auth/middleware.ts:392-411`):
   `{ tenantId, userId, roleSlug, permissions: Record<string,boolean>, isAdmin }`.
   This object is threaded into every downstream check (`can(ctx, …)`,
   `enforceFieldRead(ctx, …)`).
-- **CSRF central backstop**: for cookie credentials it enforces CSRF, gated by
-  env `CSRF_ENFORCE_CENTRAL` (`lib/auth/middleware.ts:220-227`). See 03 § CSRF.
+- **CSRF is enforced at the edge**: `proxy.ts` validates the double-submit pair for
+  every `/api/` mutation; `requireAuth` has no in-handler backstop (#2580 deleted the dead `CSRF_ENFORCE_CENTRAL` branch, `lib/auth/middleware.ts:204-211`). See 03 § CSRF.
 
 ### Handler wrapper — `withApiRoute()` in `lib/api/with-api-route.ts:100`
 

@@ -10,8 +10,6 @@
     "app/api/tenant/chat/route.ts",
     "app/api/tenant/custom-entities/[id]/rows/[rowId]/route.ts",
     "app/api/tenant/custom-entities/[id]/rows/route.ts",
-    "app/api/tenant/field-sales/checkin/route.ts",
-    "app/api/tenant/field-sales/checkout/route.ts",
     "app/api/tenant/files/route.ts",
     "app/api/tenant/forms/[id]/analytics/route.ts",
     "app/api/tenant/onboarding/complete/route.ts",

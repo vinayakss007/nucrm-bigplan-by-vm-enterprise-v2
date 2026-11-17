@@ -14,6 +14,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSubscription, getPriceId, isStripeConfigured, getSubscriptionPeriodStart, getSubscriptionPeriodEnd } from '@/lib/stripe';
 import { deriveUpgradeIdempotencyKey } from '@/lib/billing-idempotency';
 import { currencyFromProvider } from '@/lib/billing-currency';
+import { billingEventAmount } from '@/lib/billing/event-amount';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -212,7 +213,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         await tx.insert(billingEvents).values({
           tenantId: ctx.tenantId,
           eventType: 'subscription.upgraded',
-          amount: String(newPlan.priceMonthly || '0'),
+          // #3586: Stripe was charged at `interval`, so the ledger must record
+          // that price — a yearly charge is 10x the monthly one for paid plans.
+          amount: billingEventAmount(newPlan, interval),
           currency: currencyFromProvider(stripeSub),
           stripeSubscriptionId: currentSub.stripeSubscriptionId,
           metadata: {

@@ -23,11 +23,21 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * created_at ordering would compare an entry against another tenant's hash and
  * report tampering on every healthy multi-tenant install.
  *
+ * #3577: the superadmin's RLS read of audit_logs is granted by migration 0147.
+ * Until that policy exists (or when a tenant has no rows), an empty result is
+ * NOT a valid chain — `every()` on `[]` is vacuously true, which is how this
+ * monitor stayed green while checking zero tenants.
+ *
  * Query params:
  *   tenant_id  verify just this tenant; omit to verify every tenant that has
  *              audit rows
  *   limit      max entries per tenant (default 1000, capped at 10000)
  */
+
+/** Fail closed: no tenant verified is never the same as every chain valid. */
+export function auditChainVerdict(tenants: ReadonlyArray<{ chain_valid: boolean }>): boolean {
+  return tenants.length > 0 && tenants.every((t) => t.chain_valid);
+}
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -41,11 +51,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       : 1000;
     const tenantId = searchParams.get('tenant_id');
 
-    const tenantIds = tenantId
+    const tenantIds = (tenantId
       ? [tenantId]
       : (
           await db.selectDistinct({ tenantId: auditLogs.tenantId }).from(auditLogs)
-        ).map((row) => row.tenantId);
+        ).map((row) => row.tenantId)
+    // Global audit rows have no tenant and therefore no per-tenant hash chain
+    // to verify; passing them to verifyAuditChain would query `tenant_id = null`
+    // and manufacture another zero-row "valid" result (#3577).
+    ).filter((id): id is string => typeof id === 'string' && id.length > 0);
 
     // Sequential rather than Promise.all: each verifyAuditChain call pulls up to
     // `limit` rows, so fanning out across every tenant at once could pin the
@@ -71,9 +85,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       });
     }
 
+    const chainValid = auditChainVerdict(tenants);
+
     return NextResponse.json({
       data: {
-        chain_valid: tenants.every((t) => t.chain_valid),
+        chain_valid: chainValid,
         tenants_checked: tenants.length,
         total_entries_checked: tenants.reduce((sum, t) => sum + t.total_checked, 0),
         broken_tenants: tenants.filter((t) => !t.chain_valid).map((t) => t.tenant_id),
@@ -81,7 +97,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         limit_per_tenant: limit,
         verified_at: new Date().toISOString(),
       },
-    });
+    }, { status: chainValid ? 200 : 503 });
   } catch (err) {
     return apiError(err);
   }

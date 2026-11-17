@@ -269,7 +269,7 @@ helpers from `@/lib/db/rls` (`:20`), which is the point of that façade.
   the two files disagreed about the same symbol; the drift went unnoticed
   because `:341` is inside a 500-line file, where a wrong number still points
   at something plausible.
-- **`can(ctx, perm)`** (`lib/auth/middleware.ts:432-435`): super-admin/admin
+- **`can(ctx, perm)`** (`lib/auth/middleware.ts:416-435`): super-admin/admin
   bypass, else `permissions['all'] === true || permissions[perm] === true`.
   `requirePerm()` returns 403 (`:437-442`).
 - **Capability strings** look like `deals.create`, `deals.edit`, `deals.view`,
@@ -393,8 +393,8 @@ CSRF (`lib/auth/csrf.ts`):
 - Double-submit token, constant-time compare, `validateCsrfToken` (`:92-115`).
 - `needsCsrfValidation` exemptions (`:136-166`): safe methods, api_key callers,
   webhooks/cron/forms/setup, and **pre-auth login/signup**.
-- `requireCsrf()` → 403 (`middleware.ts:478-500`); central backstop in
-  `requireAuth` for cookie creds gated by `CSRF_ENFORCE_CENTRAL` (`:220-227`).
+- `requireCsrf()` → 403 (`middleware.ts:462-500`); there is no central backstop in
+  `requireAuth` — #2580 deleted the dead `CSRF_ENFORCE_CENTRAL` branch (`:204-211`).
 - **Rebuild/client note**: any state-changing call a harness or SPA makes with
   cookie credentials must send the CSRF header + the `nucrm_csrf_token` cookie
   (the acceptance Client does exactly this: cookie jar + `withCsrf`).
