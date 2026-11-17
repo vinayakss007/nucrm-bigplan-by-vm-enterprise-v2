@@ -25,7 +25,7 @@ describe('guard-census over the real repository (#3412)', () => {
   const census = computeCensus(ROOT);
 
   it('measures the complete guard estate in package.json', () => {
-    // #3402 adds guard:mutating-route-permissions, wired into ci.yml:85.
+    // #3402 added guard:mutating-route-permissions (46 → 47 aliases, 45 → 46 wired).
     expect(census.total).toBe(47);
     expect(census.wiredCount).toBe(46);
     expect(census.unwiredCount).toBe(1);
@@ -40,7 +40,6 @@ describe('guard-census over the real repository (#3412)', () => {
   });
 
   it('accurately attributes guards per workflow', () => {
-    // #3402's mutating-route guard lands on the ci.yml:85 chain.
     expect(census.perWorkflow['ci.yml']?.length).toBe(41);
     expect(census.perWorkflow['nightly-soak.yml']?.length).toBe(5);
   });
