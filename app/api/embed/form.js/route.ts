@@ -34,9 +34,35 @@ const WIDGET_JS = `
 
   var formDef = null;
 
+  // #3408: a failed load must not be rendered as an empty form. Terser keeps
+  // property names and string literals, so these shapes survive minification.
+  function loadError(body, status) {
+    if (body && typeof body === 'object') {
+      if (typeof body.error === 'string') return body.error;
+      if (body.error && typeof body.error.message === 'string') return body.error.message;
+      if (typeof body.message === 'string') return body.message;
+    }
+    return 'Failed to load form (HTTP ' + status + ')';
+  }
+
   function fetchForm() {
     return fetch(BASE + '/api/tenant/forms/public/' + FORM_ID)
-      .then(function(r) { return r.json(); });
+      .then(function(r) {
+        if (r.ok === false) {
+          // The public form route answers 404 for missing/unpublished forms,
+          // 403 for a suspended tenant and 500 on a server error — always with
+          // a JSON {error: "..."} body. Surface it instead of handing that body
+          // to renderForm, which used to produce an empty form with a Submit
+          // button (the "no data" lie #3408 names).
+          return r.json().then(
+            function(body) { throw new Error(loadError(body, r.status)); },
+            function() { throw new Error(loadError(null, r.status)); }
+          );
+        }
+        // Happy path keeps its single r.json() hop — the render below runs in
+        // the same promise turn as before this fix.
+        return r.json();
+      });
   }
 
   function trackView() {
@@ -179,11 +205,24 @@ const WIDGET_JS = `
 
   fetchForm()
     .then(function(def) {
+      // Same failure in a 200: apiFetcher now throws on these shapes for the
+      // dashboard panels (#3574); the embed widget fetches directly, so it
+      // needs the same check here. Checked in this existing turn so a valid
+      // form still renders in exactly one microtask, as before the fix.
+      if (!def || typeof def !== 'object' || def.ok === false || def.success === false || def.error) {
+        throw new Error(loadError(def, 200));
+      }
       renderForm(def);
       trackView();
     })
     .catch(function(err) {
-      container.innerHTML = '<p style="color:#e53e3e;font-family:system-ui,sans-serif;padding:20px;">Failed to load form. Please try again later.</p>';
+      // #3408: distinguish "could not ask" from an empty form. The message is
+      // written with textContent, never innerHTML — it comes from an API body.
+      container.innerHTML = '';
+      var msg = document.createElement('p');
+      msg.style.cssText = 'color:#e53e3e;font-family:system-ui,sans-serif;padding:20px;';
+      msg.textContent = (err && err.message) || 'Failed to load form. Please try again later.';
+      container.appendChild(msg);
       console.error('[NuCRM] Failed to load form:', err);
     });
 })();
