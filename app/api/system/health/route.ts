@@ -90,7 +90,7 @@ interface SystemHealthResponse {
  * one component among six, and `unhealthy` means `unhealthy`.
  */
 export function overallHealthStatus(
-  statuses: ReadonlyArray<'healthy' | 'degraded' | 'unhealthy'>,
+  statuses: ReadonlyArray<string>,
 ): 'healthy' | 'degraded' | 'unhealthy' {
   if (statuses.includes('unhealthy')) return 'unhealthy';
   if (statuses.includes('degraded')) return 'degraded';
@@ -243,7 +243,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   }
 
   // Compute overall status
-  const statuses: Array<'healthy' | 'degraded' | 'unhealthy'> = [
+  const statuses = [
     health.database.healthy ? 'healthy' : 'unhealthy',
     health.redis.status,
     health.disk.status,
