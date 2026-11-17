@@ -15,7 +15,6 @@
   "app/tenant/settings/security/page.tsx": 706,
   "components/marketing/mocks.tsx": 729,
   "components/shared/command-palette.tsx": 559,
-  "components/superadmin/superadmin-dashboard-client.tsx": 513,
   "components/tenant/contact-detail-client.tsx": 1199,
   "components/tenant/contacts-client.tsx": 787,
   "components/tenant/contacts-data-table.tsx": 993,
