@@ -32,7 +32,6 @@
     "app/api/tenant/products/[id]/route.ts",
     "app/api/tenant/products/route.ts",
     "app/api/tenant/record-links/route.ts",
-    "app/api/tenant/search/advanced/route.ts",
     "app/api/tenant/services/[id]/route.ts",
     "app/api/tenant/services/route.ts",
     "app/api/tenant/sms/route.ts",
