@@ -1,0 +1,15 @@
+{
+  "note": "#3402 Fix — mutating routes whose data belongs to the authenticated user, so a role gate would deny them access to their own settings. Reviewed exemptions, not a floor: every entry names a live ungated route and carries its reason.",
+  "routes": {
+    "app/api/tenant/2fa/backup-codes/route.ts": "Regenerates the caller's own recovery codes, keyed by ctx.userId; no tenant-wide data.",
+    "app/api/tenant/2fa/disable/route.ts": "Disables the caller's own TOTP enrolment, keyed by ctx.userId.",
+    "app/api/tenant/2fa/setup/route.ts": "Starts the caller's own TOTP enrolment; the secret is scoped to ctx.userId.",
+    "app/api/tenant/2fa/verify/route.ts": "Verifies the caller's own TOTP code before enabling their enrolment.",
+    "app/api/tenant/ai-keys/route.ts": "Personal AI keys: listProviderKeyMeta/deleteProviderKey are scoped to ctx.tenantId + ctx.userId. Tenant keys live under a different, gated route.",
+    "app/api/tenant/dashboard/layout/route.ts": "saveLayout is keyed by ctx.tenantId + ctx.userId — the caller's own dashboard tiles.",
+    "app/api/tenant/notification-prefs/route.ts": "Writes the caller's tenantMembers.notificationPrefs row, filtered by ctx.userId.",
+    "app/api/tenant/notifications/matrix/route.ts": "PATCH updates the caller's own tenantMembers row by ctx.userId; no other member's prefs are reachable.",
+    "app/api/tenant/notifications/route.ts": "All reads and writes filter notifications by ctx.tenantId + ctx.userId; a role gate would hide a member's own inbox.",
+    "app/api/tenant/user/preferences/route.ts": "Reads and writes the users row for ctx.userId only, with a concurrency guard on that same id."
+  }
+}
