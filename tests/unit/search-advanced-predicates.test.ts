@@ -19,8 +19,9 @@ vi.mock('@/lib/auth/middleware', async () => {
 // Partial, like the middleware: the route now reaches `can()` through
 // `ownerScope` (#2690), and a full mock of a module other files import
 // transitively (`InvalidJsonBodyError`) turns those reads into 500s. The
-// fixture is a `view_all` holder so this file keeps pinning the *predicate*
-// text it was written for; the caller narrowing is #2690's own suite.
+// fixture is a `view_all` holder (and, since #3402, holds every `<entity>.view`
+// the route now demands) so this file keeps pinning the *predicate* text it was
+// written for; the caller narrowing is #2690's own suite.
 vi.mock('@/lib/api/validate', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api/validate')>('@/lib/api/validate');
   return { ...actual, readJsonBody: async () => body };
@@ -31,6 +32,8 @@ const TENANT = '11111111-1111-1111-1111-111111111111';
 const VIEW_ALL = {
   tenantId: TENANT, userId: 'user-1', email: 'a@b.c', roleSlug: 'manager',
   permissions: {
+    'contacts.view': true, 'deals.view': true, 'companies.view': true,
+    'tasks.view': true, 'leads.view': true,
     'contacts.view_all': true, 'deals.view_all': true,
     'tasks.view_all': true, 'leads.view_all': true,
   },

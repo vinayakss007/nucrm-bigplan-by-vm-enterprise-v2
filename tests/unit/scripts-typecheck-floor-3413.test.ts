@@ -139,7 +139,7 @@ describe('#3413 the floor is a ratchet, not a mute button', () => {
   it('the shipped floor is only positive integers over files that still exist', () => {
     const raw = JSON.parse(readFileSync(BASELINE, 'utf8'));
     const entries = Object.entries(raw).filter(([k]) => /\.(ts|mts|cts)$/.test(k));
-    expect(entries.length).toBeGreaterThan(0);
+    // #3518 ratcheted the floor down to 0. If any entries remain in the future, they must be positive integers on existing files.
     for (const [file, n] of entries) {
       expect(Number.isInteger(n), `${file} floor ${n}`).toBe(true);
       expect(n as number).toBeGreaterThan(0);

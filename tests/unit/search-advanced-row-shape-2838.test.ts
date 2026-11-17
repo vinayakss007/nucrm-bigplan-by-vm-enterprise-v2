@@ -65,6 +65,9 @@ vi.mock('@/lib/auth/middleware', async () => {
       email: 'a@b.c',
       roleSlug: 'manager',
       permissions: {
+        // #3402 — keep this fixture a role that may search every entity.
+        'contacts.view': true, 'deals.view': true, 'companies.view': true,
+        'tasks.view': true, 'leads.view': true,
         'contacts.view_all': true, 'deals.view_all': true,
         'tasks.view_all': true, 'leads.view_all': true,
       },

@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -21,6 +21,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — reading the tenant's integration list (and its credential-key
+    // names) is an admin/settings surface, not a bare-authenticated one.
+    const denied = requirePerm(ctx, 'settings.view');
+    if (denied) return denied;
     const tid = ctx.tenantId;
 
     const { searchParams } = new URL(request.url);
@@ -81,6 +85,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — a plain member must not be able to install an integration with
+    // tenant credentials. The sibling `/plugin-engine/actions` route already
+    // gates its privileged calls with `settings.manage` (#3292); this writer
+    // stores those same credentials and had no role gate at all.
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
     // #2561: in-handler CSRF, the placement `app/api/tenant/integrations/route.ts:76`
     // (#1835) uses. The proxy does check this surface (`proxy.ts:530-532`), but a
     // `Bearer ak_*` request on an allowed path is passed through before that block
@@ -103,10 +113,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const provider = getProviderDef(body.provider_id);
     const config = body.config || {};
 
-    // #3292: this handler never checks `isAdmin` (`grep -n isAdmin` over this file
-    // returns nothing) — a plain member with a session cookie and a CSRF token can
-    // write `integrations.config` here. The declared `configFields` are what the
-    // server enforces, so an out-of-policy bag is refused before the insert.
+    // #3292: the declared `configFields` are what the server enforces, so an
+    // out-of-policy bag is refused before the insert. #3402 closes the other
+    // half: the `settings.manage` gate above is what stops a plain member from
+    // writing `integrations.config` here at all.
     const configRejected = integrationConfigResponse(provider, config);
     if (configRejected) return configRejected;
 
@@ -155,6 +165,9 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — see POST: both writers change the tenant's integration config.
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
     if (ctx.authMethod !== 'api_key') {
       const csrf = requireCsrf(request); // #2561: see the POST handler for why
       if (csrf) return csrf;
@@ -220,6 +233,9 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — see POST: both writers change the tenant's integration config.
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
     if (ctx.authMethod !== 'api_key') {
       const csrf = requireCsrf(request); // #2561: see the POST handler for why
       if (csrf) return csrf;

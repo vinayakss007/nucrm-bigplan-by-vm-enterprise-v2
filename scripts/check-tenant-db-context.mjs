@@ -72,6 +72,14 @@ const FROM_RAW_CLIENT_RE =
   /\b(import|export)\s+(type\s+)?[\w\s{},*$]*?from\s*['"](?:@\/drizzle\/db|(?:\.\.?\/)+drizzle\/db)['"]/g;
 /** Side-effect form: `import '@/drizzle/db'`. */
 const BARE_RAW_CLIENT_RE = /\bimport\s*['"](?:@\/drizzle\/db|(?:\.\.?\/)+drizzle\/db)['"]/;
+/**
+ * Dynamic forms: `await import('@/drizzle/db')` / `require('@/drizzle/db')`.
+ * #3405: these bypassed the exact-set ledger completely — nine real call sites
+ * held the raw client this guard reported as "not imported". A `typeof import`
+ * type query is erased by the compiler and is filtered out below.
+ */
+const DYNAMIC_RAW_CLIENT_RE =
+  /\b(import|require)\s*\(\s*['"](?:@\/drizzle\/db|(?:\.\.?\/)+drizzle\/db)['"]\s*\)/g;
 
 const ISSUE_REF_RE = /^#\d+$/;
 
@@ -101,7 +109,8 @@ function walk(abs, out) {
  * `import type { … } from '@/drizzle/db'` is not a leak: a type import is erased
  * before the module runs, so it cannot open a connection. Everything else — a
  * default import, a named import, a namespace import, a re-export, the
- * side-effect form — can.
+ * side-effect form, and a dynamic `import()` / `require()` — can. A
+ * `typeof import('@/drizzle/db')` type query is erased too and is skipped.
  */
 export function importsRawClient(src) {
   const matches = [];
@@ -111,6 +120,14 @@ export function importsRawClient(src) {
     matches.push(m[0].replace(/\s+/g, ' ').trim());
   }
   if (BARE_RAW_CLIENT_RE.test(src)) matches.push("import '@/drizzle/db'");
+  DYNAMIC_RAW_CLIENT_RE.lastIndex = 0;
+  for (const m of src.matchAll(DYNAMIC_RAW_CLIENT_RE)) {
+    // `type AppDb = (typeof import('@/drizzle/db'))['db']` is a type query: the
+    // compiler erases it, exactly like `import type …`. Everything else —
+    // awaited or bare `import()`, and `require()` — opens the real client.
+    if (m[1] === 'import' && /\btypeof\s*$/.test(src.slice(Math.max(0, m.index - 8), m.index))) continue;
+    matches.push(m[0].replace(/\s+/g, ' ').trim());
+  }
   return matches;
 }
 

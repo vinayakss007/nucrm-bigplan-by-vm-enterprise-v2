@@ -110,7 +110,7 @@
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
-> (`app/api/tenant/leads/bulk/route.ts:376` (re-pinned 2026-10-16 from `:326`: #2647 bulk watch-field gate added 22 lines above; re-pinned the same day again from `:348`: #2692/#2693 lead owner scope added 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** rewrote the statement as a chain ending `.returning({ entityId })` so its `const` anchor moved 12 lines down and its text is no longer the one-line `onConflictDoNothing()` this sentence quotes) +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
+> (`app/api/tenant/leads/bulk/route.ts:382` (re-pinned 2026-11-17 from `:376` — later edits grew the audit-ids block above the insert by six lines; guard:register-drift; re-pinned 2026-10-16 from `:326`: #2647 bulk watch-field gate added 22 lines above; re-pinned the same day again from `:348`: #2692/#2693 lead owner scope added 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** rewrote the statement as a chain ending `.returning({ entityId })` so its `const` anchor moved 12 lines down and its text is no longer the one-line `onConflictDoNothing()` this sentence quotes) +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
 > `0126_segment_members_primary_key` adds `PRIMARY KEY (id)` (the key `utils.pk()` always declared), replaces the misleading index with
 > `uq_segment_members_segment_entity` — UNIQUE, same two columns, still the lookup path — and dedupes both shapes **before** constraining,
 > per tenant under `set_config('app.current_tenant', …)`: PP-067 measured `app.is_super_admin` **inert** on this table's loop-built policy,
@@ -1295,7 +1295,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      the cited lines. -->
 
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
-  panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:245`
+  panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:243 (re-pinned 2026-11-17 from `:245` — two lines shed above the backup insert; guard:register-drift)`
   (re-pinned 2026-11-12: **#2540** centralized backup dir resolution)
   inserts into. `app/api/cron/auto-backup/route.ts:275` (re-pinned 2026-11-01: **#3408** bound the
   skip-alert result 9 lines above it, which moved this INSERT off `:261`; re-pinned again 2026-11-05 by
@@ -2178,7 +2178,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   calls `.insert(`** — the 23503 class — by area: **Settings/platform 47 · CRM objects 38 · Comms+integrations 19 ·
   Billing 14 · AI 2**. The other **50** are update/delete-only: `tenant_id = sentinel` matches no row, so they
   answer 404 or a silent no-op and never reach the FK. 116 of the 120 are `/api/tenant/**`, 4 are `/api/v1/**`.
-  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
+  Examples: `app/api/tenant/roles/route.ts:74 (re-pinned 2026-11-17 from `:70` — four lines added above the tenant scope; guard:register-drift)`, `custom-fields/route.ts:365` (re-pinned from `:367` on 2026-10-22 — **#3078** replaced set-bulk's whole-column snapshot read with a one-statement SQL merge and the shrink moved the `customFieldDefs` insert two lines up; originally re-pinned from the `:342` this line carried on 2026-10-17 because **#2768** replaced a `register_feature` RPC call with the `feature_registry` insert twenty-five lines above it, so the pointer still landed on a live line but on `const storedFieldKey = sanitizeFieldKey(fieldKey);` instead of the write it names), `webhooks/route.ts:104`,
   `billing/checkout/route.ts:75` (re-pinned 2026-11-14 from `:74`: the #3402 billing batch inserted `billing.manage` above it), `billing/dunning/route.ts:111` (re-pinned 2026-11-14 from `:109`: the same #3402 batch inserted the `billing.view` and `billing.manage` gates above it), `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:190` (re-pinned 2026-11-14 from `:186`: `55657229` (#3527) inserted the POST invoice permission gate; `:186` re-pinned 2026-10-22 from `:181`: `d78d7698` (#2973) put the money-math comment block above it), `import/route.ts:72`, `v1/deals/route.ts:154` (re-pinned 2026-11-13 from `:148` for **#3516**). `api-keys` is a **positional** pass
   (`app/api/tenant/api-keys/route.ts:104` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:197`, both re-pinned 2026-10-28 from `:91`/`:178` — **#3291** added the key-revocation import and the owner-membership proof above these lines), so
@@ -2287,7 +2287,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:312-314 (re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:311-313 (re-pinned 2026-11-17 from `:312-314` — a validation comment was added above the scratch-DB name; guard:register-drift; re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:314`, re-pinned from `:290`/`:294` on 2026-10-11 — both halves of **#2528**
   edited that file; `lib/db/query-timeout.ts:70`, re-pinned from `:63` on 2026-10-11, is clamped — `Math.round`ed
@@ -2325,7 +2325,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:312-314 (re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:311-313 (re-pinned 2026-11-17 from `:312-314` — a validation comment was added above the scratch-DB name; guard:register-drift; re-pinned 2026-10-28: **#3348** shifted it; first moved off :267-269 by **#2600** on 2026-10-13)`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
@@ -2356,7 +2356,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   dedup lock with `acquireLock('cron:<name>', …)` and hand-rolled the skip. What each answered when the lock was
   already held, at the coordinates this entry still names: **20** returned HTTP 200
   `{ok:true,skipped:true,reason:'lock-held'}` (the three coordinates are read at `2d037d6a`: `auto-backup/route.ts:52-54`,
-  `cleanup/route.ts:88-90`, `backup-verify/route.ts:180-181` (re-pinned 2026-10-28: **#3348** shifted it; first re-pinned 2026-10-15 for **#2539**/**#2575**) — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
+  `cleanup/route.ts:88-90`, `backup-verify/route.ts:179-180` (re-pinned 2026-11-17 from `:180-181` — a dedup-guard comment was added above the lock check; guard:register-drift; re-pinned 2026-10-28: **#3348** shifted it; first re-pinned 2026-10-15 for **#2539**/**#2575**) — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
   same lie with a different string, `reason:'Another instance running'`
   (`process-sequences/route.ts:40-42` (re-pinned 2026-10-18 from `:39-41`: **#2795**/**#2810** added one import line above `POST`), `scheduled-report-delivery/route.ts:159-161`).
   PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreported
@@ -2486,7 +2486,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
   `lib/cron/sequence-steps.ts:171`, re-pinned 2026-10-17 from `:145`: **#2796**'s `stepDelayMs` helper was added above it and shifted every later line down by 26) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:109`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:247`) — re-pinned 2026-10-25 by **#3225**, `:107`/`:169` → `:109`/`:171`, and again 2026-11-11 by **#3406**, `:171` → `:247` — + the tenants `SELECT`
-  (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:251`, re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved it from `:241`; again 2026-10-25: **#3237**'s reset rationale moved it `:249` → `:251`). **Count = 7 per tenant**; the 8th
+  (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:281`, re-pinned 2026-11-17 from `:251` — **#3542**'s lazy connection pinning moved the teardown reset 30 lines down; guard:register-drift; re-pinned 2026-10-25: **#3218**'s doc block landed above the module and moved it from `:241`; again 2026-10-25: **#3237**'s reset rationale moved it `:249` → `:251`). **Count = 7 per tenant**; the 8th
   (the re-set at `:161`) does not fire on this data — and the log discriminates: 8/tenant predicts 85.9 s, i.e. _every_ sweep
   would report a second tick, but only 6 of 288 do.
 - **Predicted ≈ observed.** Calibrating on the one inherited figure (a hand-triggered run at 39 tenants, wall **56.10 s**,
@@ -2497,7 +2497,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   (77 s ×4, 80 s ×2) ⇒ those exceeded 77 s. 75.3 s sits at the top of the band. The match is only as good as the instrument:
   **a 30 s tick can bound a 75 s job to ±30 s and nothing better.**
 - **The one metric that could measure the duration cannot see this job.** `http_request_duration` is recorded only inside
-  `withApiRoute`'s `finally` (`lib/api/with-api-route.ts:153-162`), and per PP-049 only 3 of 22 cron routes are wrapped.
+  `withApiRoute`'s `finally` (`lib/api/with-api-route.ts:155-164 (re-pinned 2026-11-17 from `:153-162` — the `finally` block moved two lines down; guard:register-drift)`), and per PP-049 only 3 of 22 cron routes are wrapped.
   `topk(6, max_over_time(http_request_duration_ms{path=~"/api/cron/.*"}[24h]))` returns exactly three series —
   `POST /api/cron/cleanup` **70299 ms**, `/api/cron/auto-backup` 7299, `/api/cron/retry-webhooks` 6796 — and
   **`/api/cron/process-sequences` is absent**. So the only route-duration metric in the stack is blind to the 75 s job.
@@ -2515,7 +2515,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   fires — measuring it needs 2 statements × 53 tenants and `tenant_members` is RLS-closed to the platform context (the probe
   returned 0 policies referencing `app.is_super_admin` on that table, and `tenant_members_visible = 0`).
 - **Would a real leak surface today? No — two independent reasons.** (1) Registration is single-site: `trackClient` has exactly
-  **one** call site, `lib/db/request-connection.ts:227` (re-pinned 2026-10-25: **#3218**'s doc block landed above the module, `:217` → `:225`; again 2026-10-25: **#3237**'s block above the reset, `:225` → `:227`), while **six** other checkout sites never register and are therefore
+  **one** call site, `lib/db/request-connection.ts:296` (re-pinned 2026-11-17 from `:227` — later pool-lifecycle edits moved the leak-detector call 69 lines down; guard:register-drift; re-pinned 2026-10-25: **#3218**'s doc block landed above the module, `:217` → `:225`; again 2026-10-25: **#3237**'s block above the reset, `:225` → `:227`), while **six** other checkout sites never register and are therefore
   invisible to the detector — `lib/db/client.ts:78`, `lib/db/safe-connection.ts:207`, `lib/db/query-timeout.ts:65`
   (re-pinned on 2026-10-11: `main` had `:58` and this branch `:86`; the **#2528** clamp comment and import sit
   above the checkout, and neither pass changed the checkout itself), `lib/db/migration-safety.ts:214`,
@@ -2571,7 +2571,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `lib/errors-server.ts:272` (re-pinned 2026-11-13 from `:231` for **#3516**; earlier re-pinned 2026-10-22 from `:228`: **#3016** moved that insert one line up by deleting the module-scope `errorLogs` import, then four lines down by putting it behind the dynamic `@/drizzle/schema/support` import and its three-line WHY). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
   paths: `app/api/cron/subscription-renewal-check/route.ts:165` (re-pinned 2026-10-28 from `:157`: **#3315** put the empty-recipient guard above the send loop; earlier re-pin 2026-10-22 from `:145`: **#3045** put the `emailResult` check and the `emailRejected` guard above the insert), `contract-renewal-check/route.ts:181` (re-pinned 2026-10-28 from `:161`: **#3315** added the `recipientWarningLogged` guard above it; earlier re-pin 2026-10-22 from `:159`: `ed340144` (#2997) added the UTC-window comment above it),
-  `backup-verify/route.ts:350,383,416 (re-pinned 2026-11-14: **#3521** rewrote the 350 body in place into a logError catch; re-pinned 2026-10-28: **#3348** shifted them; first shifted by **#2599/#2603** on 2026-10-15. **#216** rewrote the 383 and 416 bodies in place into logError catches, so none of the three reads as a silent catch anymore)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
+  `backup-verify/route.ts:349,383,416 (re-pinned 2026-11-17 from `:350` — **#3521** rewrote the catch body in place so the `.catch((err: unknown) => {` anchor moved up one line; guard:register-drift; re-pinned 2026-11-14: **#3521** rewrote the 350 body in place into a logError catch; re-pinned 2026-10-28: **#3348** shifted them; first shifted by **#2599/#2603** on 2026-10-15. **#216** rewrote the 383 and 416 bodies in place into logError catches, so none of the three reads as a silent catch anymore)`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
   `* = host=host.docker.internal port=5432` (`:2`), `pool_mode = transaction` (`:10`) and `query_timeout = 30` (`:20`), while
@@ -2714,7 +2714,7 @@ backup_schedules=0, invoices=12, sla_breaches=0, contact_scores=0, lead_warming_
   request logs), `vercel.json`, `scripts/cron-scheduler.ts`, `ecosystem.config.cjs:178-217` (both ends re-pinned 2026-10-29 from `:150-175`: the **#3271** `web` env block and header note grew above this app; again on 2026-11-02 to these, which is where **#3253**'s `merge_logs`/`watch` keys and the `load-env.mjs` preload leave the cron app),
   `app/api/cron/{backup,auto-backup,sla-check,lead-warming,process-lead-scoring,recurring-invoice-generator}/route.ts`,
   `lib/lead-warming/{engine.ts:154,index.ts:29}`, `lib/ai/scoring.ts:127-147`, `lib/sla.ts`,
-  `lib/backups/backup-service.ts:122,234-248` (re-pinned 2026-11-13 from `:121` for **#3516**), `lib/backups/script-backup-record.ts:61`, `tests/unit/contract-renewal.test.ts`,
+  `lib/backups/backup-service.ts:120,234-248` (re-pinned 2026-11-17 from `:122` — later edits shifted the refusal string up two lines; guard:register-drift; re-pinned 2026-11-13 from `:121` for **#3516**), `lib/backups/script-backup-record.ts:61`, `tests/unit/contract-renewal.test.ts`,
   `tests/unit/follow-up-cron.test.ts`, `logs/cron-error-5.log`. Related: **#50**, **#54**, **#79**, **#71**, **PP-048** (the
   single-role boundary the dump refusal is a symptom of), **PP-050** (the sweeps that are scheduled).
 
@@ -3319,7 +3319,7 @@ without headers`. Of the PRs that fix those assertions, **#2359 has merged** (`4
   1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
   8-worker sweep, not broken by anything here. Neither number is a claim about this PR: the diff is two files
   under `scripts/`, which no test in `tests/unit` imports (grepped for assertions on `migrate.ts`'s changed
-  strings — the only hit is `scripts/migration-runner.ts:217` (re-pinned from `:218` on 2026-11-03 — **#3413**'s `7cac381ab` deleted a duplicate import above the `:217`→`:218` pin **#3381** left), a different script this PR does not touch).
+  strings — the only hit is `scripts/migration-runner.ts:216` (re-pinned 2026-11-17 from `:217` — one line shed above the pending check; guard:register-drift; re-pinned from `:218` on 2026-11-03 — **#3413**'s `7cac381ab` deleted a duplicate import above the `:217`→`:218` pin **#3381** left), a different script this PR does not touch).
 - **And a retraction this measurement bought: `0115` being unapplied is _not_ a live cross-tenant read.**
   #2366's message describes the risk as arriving "once the app stops connecting as superuser" — preprod
   already doesn't: the connecting role is `nucrm`, `rolbypassrls = false`, `is_superuser = off`, and
@@ -4874,7 +4874,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
-  three bulk callers (`leads/bulk/route.ts:376 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate; re-pinned again the same day from `:348`: #2692/#2693 added the lead owner scope 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** grew the audit-ids block above it and rewrote the enroll as a `.returning()` chain)`, `contacts/bulk/route.ts:468 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter; re-pinned 2026-10-18 from `:452`: #2813 added 4 lines above, returning it to the number it briefly held before that move; re-pinned 2026-10-23 from `:456`: #3123's `restore` case — the `auditIds` declaration and the `restoreBulkContacts` branch — added 12 lines above; the number did not move on 2026-10-25 but its text did: **#3220** replaced the one-line `onConflictDoNothing()` with the `const inserted = await db` chain, so the cite re-pins to this revision to keep saying what the sentence claims)`,
+  three bulk callers (`leads/bulk/route.ts:382 (re-pinned 2026-11-17 from `:376` — later edits grew the audit-ids block above the insert by six lines; guard:register-drift; re-pinned 2026-10-16 from `:326`: #2647 bulk gate; re-pinned again the same day from `:348`: #2692/#2693 added the lead owner scope 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** grew the audit-ids block above it and rewrote the enroll as a `.returning()` chain)`, `contacts/bulk/route.ts:468 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter; re-pinned 2026-10-18 from `:452`: #2813 added 4 lines above, returning it to the number it briefly held before that move; re-pinned 2026-10-23 from `:456`: #3123's `restore` case — the `auditIds` declaration and the `restoreBulkContacts` branch — added 12 lines above; the number did not move on 2026-10-25 but its text did: **#3220** replaced the one-line `onConflictDoNothing()` with the `const inserted = await db` chain, so the cite re-pins to this revision to keep saying what the sentence claims)`,
   `deals/bulk/route.ts:479 (re-pinned 2026-10-16 from `:472`: #2671 added the `deals.view_all` scope 6 lines above; was `:446` for #2616/#2641; re-pinned 2026-10-23 from `:478`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:480`: **#3220**'s chain replaced the statement and the `affected =` line took the old number)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
@@ -5070,7 +5070,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   request-shaped key like `x" = '1' OR 1=1 --` reaching the planner as a 17-character column named
   `x = '1' OR 1=1 --`. Reaching the planner is not the failure the register records: silently
   addressing a different column is. Shape rejection also matches what the sibling sinks already do
-  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:321 (re-pinned 2026-10-28: **#3348** shifted it; first pinned 2026-10-13 off :276 by **#2600**)`), so
+  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:320 (re-pinned 2026-11-17 from `:321` — a validation-comment line above shifted it up one; guard:register-drift; re-pinned 2026-10-28: **#3348** shifted it; first pinned 2026-10-13 off :276 by **#2600**)`), so
   the codebase has one rule for "a name in a string" instead of two.
 - **Three sinks, one rule.** `buildInsert` (`lib/db/client.ts:142`), `buildUpdate` — which has two
   separate key lists, `dk` mapped at `:156` and `wk` at `:158`, and both interpolate — and
@@ -5469,7 +5469,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `compliance_requests` in the loop whose generated policy is `CREATE POLICY tenant_isolation …` with no
   `FOR` clause (`:178-180`) — therefore `FOR ALL`, so a tenant-scoped UPDATE is permitted — and the GUC
   that policy reads is held for the whole handler by `withApiRoute`'s
-  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:199`,
+  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:201 (re-pinned 2026-11-17 from `:199` — shutdown-drain comments above the carrier call grew two lines; guard:register-drift)`,
   `lib/db/tenant-carrier.ts:11`). The reaper's `UPDATE` pins `id` + `tenant_id` + `status = 'processing'`,
   so it is CAS-guarded against a marker that landed during the read and cannot move another tenant's row
   even if a future caller handed it one; the two markers pin `id` + `tenant_id` and hold **no** status
