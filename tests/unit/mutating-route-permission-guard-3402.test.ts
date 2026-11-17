@@ -18,7 +18,15 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { collectUngated, diffBaseline, readBaseline, readSources } from '../../scripts/check-mutating-route-permissions.mjs';
+import {
+  applyAllowlist,
+  collectUngated,
+  diffBaseline,
+  readAllowlist,
+  readBaseline,
+  readSources,
+  DEFAULT_ALLOWLIST_PATH,
+} from '../../scripts/check-mutating-route-permissions.mjs';
 
 const file = (path: string, source: string) => ({ path, source });
 
@@ -62,6 +70,51 @@ describe('readBaseline', () => {
     const bad = join(mkdtempSync(join(tmpdir(), 'mutguard-')), 'baseline.json');
     writeFileSync(bad, '{ "count": 12 }');
     expect(() => readBaseline(bad)).toThrow(/files\[\]/);
+  });
+});
+
+describe('applyAllowlist', () => {
+  it('exempts only the documented self-scoped paths from the exact-set floor', () => {
+    const allowlist = {
+      'app/api/tenant/notification-prefs/route.ts': 'Writes the caller own preferences.',
+    };
+    const result = applyAllowlist(
+      ['app/api/tenant/notification-prefs/route.ts', 'app/api/tenant/invoices/route.ts'],
+      allowlist,
+      ['app/api/tenant/notification-prefs/route.ts', 'app/api/tenant/invoices/route.ts'],
+    );
+    expect(result.remaining).toEqual(['app/api/tenant/invoices/route.ts']);
+    expect(result.exempted).toEqual(['app/api/tenant/notification-prefs/route.ts']);
+    expect(result.stale).toEqual([]);
+  });
+
+  it('reports an allowlist entry whose route is now gated or gone', () => {
+    const allowlist = {
+      'app/api/tenant/notification-prefs/route.ts': 'Writes the caller own preferences.',
+      'app/api/tenant/2fa/setup/route.ts': 'Starts the caller own enrolment.',
+    };
+    expect(applyAllowlist([], allowlist, ['app/api/tenant/2fa/setup/route.ts']).stale).toEqual([
+      'app/api/tenant/2fa/setup/route.ts',
+      'app/api/tenant/notification-prefs/route.ts',
+    ]);
+  });
+});
+
+describe('readAllowlist', () => {
+  it('reads the reviewed real allowlist', () => {
+    const routes = readAllowlist(DEFAULT_ALLOWLIST_PATH);
+    expect(Object.keys(routes).length).toBeGreaterThanOrEqual(10);
+    expect(routes['app/api/tenant/2fa/setup/route.ts']).toMatch(/caller/);
+  });
+
+  it('fails closed on a missing map or an entry without a reason', () => {
+    expect(() => readAllowlist('/tmp/opencode/does-not-exist-allowlist.json')).toThrow(/missing/);
+    const dir = mkdtempSync(join(tmpdir(), 'mutguard-'));
+    const bad = join(dir, 'allowlist.json');
+    writeFileSync(bad, '{ "routes": { "app/api/tenant/x/route.ts": "x" } }');
+    expect(() => readAllowlist(bad)).toThrow(/real reason/);
+    writeFileSync(bad, '{ "files": [] }');
+    expect(() => readAllowlist(bad)).toThrow(/routes\{\}/);
   });
 });
 
