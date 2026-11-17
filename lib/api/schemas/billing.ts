@@ -79,12 +79,30 @@ export const invoiceQuerySchema = z.object({
   contact_id: uuidIdSchema.optional(),
 });
 
+/**
+ * #3590 — the status vocabularies the tables actually accept. Both mirror the
+ * CHECK constraints in drizzle/migrations/0050_data_validation_checks.sql
+ * exactly: nothing that passes Zod may die at INSERT with 23514, and nothing
+ * the table accepts should be unreachable from the create API. The invoice
+ * vocabulary above follows the same rule (see migration 0112).
+ */
+export const QUOTE_STATUSES = [
+  'draft', 'sent', 'viewed', 'accepted', 'declined', 'expired',
+  'pending', 'expired_pending', 'converted', 'cancelled',
+] as const;
+
+export const CONTRACT_STATUSES = [
+  'draft', 'pending_approval', 'active', 'expired', 'terminated',
+  'under_review', 'suspended', 'cancelled', 'renewed', 'completed',
+  'pending_signature', 'amendment_pending',
+] as const;
+
 // ── Quote schemas ──
 export const createQuoteSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   title: requiredString.max(200),
-  status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired', 'negotiating', 'won', 'lost']).optional().default('draft'),
+  status: z.enum(QUOTE_STATUSES).optional().default('draft'),
   issue_date: z.string().date().optional().nullable(),
   expiry_date: z.string().date().optional().nullable(),
   line_items: z.array(z.object({
@@ -224,7 +242,7 @@ export const createContractSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   type: z.enum(CONTRACT_TYPES).nullable().optional(),
-  status: z.enum(['draft', 'active', 'expired', 'terminated', 'renewed', 'signed', 'pending_approval']).optional().default('draft'),
+  status: z.enum(CONTRACT_STATUSES).optional().default('draft'),
   start_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   end_date: z.string().date().optional().nullable(),
   value: z.coerce.number().min(0).optional().default(0),
