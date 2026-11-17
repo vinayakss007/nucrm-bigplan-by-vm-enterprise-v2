@@ -1,5 +1,5 @@
 {
-  "_comment": "Exact-set ledger for scripts/check-tenant-db-context.mjs (#3405). Every file here imports the raw DB client outside lib/db, the choke point that owns the pool and the tenant GUCs. The list may only shrink: migrate a file through lib/db and delete its entry, or the guard fails on the stale entry. Do not add a file to make CI green — a statement that runs on the pool without app.current_tenant returns zero rows silently, which is the failure #3405 was filed for. Regenerate with `node scripts/check-tenant-db-context.mjs --update`.",
+  "_comment": "Exact-set ledger for scripts/check-tenant-db-context.mjs (#3405). Every file here imports the raw DB client outside lib/db, the choke point that owns the pool and the tenant GUCs. The list may only shrink: migrate a file through lib/db and delete its entry, or the guard fails on the stale entry. Do not add a file to make CI green — a statement that runs on the pool without app.current_tenant returns zero rows silently, which is the failure #3405 was filed for. Regenerate with `node scripts/check-tenant-db-context.mjs --update`. Entries may reach the client through a static import or a dynamic `import()` / `require()` (the latter used to break module cycles); the scanner sees all three, and a `typeof import(...)` type query is erased and does not count.",
   "issue": 3405,
   "roots": ["app", "lib", "worker.ts"],
   "chokePoint": ["lib/db/"],
@@ -439,7 +439,10 @@
         "app/api/tenant/workflows/[id]/run/route.ts",
         "app/api/tenant/workflows/[id]/test/route.ts",
         "app/api/tenant/workflows/route.ts",
-        "app/api/tenant/workspace/route.ts"
+        "app/api/tenant/workspace/route.ts",
+        "app/api/tenant/calendar-sync/route.ts",
+        "app/api/tenant/calendar-sync/google/callback/route.ts",
+        "app/api/tenant/calendar-sync/outlook/callback/route.ts"
       ]
     },
     "app/api/user": {
@@ -535,7 +538,8 @@
         "lib/territories.ts",
         "lib/user-defaults.ts",
         "lib/visitor-tracking.ts",
-        "lib/webhooks.ts"
+        "lib/webhooks.ts",
+        "lib/errors-server.ts"
       ]
     },
     "lib/activity": {
@@ -596,7 +600,8 @@
       "files": [
         "lib/automation/engine.ts",
         "lib/automation/stage-change-hooks.ts",
-        "lib/automation/workflow-executor.ts"
+        "lib/automation/workflow-executor.ts",
+        "lib/automation/workflows.ts"
       ]
     },
     "lib/backups": {
@@ -630,7 +635,7 @@
     "lib/cron": {
       "reason": "Cron infrastructure (lock, health, job registry) in system context; jobs bind their own tenant per unit of work.",
       "filedAs": "#3405",
-      "files": ["lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
+      "files": ["lib/cron/cron-lock.ts", "lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
     },
     "lib/dashboard": {
       "reason": "Dashboard aggregate helper reading tenant rows inside the route the context was opened for.",
@@ -640,7 +645,7 @@
     "lib/email": {
       "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
       "filedAs": "#3405",
-      "files": ["lib/email/warmup.ts"]
+      "files": ["lib/email/service.ts", "lib/email/tracking.ts", "lib/email/warmup.ts"]
     },
     "lib/export": {
       "reason": "Export builder streams tenant rows under the caller transaction so a partial export cannot outlive it.",
