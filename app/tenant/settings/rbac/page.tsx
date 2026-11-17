@@ -263,13 +263,14 @@ export default function RBACSettingsPage() {
           {arLoading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading approval rules…</p>
           ) : arFailed ? (
-            // #2597: this route is allowlisted as missing in
-            // tests/unit/api-url-has-handler-2822.test.ts, so this arm is the tab's
-            // everyday answer. #2597's sentence is pinned by
-            // tests/unit/rbac-tab-error-state-2597.test.tsx, which asserts the reason
-            // (and its status code) reaches the operator — so only the tail, which said
-            // "endpoint responded successfully", was moved to #2872 rule #3's operator
-            // wording. It still keeps "none" and "unreadable" apart.
+            // #2597: GET /api/tenant/rbac/approval-rules now exists and answers 200
+            // with [], so an empty list really does mean "none configured" — the 404
+            // that used to masquerade as an empty state is gone. This arm still matters:
+            // a refusal (or a stale read after one) must not be reported as "none".
+            // The wording is pinned by tests/unit/rbac-tab-error-state-2597.test.tsx,
+            // which asserts the reason (and its status code) reaches the operator;
+            // only the tail that said "endpoint responded successfully" was moved to
+            // #2872 rule #3's operator wording.
             <InlineErrorState
               message={`Failed to load approval rules: ${arReason}. An empty list would say none are configured; this says the read never came back.`}
               onRetry={() => void refetchAr()}

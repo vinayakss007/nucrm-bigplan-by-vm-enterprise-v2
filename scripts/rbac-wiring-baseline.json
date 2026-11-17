@@ -1,0 +1,18 @@
+{
+  "note": "Exact set of lib/rbac exported functions with NO production caller outside lib/rbac (#2597). Shrink-only: wiring one is red until its entry comes down; a new unwired export is red outright. Each entry names the proposed consumer (Option A of #2597) that would retire it.",
+  "exports": {
+    "lib/rbac/approval-workflows.ts:checkNeedsApproval": "Producer half of the approval inbox: no mutating entity handler calls it, so approval_requests has no writer. Needs #2597 Option A3 (rule-matched POST hooks).",
+    "lib/rbac/approval-workflows.ts:requestApproval": "Creates approval_requests rows; only reachable from checkNeedsApproval, itself unwired. Retired together with A3.",
+    "lib/rbac/enforce.ts:__clearRoleIdCache": "Test-only cache reset called from tests/unit/rbac-field-enforcement-2597.test.ts; intentionally has no production caller.",
+    "lib/rbac/enforce.ts:__clearFieldRestrictionsCache": "Test-only cache reset called from tests/unit/rbac-field-enforcement-2597.test.ts; intentionally has no production caller.",
+    "lib/rbac/enforce.ts:getFieldRestrictions": "Internal helper composed only inside lib/rbac/enforce.ts by enforceFieldRead/Write; needs no caller outside the module.",
+    "lib/rbac/enforce.ts:stripRowForRead": "Internal row projector composed only inside lib/rbac/enforce.ts; needs no caller outside the module.",
+    "lib/rbac/field-permissions.ts:checkFieldAccess": "Superseded by lib/rbac/enforce.ts used in the 10 entity routes pinned by guard:field-permissions; kept for the legacy API, not called in production.",
+    "lib/rbac/field-permissions.ts:filterFieldsByPermission": "Same legacy field-permission API as checkFieldAccess; enforcement now goes through enforceFieldRead/Write.",
+    "lib/rbac/record-permissions.ts:checkRecordAccess": "Record scoping is enforced by can(ctx, '<entity>.view_all') strings; the record_permissions table is the competing model #2597 Option A2 must fold into can() or delete.",
+    "lib/rbac/record-permissions.ts:grantRecordAccess": "Writer for the competing record_permissions model; unwired until A2 picks a system.",
+    "lib/rbac/record-permissions.ts:revokeRecordAccess": "Writer for the competing record_permissions model; unwired until A2 picks a system.",
+    "lib/rbac/record-permissions.ts:getColumnMapping": "Helper for the unwired record-permission filter; needs A2 to pick record_permissions before it has a caller.",
+    "lib/rbac/record-permissions.ts:getRecordAccessFilter": "Per-record allow-list builder; the API the A2 'fold into can()' choice would call from the entity list handlers."
+  }
+}
