@@ -13,6 +13,25 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * Checks background worker/queue connectivity.
  * Protected: superadmin only.
  */
+
+/**
+ * #3566 — the Redis endpoint the queue check must probe.
+ *
+ * Every real consumer (lib/queue, lib/cache, lib/feature-flags,
+ * lib/realtime/publish) connects through REDIS_URL, and both compose files set
+ * `REDIS_URL=redis://redis:6379` without REDIS_HOST/PORT. Probing
+ * `REDIS_HOST || 'localhost'` instead answered "queues inaccessible" on the
+ * Docker topology while `redis.connected` was true — a monitor that looks at
+ * the wrong service. REDIS_HOST/PORT survive only as a fallback for setups
+ * that never set REDIS_URL.
+ */
+export function queueProbeRedisUrl(env: Record<string, string | undefined> = process.env): string {
+  const url = env['REDIS_URL'];
+  if (url) return url;
+  const host = env['REDIS_HOST'] || 'localhost';
+  const port = env['REDIS_PORT'] || '6379';
+  return `redis://${host}:${port}`;
+}
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -66,12 +85,25 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     try {
       const { Queue } = await import('bullmq');
-      const connection = { host: process.env.REDIS_HOST || 'localhost', port: Number(process.env.REDIS_PORT || 6379) };
-      const testQueue = new Queue('health-check', { connection });
-      await testQueue.getJobCounts();
-      queueCount = 1; // If we got here, at least one queue is accessible
-      queuesHealthy = true;
-      await testQueue.close();
+      // #3566: probe the endpoint the queue actually uses. Passing an IORedis
+      // client built from the same URL preserves password/TLS/db, which a
+      // `{ host, port }` object silently dropped.
+      const Redis = (await import('ioredis')).default;
+      const probe = new Redis(queueProbeRedisUrl(), {
+        maxRetriesPerRequest: 1,
+        connectTimeout: 3000,
+        lazyConnect: true,
+      });
+      try {
+        await probe.connect();
+        const testQueue = new Queue('health-check', { connection: probe });
+        await testQueue.getJobCounts();
+        queueCount = 1; // If we got here, at least one queue is accessible
+        queuesHealthy = true;
+        await testQueue.close();
+      } finally {
+        await probe.quit().catch(() => undefined);
+      }
     } catch {
       // BullMQ may not be configured in all environments
       queuesHealthy = false;
