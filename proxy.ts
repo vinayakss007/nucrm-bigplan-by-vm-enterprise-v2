@@ -474,7 +474,7 @@ export async function proxy(request: NextRequest) {
   // #2579: and the pass-through does not apply when the request also carries a
   // session cookie. `requireAuth()` tries the key first and, on a key that is not
   // in `api_keys`, falls through to `extractToken()` — which prefers
-  // `nucrm_session` (`lib/auth/middleware.ts:241` then `:262`). So a junk bearer
+  // `nucrm_session` (`lib/auth/middleware.ts:225` then `:262`). So a junk bearer
   // alongside a live cookie was not an API-key request at all: it was a
   // cookie-authenticated mutation that left this file having never met the CSRF
   // check below. Anything running on the site's own origin (stored XSS, a pasted

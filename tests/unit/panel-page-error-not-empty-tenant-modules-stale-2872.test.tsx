@@ -36,7 +36,7 @@
  * :392-400 on update_settings), and `disable` (:372-376) is an unconditional UPDATE with no
  * precondition and no re-read — so the badge that decided which button the operator sees is
  * the only referee, and on a refused refresh that badge is the older one. Blast radius is
- * the whole workspace: the same row is what `lib/auth/middleware.ts:446`,
+ * the whole workspace: the same row is what `lib/auth/middleware.ts:430`,
  * `lib/modules/client-gate.tsx:139,173` and `components/tenant/layout/sidebar.tsx:171` gate
  * every user of the tenant on.
  *

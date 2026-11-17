@@ -173,7 +173,7 @@ the remainder were checked by hand this pass and are what the next hand pass inh
 Both figures are of the text _after_ this pass edited it, which is the only honest way
 to count the citations in a document a change is rewriting.
 
-- `03` § 2 cited `requireAuth` at `middleware.ts:341`. `:341` is the
+- `03` § 2 cited `requireAuth` at `middleware.ts:325`. `:341` is the
   `COALESCE(roles.permissions, …)` select line — a line `01:51` cites correctly for
   exactly that — while `01`'s own heading and `06` step 5 both said `:200`. The file
   disagreed with itself for a whole audit cycle because a wrong number in a 500-line

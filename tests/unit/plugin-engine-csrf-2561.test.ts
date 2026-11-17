@@ -18,7 +18,7 @@
  *    credential requireAuth actually verified, because the proxy passes a
  *    `Bearer ak_*` request through before its own CSRF block (`proxy.ts:466`) and
  *    requireAuth then falls back to the ambient session cookie
- *    (`lib/auth/middleware.ts:262`) — that path is the one an in-handler check is
+ *    (`lib/auth/middleware.ts:246`) — that path is the one an in-handler check is
  *    for, and it is also the path an API-key client reaches this route by.
  *
  * 2. the guard. A guard that finds nothing looks identical to a guard that passes,
