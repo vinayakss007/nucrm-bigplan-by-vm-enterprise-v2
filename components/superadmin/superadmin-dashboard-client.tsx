@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { cn, formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useDashboardPanels } from './use-dashboard-panels';
 
 interface StatsData {
   mrr?: number;
@@ -53,29 +54,6 @@ interface SearchResult {
   email?: string;
   type: 'tenant' | 'user';
   status?: string;
-}
-
-interface HealthCheck {
-  service: string;
-  status: string;
-  latency_ms?: number;
-}
-
-interface RevenueData {
-  mrr?: { mrr?: number; paying?: number; trialing?: number; free_tier?: number };
-  events?: { id: string; event_type: string; tenant_name?: string; amount?: number; created_at: string }[];
-}
-
-interface UsageData {
-  growth?: Array<Record<string, unknown>>;
-}
-
-interface ActivityItem {
-  type: string;
-  name?: string;
-  message?: string;
-  created_at?: string;
-  timestamp?: string;
 }
 
 const TICK = { fill: 'rgba(255,255,255,0.3)', fontSize: 10 };
@@ -120,14 +98,10 @@ export default function SuperAdminDashboardClient({
   const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
-  const [healthLoading, setHealthLoading] = useState(true);
-
-  const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
-  const [usageData, setUsageData] = useState<UsageData | null>(null);
-
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [activityLoading, setActivityLoading] = useState(true);
+  const {
+    healthChecks, healthLoading, healthFailed,
+    revenueData, usageData, activity, activityLoading,
+  } = useDashboardPanels();
   const activityRef = useRef<HTMLDivElement>(null);
 
   const [alertsDismissed, setAlertsDismissed] = useState<Set<string>>(new Set());
@@ -166,40 +140,11 @@ export default function SuperAdminDashboardClient({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Fetch health, revenue, usage, activity on mount
-  useEffect(() => {
-    let ignore = false;
-    const controller = new AbortController();
-    const { signal } = controller;
-    Promise.all([
-      fetch('/api/superadmin/health', { signal }).then(r => r.json()).catch(() => ({ checks: [] })),
-      fetch('/api/superadmin/revenue', { signal }).then(r => r.json()).catch(() => ({})),
-      fetch('/api/superadmin/usage', { signal }).then(r => r.json()).catch(() => ({})),
-      fetch('/api/superadmin/recent-activity?limit=10', { signal }).then(r => r.json()).catch(() => ({})),
-    ]).then(([health, rev, usage, act]) => {
-      if (ignore || signal.aborted) return;
-      setHealthChecks(health.checks ?? []);
-      setRevenueData(rev);
-      setUsageData(usage);
-      const items = [
-        ...(act.bulk_ops ?? []),
-        ...(act.settings_changes ?? []),
-        ...(act.critical ?? []),
-      ].sort((a: ActivityItem, b: ActivityItem) => {
-        const ta = a.created_at ?? a.timestamp ?? '';
-        const tb = b.created_at ?? b.timestamp ?? '';
-        return tb.localeCompare(ta);
-      }).slice(0, 10);
-      setActivity(items);
-      setHealthLoading(false);
-      setActivityLoading(false);
-    });
-    return () => { ignore = true; controller.abort(); };
-  }, []);
-
   const allUp = healthChecks.every(c => c.status === 'up');
   const anyDown = healthChecks.some(c => c.status === 'down');
-  const healthStatus = anyDown ? 'down' : allUp ? 'up' : 'degraded';
+  // #3408: "no answer" is not "all healthy". An empty checks array used to
+  // make [].every() true and the badge claimed ALL UP during an API outage.
+  const healthStatus = healthFailed ? 'unavailable' : anyDown ? 'down' : allUp ? 'up' : 'degraded';
 
   const recentBillingEvents = revenueData?.events?.slice(0, 5) ?? [];
 
@@ -319,10 +264,11 @@ export default function SuperAdminDashboardClient({
             <p className="text-sm font-semibold text-foreground">System Health</p>
             <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full',
               healthStatus === 'up' ? 'bg-emerald-500/15 text-emerald-500' :
-              healthStatus === 'down' ? 'bg-red-500/15 text-red-500' :
+              healthStatus === 'down' || healthStatus === 'unavailable' ? 'bg-red-500/15 text-red-500' :
               'bg-amber-500/15 text-amber-500'
             )}>
-              {healthStatus === 'up' ? 'ALL UP' : healthStatus === 'down' ? 'ISSUES' : 'DEGRADED'}
+              {healthStatus === 'up' ? 'ALL UP' : healthStatus === 'down' ? 'ISSUES' :
+                healthStatus === 'unavailable' ? 'UNAVAILABLE' : 'DEGRADED'}
             </span>
           </div>
           {healthLoading ? (
@@ -342,7 +288,11 @@ export default function SuperAdminDashboardClient({
                   </div>
                 );
               })}
-              {healthChecks.length === 0 && <p className="text-xs text-muted-foreground">No health data</p>}
+              {healthChecks.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {healthFailed ? 'Could not load health data' : 'No health data'}
+                </p>
+              )}
             </div>
           )}
           <Link href="/superadmin/health" className="block text-center text-xs text-violet-600 dark:text-violet-400 hover:underline mt-3">Full health dashboard →</Link>
