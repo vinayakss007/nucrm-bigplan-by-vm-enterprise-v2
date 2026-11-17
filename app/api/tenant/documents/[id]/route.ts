@@ -8,7 +8,7 @@
  * DELETE /api/tenant/documents/[id]  — soft-delete row + remove S3 object
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { documents } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -21,6 +21,9 @@ export const GET = withApiRoute(async (request: NextRequest,
   context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  // #3402 — role gate on the catalog/document surface, checked before any DB work.
+  const denied = requirePerm(ctx, 'documents.view');
+  if (denied) return denied;
 
   const { id } = await context.params;
 
@@ -74,6 +77,9 @@ export const DELETE = withApiRoute(async (request: NextRequest,
   context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+  // #3402 — role gate on the catalog/document surface, checked before any DB work.
+  const denied = requirePerm(ctx, 'documents.manage');
+  if (denied) return denied;
 
   const { id } = await context.params;
 

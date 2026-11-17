@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
@@ -49,6 +49,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'documents.view');
+    if (denied) return denied;
 
     const moduleGate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
@@ -118,6 +121,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'documents.manage');
+    if (denied) return denied;
 
     const moduleGate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
@@ -243,6 +249,9 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'documents.manage');
+    if (denied) return denied;
 
     const moduleGate = await requireModule(ctx.tenantId, 'core-crm', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
@@ -20,6 +20,9 @@ export const GET = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'services.view');
+    if (denied) return denied;
     const { tenantId } = ctx;
     const { id } = await params;
 
@@ -50,6 +53,9 @@ export const PATCH = withApiRoute(async (request: NextRequest,
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'services.manage');
+    if (denied) return denied;
     const { tenantId, userId } = ctx;
     const { id } = await params;
 
@@ -112,6 +118,9 @@ export const DELETE = withApiRoute(async (request: NextRequest,
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate on the catalog/document surface, checked before any DB work.
+    const denied = requirePerm(ctx, 'services.manage');
+    if (denied) return denied;
     const { tenantId } = ctx;
     const { id } = await params;
 

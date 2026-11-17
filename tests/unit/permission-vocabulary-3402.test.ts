@@ -193,7 +193,7 @@ describe('the vocabulary on this tree', () => {
   });
 
   it('counts itself, so the denominators cannot rot into a lie', () => {
-    expect(result.counts.catalog).toBe(87);
+    expect(result.counts.catalog).toBe(93); // #3402: +6 catalog/document ids, all enforced below
     expect(result.counts.checked).toBeGreaterThanOrEqual(73);
     expect(result.filesScanned).toBeGreaterThan(1000);
     expect(result.counts.dynamic).toBe(2);
