@@ -75,6 +75,7 @@
     "guard:cron-manifest": "npx tsx scripts/gen-cron-manifest.mts --check",
     "cron:manifest": "npx tsx scripts/gen-cron-manifest.mts",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
+    "guard:rbac-wiring": "node scripts/check-rbac-wiring.mjs",
     "guard:permission-vocabulary": "node scripts/check-permission-vocabulary.mjs",
     "guard:mutating-route-permissions": "node scripts/check-mutating-route-permissions.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
