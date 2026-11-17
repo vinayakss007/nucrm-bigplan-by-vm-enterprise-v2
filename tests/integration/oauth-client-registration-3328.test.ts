@@ -589,18 +589,20 @@ d('an OAuth client registered through the settings route completes an authorizat
     expect(await countOf(), 'an unauthenticated POST wrote nothing').toBe(before);
   });
 
-  it('a mutation whose request carries the session but not the CSRF pair is refused', async () => {
-    // The panel's `apiFetch` attaches `x-csrf-token` from the readable CSRF cookie; a
-    // cross-site form post cannot, and this is the state where that difference is the
-    // only thing between the caller and another workspace's redirect URIs.
+  it('CSRF is decided at the edge, not by requireAuth (#2580)', async () => {
+    // #2580 deleted the env-gated central backstop in requireAuth, and these
+    // handlers are imported directly — proxy.ts is not in this call path. So a
+    // session-only mutation is no longer rejected *here*; in production the
+    // edge double-submit check (proxy.ts:548-564, asserted by guard:csrf) answers
+    // 403 before the handler runs. This pins that the handler owns no second,
+    // env-dependent CSRF implementation.
     const created = await register(sessionA, `CSRF target ${RUN}`, [CB]);
     const res = await H.item.PATCH(new NextRequest(`http://localhost:3000/api/tenant/oauth-clients/${created.body.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'x-forwarded-for': nextIp(), cookie: `nucrm_session=${sessionA}` },
       body: JSON.stringify({ name: 'Cross-site' }),
     }), ctx(created.body.id as string));
-    expect(res.status).toBe(403);
-    expect(String((await res.json() as Record<string, unknown>).error)).toMatch(/CSRF token missing or invalid/);
-    expect((await clientRow(created.body.id as string))!.redirect_uris).toBe(CB);
+    expect(res.status).toBe(200);
+    expect((await clientRow(created.body.id as string))!.name).toBe('Cross-site');
   });
 });

@@ -29,7 +29,7 @@
  * the body names which handler ran; and `requireTenantCtx()` reads the session
  * cookie and nothing else (`lib/tenant/context.ts:29-30`), so a Bearer-token or
  * API-key caller — the credential every sibling `/api/tenant/*` route accepts
- * through `requireAuth` (`lib/auth/middleware.ts:238`) — could not sign in here
+ * through `requireAuth` (`lib/auth/middleware.ts:222`) — could not sign in here
  * at all.
  *
  * The anonymous cases below are graded by the REAL `requireAuth`: the mock

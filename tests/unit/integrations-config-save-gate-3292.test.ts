@@ -96,7 +96,7 @@ vi.mock('@/lib/auth/middleware', () => ({
     userId: USER_ID,
     // `member: true` is the shape of a non-admin with no extra permissions:
     // `can()` returns false for settings.manage here, so #3402's gate refuses them.
-    // `isAdmin` is derived the way `lib/auth/middleware.ts:423` derives it, because
+    // `isAdmin` is derived the way `lib/auth/middleware.ts:407` derives it, because
     // `POST /api/tenant/integrations` gates on it and a fixture that said false for
     // an `admin` role would be testing a context the server cannot produce.
     isAdmin: !harness.member,

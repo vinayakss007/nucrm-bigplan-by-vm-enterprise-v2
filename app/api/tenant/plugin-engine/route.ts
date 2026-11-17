@@ -95,7 +95,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // (#1835) uses. The proxy does check this surface (`proxy.ts:530-532`), but a
     // `Bearer ak_*` request on an allowed path is passed through before that block
     // (`proxy.ts:466`) and `requireAuth` then falls back to the ambient session cookie
-    // (`lib/auth/middleware.ts:262`) — on that path nothing has validated CSRF. The
+    // (`lib/auth/middleware.ts:246`) — on that path nothing has validated CSRF. The
     // exemption keys on the *verified* credential, not on the client-settable
     // `x-auth-method` header `requireCsrf` alone would trust, so an API-key client that
     // sends no CSRF cookie keeps working.

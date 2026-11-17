@@ -95,7 +95,7 @@ export default function ModulesPage() {
   //   `installed_at` (route.ts:25) and this page ignores it; threading it through the
   //   PATCH body would give the row a version to check.
   // Blast radius, which is why the copy says "every user": the row these writes flip is
-  // the one the whole workspace is gated on — lib/auth/middleware.ts:446
+  // the one the whole workspace is gated on — lib/auth/middleware.ts:430
   // (requireModule → ModuleRegistry.hasModule, registry.ts:268-274),
   // lib/modules/client-gate.tsx:139,173 and components/tenant/layout/sidebar.tsx:171 all
   // read `status === 'active'` for the tenant, from this same URL.

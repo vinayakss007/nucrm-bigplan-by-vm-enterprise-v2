@@ -19,7 +19,7 @@
  *     covers a route on the paths the proxy passes through early: a
  *     `Bearer ak_*` request on an API-key-allowed path returns at
  *     proxy.ts:466 — before the CSRF block — and requireAuth() then falls back
- *     to the ambient session cookie (lib/auth/middleware.ts:262). New state-
+ *     to the ambient session cookie (lib/auth/middleware.ts:246). New state-
  *     changing routes that write tenant data should call it, as
  *     app/api/tenant/integrations/route.ts:76 (#1835) and now plugin-engine do.
  *   - requireAuth() has no in-handler CSRF check. #2580 removed the dead

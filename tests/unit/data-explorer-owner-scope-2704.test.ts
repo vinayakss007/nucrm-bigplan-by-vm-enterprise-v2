@@ -24,7 +24,7 @@
  *
  * No `<entity>.view` gate is asserted because there is nothing to gate on:
  * `contacts.view`, `companies.view` and `tasks.view` are not in the catalogue at
- * all, and `can()` is a strict lookup (`lib/auth/middleware.ts:432-435`), so
+ * all, and `can()` is a strict lookup (`lib/auth/middleware.ts:416-435`), so
  * requiring them would answer 403 for the role that uses this tool most.
  *
  * The mocked `db.execute` is not canned: it answers a statement only the way

@@ -45,7 +45,7 @@ vi.mock('@/lib/db/request-connection', () => ({
 
 /**
  * The real permission logic, with only the identity lookup stubbed — so
- * `requirePerm` here is `lib/auth/middleware.ts:437`, not a test double that
+ * `requirePerm` here is `lib/auth/middleware.ts:421`, not a test double that
  * would agree with anything.
  */
 vi.mock('@/lib/auth/middleware', async (importOriginal) => {
