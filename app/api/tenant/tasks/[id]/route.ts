@@ -90,7 +90,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const v = validated.data;
 
     const [existing] = await db
-      .select({ id: tasks.id, assignedTo: tasks.assignedTo, createdBy: tasks.createdBy, updatedAt: tasks.updatedAt })
+      .select({ id: tasks.id, status: tasks.status, assignedTo: tasks.assignedTo, createdBy: tasks.createdBy, updatedAt: tasks.updatedAt })
       .from(tasks)
       .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)))
       .limit(1);
@@ -131,9 +131,19 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       updateData.completedAt = null;
     }
 
+    // #3407 — a status write is a transition, not an assignment. Read the
+    // from-state above and claim it in the UPDATE's WHERE so a concurrent
+    // status change between the read and the write matches zero rows and
+    // `withConcurrencyGuard` answers 409 instead of silently stomping it.
+    // `completed` is a status write too: true sets 'completed', false 'pending'.
+    const claimsStatus = v.status !== undefined || body.completed !== undefined;
+
     const [row] = await withConcurrencyGuard(
       () => {
         const whereConditions = [eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)];
+        if (claimsStatus) {
+          whereConditions.push(eq(tasks.status, existing.status));
+        }
         if (clientVersion) {
           whereConditions.push(updatedAtMs(tasks, existing.updatedAt!));
         }

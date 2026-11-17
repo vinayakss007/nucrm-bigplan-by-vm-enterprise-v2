@@ -357,21 +357,33 @@ export const leadQuerySchema = z.object({
 });
 
 // ── Task schemas ──
-export const createTaskSchema = z.object({
+/**
+ * #3407 — the PATCH contract is this object `.partial()`d, so it must not carry
+ * create defaults: Zod applies the inner default even through `.partial()`,
+ * which made every priority/assignee edit rewrite status to `pending` and tags
+ * to `[]`. Defaults live only on `createTaskSchema` below.
+ */
+const taskFieldsSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   description: z.string().trim().max(2000).nullable().optional(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled', 'deferred', 'on_hold']).optional().default('pending'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled', 'deferred', 'on_hold']).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   due_date: z.string().date().optional().nullable(),
   contact_id: uuid,
   deal_id: uuid,
   company_id: uuid,
   assigned_to: uuid,
   reminder_date: z.string().datetime().optional().nullable(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const createTaskSchema = taskFieldsSchema.extend({
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled', 'deferred', 'on_hold']).optional().default('pending'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
   tags: z.array(z.string()).optional().default([]),
 });
 
-export const updateTaskSchema = createTaskSchema.partial();
+export const updateTaskSchema = taskFieldsSchema.partial();
 
 export const taskQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
