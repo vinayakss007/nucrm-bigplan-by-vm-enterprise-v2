@@ -173,6 +173,24 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const subId = (await params).id;
 
+    // #3407: cancelling on delete is a status transition, so claim the
+    // from-state the way the PUT path does (#3337) and the invoice DELETE does
+    // (#3628). Without it, a concurrent renewal or upgrade landing in the gap
+    // is silently overwritten by this tombstone.
+    const [existing] = await db
+      .select({ status: serviceSubscriptions.status })
+      .from(serviceSubscriptions)
+      .where(
+        and(
+          eq(serviceSubscriptions.id, subId),
+          eq(serviceSubscriptions.tenantId, ctx.tenantId),
+          sql`${serviceSubscriptions.deletedAt} IS NULL`
+        )
+      )
+      .limit(1);
+
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     const [row] = await db
       .update(serviceSubscriptions)
       .set({
@@ -185,12 +203,21 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
         and(
           eq(serviceSubscriptions.id, subId),
           eq(serviceSubscriptions.tenantId, ctx.tenantId),
-          sql`${serviceSubscriptions.deletedAt} IS NULL`
+          sql`${serviceSubscriptions.deletedAt} IS NULL`,
+          eq(serviceSubscriptions.status, existing.status)
         )
       )
       .returning({ id: serviceSubscriptions.id });
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) {
+      return NextResponse.json(
+        {
+          error:
+            `Subscription status changed concurrently — cannot cancel '${existing.status}'. Reload and retry.`,
+        },
+        { status: 409 }
+      );
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
