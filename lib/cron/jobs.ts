@@ -93,10 +93,15 @@ export const CRON_JOBS: readonly CronJobSpec[] = [
   { name: 'recurring-invoice-generator', path: '/api/cron/recurring-invoice-generator', cron: '0 6 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: true, scheduler: true } },
   { name: 'backup', path: '/api/cron/backup', cron: '30 2 * * *', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
   { name: 'lead-warming', path: '/api/cron/lead-warming', cron: '0 9 * * *', owner: 'email', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
-  // Orphans below run nowhere; their `cron` is the cadence the owner decision
-  // (#2539 step 3, scheduled by #3410) would apply if the job is kept.
-  { name: 'process-lead-scoring', path: '/api/cron/process-lead-scoring', cron: '0 * * * *', owner: 'ai', maxDurationMs: 120_000, expectedEveryMs: HOUR, sources: { crontab: false, vercel: false, scheduler: false } },
-  { name: 'sla-check', path: '/api/cron/sla-check', cron: '*/10 * * * *', owner: 'support', maxDurationMs: 120_000, expectedEveryMs: 10 * MIN, sources: { crontab: false, vercel: false, scheduler: false } },
+  // #3410 PR-2B — the last two orphans are now scheduled, at the cadence their
+  // own route headers declare: lead scoring is a nightly recompute of leads not
+  // scored in 24h (the hourly value here was never installed anywhere, so it
+  // had no behaviour to preserve); sla-check says every 5-10 minutes and its
+  // dedup lock is 30 minutes, so */10 is the safe end of that range. Both are
+  // real features with live callers and tests — deleting them would remove
+  // functionality, so the decision recorded here is to schedule them.
+  { name: 'process-lead-scoring', path: '/api/cron/process-lead-scoring', cron: '0 2 * * *', owner: 'ai', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
+  { name: 'sla-check', path: '/api/cron/sla-check', cron: '*/10 * * * *', owner: 'support', maxDurationMs: 120_000, expectedEveryMs: 10 * MIN, sources: { crontab: true, vercel: true, scheduler: true } },
 ] as const;
 
 export function jobByName(name: string): CronJobSpec | undefined {

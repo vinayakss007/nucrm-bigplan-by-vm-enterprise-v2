@@ -16,7 +16,7 @@
  *
  * The /api/system/cron-health endpoint reads this registry.
  */
-import { CRON_JOBS } from './jobs';
+import { CRON_JOBS, type CronJobSpec } from './jobs';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -160,12 +160,13 @@ export function summarizeCronHealth(
   rows: readonly CronJobRunSummary[],
   nowMs: number = Date.now(),
   maxAgeSlackMs = 0,
+  manifest: readonly CronJobSpec[] = CRON_JOBS,
 ): CronManifestHealthReport {
   const slack = Number.isFinite(maxAgeSlackMs) && maxAgeSlackMs > 0 ? maxAgeSlackMs : 0;
   const byJob = new Map(rows.map((r) => [r.job, r]));
   const jobs: CronManifestHealthEntry[] = [];
 
-  for (const spec of CRON_JOBS) {
+  for (const spec of manifest) {
     const scheduledIn = (['crontab', 'vercel', 'scheduler'] as const)
       .filter((source) => spec.sources[source]);
     const row = byJob.get(spec.name);
