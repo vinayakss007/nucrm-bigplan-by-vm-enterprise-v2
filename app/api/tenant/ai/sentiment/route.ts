@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { analyzeSentiment, updateDealSentiment } from '@/lib/ai/sentiment';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
@@ -21,6 +21,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate before the plan gate and the provider call.
+    const denied = requirePerm(ctx, 'ai.use');
+    if (denied) return denied;
 
     const gate = await requireAiFeature(ctx, 'ai_sentiment');
     if (gate) return gate;

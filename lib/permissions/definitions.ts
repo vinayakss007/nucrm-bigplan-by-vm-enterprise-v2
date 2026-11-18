@@ -155,6 +155,11 @@ export const PERMISSIONS: Permission[] = [
   { id: 'documents.view',      label: 'View Documents',     description: 'See tenant documents and their metadata', category: 'Settings', dangerLevel: 'safe' },
   { id: 'documents.manage',    label: 'Manage Documents',   description: 'Upload, edit, verify or delete tenant documents', category: 'Settings', dangerLevel: 'moderate' },
 
+  // ── AI ────────────────────────────────────────────────────
+  // Every AI call spends the tenant's provider budget, so this is a moderate
+  // capability, not a safe read — same reasoning as documents.manage (#3402).
+  { id: 'ai.use',              label: 'Use AI Assistant',   description: 'Call tenant AI endpoints (drafts, summaries, sentiment, chat)', category: 'AI', dangerLevel: 'moderate' },
+
   // ── Partners ─────────────────────────────────────────────
   { id: 'partners.create',        label: 'Create Partners',   description: 'Add partner records and their deals',category: 'Partners',dangerLevel: 'moderate' },
 ];
@@ -182,6 +187,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     // #3402 — reps can see the catalogs and documents they reference in quotes
     // and tickets; writing those tenant-wide records stays with admin/manager.
     'products.view': true, 'services.view': true, 'documents.view': true,
+    // #3402 — the AI assistant is a rep-facing tool; the plan/module gate still
+    // decides whether the feature is enabled, this only gates the role.
+    'ai.use': true,
     'team.view': true, 'reports.view': false,
   },
   viewer: Object.fromEntries(PERMISSIONS.map(p => [p.id, p.id.endsWith('.view') || p.id.endsWith('.view_all')])),
