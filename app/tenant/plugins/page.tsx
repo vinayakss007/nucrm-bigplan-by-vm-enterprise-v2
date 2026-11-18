@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { Puzzle, Plus, Trash2, X, Loader2, ToggleLeft, ToggleRight, Zap, TestTube, Copy, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -97,27 +98,30 @@ export default function PluginsPage() {
   const toggleMutation = useMutation({
     mutationFn: async (plugin: Plugin) => {
       const newStatus = plugin.status === 'active' ? 'disabled' : 'active';
-      const res = await fetch(`/api/tenant/plugins/${plugin.id}`, {
+      const res = await fetchJsonSafe(`/api/tenant/plugins/${plugin.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
+      // #3408: a refused toggle had no onError — the click did nothing.
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => {
       toast.success(newStatus === 'active' ? 'Plugin enabled' : 'Plugin disabled');
       loadPlugins();
     },
+    onError: (e: Error) => toast.error(e.message),
   });
   const togglePlugin = (plugin: Plugin) => toggleMutation.mutate(plugin);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      const res = await fetchJsonSafe(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Failed');
     },
     onSuccess: () => { toast.success('Plugin deleted'); loadPlugins(); },
+    onError: (e: Error) => toast.error(e.message),
   });
   const deletePlugin = async (id: string) => {
     const plugin = plugins.find(p => p.id === id);
