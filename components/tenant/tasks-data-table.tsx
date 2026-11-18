@@ -11,6 +11,7 @@ import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -62,6 +63,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   const [tasks, setTasks] = useState(initialTasks)
   const [total, setTotal] = useState(initialTasks.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   // Open the create form when arriving via ⌘K "New Task" (?action=create).
   useOpenCreateParam(() => setShowAdd(true))
@@ -86,14 +88,10 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       offset: String(page * pagination.pageSize),
     })
     if (globalFilter) params.set('q', globalFilter)
-    try {
-      const res = await fetch(`/api/tenant/tasks?${params}`)
-      const data = await res.json()
-      setTasks(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load tasks:', error)
-    }
+    // #3408: a failed refresh must not render "No tasks yet" over an outage.
+    const result = await fetchJsonSafe<{ data?: typeof tasks; total?: number }>(`/api/tenant/tasks?${params}`)
+    if (result.status === 'ok') { setTasks(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
+    else if (result.status === 'error') setLoadError(result.message)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -557,6 +555,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       )}
 
       {/* DataTable */}
+      {loadError&&<div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Could not load tasks — an empty list here would be a lie.</div>}
       <DataTable
         columns={columns}
         data={tasks}
@@ -578,9 +577,9 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
         onPaginationChange={handlePaginationChange}
         emptyState={{
           icon: <CheckCircle className="w-6 h-6 text-muted-foreground" />,
-          title: "No tasks yet",
-          description: "Create your first task to stay on top of your follow-ups",
-          action: permissions.canCreate ? {
+          title: loadError ? "Task list unavailable" : "No tasks yet",
+          description: loadError ? "The task list could not be read." : "Create your first task to stay on top of your follow-ups",
+          action: loadError ? undefined : permissions.canCreate ? {
             label: "Add Task",
             onClick: () => setShowAdd(true),
             icon: <Plus className="w-4 h-4 mr-2" />,
