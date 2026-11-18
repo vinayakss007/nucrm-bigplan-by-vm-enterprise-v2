@@ -39,6 +39,9 @@ let lastWhere: { sql: string; params: unknown[] } | undefined;
 // What the mocked reader answers for the lead being looked at.
 let leadRow: Record<string, unknown> | null = { assignedTo: OTHER, createdBy: OTHER, id: LEAD };
 const mockDb = {
+  // #3405: a real Drizzle client opened by withTenantContext() has execute();
+  // without it the context helper throws before the read can be answered.
+  execute: vi.fn(() => Promise.resolve()),
   select: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
