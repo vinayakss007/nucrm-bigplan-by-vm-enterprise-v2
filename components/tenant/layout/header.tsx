@@ -34,6 +34,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [showDrop, setShowDrop]   = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
   const { theme, setTheme }       = useTheme();
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
@@ -65,22 +66,23 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   }, []);
 
   const loadNotifications = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [unreadRes, notifRes] = await Promise.all([
-        fetch('/api/tenant/notifications/unread', { signal }),
-        fetch('/api/tenant/notifications', { signal }),
-      ]);
-      const [unreadData, notifData] = await Promise.all([
-        unreadRes.json(),
-        notifRes.json(),
-      ]);
-      if (signal?.aborted) return;
-      setUnread(unreadData.count ?? 0);
-      setNotifications((notifData.data ?? []).slice(0, 8).map((n: Record<string, unknown>) => toSnakeCase(n as Record<string, unknown>)) as HeaderNotification[]);
-    } catch (error) {
-      if ((error as Error)?.name === 'AbortError') return;
-      clientLogError('header:notifications', error);
+    const [unreadResult, notifResult] = await Promise.all([
+      fetchJsonSafe<{ count?: number }>('/api/tenant/notifications/unread', { signal }),
+      fetchJsonSafe<{ data?: Record<string, unknown>[] }>('/api/tenant/notifications', { signal }),
+    ]);
+    if (unreadResult.status === 'aborted' || notifResult.status === 'aborted') return;
+    if (unreadResult.status === 'error' || notifResult.status === 'error') {
+      // #3408: keep the last good rows on screen and say the refresh failed —
+      // zeroing them would render "All caught up!" over an outage.
+      const message = unreadResult.status === 'error' ? unreadResult.message : (notifResult as { message: string }).message;
+      setNotifError(`Could not refresh notifications: ${message}`);
+      clientLogError('header:notifications', new Error(message));
+      return;
     }
+    setUnread(unreadResult.data.count ?? 0);
+    setNotifications((notifResult.data.data ?? []).slice(0, 8)
+      .map((n: Record<string, unknown>) => toSnakeCase(n as Record<string, unknown>)) as unknown as HeaderNotification[]);
+    setNotifError(null);
   }, []);
 
   useEffect(() => {
@@ -129,9 +131,14 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   }, []);
 
   const markNotifRead = async (id: string) => {
-    await fetch('/api/tenant/notifications', {
+    const res = await fetchJsonSafe('/api/tenant/notifications', {
       method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
     });
+    // #3408: do not mark it read locally when the server refused the write.
+    if (res.status !== 'ok') {
+      setNotifError(res.status === 'error' ? `Could not mark as read: ${res.message}` : 'Could not mark as read');
+      return;
+    }
     setNotifications(prev => prev.map(n => n.id===id ? {...n, is_read:true} : n));
     setUnread(prev => Math.max(0, prev - 1));
   };
@@ -306,14 +313,22 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/20">
                 <p className="text-sm font-bold">Notifications</p>
                 {unread > 0 && <button onClick={async () => {
-                  await fetch('/api/tenant/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_all_read' }) });
+                  const res = await fetchJsonSafe('/api/tenant/notifications', {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'mark_all_read' }),
+                  });
+                  if (res.status !== 'ok') {
+                    setNotifError(res.status === 'error' ? `Could not mark all read: ${res.message}` : 'Could not mark all read');
+                    return;
+                  }
                   setNotifications(prev => prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
                   setUnread(0);
                 }} className="text-[10px] font-bold text-violet-600 hover:text-violet-700 uppercase tracking-wider">Mark all read</button>}
               </div>
               
               <div className="max-h-[350px] overflow-y-auto">
-                {notifications.length === 0 ? (
+                {notifError && <div className="p-3"><InlineErrorState message={notifError} onRetry={() => void loadNotifications()} /></div>}
+                {!notifError && notifications.length === 0 ? (
                   <div className="px-8 py-10 text-center">
                     <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-3 opacity-50">
                       <Bell className="w-6 h-6 text-muted-foreground"/>
