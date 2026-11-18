@@ -1058,6 +1058,13 @@
       "when": 1793500300000,
       "tag": "0148_approval_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1793500400000,
+      "tag": "0149_churn_risk_activity_recency",
+      "breakpoints": true
     }
   ]
 }

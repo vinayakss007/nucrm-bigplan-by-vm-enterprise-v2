@@ -21,28 +21,26 @@ import { logError } from '@/lib/errors-server';
 const calculateSchema = z.object({ contact_id: uuidField });
 
 /**
- * #2774 — where a `probability` in this response actually came from.
+ * #2774 — where a `probability` in this response comes from.
  *
- * `public.calculate_churn_risk` (`drizzle/migrations/0032_missing_db_functions.sql`)
- * is `RETURN 0.1;`: it never reads `p_contact_id`, `contacts`, an activity
- * signal or `churn_predictions`. So the number this handler answers is a stored
- * constant the database hands back, identical for every contact in every
- * tenant — not a score about the contact in the request body.
+ * `public.calculate_churn_risk` was `RETURN 0.1;` in 0032: it ignored its
+ * argument, so every contact in every tenant scored the same constant. #3203
+ * made the response name that placeholder instead of pretending a computation
+ * had happened; migration 0149 now supplies the scoring rule the issue called
+ * for. The score is deterministic: recency bands off
+ * `COALESCE(GREATEST(last_activity_at, last_contacted_at), created_at)`, tuned
+ * by the tenant's global `at_risk_rules.max_days_idle` (default 14), plus small
+ * engagement/disengagement adjustments. See 0149 for the exact bands.
  *
- * The verb the old doc comment used ("Calculate churn risk") and a bare
- * `probability` key both implied a computation had happened. What is missing is
- * the scoring RULE, which #2774 states is an owner decision (which signals
- * count, whether this endpoint should compute at all or only read the stored
- * `churn_predictions.churnProbability`, and whether a computed score is
- * persisted). This file does not make that decision; it stops asserting the
- * opposite one. The source is reported as data so no consumer can render the
- * placeholder as a prediction.
- *
- * Additive only — `ok`, `probability` and `prediction` keep their names, types
- * and meaning, so existing consumers are unaffected.
+ * The provenance keys stay in the response so a consumer can tell a modelled
+ * score from the old stored constant; `isModelled` is now true. This is still
+ * additive — `ok`, `probability` and `prediction` keep their names, types and
+ * meaning, so existing consumers are unaffected. The stored `churn_predictions`
+ * row is reported beside the score, not overwritten by it: persisting a
+ * computed score remains a separate decision.
  */
-type ChurnProbabilitySource = 'database_placeholder';
-const CHURN_PROBABILITY_SOURCE: ChurnProbabilitySource = 'database_placeholder';
+type ChurnProbabilitySource = 'activity_recency_model';
+const CHURN_PROBABILITY_SOURCE: ChurnProbabilitySource = 'activity_recency_model';
 /** The function the value was read out of, so the response names its own source. */
 const CHURN_PROBABILITY_SOURCE_FUNCTION = 'public.calculate_churn_risk';
 
@@ -110,14 +108,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 /**
  * POST /api/tenant/analytics/churn
- * Read this contact's churn score and the stored `churn_predictions` row.
+ * Read this contact's modelled churn score and its stored `churn_predictions` row.
  *
- * #2774 — the word "Calculate" in the old summary was the bug's other half: the
- * RPC this handler calls returns a hard-coded constant, so nothing about the
- * contact is calculated here. The response now says so with `probabilitySource`,
- * `probabilitySourceFunction` and `isModelled`, and returns the stored
- * prediction row beside the score because that row — not the RPC — is the only
- * per-contact churn data in the database.
+ * #2774 — migration 0149 replaced the `RETURN 0.1;` placeholder with a
+ * deterministic activity-recency score, so the RPC now actually uses the
+ * contact it is passed. The response keeps the provenance keys
+ * (`probabilitySource`, `probabilitySourceFunction`, `isModelled`) so callers
+ * can tell a modelled score from the old constant, and still returns the stored
+ * prediction row beside it: that row is tenant-owned data and is not rewritten
+ * here. Reconciling the two, or persisting the computed score, is a separate
+ * decision this endpoint does not make.
  *
  * The doc comment used to advertise `.../churn/calculate`, which is not a route:
  * there is no `calculate/route.ts` under `app/api/tenant/analytics/`, so a client
@@ -192,12 +192,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       prediction,
       // #2774 — the score's provenance, as data. Every key above keeps its
       // name, type and meaning, so this is additive for existing consumers.
-      // `probability` is the value the placeholder function stored, and
-      // `prediction` is the tenant's own `churn_predictions` row; they are
-      // allowed to disagree, and nothing here reconciles them into a score.
+      // `probability` is the modelled score from migration 0149's function;
+      // `prediction` is the tenant's own `churn_predictions` row. They are
+      // allowed to disagree — nothing here reconciles or persists either one.
       probabilitySource: CHURN_PROBABILITY_SOURCE,
       probabilitySourceFunction: CHURN_PROBABILITY_SOURCE_FUNCTION,
-      isModelled: false,
+      isModelled: true,
     });
  
  
