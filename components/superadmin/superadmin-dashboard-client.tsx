@@ -15,6 +15,8 @@ import { cn, formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils'
 import { logError } from '@/lib/errors-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useDashboardPanels } from './use-dashboard-panels';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface StatsData {
   mrr?: number;
@@ -94,6 +96,7 @@ export default function SuperAdminDashboardClient({
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -110,13 +113,16 @@ export default function SuperAdminDashboardClient({
 
   // Global search
   const handleSearch = useCallback(async (q: string, signal?: AbortSignal) => {
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 2) { setSearchResults([]); setSearchError(null); return; }
     setSearching(true);
     try {
-      const res = await fetch(`/api/superadmin/search?q=${encodeURIComponent(q)}`, { signal });
-      const data = await res.json();
+      // #3408: a refused search used to set results=[], indistinguishable
+      // from a genuine zero-match dropdown.
+      const result = await fetchJsonSafe<{ results?: SearchResult[] }>(
+        `/api/superadmin/search?q=${encodeURIComponent(q)}`, { signal });
       if (signal?.aborted) return;
-      setSearchResults(data.results ?? []);
+      if (result.status === 'ok') { setSearchResults(result.data.results ?? []); setSearchError(null); }
+      else if (result.status === 'error') { setSearchResults([]); setSearchError(result.message); }
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') return;
       logError({ error: err, context: 'superadmin-search' });
@@ -170,6 +176,11 @@ export default function SuperAdminDashboardClient({
             />
             {searching && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground animate-spin" />}
           </div>
+          {showSearch && searchError && (
+            <div className="absolute top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-lg z-50 p-3">
+              <InlineErrorState message={`Search failed: ${searchError}`} onRetry={() => void handleSearch(searchQuery)} />
+            </div>
+          )}
           {showSearch && searchResults.length > 0 && (
             <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-xl shadow-lg z-50 max-h-80 overflow-y-auto">
               {searchResults.map(r => (
