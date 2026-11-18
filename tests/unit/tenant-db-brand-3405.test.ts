@@ -65,4 +65,11 @@ describe('withTenantDb (#3405)', () => {
     const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
     expect(ledger.groups).not.toHaveProperty('lib/activity');
   });
+
+  it('the formula sync service no longer reaches for the raw client', () => {
+    expect(read('lib/formula/sync.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/formula/sync.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/formula');
+  });
 });

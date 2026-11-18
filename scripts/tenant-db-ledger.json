@@ -648,11 +648,6 @@
       "filedAs": "#3405",
       "files": ["lib/field-sales/card-scanner.ts"]
     },
-    "lib/formula": {
-      "reason": "Formula evaluator that loads its inputs through a caller-supplied client bound to one tenant.",
-      "filedAs": "#3405",
-      "files": ["lib/formula/sync.ts"]
-    },
     "lib/import": {
       "reason": "Import pipeline stages rows inside one transaction per tenant so a failed import leaves nothing behind.",
       "filedAs": "#3405",

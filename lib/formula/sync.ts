@@ -3,7 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { customFieldDefs } from '@/drizzle/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { formulaEngine } from './engine';
@@ -22,18 +23,20 @@ export async function syncCalculatedFields(
   recordData: Record<string, unknown>
 ): Promise<void> {
   try {
-    // 1. Fetch all calculated field definitions for this tenant/entity
-    const defs = await db.select({
-      fieldKey: customFieldDefs.fieldKey,
-      formula: customFieldDefs.formula
-    })
-    .from(customFieldDefs)
-    .where(and(
-      isNull(customFieldDefs.deletedAt),
-      eq(customFieldDefs.tenantId, tenantId),
-      eq(customFieldDefs.entityType, entityType),
-      eq(customFieldDefs.isCalculated, true)
-    ));
+    // #3405: definition reads and the metadata write run on one branded
+    // tenant client, so the GUC is set on the connection that executes them.
+    const defs = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db.select({
+        fieldKey: customFieldDefs.fieldKey,
+        formula: customFieldDefs.formula
+      })
+      .from(customFieldDefs)
+      .where(and(
+        isNull(customFieldDefs.deletedAt),
+        eq(customFieldDefs.tenantId, tenantId),
+        eq(customFieldDefs.entityType, entityType),
+        eq(customFieldDefs.isCalculated, true)
+      )));
 
     if (!defs.length) return;
 
@@ -54,11 +57,12 @@ export async function syncCalculatedFields(
     const tableName = getTableName(entityType);
     if (!tableName) return;
 
-    await db.execute(sql`
-      UPDATE public.${sql.identifier(tableName)} 
-      SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(updates)}::jsonb, updated_at = now() 
-      WHERE id = ${entityId} AND tenant_id = ${tenantId}
-    `);
+    await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db.execute(sql`
+        UPDATE public.${sql.identifier(tableName)}
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(updates)}::jsonb, updated_at = now()
+        WHERE id = ${entityId} AND tenant_id = ${tenantId}
+      `));
   } catch (err) {
     // Formula fields are derived data written into metadata. A failure here means
     // the stored values are now stale relative to their inputs, which is a
