@@ -9,6 +9,8 @@ import { useState, useCallback, useMemo } from 'react'
 import { Crown, XCircle, CheckCircle, Plus, Mail, Loader2 } from 'lucide-react'
 import { formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -33,6 +35,7 @@ export default function UsersDataTable({ initialUsers }: Props) {
   const [users, setUsers] = useState(initialUsers)
   const [total, setTotal] = useState(initialUsers.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [showCreate, setShowCreate] = useState(false)
@@ -46,13 +49,16 @@ export default function UsersDataTable({ initialUsers }: Props) {
       offset: String(page * pagination.pageSize),
     })
     if (globalFilter) params.set('q', globalFilter)
-    try {
-      const res = await fetch('/api/superadmin/users?' + params)
-      const data = await res.json()
-      setUsers(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load users:', error)
+    // #3408: a failed refresh used to set users=[], total=0 and render
+    // "No users found" — an outage indistinguishable from an empty directory.
+    const result = await fetchJsonSafe<{ data?: typeof users; total?: number }>(
+      '/api/superadmin/users?' + params)
+    if (result.status === 'ok') {
+      setUsers(result.data.data ?? [])
+      setTotal(result.data.total ?? 0)
+      setLoadError(null)
+    } else if (result.status === 'error') {
+      setLoadError(result.message) // keep the last good rows
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
@@ -231,6 +237,15 @@ export default function UsersDataTable({ initialUsers }: Props) {
         </form>
       )}
 
+      {loadError && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Could not load users — an empty directory here would be a lie. (${loadError})`}
+            onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
+
       <div className="table-responsive rounded-xl border border-white/5">
         <DataTable
           columns={columns}
@@ -248,8 +263,8 @@ export default function UsersDataTable({ initialUsers }: Props) {
           onPaginationChange={handlePaginationChange}
           emptyState={{
             icon: <Mail className="w-6 h-6 text-white/30" />,
-            title: "No users found",
-            description: "Try adjusting your search filters",
+            title: loadError ? "User directory unavailable" : "No users found",
+            description: loadError ? "The user list could not be read." : "Try adjusting your search filters",
           }}
         />
       </div>
