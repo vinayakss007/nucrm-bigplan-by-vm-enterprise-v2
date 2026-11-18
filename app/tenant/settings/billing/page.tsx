@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import Link from 'next/link';
 import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText, type LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
@@ -103,18 +104,19 @@ export default function BillingPage() {
   // Kept as mutations only for the isPending busy state — no cache to invalidate.
   const checkoutMutation = useMutation({
     mutationFn: async (planId: string) => {
-      const res = await fetch('/api/tenant/billing/checkout', {
+      // #3408: res.json() on a gateway HTML error used to throw inside the
+      // mutation with no onError — the upgrade button did nothing silently.
+      const result = await fetchJsonSafe<{ url?: string }>('/api/tenant/billing/checkout', {
         method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ plan_id: planId }),
       });
-      const d = await res.json();
-      if (res.ok && d.url) {
+      if (result.status === 'ok' && result.data.url) {
         // #1267: external navigation to the Stripe Checkout URL — must be a real
         // browser navigation, not a client-side router.push.
-        window.location.href = d.url;
-      } else if (d.error?.includes('not configured')) {
-        toast.error('Stripe is not configured yet. Contact support to upgrade.');
+        window.location.href = result.data.url;
       } else {
-        toast.error(d.error || 'Could not start checkout');
+        const message = result.status === 'error' ? result.message : 'Could not start checkout';
+        toast.error(message.includes('not configured')
+          ? 'Stripe is not configured yet. Contact support to upgrade.' : message);
       }
     },
   });
@@ -123,10 +125,9 @@ export default function BillingPage() {
 
   const portalMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/billing/portal', { method:'POST' });
-      const d = await res.json();
-      if (res.ok && d.url) window.open(d.url, '_blank');
-      else toast.error(d.error || 'Could not open billing portal');
+      const result = await fetchJsonSafe<{ url?: string }>('/api/tenant/billing/portal', { method:'POST' });
+      if (result.status === 'ok' && result.data.url) window.open(result.data.url, '_blank');
+      else toast.error(result.status === 'error' ? result.message : 'Could not open billing portal');
     },
   });
   const openPortal = () => portalMutation.mutate();
