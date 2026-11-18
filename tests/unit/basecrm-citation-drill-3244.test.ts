@@ -112,11 +112,11 @@ const PINNED: Array<{
   },
   {
     doc: 'docs/BASECRM/02-DATA-MODEL.md',
-    cite: 'core.ts:379',
+    cite: 'core.ts:416',
     src: 'drizzle/schema/core.ts',
-    line: 379,
+    line: 416,
     has: "pgTable('invitations'",
-    why: 'the third, and 259 lines away from sessions, which is the point of pinning it',
+    why: 'the third, and 229 lines away from sessions, which is the point of pinning it',
   },
   {
     doc: 'docs/BASECRM/02-DATA-MODEL.md',
@@ -136,9 +136,9 @@ const PINNED: Array<{
   },
   {
     doc: 'docs/BASECRM/02-DATA-MODEL.md',
-    cite: 'core.ts:324',
+    cite: 'core.ts:361',
     src: 'drizzle/schema/core.ts',
-    line: 324,
+    line: 361,
     has: "pgTable('audit_logs'",
     why: 'the audit_logs table',
   },
@@ -273,7 +273,7 @@ describe('#3244 follow-up — pinned BASECRM citations resolve to what they name
     // `(was :X)` parenthetical this directory's convention requires: 02 still quotes
     // `core.ts:217…` as the mistake, so the check is that the *corrections* are there.
     const two = readFileSync(join(ROOT, 'docs/BASECRM/02-DATA-MODEL.md'), 'utf8');
-    for (const fixed of ['core.ts:185', 'core.ts:379', 'core.ts:120']) {
+    for (const fixed of ['core.ts:185', 'core.ts:416', 'core.ts:120']) {
       expect(two, `02 lost the ${fixed} correction`).toContain(fixed);
     }
   });

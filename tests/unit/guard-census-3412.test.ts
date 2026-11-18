@@ -25,9 +25,10 @@ describe('guard-census over the real repository (#3412)', () => {
   const census = computeCensus(ROOT);
 
   it('measures the complete guard estate in package.json', () => {
-    // #3402 added guard:mutating-route-permissions (46 → 47 aliases, 45 → 46 wired).
-    expect(census.total).toBe(47);
-    expect(census.wiredCount).toBe(46);
+    // #3402 added guard:mutating-route-permissions (46 → 47); #2597 added
+    // guard:rbac-wiring (47 → 48 aliases, 46 → 47 wired).
+    expect(census.total).toBe(48);
+    expect(census.wiredCount).toBe(47);
     expect(census.unwiredCount).toBe(1);
     expect(census.unwired).toEqual(['guard:migration-redecl']);
   });
@@ -40,7 +41,7 @@ describe('guard-census over the real repository (#3412)', () => {
   });
 
   it('accurately attributes guards per workflow', () => {
-    expect(census.perWorkflow['ci.yml']?.length).toBe(41);
+    expect(census.perWorkflow['ci.yml']?.length).toBe(42);
     expect(census.perWorkflow['nightly-soak.yml']?.length).toBe(5);
   });
 
@@ -49,8 +50,8 @@ describe('guard-census over the real repository (#3412)', () => {
       cwd: ROOT,
       encoding: 'utf8',
     });
-    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 47');
-    expect(stdout).toContain('[guard-census] Wired in workflows: 46/47');
+    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 48');
+    expect(stdout).toContain('[guard-census] Wired in workflows: 47/48');
     expect(stdout).toContain('[guard-census] Unwired (1): guard:migration-redecl');
   });
 
@@ -60,8 +61,8 @@ describe('guard-census over the real repository (#3412)', () => {
       encoding: 'utf8',
     });
     const parsed = JSON.parse(stdout);
-    expect(parsed.total).toBe(47);
-    expect(parsed.wiredCount).toBe(46);
+    expect(parsed.total).toBe(48);
+    expect(parsed.wiredCount).toBe(47);
     expect(parsed.unwired).toEqual(['guard:migration-redecl']);
     expect(Array.isArray(parsed.bareInvocations)).toBe(true);
   });

@@ -180,12 +180,25 @@ class NuCRMClient {
     submit: (formId: string, data: Record<string, unknown>) =>
       // #3046: this hand-rolled fetch bypassed req()'s 15s deadline — a dead
       // form endpoint could pin a server handler forever. Match the
-      // client-wide timeout; response semantics are unchanged.
+      // client-wide timeout. It stays hand-rolled so the public endpoint gets
+      // no Bearer header; only the response handling is aligned with req().
       fetch(`${this.cfg.baseUrl}/api/forms/submit`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ form_id: formId, data }),
-      }).then(r => r.json()),
+      }).then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        // #3408: a refused submission used to resolve as `{error: "..."}`,
+        // indistinguishable from a captured lead to every SDK consumer.
+        const record = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+        const err = record.error;
+        const message = typeof err === 'string' ? err
+          : err && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : `HTTP ${r.status}`;
+        if (!r.ok || record.ok === false || record.success === false) throw new Error(message);
+        return body;
+      }),
   };
 
   // ── Automation ──────────────────────────────────────────────

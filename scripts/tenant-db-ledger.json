@@ -368,6 +368,7 @@
         "app/api/tenant/quotes/[id]/pdf/route.ts",
         "app/api/tenant/quotes/[id]/route.ts",
         "app/api/tenant/quotes/route.ts",
+        "app/api/tenant/rbac/approval-rules/route.ts",
         "app/api/tenant/rbac/field-permissions/route.ts",
         "app/api/tenant/rbac/record-permissions/route.ts",
         "app/api/tenant/reports/[id]/route.ts",

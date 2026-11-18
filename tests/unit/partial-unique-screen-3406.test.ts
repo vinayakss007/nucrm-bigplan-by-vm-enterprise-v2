@@ -301,19 +301,15 @@ describe('#3406 the live repo reads clean, and the census is the published one',
     // files at one number, so the ledger became 0145 and the chain grew to 148.
     // This PR's own 0146 (the RLS tombstone arm) made it 149; #3577's 0147
     // (superadmin SELECT on audit_logs so chain verification sees other
-    // tenants) made it 150; #2774's 0149 (replaces the churn placeholder
-    // function — no tables or indexes, so only the migration count moves)
-    // makes it 151.
-    //
-    // NOTE for the merge of #2597's 0148: when both in-flight migrations land,
-    // this pin becomes migrations: 152, softTables: 205, uniqueOnSoft: 60,
-    // partial: 35. Both PRs touch this assertion, so the merge conflict is the
-    // prompt to apply the combined numbers.
+    // tenants) made it 150; #2597's 0148 (approval_rules, a new
+    // soft-deletable table whose live-name unique index excludes tombstones)
+    // made it 151; #2774's 0149 (replaces the churn placeholder function —
+    // no tables or indexes, so only the migration count moves) makes it 152.
     expect(report.totals).toEqual({
-      migrations: 151,
-      softTables: 204,
-      uniqueOnSoft: 59,
-      partial: 34,
+      migrations: 152,
+      softTables: 205,
+      uniqueOnSoft: 60,
+      partial: 35,
       absolute: 25,
       conflictSites: expect.any(Number),
     });
@@ -323,7 +319,7 @@ describe('#3406 the live repo reads clean, and the census is the published one',
     const r = run(ROOT, '--json');
     expect(r.status, r.stderr).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.totals.partial).toBe(34);
+    expect(parsed.totals.partial).toBe(35);
     expect(parsed.findings).toEqual([]);
   });
 });

@@ -2,9 +2,9 @@
 
 > **A count is not a census until you say who counted.** The application role is not the
 > table owner, is not a superuser and has no `BYPASSRLS`, so Row Level Security binds it on
-> **every** table where it is enabled — measured on the live schema: 227 tables, 227 with
-> row security (`0145_cron_runs` added #3410's ledger table; 226 / 209 before it). 17 of them carry a `FOR SELECT USING (true)` policy and read honestly from
-> any session (`tenants`, `plans`, `backup_records`…); for the other 210 a session that sets
+> **every** table where it is enabled — measured on the live schema: 228 tables, 228 with
+> row security (`0148_approval_rules` added #2597's persisted RBAC rules; 227 / 210 before it). 17 of them carry a `FOR SELECT USING (true)` policy and read honestly from
+> any session (`tenants`, `plans`, `backup_records`…); for the other 211 a session that sets
 > neither `app.current_tenant` nor `app.is_super_admin` is admitted to **no rows**: `count(*)`
 > answers 0, `sum()` answers null, `EXISTS` answers false, `SELECT` returns nothing, and none of
 > it raises. Measured

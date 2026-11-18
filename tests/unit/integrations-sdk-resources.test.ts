@@ -335,15 +335,26 @@ describe('forms', () => {
     expect(req.headers['Authorization']).toBeUndefined();
   });
 
-  it('submit() resolves the raw parsed body and does not throw on non-2xx', async () => {
+  it('submit() rejects on non-2xx instead of handing back an error body (#3408)', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 422,
       json: async () => ({ error: 'validation failed' }),
     } as never);
     const c = await client();
-    // submit() bypasses req(), so it has no ok-check: it hands the body back.
-    await expect(c.forms.submit('f-1', {})).resolves.toEqual({ error: 'validation failed' });
+    // This test used to assert resolves({error: ...}) — a refused submission
+    // looked identical to a captured lead to every SDK consumer.
+    await expect(c.forms.submit('f-1', {})).rejects.toThrow('validation failed');
+  });
+
+  it('submit() rejects a failure envelope carried in a 200 (#3408)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, error: { code: 'FORM_CLOSED', message: 'form unpublished' } }),
+    } as never);
+    const c = await client();
+    await expect(c.forms.submit('f-1', {})).rejects.toThrow('form unpublished');
   });
 });
 
