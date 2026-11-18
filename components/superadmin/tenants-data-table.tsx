@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal, LogIn, AlertTriangle, Edit, XCircle } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -61,6 +63,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
   const [tenants, setTenants] = useState(initialTenants)
   const [total, setTotal] = useState(initialTenants.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
 
@@ -71,14 +74,11 @@ export default function TenantsDataTable({ initialTenants }: Props) {
       offset: String(page * pagination.pageSize),
     })
     if (globalFilter) params.set('q', globalFilter)
-    try {
-      const res = await fetch('/api/superadmin/tenants?' + params)
-      const data = await res.json()
-      setTenants(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load tenants:', error)
-    }
+    // #3408: a failed refresh used to set tenants=[], total=0 and render
+    // "No tenants found" — an outage indistinguishable from an empty platform.
+    const result = await fetchJsonSafe<{ data?: typeof tenants; total?: number }>('/api/superadmin/tenants?' + params)
+    if (result.status === 'ok') { setTenants(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
+    else if (result.status === 'error') setLoadError(result.message)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
 
@@ -238,6 +238,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
       </div>
 
       {/* DataTable */}
+      {loadError && <div className="p-3"><InlineErrorState message={`Could not load tenants — an empty list here would be a lie. (${loadError})`} onRetry={() => void loadData(pagination.pageIndex)} /></div>}
       <div className="table-responsive rounded-xl border border-white/5">
         <DataTable
           columns={columns}
@@ -254,8 +255,8 @@ export default function TenantsDataTable({ initialTenants }: Props) {
           onPaginationChange={handlePaginationChange}
           emptyState={{
             icon: <AlertTriangle className="w-6 h-6 text-white/30" />,
-            title: "No tenants found",
-            description: "Try adjusting your search filters",
+            title: loadError ? "Tenant list unavailable" : "No tenants found",
+            description: loadError ? "The tenant list could not be read." : "Try adjusting your search filters",
           }}
         />
       </div>
