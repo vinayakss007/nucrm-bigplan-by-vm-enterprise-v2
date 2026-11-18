@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { Plug, Trash2, CheckCircle, XCircle, Globe, Mail, Zap, Send, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate } from '@/lib/utils';
@@ -186,17 +187,24 @@ export default function IntegrationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
-      await fetch(`/api/tenant/integrations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !active }) });
+      // #3408: a refused write must not quietly "succeed" and reload.
+      const res = await fetchJsonSafe(`/api/tenant/integrations/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !active }),
+      });
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Request aborted');
     },
     onSuccess: reload,
+    onError: (e: Error) => toast.error(e.message),
   });
   const toggle = (id: string, active: boolean) => toggleMutation.mutate({ id, active });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/integrations/${id}`, { method: 'DELETE' });
+      const res = await fetchJsonSafe(`/api/tenant/integrations/${id}`, { method: 'DELETE' });
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Request aborted');
     },
     onSuccess: () => { toast.success('Removed'); reload(); },
+    onError: (e: Error) => toast.error(e.message),
   });
   const del = async (id: string) => {
     await confirmThen('Remove this integration?', async () => {
