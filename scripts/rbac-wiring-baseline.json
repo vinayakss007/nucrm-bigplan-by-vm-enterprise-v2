@@ -2,6 +2,7 @@
   "note": "Exact set of lib/rbac exported functions with NO production caller outside lib/rbac (#2597). Shrink-only: wiring one is red until its entry comes down; a new unwired export is red outright. Each entry names the proposed consumer (Option A of #2597) that would retire it.",
   "exports": {
     "lib/rbac/approval-producer.ts:stageDealChange": "Composed inside lib/rbac/approval-producer.ts by the route-facing stageDealPatchResponse; tests call it directly to pin staging semantics.",
+    "lib/rbac/approval-producer.ts:stageContactChange": "Composed inside lib/rbac/approval-producer.ts by stageContactPatchResponse; tests call it directly to pin contact staging.",
     "lib/rbac/approval-workflows.ts:checkNeedsApproval": "Composed inside lib/rbac/approval-producer.ts by the A3 producer; the route calls stageDealChange, so no caller outside lib/rbac is needed.",
     "lib/rbac/approval-workflows.ts:requestApproval": "Composed inside lib/rbac/approval-producer.ts by the A3 producer together with checkNeedsApproval.",
     "lib/rbac/enforce.ts:__clearRoleIdCache": "Test-only cache reset called from tests/unit/rbac-field-enforcement-2597.test.ts; intentionally has no production caller.",

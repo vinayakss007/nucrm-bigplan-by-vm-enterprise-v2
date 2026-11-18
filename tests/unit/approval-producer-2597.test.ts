@@ -72,7 +72,7 @@ vi.mock('@/drizzle/db', async () => {
   return { db };
 });
 
-import { stageDealChange, applyApprovedChange } from '@/lib/rbac/approval-producer';
+import { stageDealChange, stageContactChange, applyApprovedChange } from '@/lib/rbac/approval-producer';
 
 const ctx = (over: Partial<AuthContext> = {}): AuthContext => ({
   userId: USER, tenantId: TENANT, roleSlug: 'rep', permissions: {},
@@ -105,7 +105,7 @@ describe('stageDealChange (#2597 A3)', () => {
 
   it('rejects a stage transition instead of staging it silently', async () => {
     expect(await stageDealChange(ctx(), DEAL, {}, { stage_id: 'x' }, BASE))
-      .toEqual({ kind: 'unsupported', reason: 'Stage transitions cannot go through approval yet' });
+      .toEqual({ kind: 'unsupported', reason: 'stage_id changes cannot go through approval yet' });
   });
 
   it('stages a rule-matched PATCH with the chain and the base timestamp', async () => {
@@ -129,6 +129,32 @@ describe('stageDealChange (#2597 A3)', () => {
     expect(await stageDealChange(ctx(), DEAL, { amount: 20000 }, { amount: 20000 }, BASE))
       .toEqual({ kind: 'conflict', requestId: 'existing' });
     expect(h.inserts).toHaveLength(0);
+  });
+});
+
+describe('stageContactChange (#2597 A3, contacts rollout)', () => {
+  const contactRule = {
+    ...rule, id: RULE + '-c', entityType: 'contact', conditionField: 'lead_status',
+    conditionOperator: '==', conditionValue: 'qualified',
+  };
+
+  it('stages a rule-matched contact PATCH under the contacts entity name', async () => {
+    h.ruleRows = [contactRule]; h.pendingRows = [[]];
+    const result = await stageContactChange(
+      ctx(), DEAL, { lead_status: 'qualified' }, { lead_status: 'qualified', first_name: 'A' }, BASE,
+    );
+    expect(result.kind).toBe('staged');
+    const request = h.inserts.find((i) => i.table === 'approval_requests')!;
+    expect(request.values).toMatchObject({ entityType: 'contacts', entityId: DEAL });
+    expect(request.values.pendingData).toEqual({
+      body: { lead_status: 'qualified', first_name: 'A' }, baseUpdatedAt: BASE,
+    });
+  });
+
+  it('does nothing when the contact rule does not match', async () => {
+    h.ruleRows = [contactRule]; h.pendingRows = [[]];
+    expect(await stageContactChange(ctx(), DEAL, { lead_status: 'new' }, { lead_status: 'new' }, BASE))
+      .toEqual({ kind: 'none' });
   });
 });
 
@@ -163,6 +189,17 @@ describe('applyApprovedChange (#2597 A3)', () => {
     expect(h.inserts.map((i) => i.table)).toContain('activities');
   });
 
+  it('replays a staged contact change onto the contacts table', async () => {
+    const result = await applyApprovedChange({
+      ...base, entityType: 'contacts',
+      pendingData: { body: { lead_status: 'qualified', first_name: 'A' }, baseUpdatedAt: BASE },
+    }, USER);
+    expect(result).toEqual({ applied: true });
+    expect(h.updates[0]!.table).toBe('contacts');
+    expect(h.updates[0]!.set).toMatchObject({ leadStatus: 'qualified', firstName: 'A' });
+    expect(h.updates[0]!.where.sql).toContain('tenant_id');
+  });
+
   it('reports a stale base rather than overwriting a concurrent edit', async () => {
     h.updateReturns = [[]];
     expect(await applyApprovedChange(base, USER)).toEqual({ applied: false, reason: 'stale' });
@@ -174,6 +211,7 @@ describe('#2597 A3 wiring anti-rot', () => {
   const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, 'utf8');
   it('the deal PATCH stages and both decision endpoints replay', () => {
     expect(read('app/api/tenant/deals/[id]/route.ts')).toMatch(/stageDealPatchResponse\(/);
+    expect(read('app/api/tenant/contacts/[id]/route.ts')).toMatch(/stageContactPatchResponse\(/);
     expect(read('app/api/tenant/approvals/[id]/route.ts')).toMatch(/applyApprovedChange\(/);
     expect(read('app/api/tenant/permissions/approvals/route.ts')).toMatch(/applyApprovedChange\(/);
   });
