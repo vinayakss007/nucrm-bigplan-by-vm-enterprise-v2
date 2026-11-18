@@ -11,7 +11,7 @@
  * Asserts on the rendered SQL of the count select so a future edit that drops
  * the cast fails here rather than silently changing the response type.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
