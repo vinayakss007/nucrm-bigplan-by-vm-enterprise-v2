@@ -624,8 +624,7 @@
       "files": [
         "lib/compliance/gdpr.ts",
         "lib/compliance/request-lifecycle.ts",
-        "lib/compliance/soc2.ts",
-        "lib/compliance/stale-requests.ts"
+        "lib/compliance/soc2.ts"
       ]
     },
     "lib/cron": {
