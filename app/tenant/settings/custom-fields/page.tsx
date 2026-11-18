@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Plus,
   Trash2,
@@ -102,39 +103,37 @@ export default function TenantCustomFields() {
 
   const createMutation = useMutation({
     mutationFn: async (fieldData: FieldFormData) => {
-      const res = await fetch('/api/tenant/custom-fields', {
+      const data = await fetchJsonOrThrow<{ field?: unknown }>('/api/tenant/custom-fields', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entityType, ...fieldData }),
       });
-      const data = await res.json();
       if (!data.field) throw new Error('Failed to create field');
     },
     onSuccess: () => { setShowAddModal(false); reloadFields(); },
-    onError: () => toast.error('Failed to create field'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to create field'),
   });
 
   const updateMutation = useMutation({
     mutationFn: async (fieldData: FieldFormData) => {
       if (!editingField) throw new Error('No field selected');
-      const res = await fetch('/api/tenant/custom-fields', {
+      const data = await fetchJsonOrThrow<{ field?: unknown }>('/api/tenant/custom-fields', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fieldId: editingField.id, ...fieldData }),
       });
-      const data = await res.json();
       if (!data.field) throw new Error('Failed to update field');
     },
     onSuccess: () => { setShowEditModal(false); setEditingField(null); reloadFields(); },
-    onError: () => toast.error('Failed to update field'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update field'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (fieldId: string) => {
-      await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
+      await fetchJsonOrThrow(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
     },
     onSuccess: () => reloadFields(),
-    onError: () => toast.error('Failed to delete field'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete field'),
   });
 
   const handleCreate = (fieldData: FieldFormData) => createMutation.mutate(fieldData);
