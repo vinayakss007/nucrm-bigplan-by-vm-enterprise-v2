@@ -24,6 +24,7 @@ import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { hasRecordGrant } from '@/lib/rbac/record-scope';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -63,9 +64,11 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // RBAC: if user lacks view_all, only allow access to own records
+    // RBAC: if user lacks view_all, allow own records and explicit per-record
+    // read grants (#2597 A2).
     if (!can(ctx, 'deals.view_all')) {
-      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+      const isOwner = row.assignedTo === ctx.userId || row.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'deals', row.id, 'read'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
@@ -156,9 +159,10 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // RBAC: if user lacks view_all, only allow editing own records
+    // RBAC: if user lacks view_all, allow own records and explicit write grants
     if (!can(ctx, 'deals.view_all')) {
-      if (prev.assignedTo !== ctx.userId && prev.createdBy !== ctx.userId) {
+      const isOwner = prev.assignedTo === ctx.userId || prev.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'deals', dealId, 'write'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
@@ -316,7 +320,8 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
         .limit(1);
 
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+      const isOwner = existing.assignedTo === ctx.userId || existing.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'deals', dealId, 'admin'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }

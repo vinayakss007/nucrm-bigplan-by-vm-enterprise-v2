@@ -22,6 +22,7 @@ import { archiveFilter } from '@/lib/api/deals-archive-filter';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { resolveDealStage, stageFailureMessage } from '@/lib/deals/resolve-stage';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body so the
 // auth check's setTenantContext() and every db query below (count + list) share
@@ -54,7 +55,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (archiveWhere) filters.push(archiveWhere);
 
     if (!can(ctx, 'deals.view_all')) {
-      filters.push(or(eq(deals.assignedTo, ctx.userId), eq(deals.createdBy, ctx.userId))!);
+      // #2597 A2: ownership is the default scope; a per-record grant from
+      // record_permissions is the explicit exception. Without this, a saved
+      // grant was invisible to every list response.
+      const ownerScope = or(eq(deals.assignedTo, ctx.userId), eq(deals.createdBy, ctx.userId))!;
+      const grantScope = await getRecordGrantCondition(ctx, 'deals', deals.id);
+      filters.push(grantScope ? or(ownerScope, grantScope)! : ownerScope);
     }
 
     if (stage_id) filters.push(eq(deals.stageId, stage_id));

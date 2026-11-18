@@ -9,10 +9,9 @@
     "lib/rbac/enforce.ts:stripRowForRead": "Internal row projector composed only inside lib/rbac/enforce.ts; needs no caller outside the module.",
     "lib/rbac/field-permissions.ts:checkFieldAccess": "Superseded by lib/rbac/enforce.ts used in the 10 entity routes pinned by guard:field-permissions; kept for the legacy API, not called in production.",
     "lib/rbac/field-permissions.ts:filterFieldsByPermission": "Same legacy field-permission API as checkFieldAccess; enforcement now goes through enforceFieldRead/Write.",
-    "lib/rbac/record-permissions.ts:checkRecordAccess": "Record scoping is enforced by can(ctx, '<entity>.view_all') strings; the record_permissions table is the competing model #2597 Option A2 must fold into can() or delete.",
-    "lib/rbac/record-permissions.ts:grantRecordAccess": "Writer for the competing record_permissions model; unwired until A2 picks a system.",
-    "lib/rbac/record-permissions.ts:revokeRecordAccess": "Writer for the competing record_permissions model; unwired until A2 picks a system.",
-    "lib/rbac/record-permissions.ts:getColumnMapping": "Helper for the unwired record-permission filter; needs A2 to pick record_permissions before it has a caller.",
-    "lib/rbac/record-permissions.ts:getRecordAccessFilter": "Per-record allow-list builder; the API the A2 'fold into can()' choice would call from the entity list handlers."
+
+    "lib/rbac/record-permissions.ts:checkRecordAccess": "Legacy per-record reader taking a role id; A2's typed lib/rbac/record-scope.ts helper resolves the role from AuthContext instead. Kept for the legacy API, not called in production.",
+    "lib/rbac/record-permissions.ts:getColumnMapping": "Helper for the legacy string-based filter; A2 enforces through lib/rbac/record-scope.ts, which takes Drizzle columns so joins cannot leave identifiers ambiguous.",
+    "lib/rbac/record-permissions.ts:getRecordAccessFilter": "String-identifier fragment from the competing model; superseded by getRecordGrantCondition in record-scope.ts."
   }
 }
