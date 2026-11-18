@@ -43,6 +43,24 @@ describe('collectUngated', () => {
     expect(collectUngated(files)).toEqual(['a/route.ts', 'b/route.ts']);
   });
 
+  it('accepts an explicit superadmin refusal as a role gate', () => {
+    const files = [
+      file('a/route.ts', 'export const POST = async () => {}; if (!ctx.isSuperAdmin) return NextResponse.json({}, {status:403});'),
+      file('b/route.ts', 'export const POST = async () => {}; if (!ctx.isSuperAdmin) { return forbidden(); }'),
+    ];
+    expect(collectUngated(files)).toEqual([]);
+  });
+
+  it('does NOT accept passing ctx.isSuperAdmin to a module gate as a role gate', () => {
+    // chat, sms and tax/calculate do this: it bypasses the plan check, it does
+    // not decide whether the caller may mutate a tenant record.
+    const files = [file(
+      'a/route.ts',
+      'export const POST = async () => {}; const gate = await requireModule(ctx.tenantId, "m", ctx.isSuperAdmin); if (gate) return gate;',
+    )];
+    expect(collectUngated(files)).toEqual(['a/route.ts']);
+  });
+
   it('does not mistake a mention in a comment for a gate', () => {
     // A comment can say "this needs requirePerm(ctx, …)"; the guard must still
     // fail until the code actually calls it.
