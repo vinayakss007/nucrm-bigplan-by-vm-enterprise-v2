@@ -47,6 +47,14 @@ export const SCAN_GLOB = 'app/api/tenant/**/route.ts';
 export const MUTATING_EXPORT = /export const (POST|PATCH|PUT|DELETE)\b/;
 /** The three shapes the #3402 census counted as a role gate. */
 export const GATE = /\b(?:can|requirePerm)\s*\(\s*ctx\b|\bctx\.isAdmin\b/;
+/**
+ * A deliberate superadmin-only refusal is a role gate too — stricter than
+ * `ctx.isAdmin`, and the case `app/api/tenant/backup/route.ts` has always used.
+ * The narrow `if (!ctx.isSuperAdmin)` shape is required: merely PASSING
+ * `ctx.isSuperAdmin` to `requireModule(...)` only bypasses a plan gate and is
+ * not an authorization decision (chat, sms and tax/calculate do exactly that).
+ */
+export const SUPERADMIN_GATE = /if\s*\(\s*!\s*ctx\.isSuperAdmin\b/;
 
 /**
  * Strip comments before looking for a gate: a TODO saying "needs requirePerm"
@@ -63,7 +71,7 @@ export function collectUngated(files) {
   return files
     .filter(({ source }) => {
       const code = stripComments(source);
-      return MUTATING_EXPORT.test(code) && !GATE.test(code);
+      return MUTATING_EXPORT.test(code) && !GATE.test(code) && !SUPERADMIN_GATE.test(code);
     })
     .map(({ path }) => path)
     .sort();

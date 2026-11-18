@@ -1,7 +1,6 @@
 {
   "note": "Exact set of mutating tenant routes with no role gate and no self-scoped exemption (#3402). Shrink-only: a newly gated route is red until removed here; a new ungated route is red outright.",
   "files": [
-    "app/api/tenant/backup/route.ts",
     "app/api/tenant/chat/[sessionId]/messages/route.ts",
     "app/api/tenant/chat/route.ts",
     "app/api/tenant/custom-entities/[id]/rows/[rowId]/route.ts",
