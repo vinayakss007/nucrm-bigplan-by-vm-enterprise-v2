@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
   AtSign, AlertTriangle, Zap, Clock, Users, type LucideIcon } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
@@ -84,33 +85,43 @@ export default function NotificationsPage() {
 
   const isUnread = (n: NotificationItem) => !n.read_at && !n.is_read;
 
+  // #3408: every mutation below used bare fetch with no status check, so a
+  // refused write still fired onSuccess ("All marked as read" / "Cleared").
+  const mustSucceed = async (url: string, init?: RequestInit) => {
+    const res = await fetchJsonSafe(url, init);
+    if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Request aborted');
+  };
+
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch('/api/tenant/notifications', {
+      await mustSucceed('/api/tenant/notifications', {
         method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
       });
     },
     onSuccess: () => reload(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const markRead = (id: string) => markReadMutation.mutateAsync(id);
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/tenant/notifications', {
+      await mustSucceed('/api/tenant/notifications', {
         method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ markAllRead:true }),
       });
     },
     onSuccess: () => { toast.success('All marked as read'); reload(); },
+    onError: (e: Error) => toast.error(e.message),
   });
   const markAllRead = () => markAllReadMutation.mutate();
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch('/api/tenant/notifications', {
+      await mustSucceed('/api/tenant/notifications', {
         method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
       });
     },
     onSuccess: () => reload(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const del = async (id: string) => {
     await confirmThen('Delete this notification?', async () => {
@@ -120,9 +131,10 @@ export default function NotificationsPage() {
 
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/tenant/notifications', { method:'DELETE' });
+      await mustSucceed('/api/tenant/notifications', { method:'DELETE' });
     },
     onSuccess: () => { toast.success('Cleared'); reload(); },
+    onError: (e: Error) => toast.error(e.message),
   });
   const clearAll = async () => {
     await confirmThen('Clear all notifications?', async () => {
@@ -131,7 +143,10 @@ export default function NotificationsPage() {
   };
 
   const handleClick = async (n: NotificationItem) => {
-    if (isUnread(n)) await markRead(n.id);
+    if (isUnread(n)) {
+      // onError already toasts the refusal; still let the link open.
+      try { await markRead(n.id); } catch { /* surfaced by onError */ }
+    }
     if (n.link) router.push(n.link);
   };
 
