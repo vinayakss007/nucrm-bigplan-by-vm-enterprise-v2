@@ -19,27 +19,33 @@
  * Semantics mirror the table: a live, non-tombstoned, unexpired grant at any
  * access level makes the record visible to the role. `none` is not a grant.
  * Superadmins/admins are exempt — a tenant staffing role cannot name them.
+ *
+ * #3405: every read below goes through the branded `withTenantDb` choke point,
+ * so this module is no longer on the raw-client ledger.
  */
 import { and, eq, gt, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { type AnyPgColumn } from 'drizzle-orm/pg-core';
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
 import { recordPermissions, roles } from '@/drizzle/schema/core';
 import type { AuthContext } from '@/lib/auth/middleware';
 
 const roleIdCache = new Map<string, { id: string | null; at: number }>();
 const ROLE_TTL_MS = 60_000;
 
-async function resolveRoleId(tenantId: string, roleSlug: string): Promise<string | null> {
+async function resolveRoleId(ctx: AuthContext): Promise<string | null> {
+  const { tenantId, roleSlug } = ctx;
   if (!roleSlug) return null;
   const key = `${tenantId}:${roleSlug}`;
   const hit = roleIdCache.get(key);
   if (hit && Date.now() - hit.at < ROLE_TTL_MS) return hit.id;
-  if (typeof db?.select !== 'function') return null;
-  const [role] = await db
-    .select({ id: roles.id })
-    .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
-    .limit(1);
+  const role = await withTenantDb(tenantId, ctx.userId, async (db) => {
+    const [row] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
+      .limit(1);
+    return row;
+  });
   const id = role?.id ?? null;
   roleIdCache.set(key, { id, at: Date.now() });
   return id;
@@ -59,20 +65,23 @@ export async function getRecordGrantCondition(
   idColumn: AnyPgColumn,
 ): Promise<SQL | null> {
   if (ctx.isSuperAdmin || ctx.isAdmin) return null;
-  const roleId = await resolveRoleId(ctx.tenantId, ctx.roleSlug);
+  const roleId = await resolveRoleId(ctx);
   if (!roleId) return null;
 
-  const [grant] = await db
-    .select({ id: recordPermissions.id })
-    .from(recordPermissions)
-    .where(and(
-      eq(recordPermissions.tenantId, ctx.tenantId),
-      eq(recordPermissions.roleId, roleId),
-      eq(recordPermissions.entityType, entityType),
-      isNull(recordPermissions.deletedAt),
-      or(isNull(recordPermissions.expiresAt), gt(recordPermissions.expiresAt, new Date())),
-    ))
-    .limit(1);
+  const grant = await withTenantDb(ctx.tenantId, ctx.userId, async (db) => {
+    const [row] = await db
+      .select({ id: recordPermissions.id })
+      .from(recordPermissions)
+      .where(and(
+        eq(recordPermissions.tenantId, ctx.tenantId),
+        eq(recordPermissions.roleId, roleId),
+        eq(recordPermissions.entityType, entityType),
+        isNull(recordPermissions.deletedAt),
+        or(isNull(recordPermissions.expiresAt), gt(recordPermissions.expiresAt, new Date())),
+      ))
+      .limit(1);
+    return row;
+  });
   if (!grant) return null;
 
   // No `alias()` here: in raw SQL Drizzle renders an alias as just `"rp"`,
@@ -108,20 +117,23 @@ export async function hasRecordGrant(
   required: keyof typeof LEVELS = 'read',
 ): Promise<boolean> {
   if (ctx.isSuperAdmin || ctx.isAdmin) return true;
-  const roleId = await resolveRoleId(ctx.tenantId, ctx.roleSlug);
+  const roleId = await resolveRoleId(ctx);
   if (!roleId) return false;
-  const [grant] = await db
-    .select({ id: recordPermissions.id })
-    .from(recordPermissions)
-    .where(and(
-      eq(recordPermissions.tenantId, ctx.tenantId),
-      eq(recordPermissions.roleId, roleId),
-      eq(recordPermissions.entityType, entityType),
-      eq(recordPermissions.entityId, entityId),
-      isNull(recordPermissions.deletedAt),
-      or(isNull(recordPermissions.expiresAt), gt(recordPermissions.expiresAt, new Date())),
-      inArray(recordPermissions.accessLevel, [...LEVELS[required]]),
-    ))
-    .limit(1);
+  const grant = await withTenantDb(ctx.tenantId, ctx.userId, async (db) => {
+    const [row] = await db
+      .select({ id: recordPermissions.id })
+      .from(recordPermissions)
+      .where(and(
+        eq(recordPermissions.tenantId, ctx.tenantId),
+        eq(recordPermissions.roleId, roleId),
+        eq(recordPermissions.entityType, entityType),
+        eq(recordPermissions.entityId, entityId),
+        isNull(recordPermissions.deletedAt),
+        or(isNull(recordPermissions.expiresAt), gt(recordPermissions.expiresAt, new Date())),
+        inArray(recordPermissions.accessLevel, [...LEVELS[required]]),
+      ))
+      .limit(1);
+    return row;
+  });
   return Boolean(grant);
 }
