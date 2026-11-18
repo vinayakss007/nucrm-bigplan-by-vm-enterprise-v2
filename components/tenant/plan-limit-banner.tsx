@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, ArrowUpRight, X, Clock, Crown } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface UsageStatus {
   workspace_status: string;
@@ -19,16 +20,31 @@ interface UsageStatus {
 export default function PlanLimitBanner() {
   const [status, setStatus] = useState<UsageStatus | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/usage-status', { signal: abort.signal }).then(r => r.json()).then(d => {
-      if (!abort.signal.aborted && d.data) setStatus(d.data);
-    }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return; console.error('[plan-limit-banner] Error:', e); });
+    void (async () => {
+      const result = await fetchJsonSafe<{ data?: UsageStatus }>('/api/tenant/usage-status', { signal: abort.signal });
+      if (result.status === 'ok' && result.data.data) setStatus(result.data.data);
+      else if (result.status === 'error') setLoadError(result.message);
+    })();
     return () => abort.abort();
   }, []);
 
-  if (dismissed || !status) return null;
+  // #3408: a failed usage read is not "no limits reached". Saying nothing
+  // while the quota API is down is the same lie as an empty list.
+  if (dismissed) return null;
+  if (loadError) {
+    return (
+      <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800 shrink-0">
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          Could not verify your workspace usage right now — quota warnings may be unavailable.
+        </p>
+      </div>
+    );
+  }
+  if (!status) return null;
 
   // Trial expired — hard block warning
   if (status.workspace_status === 'trial_expired' || status.workspace_status === 'suspended') {
