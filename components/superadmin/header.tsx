@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { Crown, LogOut, Settings,
   ChevronDown, ArrowLeft, Bell, Menu } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import toast from 'react-hot-toast';
 import { cn, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -17,14 +19,14 @@ interface AdminStats { open_errors?: number; active_tenants?: number; total_tena
 
 export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { profile: AdminProfile | null; stats: AdminStats | null; onToggleSidebar?: () => void }) {
   const [showProfile, setShowProfile] = useState(false);
-  const [health, setHealth] = useState<'ok'|'warn'|'error'>('ok');
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    const errors = stats?.open_errors ?? 0;
-    setHealth(errors > 5 ? 'error' : errors > 0 ? 'warn' : 'ok');
-  }, [stats]);
+  // #3408: a missing stats payload is not "all systems OK" — the old
+  // `stats?.open_errors ?? 0` made a failed read render a green badge.
+  const errors = stats?.open_errors ?? 0;
+  const health: 'ok'|'warn'|'error'|'unknown' = stats == null ? 'unknown'
+    : errors > 5 ? 'error' : errors > 0 ? 'warn' : 'ok';
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (!profileRef.current?.contains(e.target as Node)) setShowProfile(false); };
@@ -34,7 +36,8 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
 
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
-      await fetch('/api/auth/logout', { method:'POST' });
+      const res = await fetchJsonSafe('/api/auth/logout', { method:'POST' });
+      if (res.status !== 'ok') { toast.error(res.status === 'error' ? res.message : 'Could not sign out'); return; }
       router.push('/auth/login');
     }, 'danger_only', 'Log out');
   };
@@ -64,11 +67,11 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
         <Link href="/superadmin/health"
           className={cn('hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-colors',
             health==='ok'?'border-emerald-300/20 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400':
-            health==='warn'?'border-amber-300/20 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400':
+            health==='warn'||health==='unknown'?'border-amber-300/20 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400':
             'border-red-300/20 dark:border-red-500/20 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400')}>
           <div className={cn('w-1.5 h-1.5 rounded-full',
-            health==='ok'?'bg-emerald-500': health==='warn'?'bg-amber-500 animate-pulse':'bg-red-500 animate-pulse')} />
-          {health==='ok'?'All Systems OK': `${stats?.open_errors ?? 0} Open Error${(stats?.open_errors ?? 0) > 1 ? 's' : ''}`}
+            health==='ok'?'bg-emerald-500': health==='warn'||health==='unknown'?'bg-amber-500 animate-pulse':'bg-red-500 animate-pulse')} />
+          {health==='ok'?'All Systems OK': health==='unknown'?'Health Unavailable': `${errors} Open Error${errors > 1 ? 's' : ''}`}
         </Link>
 
         {(stats?.open_errors ?? 0) > 0 && (
