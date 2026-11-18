@@ -50,6 +50,7 @@
     "guard:schemas": "node scripts/check-schema-drift.mjs",
     "guard:boundaries": "node scripts/check-route-boundaries.mjs",
     "guard:filesize": "node scripts/check-file-size.mjs",
+    "guard:client-fetch": "node scripts/check-client-fetch.mjs",
     "guard:any-suppressions": "node scripts/check-any-suppressions.mjs",
     "guard:running-config": "node scripts/check-running-config-drift.mjs",
     "guard:chain": "node scripts/check-migration-chain.mjs",
