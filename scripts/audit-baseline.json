@@ -1,4 +1,11 @@
 {
   "_comment": "#2301 grandfathered HIGH/CRITICAL npm advisories. Each entry needs a written `reason`. The guard FAILS on any advisory not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs --update",
-  "entries": []
+  "entries": [
+    {
+      "ghsa": "GHSA-FC5Q-39XC-VJPF",
+      "pkg": "picomatch",
+      "range": "<=4.0.7",
+      "reason": "Accepted 2026-11-18. No patched version is published: `npm view picomatch version` is 4.0.7 and the advisory range is <=4.0.7, so an npm audit fix / targeted bump cannot resolve it today. picomatch is a transitive glob matcher under dev-only build/test tooling (vitest, vite, lint-staged, tailwind, rollup plugins) — it is not a direct or runtime dependency of the app, and the ReDoS needs attacker-controlled glob patterns, which these tools take from committed config, not from HTTP input. Re-check on every audit run and delete this entry as soon as a fixed picomatch is published."
+    }
+  ]
 }
