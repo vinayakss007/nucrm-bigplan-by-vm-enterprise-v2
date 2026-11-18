@@ -7,6 +7,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WidgetGrid } from '@/components/tenant/dashboard/widget-grid';
 import { getPlanDefaultLayout } from '@/lib/dashboard/layout-defaults';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import type { DashboardLayout } from '@/types/dashboard';
 import { Users, Handshake, FileText, Zap, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -54,32 +56,33 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
   const [layout, setLayout] = useState<DashboardLayout | null>(null);
   const [loadingLayout, setLoadingLayout] = useState(true);
   const [isEmpty, setIsEmpty] = useState<boolean | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchLayout = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/dashboard/layout', { credentials: 'include', signal });
-      const data = await res.json();
-      if (data.layout) {
-        setLayout(data.layout);
-      } else {
-        setLayout(getPlanDefaultLayout(planName));
-      }
-    } catch {
+    const result = await fetchJsonSafe<{ layout?: DashboardLayout }>(
+      '/api/tenant/dashboard/layout', { credentials: 'include', signal });
+    if (result.status === 'ok' && result.data.layout) {
+      setLayout(result.data.layout);
+    } else {
+      // #3408: a refused read is not "no saved layout". Use the plan default,
+      // but keep the failure visible in the banner.
       setLayout(getPlanDefaultLayout(planName));
-    } finally {
-      setLoadingLayout(false);
+      if (result.status === 'error') setLoadError(result.message);
     }
+    setLoadingLayout(false);
   }, [planName]);
 
   const fetchStats = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include', signal });
-      const data = await res.json();
-      const d = data.data ?? data;
-      const empty = (d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0;
-      setIsEmpty(empty);
-    } catch {
-      setIsEmpty(false);
+    const result = await fetchJsonSafe<{ data?: { count?: number; companyCount?: number } }>(
+      '/api/tenant/dashboard/widgets/stats/contacts', { credentials: 'include', signal });
+    if (result.status === 'ok') {
+      const d = (result.data.data ?? result.data) as { count?: number; companyCount?: number };
+      setIsEmpty((d?.count ?? 0) === 0 && (d?.companyCount ?? 0) === 0);
+    } else if (result.status === 'error') {
+      // #3408: an error body used to fall through to count=0, rendering the
+      // "no contacts yet" onboarding screen over an outage.
+      setLoadError(result.message);
+      setIsEmpty(null);
     }
   }, []);
 
@@ -123,7 +126,12 @@ export default function DashboardClient({ tenantId, userId, planName, isAdmin }:
         <h1 className="text-2xl font-extrabold tracking-tight">Dashboard</h1>
         <p className="text-sm font-semibold text-foreground/70 capitalize">{planName} plan</p>
       </div>
-      {isEmpty === true ? (
+      {loadError ? (
+        <InlineErrorState
+          message={`Could not load dashboard data — this is a failed request, not an empty workspace. (${loadError})`}
+          onRetry={() => { setLoadError(null); void fetchLayout(); void fetchStats(); }}
+        />
+      ) : isEmpty === true ? (
         <DashboardEmptyState />
       ) : (
         <WidgetGrid
