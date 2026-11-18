@@ -22,16 +22,19 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { activities, approvalRequests, approvalRules, contacts, deals } from '@/drizzle/schema';
+import { activities, approvalRequests, approvalRules, companies, contacts, deals, leads, tasks } from '@/drizzle/schema';
 import { checkNeedsApproval, requestApproval, type ApprovalRule } from '@/lib/rbac/approval-workflows';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import type { AuthContext } from '@/lib/auth/middleware';
 
-type EntityKey = 'deals' | 'contacts';
+type EntityKey = 'deals' | 'contacts' | 'leads' | 'companies' | 'tasks';
 
 const ENTITY_NAMES: Record<EntityKey, string[]> = {
   deals: ['deals', 'deal'],
   contacts: ['contacts', 'contact'],
+  leads: ['leads', 'lead'],
+  companies: ['companies', 'company'],
+  tasks: ['tasks', 'task'],
 };
 
 /** Body keys the replay may apply, and their Drizzle columns. */
@@ -49,13 +52,41 @@ const ENTITY_FIELDS: Record<EntityKey, Record<string, string>> = {
     website: 'website', linkedin_url: 'linkedinUrl', twitter_url: 'twitterUrl',
     custom_fields: 'customFields',
   },
+  leads: {
+    first_name: 'firstName', last_name: 'lastName', email: 'email', phone: 'phone',
+    company_id: 'companyId', assigned_to: 'assignedTo', lead_status: 'leadStatus',
+    lead_source: 'leadSource', notes: 'notes', score: 'score', tags: 'tags',
+  },
+  companies: {
+    name: 'name', domain: 'domain', industry: 'industry', size: 'companySize',
+    annual_revenue: 'annualRevenue', description: 'description', notes: 'notes',
+    website: 'website', phone: 'phone', billing_address: 'address', city: 'city',
+    state: 'state', country: 'country', postal_code: 'postalCode',
+    linkedin_url: 'linkedinUrl', twitter_url: 'twitterUrl', facebook_url: 'facebookUrl',
+    tags: 'tags', custom_fields: 'customFields',
+  },
+  tasks: {
+    title: 'title', description: 'description', due_date: 'dueDate', priority: 'priority',
+    contact_id: 'contactId', deal_id: 'dealId', assigned_to: 'assignedTo',
+    status: 'status', completed: 'completed',
+  },
 };
+
+/** Columns stored as `date`/`timestamptz` in the replayed payloads. */
+const DATE_COLUMNS = new Set(['closeDate', 'dueDate']);
+/** Columns Drizzle types as `numeric` (string in, string out). */
+const STRING_COLUMNS = new Set(['amount', 'annualRevenue']);
 
 /** Changes that need their own side effects are rejected, never staged silently. */
 const UNSUPPORTED_KEYS: Record<EntityKey, string[]> = {
   deals: ['stage_id', 'stage', 'stage_name'],
-  contacts: [],
+  contacts: [], leads: [], companies: [], tasks: [],
 };
+
+/** Tables keyed by (id, tenant_id, deleted_at, updated_at) for replay and CAS. */
+const ENTITY_TABLES = {
+  deals, contacts, leads, companies, tasks,
+} as const;
 
 type StagedBody = Record<string, unknown>;
 
@@ -169,12 +200,17 @@ export function stageDealChange(
   return stageEntityChange(ctx, 'deals', dealId, entityData, body, baseUpdatedAt);
 }
 
-export function stageContactChange(
-  ctx: AuthContext, contactId: string, entityData: Record<string, unknown>,
-  body: StagedBody, baseUpdatedAt: Date | string,
-): Promise<StageResult> {
-  return stageEntityChange(ctx, 'contacts', contactId, entityData, body, baseUpdatedAt);
+function stageFor(entityType: EntityKey) {
+  return (
+    ctx: AuthContext, entityId: string, entityData: Record<string, unknown>,
+    body: StagedBody, baseUpdatedAt: Date | string,
+  ): Promise<StageResult> => stageEntityChange(ctx, entityType, entityId, entityData, body, baseUpdatedAt);
 }
+
+export const stageContactChange = stageFor('contacts');
+export const stageLeadChange = stageFor('leads');
+export const stageCompanyChange = stageFor('companies');
+export const stageTaskChange = stageFor('tasks');
 
 /** Route-facing wrapper: one call, one `NextResponse | null`. */
 async function stagePatchResponse(
@@ -188,7 +224,7 @@ async function stagePatchResponse(
   }
   if (staged.kind === 'conflict') {
     return NextResponse.json({
-      error: `An approval is already pending for this ${entityType === 'deals' ? 'deal' : 'contact'}`,
+      error: `An approval is already pending for this ${ENTITY_NAMES[entityType][0]!.replace(/s$/, '')}`,
       approval_id: staged.requestId,
     }, { status: 409 });
   }
@@ -204,11 +240,33 @@ export function stageDealPatchResponse(
   return stagePatchResponse(ctx, 'deals', dealId, entityData, body, baseUpdatedAt);
 }
 
-export function stageContactPatchResponse(
-  ctx: AuthContext, contactId: string, entityData: Record<string, unknown>,
-  body: StagedBody, baseUpdatedAt: Date | string,
-): Promise<NextResponse | null> {
-  return stagePatchResponse(ctx, 'contacts', contactId, entityData, body, baseUpdatedAt);
+function patchResponseFor(entityType: EntityKey) {
+  return (
+    ctx: AuthContext, entityId: string, entityData: Record<string, unknown>,
+    body: StagedBody, baseUpdatedAt: Date | string,
+  ): Promise<NextResponse | null> => stagePatchResponse(ctx, entityType, entityId, entityData, body, baseUpdatedAt);
+}
+
+export const stageContactPatchResponse = patchResponseFor('contacts');
+export const stageLeadPatchResponse = patchResponseFor('leads');
+export const stageCompanyPatchResponse = patchResponseFor('companies');
+export const stageTaskPatchResponse = patchResponseFor('tasks');
+
+/**
+ * Companies PATCH only loads `updatedAt` inside the non-admin branch, so the
+ * staging path needs its own read for the CAS base.
+ */
+export async function loadBaseUpdatedAt(
+  entityType: EntityKey,
+  entityId: string,
+  tenantId: string,
+): Promise<Date | null> {
+  const table = ENTITY_TABLES[entityType];
+  const [row] = await db.select({ updatedAt: table.updatedAt })
+    .from(table)
+    .where(and(eq(table.id, entityId), eq(table.tenantId, tenantId)))
+    .limit(1);
+  return row?.updatedAt ?? null;
 }
 
 export interface ApprovalLike {
@@ -240,16 +298,16 @@ export async function applyApprovedChange(
   for (const [key, value] of Object.entries(pending.body)) {
     const column = fields[key];
     if (!column) continue;
-    if (column === 'amount') {
-      patch.amount = typeof value === 'number' ? String(value) : value;
-    } else if (column === 'closeDate') {
-      patch.closeDate = value ? new Date(value as string) : null;
+    if (DATE_COLUMNS.has(column)) {
+      patch[column] = value ? new Date(value as string) : null;
+    } else if (STRING_COLUMNS.has(column)) {
+      patch[column] = value == null ? null : String(value);
     } else {
       patch[column] = value;
     }
   }
 
-  const table = entity === 'deals' ? deals : contacts;
+  const table = ENTITY_TABLES[entity];
   const [updated] = await db
     .update(table)
     .set(patch)
@@ -270,7 +328,7 @@ export async function applyApprovedChange(
     entityType: entity,
     entityId: request.entityId,
     eventType: 'approval_change_applied',
-    description: `Approved ${entity === 'deals' ? 'deal' : 'contact'} change applied to ${request.entityId}`,
+    description: `Approved ${ENTITY_NAMES[entity][0]!.replace(/s$/, '')} change applied to ${request.entityId}`,
     metadata: { requestId: request.id },
   });
   return { applied: true };

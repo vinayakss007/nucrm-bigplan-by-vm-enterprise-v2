@@ -19,6 +19,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { hasRecordGrant } from '@/lib/rbac/record-scope';
+import { stageCompanyPatchResponse, loadBaseUpdatedAt } from '@/lib/rbac/approval-producer';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -107,8 +108,14 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     const v = validated.data;
 
- 
- 
+    // #2597 A3 producer: a rule-matched edit is staged, not applied. Companies
+    // PATCH has no preloaded row in the admin branch, so read the CAS base here.
+    const base = await loadBaseUpdatedAt('companies', id, ctx.tenantId);
+    if (base) {
+      const staged = await stageCompanyPatchResponse(ctx, id, { ...v }, v, base);
+      if (staged) return staged;
+    }
+
     const updateData: Partial<typeof companies.$inferInsert> = {
       updatedAt: new Date(),
     };
