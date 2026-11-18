@@ -18,6 +18,7 @@ import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -36,7 +37,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ];
 
     if (!can(ctx, 'tasks.view_all')) {
-      filters.push(or(eq(tasks.assignedTo, ctx.userId), eq(tasks.createdBy, ctx.userId))!);
+      const ownerScope = or(eq(tasks.assignedTo, ctx.userId), eq(tasks.createdBy, ctx.userId))!;
+      const grantScope = await getRecordGrantCondition(ctx, 'tasks', tasks.id);
+      filters.push(grantScope ? or(ownerScope, grantScope)! : ownerScope);
     }
 
     if (dueStart) filters.push(gte(tasks.dueDate, new Date(dueStart)));

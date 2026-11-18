@@ -10,13 +10,14 @@ import { createCompanySchema, companyQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { companies, contacts } from '@/drizzle/schema';
-import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
 import { ownerScope } from '@/lib/api/owner-scope';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -43,7 +44,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       isNull(companies.deletedAt)
     ];
     if (scope) {
-      filters.push(scope);
+      const grantScope = await getRecordGrantCondition(ctx, 'companies', companies.id);
+      filters.push(grantScope ? or(scope, grantScope)! : scope);
     }
 
     if (q) {

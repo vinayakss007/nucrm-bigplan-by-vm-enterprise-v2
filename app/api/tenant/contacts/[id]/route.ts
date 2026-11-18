@@ -23,6 +23,7 @@ import { isEntityId } from '@/lib/id';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { hasRecordGrant } from '@/lib/rbac/record-scope';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body (auth +
 // all db queries share it) so RLS is enforced on the pinned connection. The
@@ -81,7 +82,8 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
 
     // RBAC: if user lacks view_all, only allow access to own records
     if (!can(ctx, 'contacts.view_all')) {
-      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+      const isOwner = row.assignedTo === ctx.userId || row.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'contacts', row.id, 'read'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
@@ -194,7 +196,8 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     // RBAC: if user lacks view_all, only allow editing own records
     if (!can(ctx, 'contacts.view_all')) {
-      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+      const isOwner = existing.assignedTo === ctx.userId || existing.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'contacts', contactId, 'write'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }

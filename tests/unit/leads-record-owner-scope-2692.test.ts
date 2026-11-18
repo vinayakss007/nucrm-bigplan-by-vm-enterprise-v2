@@ -67,7 +67,11 @@ const OWNER_CLAUSE = /\("leads"\."assigned_to" = .* OR "leads"\."created_by" = .
  */
 function rowsFor(query: { sql: string; params: unknown[] } | undefined) {
   if (!leadRow) return [];
-  if (!query || !query.sql.includes('"leads"."tenant_id"')) return [leadRow];
+  // #2597 A2: the detail handler also asks the role/grant tables. Those are
+  // not the lead under test — a mock that returned leadRow for them would
+  // manufacture a per-record grant and turn the expected 404 into a 200.
+  if (!query || !query.sql.includes('"leads"')) return [];
+  if (!query.sql.includes('"leads"."tenant_id"')) return [leadRow];
   const narrowedToCaller = OWNER_CLAUSE.test(query.sql) && query.params.filter(p => p === MINE).length >= 2;
   if (!narrowedToCaller) return [leadRow];
   return leadRow.assignedTo === MINE || leadRow.createdBy === MINE ? [leadRow] : [];
