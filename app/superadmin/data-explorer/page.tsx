@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { csvRow } from '@/lib/csv';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
@@ -146,6 +147,7 @@ export default function SuperAdminDataExplorer() {
   const [tenantFilter, setTenantFilter] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTarget, setEditTarget] = useState<{ table: string; id: string; field: string; value: unknown } | null>(null);
@@ -172,9 +174,9 @@ export default function SuperAdminDataExplorer() {
       });
       if (tenantFilter) params.set('tenantId', tenantFilter);
 
-      const res = await fetch(`/api/superadmin/data-explorer?${params}`);
-      const data = await res.json();
-      setResults(data);
+      const result = await fetchJsonSafe<SearchResult>(`/api/superadmin/data-explorer?${params}`);
+      // #3408: an error body is not a zero-record result set.
+      if (result.status === 'ok') { setResults(result.data); setSearchError(null); } else if (result.status === 'error') { setResults(null); setSearchError(result.message); }
     } catch (err) {
       clientLogError('data-explorer:search', err);
     } finally {
@@ -190,11 +192,13 @@ export default function SuperAdminDataExplorer() {
   const handleSaveEdit = async () => {
     if (!editTarget) return;
     try {
-      await fetch('/api/superadmin/data-explorer', {
+      const res = await fetchJsonSafe('/api/superadmin/data-explorer', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editTarget),
       });
+      // #3408: a refused edit must not close the dialog as if it landed.
+      if (res.status !== 'ok') { setSearchError(res.status === 'error' ? `Edit failed: ${res.message}` : 'Edit failed'); return; }
       setShowEditModal(false);
       setEditTarget(null);
       handleSearch(); // Refresh
@@ -206,11 +210,12 @@ export default function SuperAdminDataExplorer() {
   const handleDelete = async (table: string, id: string) => {
     await confirmThen(`Permanently delete this ${table.slice(0,-1)} record? Data will be soft-deleted.`, async () => {
       try {
-        await fetch('/api/superadmin/data-explorer', {
+        const res = await fetchJsonSafe('/api/superadmin/data-explorer', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ table, id, softDelete: true }),
         });
+        if (res.status !== 'ok') { setSearchError(res.status === 'error' ? `Delete failed: ${res.message}` : 'Delete failed'); return; }
         handleSearch(); // Refresh
       } catch (err) {
         clientLogError('data-explorer:delete', err);
@@ -391,6 +396,9 @@ export default function SuperAdminDataExplorer() {
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           <span className="ml-3 text-gray-400">Searching across all tenants…</span>
         </div>
+      )}
+      {!loading && searchError && (
+        <div className="p-4 mb-4 rounded-lg bg-red-950/40 border border-red-800 text-sm text-red-300">{searchError}</div>
       )}
 
       {!loading && results && (
