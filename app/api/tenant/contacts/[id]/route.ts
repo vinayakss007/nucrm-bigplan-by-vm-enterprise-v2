@@ -24,6 +24,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { hasRecordGrant } from '@/lib/rbac/record-scope';
+import { stageContactPatchResponse } from '@/lib/rbac/approval-producer';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body (auth +
 // all db queries share it) so RLS is enforced on the pinned connection. The
@@ -201,6 +202,12 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
+
+    // #2597 A3 producer: a rule-matched edit is staged, not applied.
+    const staged = await stageContactPatchResponse(
+      ctx, contactId, { ...existing, ...v }, v, existing.updatedAt!,
+    );
+    if (staged) return staged;
 
     const [row] = await db.transaction(async (tx) => {
       const [r] = await withConcurrencyGuard(
