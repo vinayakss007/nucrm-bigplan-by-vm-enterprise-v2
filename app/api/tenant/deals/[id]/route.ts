@@ -25,6 +25,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { hasRecordGrant } from '@/lib/rbac/record-scope';
+import { stageDealPatchResponse } from '@/lib/rbac/approval-producer';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -171,7 +172,14 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const clientVersion = rawBody?._version ?? rawBody?.updated_at;
     const conflict = checkConcurrency(prev.updatedAt!, clientVersion);
     if (conflict) return conflict;
-    
+
+    // #2597 A3 producer: a rule-matched edit is staged on an approval request
+    // and the deal stays untouched until the final step approves it. Without
+    // this the approval inbox had no producer at all.
+    const staged = await stageDealPatchResponse(
+      ctx, dealId, { ...prev, ...v, amount: normalizedAmount }, v, prev.updatedAt!,
+    );
+    if (staged) return staged;
 
     const updateData: Partial<typeof deals.$inferInsert> = {
       updatedAt: new Date(),

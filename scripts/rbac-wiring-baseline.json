@@ -1,8 +1,8 @@
 {
   "note": "Exact set of lib/rbac exported functions with NO production caller outside lib/rbac (#2597). Shrink-only: wiring one is red until its entry comes down; a new unwired export is red outright. Each entry names the proposed consumer (Option A of #2597) that would retire it.",
   "exports": {
-    "lib/rbac/approval-workflows.ts:checkNeedsApproval": "Producer half of the approval inbox: no mutating entity handler calls it, so approval_requests has no writer. Needs #2597 Option A3 (rule-matched POST hooks).",
-    "lib/rbac/approval-workflows.ts:requestApproval": "Creates approval_requests rows; only reachable from checkNeedsApproval, itself unwired. Retired together with A3.",
+    "lib/rbac/approval-workflows.ts:checkNeedsApproval": "Composed inside lib/rbac/approval-producer.ts by the A3 producer; the route calls stageDealChange, so no caller outside lib/rbac is needed.",
+    "lib/rbac/approval-workflows.ts:requestApproval": "Composed inside lib/rbac/approval-producer.ts by the A3 producer together with checkNeedsApproval.",
     "lib/rbac/enforce.ts:__clearRoleIdCache": "Test-only cache reset called from tests/unit/rbac-field-enforcement-2597.test.ts; intentionally has no production caller.",
     "lib/rbac/enforce.ts:__clearFieldRestrictionsCache": "Test-only cache reset called from tests/unit/rbac-field-enforcement-2597.test.ts; intentionally has no production caller.",
     "lib/rbac/enforce.ts:getFieldRestrictions": "Internal helper composed only inside lib/rbac/enforce.ts by enforceFieldRead/Write; needs no caller outside the module.",

@@ -710,6 +710,7 @@
       "reason": "RBAC config readers/writers are scoped to one tenant and run inside the caller transaction.",
       "filedAs": "#3405",
       "files": [
+        "lib/rbac/approval-producer.ts",
         "lib/rbac/approval-workflows.ts",
         "lib/rbac/enforce.ts",
         "lib/rbac/field-permissions.ts",

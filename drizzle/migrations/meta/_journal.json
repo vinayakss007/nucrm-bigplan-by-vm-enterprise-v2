@@ -1065,6 +1065,13 @@
       "when": 1793500400000,
       "tag": "0149_churn_risk_activity_recency",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1793500500000,
+      "tag": "0150_approval_pending_data",
+      "breakpoints": true
     }
   ]
 }
