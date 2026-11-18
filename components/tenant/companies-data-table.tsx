@@ -14,6 +14,8 @@ import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Ar
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -52,6 +54,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   // Open the create form when arriving via ⌘K "New Company" (?action=create).
   useOpenCreateParam(() => setShowForm(true))
@@ -78,14 +81,11 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
     })
     const q = filterOverride !== undefined ? filterOverride : globalFilter
     if (q) params.set('q', q)
-    try {
-      const res = await fetch(`/api/tenant/companies?${params}`)
-      const data = await res.json()
-      setCompanies(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load companies:', error)
-    }
+    // #3408: a failed refresh used to set companies=[], total=0 and render
+    // "No companies yet" — an outage indistinguishable from an empty list.
+    const result = await fetchJsonSafe<{ data?: typeof companies; total?: number }>(`/api/tenant/companies?${params}`)
+    if (result.status === 'ok') { setCompanies(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
+    else if (result.status === 'error') setLoadError(result.message)
     setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
@@ -456,6 +456,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       )}
 
       {/* DataTable */}
+      {loadError && <div className="p-3"><InlineErrorState message={`Could not load companies — an empty list here would be a lie. (${loadError})`} onRetry={() => void loadData(pagination.pageIndex)} /></div>}
       <DataTable
         columns={columns}
         data={companies}
@@ -477,9 +478,9 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         onPaginationChange={handlePaginationChange}
         emptyState={{
           icon: <Building2 className="w-6 h-6 text-muted-foreground" />,
-          title: "No companies yet",
-          description: "Start building your company list by adding your first company",
-          action: permissions.canCreate ? {
+          title: loadError ? "Company list unavailable" : "No companies yet",
+          description: loadError ? "The company list could not be read." : "Start building your company list by adding your first company",
+          action: loadError ? undefined : permissions.canCreate ? {
             label: "Add Company",
             onClick: () => setShowForm(true),
             icon: <Plus className="w-4 h-4 mr-2" />,
