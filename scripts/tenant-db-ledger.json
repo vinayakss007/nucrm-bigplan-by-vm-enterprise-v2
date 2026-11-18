@@ -543,11 +543,6 @@
         "lib/errors-server.ts"
       ]
     },
-    "lib/activity": {
-      "reason": "Activity logger: writes carry an explicit tenantId column and run inside the caller transaction.",
-      "filedAs": "#3405",
-      "files": ["lib/activity/timeline.ts"]
-    },
     "lib/ai": {
       "reason": "AI helpers read tenant rows inside a caller-supplied transaction; the GUC is already set by the route that invoked them.",
       "filedAs": "#3405",

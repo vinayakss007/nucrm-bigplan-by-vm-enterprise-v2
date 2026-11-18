@@ -58,4 +58,11 @@ describe('withTenantDb (#3405)', () => {
     const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
     expect(ledger.groups).not.toHaveProperty('lib/dashboard');
   });
+
+  it('the activity timeline no longer reaches for the raw client', () => {
+    expect(read('lib/activity/timeline.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/activity/timeline.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/activity');
+  });
 });

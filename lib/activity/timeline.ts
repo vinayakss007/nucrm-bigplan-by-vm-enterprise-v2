@@ -20,7 +20,8 @@
  * `performed_at` and BOTH `full_name` + `performed_by_name`, so the existing
  * lead / contact / deal client renderers can consume it without field renames.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { activities, leadActivities, callLogs, notes, users } from '@/drizzle/schema';
 import { eq, and, or, isNull, desc } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
@@ -88,7 +89,10 @@ export async function getActivityTimeline(
 
   // All four sources are independent — fire together (was 4 serial WAN
   // round-trips). Same Promise.all pattern already used by dashboard stats.
-  const [activityRows, leadActivityRows, callRows, noteRows] = await Promise.all([
+  // #3405: all four reads run on one branded tenant client.
+  const [activityRows, leadActivityRows, callRows, noteRows] = await withTenantDb(
+    tenantId, NO_USER_SENTINEL,
+    async (db) => Promise.all([
   safe(
     db
       .select({
@@ -178,8 +182,9 @@ export async function getActivityTimeline(
       .where(and(eq(notes.entityType, entityType), eq(notes.entityId, entityId), eq(notes.tenantId, tenantId), isNull(notes.deletedAt)))
       .orderBy(desc(notes.createdAt))
       .limit(limit),
-  ),
-  ]);
+    ),
+    ]),
+  );
 
   // ── normalize ────────────────────────────────────────────────────────────────
   const items: TimelineItem[] = [];
