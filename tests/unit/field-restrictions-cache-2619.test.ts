@@ -13,7 +13,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const TENANT = 'd1111111-1111-4111-8111-111111111111';
 
-const mockDb = vi.hoisted(() => ({ select: vi.fn(), transaction: vi.fn() }));
+// #3405: withTenantDb sets GUCs with tx.execute() inside the transaction.
+const mockDb = vi.hoisted(() => ({
+  select: vi.fn(),
+  transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockDb)),
+  execute: vi.fn(() => Promise.resolve()),
+}));
 
 function makeBuilder(rows: unknown[]) {
   const b: Record<string, unknown> = {};
@@ -100,13 +105,16 @@ describe('restriction-map cache (#2619)', () => {
   it('setFieldPermission — the only writer — invalidates the cache', async () => {
     mockDb.transaction.mockImplementation(async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
       fn({
-        select: () => makeBuilder([]),                    // no existing row → insert path
+        execute: async () => undefined,                   // #3405: tenant GUC setup
+        // Reuse the counted mock so the cache assertion still measures selects.
+        select: mockDb.select,
         insert: () => ({ values: () => ({ returning: async () => [{ id: 'fp-1' }] }) }),
         update: () => ({ set: () => ({ where: async () => ({}) }) }),
       }));
     queue(
       [{ id: 'role-1' }],
       [{ fieldName: 'amount', accessLevel: 'none' }],
+      [],                                                  // setFieldPermission: no existing row
     );
     await getFieldRestrictions(TENANT, 'rep', 'deals');
     const afterFirst = mockDb.select.mock.calls.length;
@@ -114,9 +122,11 @@ describe('restriction-map cache (#2619)', () => {
     await setFieldPermission(TENANT, 'role-1', 'deals', 'amount', 'read');
 
     await getFieldRestrictions(TENANT, 'rep', 'deals');
-    // One extra select (the field_permissions read; resolveRoleId keeps its own
-    // cache) proves the restriction map was rebuilt, not reused.
-    expect(mockDb.select.mock.calls.length).toBe(afterFirst + 1);
+    // Two extra selects: setFieldPermission's "existing row" check and the
+    // rebuilt field_permissions read (resolveRoleId keeps its own cache).
+    // #3405: the writer now runs through the same branded client, so its
+    // select is counted here too — previously it used a separate tx handle.
+    expect(mockDb.select.mock.calls.length).toBe(afterFirst + 2);
   });
 
   it('different entities do not share one cache entry', async () => {

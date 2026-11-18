@@ -712,8 +712,6 @@
       "files": [
         "lib/rbac/approval-producer.ts",
         "lib/rbac/approval-workflows.ts",
-        "lib/rbac/enforce.ts",
-        "lib/rbac/field-permissions.ts",
         "lib/rbac/record-permissions.ts"
       ]
     },

@@ -10,10 +10,14 @@ const { mockSelectChain, mockInsertChain, mockUpdateChain, mockEqFn, mockAndFn }
 
 vi.mock('@/drizzle/db', () => ({
   db: {
+    // #3405: withTenantDb sets the tenant GUCs with tx.execute() before the
+    // callback; a fake that opens a transaction must expose that method too.
+    execute: vi.fn(() => Promise.resolve()),
     select: mockSelectChain,
     insert: (...args: unknown[]) => mockInsertChain(...args),
     update: (...args: unknown[]) => mockUpdateChain(...args),
     transaction: vi.fn((cb: (tx: Record<string, unknown>) => Promise<unknown>) => cb({
+      execute: vi.fn(() => Promise.resolve()),
       select: mockSelectChain,
       insert: (...args: unknown[]) => mockInsertChain(...args),
       update: (...args: unknown[]) => mockUpdateChain(...args),
@@ -37,6 +41,8 @@ vi.mock('@/drizzle/schema/core', () => ({
 vi.mock('drizzle-orm', () => ({
   eq: mockEqFn,
   and: mockAndFn,
+  // #3405: withTenantContext builds its SET LOCAL statement with sql``.
+  sql: (...parts: unknown[]) => parts.join(''),
 }));
 
 import {

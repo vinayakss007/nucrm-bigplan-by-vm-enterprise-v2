@@ -29,7 +29,8 @@
  */
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { fieldPermissions, roles } from '@/drizzle/schema/core';
 import type { AuthContext } from '@/lib/auth/middleware';
 
@@ -114,12 +115,14 @@ async function resolveRoleId(tenantId: string, roleSlug: string): Promise<string
   const key = `${tenantId}:${roleSlug}`;
   const hit = roleIdCache.get(key);
   if (hit && Date.now() - hit.at < ROLE_TTL_MS) return hit.id;
-  if (typeof db?.select !== 'function') return null;
-  const [role] = await db
-    .select({ id: roles.id })
-    .from(roles)
-    .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
-    .limit(1);
+  const role = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) => {
+    const [row] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, roleSlug), isNull(roles.deletedAt)))
+      .limit(1);
+    return row;
+  });
   const id = role?.id ?? null;
   roleIdCache.set(key, { id, at: Date.now() });
   return id;
@@ -147,14 +150,15 @@ export async function getFieldRestrictions(
   const roleId = await resolveRoleId(tenantId, roleSlug);
   let map: RestrictionMap | null = null;
   if (roleId) {
-    const rows = await db
-      .select({ fieldName: fieldPermissions.fieldName, accessLevel: fieldPermissions.accessLevel })
-      .from(fieldPermissions)
-      .where(and(
-        eq(fieldPermissions.tenantId, tenantId),
-        eq(fieldPermissions.roleId, roleId),
-        inArray(fieldPermissions.entityType, ENTITY_CANDIDATES[entity] ?? [entity]),
-      ));
+    const rows = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db
+        .select({ fieldName: fieldPermissions.fieldName, accessLevel: fieldPermissions.accessLevel })
+        .from(fieldPermissions)
+        .where(and(
+          eq(fieldPermissions.tenantId, tenantId),
+          eq(fieldPermissions.roleId, roleId),
+          inArray(fieldPermissions.entityType, ENTITY_CANDIDATES[entity] ?? [entity]),
+        )));
     if (rows.length > 0) {
       map = new Map();
       for (const r of rows) {
