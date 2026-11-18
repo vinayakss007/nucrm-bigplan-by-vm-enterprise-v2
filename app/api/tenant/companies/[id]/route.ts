@@ -18,6 +18,7 @@ import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { hasRecordGrant } from '@/lib/rbac/record-scope';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -56,7 +57,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     // RBAC: if user lacks view_all, only allow access to own records
     if (!can(ctx, 'companies.view_all')) {
       const isOwner = row.assignedTo === ctx.userId || row.createdBy === ctx.userId;
-      if (!isOwner) {
+      if (!isOwner && !(await hasRecordGrant(ctx, 'companies', id, 'read'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
@@ -91,7 +92,8 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         .from(companies)
         .where(and(eq(companies.id, id), eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
         .limit(1);
-      if (!existing || (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId)) {
+      const isOwner = existing && (existing.assignedTo === ctx.userId || existing.createdBy === ctx.userId);
+      if (!isOwner && !(await hasRecordGrant(ctx, 'companies', id, 'write'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
@@ -199,7 +201,8 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
         .from(companies)
         .where(and(eq(companies.id, id), eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
         .limit(1);
-      if (!existing || (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId)) {
+      const isOwner = existing && (existing.assignedTo === ctx.userId || existing.createdBy === ctx.userId);
+      if (!isOwner && !(await hasRecordGrant(ctx, 'companies', id, 'admin'))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }

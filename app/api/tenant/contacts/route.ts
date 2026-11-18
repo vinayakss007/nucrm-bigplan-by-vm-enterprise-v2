@@ -22,6 +22,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { cachedListCount, buildFilterKey } from '@/lib/api/list-count';
 import { invalidateTenantCache } from '@/lib/cache/index';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
 
  
  
@@ -56,7 +57,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ];
 
     if (!canViewAll(ctx)) {
-      filters.push(or(eq(contacts.assignedTo, ctx.userId), eq(contacts.createdBy, ctx.userId))!);
+      const ownerScope = or(eq(contacts.assignedTo, ctx.userId), eq(contacts.createdBy, ctx.userId))!;
+      const grantScope = await getRecordGrantCondition(ctx, 'contacts', contacts.id);
+      filters.push(grantScope ? or(ownerScope, grantScope)! : ownerScope);
     }
 
     if (leadStatus) filters.push(eq(contacts.leadStatus, leadStatus));

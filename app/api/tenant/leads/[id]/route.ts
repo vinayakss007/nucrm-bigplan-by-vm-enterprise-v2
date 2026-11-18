@@ -20,6 +20,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { hasRecordGrant } from '@/lib/rbac/record-scope';
 
 /**
  * PATCH body schema — every field the route consumes, all routed through Zod.
@@ -100,7 +101,8 @@ export const GET = withApiRoute(async (request: NextRequest,
     // had it on the list (#2597-era), the export (#2677), search (#2686) and the
     // dashboard (#2688), and nowhere on the record path.
     if (!can(ctx, 'leads.view_all')) {
-      if (lead.assignedTo !== ctx.userId && lead.createdBy !== ctx.userId) {
+      const isOwner = lead.assignedTo === ctx.userId || lead.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'leads', lead.id, 'read'))) {
         return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       }
     }
@@ -209,7 +211,8 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     }
 
     if (!can(ctx, 'leads.view_all')) {
-      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+      const isOwner = existing.assignedTo === ctx.userId || existing.createdBy === ctx.userId;
+      if (!isOwner && !(await hasRecordGrant(ctx, 'leads', existing.id, 'write'))) {
         return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       }
     }

@@ -134,14 +134,27 @@ describe('hasRecordGrant (#2597 A2)', () => {
 describe('#2597 A2 anti-rot', () => {
   const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, 'utf8');
 
-  it('the deals list handler ORs a per-record grant into its ownership filter', () => {
-    expect(read('app/api/tenant/deals/route.ts')).toMatch(/getRecordGrantCondition\(ctx, 'deals', deals\.id\)/);
+  it.each([
+    ['deals', 'deals'],
+    ['leads', 'leads'],
+    ['contacts', 'contacts'],
+    ['companies', 'companies'],
+    ['tasks', 'tasks'],
+  ])('the %s list handler ORs a per-record grant into its ownership filter', (entity, table) => {
+    expect(read(`app/api/tenant/${entity}/route.ts`))
+      .toMatch(new RegExp(`getRecordGrantCondition\\(ctx, '${entity}', ${table}\\.id\\)`));
   });
 
-  it('the deals detail GET/PATCH/DELETE all consult the grant at their level', () => {
-    const src = read('app/api/tenant/deals/[id]/route.ts');
-    expect(src).toMatch(/hasRecordGrant\(ctx, 'deals', row\.id, 'read'\)/);
-    expect(src).toMatch(/hasRecordGrant\(ctx, 'deals', dealId, 'write'\)/);
-    expect(src).toMatch(/hasRecordGrant\(ctx, 'deals', dealId, 'admin'\)/);
+  it.each(['deals', 'leads', 'contacts', 'companies', 'tasks'])
+    ('the %s detail handler consults the grant at read and write levels', (entity) => {
+      const src = read(`app/api/tenant/${entity}/[id]/route.ts`);
+      expect(src).toMatch(new RegExp(`hasRecordGrant\\(ctx, '${entity}',`));
+      expect(src).toMatch(/'read'\)/);
+      expect(src).toMatch(/'write'\)/);
+    });
+
+  it('the deals and companies DELETE handlers require an admin-level grant', () => {
+    expect(read('app/api/tenant/deals/[id]/route.ts')).toMatch(/hasRecordGrant\(ctx, 'deals', dealId, 'admin'\)/);
+    expect(read('app/api/tenant/companies/[id]/route.ts')).toMatch(/hasRecordGrant\(ctx, 'companies', id, 'admin'\)/);
   });
 });

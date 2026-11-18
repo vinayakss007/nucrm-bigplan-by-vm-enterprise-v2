@@ -23,6 +23,7 @@ import { createNotification } from '@/lib/notifications';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
+import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
 
 // Whitelist for sort columns to prevent SQL injection
 
@@ -88,7 +89,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ];
 
     if (!can(ctx, 'leads.view_all')) {
-      filters.push(or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId))!);
+      const ownerScope = or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId))!;
+      const grantScope = await getRecordGrantCondition(ctx, 'leads', leads.id);
+      filters.push(grantScope ? or(ownerScope, grantScope)! : ownerScope);
     }
 
     if (leadStatus) {
