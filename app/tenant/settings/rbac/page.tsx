@@ -200,7 +200,8 @@ export default function RBACSettingsPage() {
       {activeTab === 'record-permissions' && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Define which records each role can access based on ownership or team assignment.
+            Share a single record with a role. Ownership rules come from the role's view_all
+            permission; a grant here is an explicit exception for one record, not a team-wide rule.
           </p>
           {rpStale && (
             <InlineErrorState
@@ -240,8 +241,8 @@ export default function RBACSettingsPage() {
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No record permissions configured yet. Record permissions control which records
-                users can view based on ownership or sharing rules.
+                No record permissions configured yet. A grant lets one role see one record
+                it would otherwise be restricted from by ownership.
               </p>
             </div>
           )}
