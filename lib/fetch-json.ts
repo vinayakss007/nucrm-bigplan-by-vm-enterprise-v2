@@ -78,3 +78,15 @@ export async function fetchJsonSafe<T = unknown>(
   }
   return { status: 'ok', data: body as T };
 }
+
+/**
+ * #3408: mutations that must succeed use this instead of ignoring the
+ * response. Same parsing/error extraction as fetchJsonSafe, but a refused
+ * write throws instead of resolving — so onError fires with the server's
+ * message and the UI cannot reload as if the write landed.
+ */
+export async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> {
+  const result = await fetchJsonSafe<T>(url, init);
+  if (result.status === 'ok') return result.data;
+  throw new Error(result.status === 'aborted' ? 'Request aborted' : result.message);
+}
