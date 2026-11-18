@@ -48,5 +48,14 @@ describe('withTenantDb (#3405)', () => {
     const rbac = Object.values(ledger.groups as Record<string, { files: string[] }>)
       .flatMap((g) => g.files);
     expect(rbac).not.toContain('lib/rbac/record-scope.ts');
+    expect(rbac).not.toContain('lib/rbac/enforce.ts');
+    expect(rbac).not.toContain('lib/rbac/field-permissions.ts');
+  });
+
+  it('the dashboard layout resolver no longer reaches for the raw client', () => {
+    expect(read('lib/dashboard/layout-resolver.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/dashboard/layout-resolver.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/dashboard');
   });
 });

@@ -638,11 +638,6 @@
       "filedAs": "#3405",
       "files": ["lib/cron/cron-lock.ts", "lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
     },
-    "lib/dashboard": {
-      "reason": "Dashboard aggregate helper reading tenant rows inside the route the context was opened for.",
-      "filedAs": "#3405",
-      "files": ["lib/dashboard/layout-resolver.ts"]
-    },
     "lib/email": {
       "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
       "filedAs": "#3405",

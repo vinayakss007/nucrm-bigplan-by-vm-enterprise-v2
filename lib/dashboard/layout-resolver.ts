@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
 import { dashboardLayouts } from '@/drizzle/schema/dashboard';
 import { eq, and, desc } from 'drizzle-orm';
 import { getPlanDefaultLayout, getRoleDefaultLayout } from '@/lib/dashboard/layout-defaults';
@@ -35,31 +35,34 @@ export async function getSavedLayout(
   tenantId: string,
   userId: string,
 ): Promise<{ layout: DashboardLayout; source: LayoutSource } | null> {
-  const row = await db.query.dashboardLayouts.findFirst({
-    where: and(
-      eq(dashboardLayouts.tenantId, tenantId),
-      eq(dashboardLayouts.userId, userId),
-      eq(dashboardLayouts.isDefault, true),
-    ),
-    orderBy: desc(dashboardLayouts.updatedAt),
-  });
-  if (row?.layout) {
-    return { layout: row.layout as DashboardLayout, source: row.source as LayoutSource };
-  }
+  // #3405: every layout read runs on the branded tenant client.
+  return withTenantDb(tenantId, userId, async (db) => {
+    const row = await db.query.dashboardLayouts.findFirst({
+      where: and(
+        eq(dashboardLayouts.tenantId, tenantId),
+        eq(dashboardLayouts.userId, userId),
+        eq(dashboardLayouts.isDefault, true),
+      ),
+      orderBy: desc(dashboardLayouts.updatedAt),
+    });
+    if (row?.layout) {
+      return { layout: row.layout as DashboardLayout, source: row.source as LayoutSource };
+    }
 
-  const tenantRow = await db.query.dashboardLayouts.findFirst({
-    where: and(
-      eq(dashboardLayouts.tenantId, tenantId),
-      eq(dashboardLayouts.userId, null as unknown as string),
-      eq(dashboardLayouts.isDefault, true),
-    ),
-    orderBy: desc(dashboardLayouts.updatedAt),
-  });
-  if (tenantRow?.layout) {
-    return { layout: tenantRow.layout as DashboardLayout, source: tenantRow.source as LayoutSource };
-  }
+    const tenantRow = await db.query.dashboardLayouts.findFirst({
+      where: and(
+        eq(dashboardLayouts.tenantId, tenantId),
+        eq(dashboardLayouts.userId, null as unknown as string),
+        eq(dashboardLayouts.isDefault, true),
+      ),
+      orderBy: desc(dashboardLayouts.updatedAt),
+    });
+    if (tenantRow?.layout) {
+      return { layout: tenantRow.layout as DashboardLayout, source: tenantRow.source as LayoutSource };
+    }
 
-  return null;
+    return null;
+  });
 }
 
 export async function saveLayout(
@@ -68,7 +71,8 @@ export async function saveLayout(
   layout: DashboardLayout,
   source: LayoutSource = 'user',
 ): Promise<void> {
-  await db.transaction(async (tx) => {
+  // withTenantDb supplies the transaction, so no nested one is opened here.
+  await withTenantDb(tenantId, userId, async (tx) => {
     await tx.update(dashboardLayouts)
       .set({ isDefault: false })
       .where(and(
