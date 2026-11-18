@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { clientLogWarn } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import {
   Target, Plus, Filter, Upload, Search, MoreHorizontal, Trash2,
   Phone, Mail, Building2, TrendingUp, User, Star, Archive, RotateCcw,
@@ -369,6 +370,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState('all');
@@ -412,14 +414,13 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
       if(filterScoreMin!=='')params.set('score_min',filterScoreMin);
       if(filterScoreMax!=='')params.set('score_max',filterScoreMax);
       
-      const res=await fetch('/api/tenant/leads?'+params, { signal });
-      if (!res.ok) throw new Error('Failed to fetch');
-      
-      const data=await res.json();
-      
-      if (lastRequestTime.current === requestTime && data) {
-        setLeads(Array.isArray(data.data) ? data.data : []);
-        setTotal(typeof data.total === 'number' ? data.total : 0);
+      // #3408: a failed read must not render "No leads yet" over an outage.
+      const result=await fetchJsonSafe<{ data?: Lead[]; total?: number }>('/api/tenant/leads?'+params, { signal });
+      if (result.status === 'aborted') return;
+      if (lastRequestTime.current === requestTime && result.status === 'ok') {
+        setLeads(Array.isArray(result.data.data) ? result.data.data : []);
+        setTotal(typeof result.data.total === 'number' ? result.data.total : 0);
+        setLoadError(false);
         setOffset(newOffset);
         setSelectedLeads(new Set());
         
@@ -429,12 +430,8 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
             setLoading(false);
           }
         }, 250);
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      console.error('[Leads load error]', err);
-      setLoading(false);
-    }
+      } else if (result.status === 'error') { setLoadError(true); setLoading(false); }
+    } catch { setLoadError(true); setLoading(false); }
   },[sortBy,sortOrder,limit, debouncedSearch, activeStatus, filterSource, filterAssignedTo, filterLifecycle, filterTags, filterScoreMin, filterScoreMax]);
 
   const refreshLeads = useCallback(() => { load(offset, activeStatus, debouncedSearch); }, [load, offset, activeStatus, debouncedSearch]);
@@ -715,6 +712,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
       )}
 
       {/* Table */}
+      {loadError&&<div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Could not load leads — the list below may be stale. Retry with the search button.</div>}
       {viewMode==='table'&&(
         <div className="rounded-xl border border-border bg-card overflow-x-auto shadow-sm scrollbar-thin">
           <div className="sm:min-w-[700px] min-w-[500px]">
@@ -742,9 +740,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
                 <tr><td colSpan={9} className="py-20 text-center">
                   <div className="max-w-sm mx-auto">
                     <div className="w-14 h-14 rounded-2xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center mx-auto mb-4"><Target className="w-7 h-7 text-violet-400"/></div>
-                    <p className="text-sm font-semibold mb-1">{search||activeStatus!=='all'?'No leads match your filters':'No leads yet'}</p>
-                    <p className="text-xs text-muted-foreground mb-4">{search?'Try a different search term':'Start building your pipeline'}</p>
-                    {!search&&activeStatus==='all'&&permissions['canCreate']&&(
+                    <p className="text-sm font-semibold mb-1">{loadError?'Could not load leads':search||activeStatus!=='all'?'No leads match your filters':'No leads yet'}</p>
+                    <p className="text-xs text-muted-foreground mb-4">{loadError?'The lead list could not be read — this is not an empty pipeline.':search?'Try a different search term':'Start building your pipeline'}</p>
+                    {!loadError&&!search&&activeStatus==='all'&&permissions['canCreate']&&(
                       <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white" onClick={()=>setShowQuickAdd(true)}><Plus className="w-3.5 h-3.5 mr-1.5"/>Add First Lead</Button>
                     )}
                   </div>
