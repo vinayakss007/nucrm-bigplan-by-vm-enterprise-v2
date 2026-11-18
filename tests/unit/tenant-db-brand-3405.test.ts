@@ -48,5 +48,28 @@ describe('withTenantDb (#3405)', () => {
     const rbac = Object.values(ledger.groups as Record<string, { files: string[] }>)
       .flatMap((g) => g.files);
     expect(rbac).not.toContain('lib/rbac/record-scope.ts');
+    expect(rbac).not.toContain('lib/rbac/enforce.ts');
+    expect(rbac).not.toContain('lib/rbac/field-permissions.ts');
+  });
+
+  it('the dashboard layout resolver no longer reaches for the raw client', () => {
+    expect(read('lib/dashboard/layout-resolver.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/dashboard/layout-resolver.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/dashboard');
+  });
+
+  it('the activity timeline no longer reaches for the raw client', () => {
+    expect(read('lib/activity/timeline.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/activity/timeline.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/activity');
+  });
+
+  it('the formula sync service no longer reaches for the raw client', () => {
+    expect(read('lib/formula/sync.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/formula/sync.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups).not.toHaveProperty('lib/formula');
   });
 });
