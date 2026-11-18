@@ -30,7 +30,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { aiDraftTemplates } from '@/drizzle/schema/ai';
 import { tenantModules } from '@/drizzle/schema/modules';
@@ -64,6 +64,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — role gate before the plan gate and the provider call.
+    const denied = requirePerm(ctx, 'ai.use');
+    if (denied) return denied;
 
     const gate = await requireAiFeature(ctx, 'ai_draft');
     if (gate) return gate;

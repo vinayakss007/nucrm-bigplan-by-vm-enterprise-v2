@@ -25,7 +25,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { aiAssistantSchema } from '@/lib/api/schemas';
-import { requireAuth, requireModule } from '@/lib/auth/middleware';
+import { requireAuth, requireModule, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantModules } from '@/drizzle/schema/modules';
 import { eq, and } from 'drizzle-orm';
@@ -84,6 +84,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // #3402 — every AI call spends the tenant's provider budget; a role gate
+    // is required, not just "logged in" plus the plan/module gate below.
+    const permDenied = requirePerm(ctx, 'ai.use');
+    if (permDenied) return permDenied;
 
     // Rate limit: 30 AI calls per hour
     const limited = await checkRateLimit(req, { action: 'ai_assistant', max: 30, windowMinutes: 60 });

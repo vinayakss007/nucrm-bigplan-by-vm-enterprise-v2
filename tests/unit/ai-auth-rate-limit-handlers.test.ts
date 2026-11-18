@@ -39,6 +39,9 @@ vi.mock('@/lib/auth/middleware', () => ({
     user: { email: 'user@example.com' },
   })),
   can: vi.fn(() => true),
+  // #3402 — ai.use gate on all four AI routes; this fixture is a permitted
+  // member, so the gate passes. The gate itself is pinned in the 3402 spec.
+  requirePerm: vi.fn(() => null),
 }));
 
 // requireAiFeature returns null/falsy so the plan gate does NOT short-circuit.
