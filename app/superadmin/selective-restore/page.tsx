@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchRestoreJson } from '@/lib/api/selective-restore-client';
 import {
   Database,
   Upload,
@@ -164,12 +165,8 @@ export default function SelectiveRestorePage() {
       formData.append('file', file);
       formData.append('backup_type', 'full');
 
-      const res = await fetch('/api/superadmin/selective-restore/backups', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
+      const data = await fetchRestoreJson<{ success?: boolean; backup_id: string; error?: string }>(
+        '/api/superadmin/selective-restore/backups', { method: 'POST', body: formData });
       if (data.success) {
         await loadBackups();
         // Wait for parsing then preview
@@ -189,8 +186,7 @@ export default function SelectiveRestorePage() {
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 2000));
       try {
-        const res = await fetch('/api/superadmin/selective-restore/backups');
-        const data = await res.json();
+        const data = await fetchRestoreJson<{ backups?: BackupFile[] }>('/api/superadmin/selective-restore/backups');
         const backup = data.backups?.find((b: BackupFile) => b.id === backupId);
         if (backup?.parse_status === 'completed') {
           setSelectedBackup(backup);
@@ -198,7 +194,7 @@ export default function SelectiveRestorePage() {
           return;
         }
         if (backup?.parse_status === 'failed') {
-          toast.error('Backup parsing failed: ' + backup.parse_error);
+          toast.error('Backup parsing failed: ' + ((backup as BackupFile & { parse_error?: string }).parse_error ?? 'unknown'));
           return;
         }
       } catch (err) { logError({ error: err, context: "catch:[context]" }); }
@@ -209,12 +205,12 @@ export default function SelectiveRestorePage() {
   const handlePreviewBackup = async (backup: BackupFile) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/superadmin/selective-restore/preview', {
+      // #3408: a refused preview used to be ignored, advancing the wizard blindly.
+      await fetchRestoreJson<Record<string, unknown>>('/api/superadmin/selective-restore/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_id: backup.id }),
       });
-      const _data = await res.json();
       setSelectedBackup(backup);
       setSelectedTenant(null);
       setSelectedTables([]);
@@ -234,15 +230,12 @@ export default function SelectiveRestorePage() {
     setStep('user-select');
 
     try {
-      const res = await fetch(`/api/superadmin/selective-restore/users?tenant_id=${tenant.tenant_id}`);
-      const data = await res.json();
-      if (data.users) {
-        setTenantUsers(data.users);
-      } else {
-        setTenantUsers([]);
-      }
+      const data = await fetchRestoreJson<{ users?: TenantUser[] }>(
+        `/api/superadmin/selective-restore/users?tenant_id=${tenant.tenant_id}`);
+      setTenantUsers(data.users ?? []);
     } catch (err) {
       clientLogError('selective-restore:load-tenant-users', err);
+      toast.error('Could not load tenant users — an empty list here would be a lie');
       setTenantUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -271,7 +264,8 @@ export default function SelectiveRestorePage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/superadmin/selective-restore/scope', {
+      // #3408: an error body shown as the pre-restore scope was the worst lie.
+      const data = await fetchRestoreJson<ScopePreview>('/api/superadmin/selective-restore/scope', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -282,7 +276,6 @@ export default function SelectiveRestorePage() {
           ...(selectedUserId ? { user_id: selectedUserId } : {}),
         }),
       });
-      const data = await res.json();
       setScopePreview(data);
       setStep('scope');
     } catch (err: unknown) {
@@ -312,6 +305,12 @@ export default function SelectiveRestorePage() {
           ...(selectedUserId ? { user_id: selectedUserId } : {}),
         }),
       });
+
+      // #3408: a refused restore is JSON, not SSE; without this the wizard stalled.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `Restore failed (${res.status})`);
+      }
 
       // Read SSE stream
       const reader = res.body?.getReader();
@@ -373,7 +372,8 @@ export default function SelectiveRestorePage() {
 
   const deleteBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY }); },
     onError: (err) => clientLogError('selective-restore:delete', err),
