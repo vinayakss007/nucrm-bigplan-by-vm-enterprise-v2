@@ -437,11 +437,13 @@ describe('GET /api/system/cron-health — ?maxAgeMs (#3410 contract)', () => {
     expect(body.status).toBe('fail');
   });
 
-  it('a fresh ledger with only tracked orphans left reads degraded, not fail', async () => {
+  it('a fresh ledger with every manifest job scheduled reads healthy, not degraded', async () => {
+    // #3410 PR-2B scheduled the last two orphans, so there is no longer a
+    // standing degraded state to hide behind: a fresh fleet must be healthy.
     const body = await withFleet('', freshFleetRows());
-    expect(body.status).toBe('degraded');
+    expect(body.status).toBe('healthy');
     expect(body.neverRun).toEqual([]);
-    expect(body.unscheduled).toEqual(expect.arrayContaining(['sla-check', 'process-lead-scoring']));
+    expect(body.unscheduled).toEqual([]);
   });
 
   it('treats an empty ?maxAgeMs= as the absent parameter', async () => {

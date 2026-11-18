@@ -75,6 +75,14 @@
     {
       "path": "/api/cron/recurring-invoice-generator",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/process-lead-scoring",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sla-check",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
