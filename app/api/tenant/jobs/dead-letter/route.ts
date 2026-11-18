@@ -77,6 +77,23 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const conflict = await concurrencyGuardById(db, deadLetterQueue, id, expectedUpdatedAt);
     if (conflict) return conflict;
 
+    // #3407: `retry` and `resolve` both write `status`, but concurrencyGuardById
+    // is a no-op unless the caller supplied expectedUpdatedAt. Read the
+    // from-state and pin it in each UPDATE's WHERE so a concurrent resolution
+    // cannot be silently overwritten by a stale retry (or vice versa).
+    const [current] = await db
+      .select({ status: deadLetterQueue.status })
+      .from(deadLetterQueue)
+      .where(and(
+        eq(deadLetterQueue.id, id),
+        eq(deadLetterQueue.tenantId, ctx.tenantId),
+      ))
+      .limit(1);
+
+    if (!current) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+
     if (action === 'retry') {
       const [updated] = await db
         .update(deadLetterQueue)
@@ -87,12 +104,16 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         })
         .where(and(
           eq(deadLetterQueue.id, id),
-          eq(deadLetterQueue.tenantId, ctx.tenantId)
+          eq(deadLetterQueue.tenantId, ctx.tenantId),
+          eq(deadLetterQueue.status, current.status)
         ))
         .returning();
 
       if (!updated) {
-        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+        return NextResponse.json(
+          { error: `Job status changed concurrently — cannot retry from '${current.status}'. Reload and retry.` },
+          { status: 409 },
+        );
       }
 
       return NextResponse.json({ ok: true, message: 'Job queued for retry' });
@@ -109,12 +130,16 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         })
         .where(and(
           eq(deadLetterQueue.id, id),
-          eq(deadLetterQueue.tenantId, ctx.tenantId)
+          eq(deadLetterQueue.tenantId, ctx.tenantId),
+          eq(deadLetterQueue.status, current.status)
         ))
         .returning();
 
       if (!updated) {
-        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+        return NextResponse.json(
+          { error: `Job status changed concurrently — cannot resolve from '${current.status}'. Reload and retry.` },
+          { status: 409 },
+        );
       }
 
       return NextResponse.json({ ok: true, message: 'Job resolved' });
