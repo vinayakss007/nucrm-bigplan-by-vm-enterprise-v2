@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import toast from 'react-hot-toast';
 import {
   Heart, Loader2, Mail, MessageSquare, Phone, ArrowRight,
   ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2, FileText,
@@ -125,21 +127,26 @@ export default function LeadWarmingPage() {
   const toggleMutation = useMutation({
     mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: string }) => {
       const newStatus = currentStatus === 'active' ? 'paused' : 'active';
-      await fetch(`/api/tenant/lead-warming/campaigns/${id}`, {
+      // #3408: a refused write must not look like a successful status change.
+      const res = await fetchJsonSafe(`/api/tenant/lead-warming/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Request aborted');
     },
     onSuccess: () => loadData(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const toggleCampaignStatus = (id: string, currentStatus: string) => toggleMutation.mutate({ id, currentStatus });
 
   const archiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/lead-warming/campaigns/${id}`, { method: 'DELETE' });
+      const res = await fetchJsonSafe(`/api/tenant/lead-warming/campaigns/${id}`, { method: 'DELETE' });
+      if (res.status !== 'ok') throw new Error(res.status === 'error' ? res.message : 'Request aborted');
     },
     onSuccess: () => loadData(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const archiveCampaign = (id: string) => archiveMutation.mutate(id);
 
