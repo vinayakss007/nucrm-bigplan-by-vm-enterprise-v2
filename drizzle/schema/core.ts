@@ -279,6 +279,41 @@ export const approvalRequests = pgTable('approval_requests', {
   drz2255_idx_approval_requests_requested_by: index('idx_approval_requests_requested_by').on(table.requestedBy),};
 });
 
+// #2597 A3 — persisted approval rules. `approval_requests.rule_id` has always
+// been a free-text id with no table behind it, so the RBAC settings page's
+// Approval Rules tab could only ever render an empty state. This table is the
+// missing writer. Columns mirror lib/rbac/approval-workflows.ts's ApprovalRule
+// so the evaluation helper can consume a row without a translation layer;
+// `name`/`isActive` carry the operator-facing state the settings tab shows.
+export const approvalRules = pgTable('approval_rules', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  /** Operator-facing label shown in the Approval Rules tab. */
+  name: text('name').notNull(),
+  /** Entity the rule applies to ('deal', 'quote', ...). */
+  entityType: text('entity_type').notNull(),
+  conditionField: text('condition_field').notNull(),
+  conditionOperator: text('condition_operator').notNull().default('>='),
+  /** Stored as text; checkNeedsApproval coerces numeric strings when needed. */
+  conditionValue: text('condition_value').notNull(),
+  /** Role slug whose members approve the first step. */
+  approverRoleSlug: text('approver_role_slug').notNull(),
+  /** Additional role slugs forming a multi-step chain (#1632). */
+  autoApproveRoles: jsonb('auto_approve_roles').notNull().default([]).$type<string[]>(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdBy: utils.createdBy(),
+  ...utils.lifecycle(),
+}, (table) => {
+  return {
+    tenantIdx: utils.tenantIdx(table),
+    entityIdx: index('idx_approval_rules_entity').on(table.tenantId, table.entityType),
+    // A trashed rule must not keep its name reserved (0144 doctrine).
+    uniqueName: uniqueIndex('idx_approval_rules_unique_live')
+      .on(table.tenantId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  };
+});
+
 // ── 5. API & INFRASTRUCTURE ───────────────────────────
 export const apiKeys = pgTable('api_keys', {
   id: utils.pk(),

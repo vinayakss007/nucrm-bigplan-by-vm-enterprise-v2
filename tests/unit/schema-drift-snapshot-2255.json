@@ -2347,6 +2347,22 @@
    "tenant_id",
    "updated_at"
   ],
+  "approval_rules": [
+   "approver_role_slug",
+   "auto_approve_roles",
+   "condition_field",
+   "condition_operator",
+   "condition_value",
+   "created_at",
+   "created_by",
+   "deleted_at",
+   "entity_type",
+   "id",
+   "is_active",
+   "name",
+   "tenant_id",
+   "updated_at"
+  ],
   "follow_ups": [
    "assigned_to",
    "auto_ai_enabled",
@@ -3798,6 +3814,9 @@
   "idx_approval_requests_requested_by",
   "idx_approval_requests_status",
   "idx_approval_requests_tenant",
+  "idx_approval_rules_entity",
+  "idx_approval_rules_tenant",
+  "idx_approval_rules_unique_live",
   "idx_assignment_logs_assignee",
   "idx_assignment_logs_entity",
   "idx_assignment_logs_rule",
