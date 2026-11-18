@@ -2338,6 +2338,7 @@
    "entity_id",
    "entity_type",
    "id",
+   "pending_data",
    "reason",
    "rejected_by",
    "requested_by",

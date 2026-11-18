@@ -133,7 +133,7 @@ describe('rbac wiring guard — the live baseline (#2597)', () => {
     // Pin the number too, so an entry cannot quietly be added to make a new
     // dead export look like reviewed debt. A2 (#2597) wired the two
     // record-permissions writers into the admin API and retired their entries.
-    expect(Object.keys(baseline).length).toBe(11);
+    expect(Object.keys(baseline).length).toBe(12);
   });
 
   it('the CI guard is wired into the workflow and the census', () => {
