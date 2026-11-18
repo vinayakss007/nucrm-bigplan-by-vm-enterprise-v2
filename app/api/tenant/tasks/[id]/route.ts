@@ -23,6 +23,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { hasRecordGrant } from '@/lib/rbac/record-scope';
+import { stageTaskPatchResponse } from '@/lib/rbac/approval-producer';
 
 /**
  * #2289: GET /api/tenant/tasks/[id] answered 405 — the detail read was missing
@@ -106,6 +107,12 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
     }
+
+    // #2597 A3 producer: a rule-matched edit is staged, not applied.
+    const staged = await stageTaskPatchResponse(
+      ctx, id, { ...existing, ...v }, v, existing.updatedAt!,
+    );
+    if (staged) return staged;
 
     const clientVersion = body?._version ?? body?.updated_at;
 

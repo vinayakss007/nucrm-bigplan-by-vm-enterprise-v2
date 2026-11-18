@@ -21,6 +21,7 @@ import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { hasRecordGrant } from '@/lib/rbac/record-scope';
+import { stageLeadPatchResponse } from '@/lib/rbac/approval-producer';
 
 /**
  * PATCH body schema — every field the route consumes, all routed through Zod.
@@ -216,6 +217,12 @@ export const PATCH = withApiRoute(async (request: NextRequest,
         return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       }
     }
+
+    // #2597 A3 producer: a rule-matched edit is staged, not applied.
+    const staged = await stageLeadPatchResponse(
+      ctx, id, { ...existing, ...v }, v, existing.updatedAt!,
+    );
+    if (staged) return staged;
 
     // Update mapping (snake_case from body to camelCase for Drizzle)
     // All values come from the Zod-validated body — no raw passthrough
