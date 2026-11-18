@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
+import { applyApprovedChange } from '@/lib/rbac/approval-producer';
 import { db } from '@/drizzle/db';
 import { approvalRequests } from '@/drizzle/schema/core';
 import { eq, and, desc } from 'drizzle-orm';
@@ -58,8 +59,12 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const v = validated.data;
 
     let result;
+    let applied: { applied: boolean; reason?: string } | undefined;
     if (v.action === 'approve') {
       result = await approveRequest(v.request_id, ctx.userId);
+      // #2597 A3: the FINAL step is what flips status to approved; only then
+      // may the staged mutation be replayed.
+      if (result?.status === 'approved') applied = await applyApprovedChange(result, ctx.userId);
     } else {
       result = await rejectRequest(v.request_id, ctx.userId, v.reason || 'No reason provided');
     }
@@ -71,6 +76,6 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     }
 
-    return NextResponse.json({ data: result });
+    return NextResponse.json({ data: result, ...(applied ? { applied } : {}) });
   } catch (err: unknown) { return apiError(err); }
 });

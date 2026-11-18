@@ -267,6 +267,10 @@ export const approvalRequests = pgTable('approval_requests', {
   // single-stage approval (one approve finalizes it) for backward compatibility.
   steps: jsonb('steps').notNull().default([]),
   currentStep: integer('current_step').notNull().default(1),
+  // #2597 A3 producer: the pending mutation, staged when the request is
+  // created and applied only on final approval. Legacy rows have NULL and are
+  // decision-only approvals, which the replay helper skips.
+  pendingData: jsonb('pending_data'),
   ...utils.lifecycle(),
 }, (table) => {
   return {

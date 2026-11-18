@@ -21,6 +21,7 @@ import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
+import { applyApprovedChange } from '@/lib/rbac/approval-producer';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -74,8 +75,10 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (guard) return guard;
 
     let result;
+    let applied: { applied: boolean; reason?: string } | undefined;
     if (action === 'approve') {
       result = await approveRequest(id, ctx.userId);
+      if (result?.status === 'approved') applied = await applyApprovedChange(result, ctx.userId);
     } else {
       result = await rejectRequest(id, ctx.userId, reason);
     }
@@ -98,6 +101,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       id,
       status: action === 'approve' ? 'approved' : 'rejected',
       reason: action === 'reject' ? reason : null,
+      ...(applied ? { applied } : {}),
     });
   } catch (err) {
     return apiError(err);

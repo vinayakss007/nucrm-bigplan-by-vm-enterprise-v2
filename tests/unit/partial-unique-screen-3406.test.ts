@@ -304,9 +304,11 @@ describe('#3406 the live repo reads clean, and the census is the published one',
     // tenants) made it 150; #2597's 0148 (approval_rules, a new
     // soft-deletable table whose live-name unique index excludes tombstones)
     // made it 151; #2774's 0149 (replaces the churn placeholder function —
-    // no tables or indexes, so only the migration count moves) makes it 152.
+    // no tables or indexes, so only the migration count moves) made it 152;
+    // #2597 A3's 0150 (pending_data on approval_requests, no new table/index)
+    // makes it 153.
     expect(report.totals).toEqual({
-      migrations: 152,
+      migrations: 153,
       softTables: 205,
       uniqueOnSoft: 60,
       partial: 35,

@@ -120,7 +120,9 @@ export async function requestApproval(
    * order they must approve (e.g. ['manager','finance','vp']). Omitting this
    * (or passing []) creates a legacy single-stage request.
    */
-  chainRoles?: string[]
+  chainRoles?: string[],
+  /** #2597 A3: the staged mutation, applied only on final approval. */
+  pendingData?: unknown
 ): Promise<ApprovalRequest> {
   const steps: ApprovalStep[] = (chainRoles ?? [])
     .filter((role) => typeof role === 'string' && role.trim())
@@ -143,6 +145,7 @@ export async function requestApproval(
       requestedBy,
       steps,
       currentStep: 1,
+      ...(pendingData === undefined ? {} : { pendingData }),
     }).returning();
 
     await tx.insert(activities).values({
