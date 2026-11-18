@@ -9,6 +9,8 @@ import { useState, useCallback, useMemo } from 'react'
 import { Plus, MoreHorizontal, Edit, Trash2, FolderKanban } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -79,6 +81,7 @@ const emptyForm = {
 export default function ProjectsDataTable({ initialProjects, teamMembers, permissions }: Props) {
   const [projects, setProjects] = useState<Project[]>(initialProjects)
   const [total, setTotal] = useState(initialProjects.length)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -93,10 +96,11 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
       limit: String(pagination.pageSize),
       offset: String(page * pagination.pageSize),
     })
-    try {
-      const res = await fetch(`/api/tenant/projects?${params}`)
-      const data = await res.json()
-      setProjects(data.data?.map((p: ApiProjectRow) => ({
+    // #3408: a failed refresh must not render "No projects yet" over an outage.
+    const result = await fetchJsonSafe<{ data?: ApiProjectRow[]; total?: number }>(`/api/tenant/projects?${params}`)
+    if (result.status === 'ok') {
+      setLoadError(null)
+      setProjects(result.data.data?.map((p: ApiProjectRow) => ({
         id: p.id,
         name: p.name,
         description: p.description,
@@ -109,10 +113,8 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
         completed_count: p.completedCount ?? 0,
         created_at: p.createdAt,
       })) ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load projects:', error)
-    }
+      setTotal(result.data.total ?? 0)
+    } else if (result.status === 'error') setLoadError(result.message)
     setLoading(false)
   }, [pagination.pageSize])
 
@@ -422,15 +424,24 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
         searchPlaceholder="Search projects..."
         emptyState={{
           icon: <FolderKanban className="w-6 h-6 text-muted-foreground" />,
-          title: "No projects yet",
-          description: "Create your first project to start tracking progress",
-          action: permissions.canCreate ? {
+          title: loadError ? "Project list unavailable" : "No projects yet",
+          description: loadError ? "The project list could not be read." : "Create your first project to start tracking progress",
+          action: loadError ? undefined : permissions.canCreate ? {
             label: "New Project",
             onClick: openCreate,
             icon: <Plus className="w-4 h-4 mr-2" />,
           } : undefined,
         }}
       />
+
+      {loadError && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Could not load projects — an empty list here would be a lie. (${loadError})`}
+            onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
