@@ -10,6 +10,8 @@ import { MoreHorizontal, Download, Trash2, RefreshCw, Database, Cloud, HardDrive
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -55,6 +57,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
   const [backups, setBackups] = useState(initialBackups)
   const [total, setTotal] = useState(initialBackups.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [statusFilter, setStatusFilter] = useState('')
@@ -69,13 +72,16 @@ export default function BackupsDataTable({ initialBackups }: Props) {
     if (globalFilter) params.set('q', globalFilter)
     if (statusFilter) params.set('status', statusFilter)
     if (typeFilter) params.set('type', typeFilter)
-    try {
-      const res = await fetch('/api/superadmin/backups?' + params)
-      const data = await res.json()
-      setBackups(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load backups:', error)
+    // #3408: a failed refresh used to set backups=[], total=0 and render
+    // "No backups found" — the worst answer on a disaster-recovery page.
+    const result = await fetchJsonSafe<{ data?: typeof backups; total?: number }>(
+      '/api/superadmin/backups?' + params)
+    if (result.status === 'ok') {
+      setBackups(result.data.data ?? [])
+      setTotal(result.data.total ?? 0)
+      setLoadError(null)
+    } else if (result.status === 'error') {
+      setLoadError(result.message) // keep the last known backups on screen
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter, statusFilter, typeFilter])
@@ -280,6 +286,15 @@ export default function BackupsDataTable({ initialBackups }: Props) {
       </div>
 
       {/* DataTable */}
+      {loadError && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Could not load backups — an empty list here would be a lie. (${loadError})`}
+            onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
+
       <div className="table-responsive rounded-xl border border-white/5">
         <DataTable
           columns={columns}
@@ -296,9 +311,9 @@ export default function BackupsDataTable({ initialBackups }: Props) {
           onPaginationChange={handlePaginationChange}
           emptyState={{
             icon: <Database className="w-6 h-6 text-white/30" />,
-            title: "No backups found",
-            description: "Run your first backup to get started",
-            action: {
+            title: loadError ? "Backup list unavailable" : "No backups found",
+            description: loadError ? "The backup catalog could not be read." : "Run your first backup to get started",
+            action: loadError ? undefined : {
               label: "Run Backup",
               onClick: runBackup,
               icon: <RefreshCw className="w-4 h-4 mr-2" />,
