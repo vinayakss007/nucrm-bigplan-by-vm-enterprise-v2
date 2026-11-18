@@ -5,6 +5,9 @@ type RowsWithLimit = unknown[] & { limit?: (...args: unknown[]) => unknown };
 // Mock drizzle DB
 vi.mock('@/drizzle/db', () => {
   const db: Record<string, unknown> = {
+    // #3405: withTenantDb sets GUCs via tx.execute() inside the transaction;
+    // the fake hands db itself to the callback, so it needs the method.
+    execute: vi.fn(() => Promise.resolve()),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         // Returns an array that additionally exposes .limit(), so both

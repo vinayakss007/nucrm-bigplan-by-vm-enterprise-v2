@@ -3,7 +3,13 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+/**
+ * #3405: config rows are tenant-keyed, so every read and write goes through
+ * the branded `withTenantDb` choke point instead of the raw singleton. Config
+ * has no end user, hence the nil-user sentinel.
+ */
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { fieldPermissions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
 import { __clearFieldRestrictionsCache } from '@/lib/rbac/enforce';
@@ -18,15 +24,14 @@ export async function getFieldPermissions(
   roleId: string,
   entityType: string
 ) {
-  const results = await db.select()
-    .from(fieldPermissions)
-    .where(and(
-      eq(fieldPermissions.tenantId, tenantId),
-      eq(fieldPermissions.roleId, roleId),
-      eq(fieldPermissions.entityType, entityType)
-    ));
-
-  return results;
+  return withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db.select()
+      .from(fieldPermissions)
+      .where(and(
+        eq(fieldPermissions.tenantId, tenantId),
+        eq(fieldPermissions.roleId, roleId),
+        eq(fieldPermissions.entityType, entityType)
+      )));
 }
 
 /**
@@ -38,14 +43,15 @@ export async function checkFieldAccess(
   entityType: string,
   fieldName: string
 ): Promise<FieldAccessLevel> {
-  const results = await db.select()
-    .from(fieldPermissions)
-    .where(and(
-      eq(fieldPermissions.tenantId, tenantId),
-      eq(fieldPermissions.roleId, roleId),
-      eq(fieldPermissions.entityType, entityType),
-      eq(fieldPermissions.fieldName, fieldName)
-    ));
+  const results = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db.select()
+      .from(fieldPermissions)
+      .where(and(
+        eq(fieldPermissions.tenantId, tenantId),
+        eq(fieldPermissions.roleId, roleId),
+        eq(fieldPermissions.entityType, entityType),
+        eq(fieldPermissions.fieldName, fieldName)
+      )));
 
   const perm = results[0];
   if (!perm) return 'write'; // Default: full access if no restriction defined
@@ -98,7 +104,8 @@ export async function filterFieldsByPermission<T extends Record<string, unknown>
 }
 
 /**
- * Set (upsert) a field permission for a role on an entity type
+ * Set (upsert) a field permission for a role on an entity type.
+ * `withTenantDb` already supplies the transaction, so no nested one is opened.
  */
 export async function setFieldPermission(
   tenantId: string,
@@ -107,8 +114,8 @@ export async function setFieldPermission(
   fieldName: string,
   accessLevel: FieldAccessLevel
 ) {
-  const result = await db.transaction(async (tx) => {
-    const [existing] = await tx.select()
+  const result = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) => {
+    const [existing] = await db.select()
       .from(fieldPermissions)
       .where(and(
         eq(fieldPermissions.tenantId, tenantId),
@@ -119,21 +126,20 @@ export async function setFieldPermission(
       .limit(1);
 
     if (existing) {
-      await tx.update(fieldPermissions)
+      await db.update(fieldPermissions)
         .set({ accessLevel, updatedAt: new Date() })
         .where(eq(fieldPermissions.id, existing.id));
       return { ...existing, accessLevel };
     }
 
-    const [result] = await tx.insert(fieldPermissions).values({
+    const [row] = await db.insert(fieldPermissions).values({
       tenantId,
       roleId,
       entityType,
       fieldName,
       accessLevel,
     }).returning();
-
-    return result;
+    return row;
   });
   // #2619 — enforcement caches restriction maps for 60 s; this is the only
   // writer, so an admin change must be visible on the next request.

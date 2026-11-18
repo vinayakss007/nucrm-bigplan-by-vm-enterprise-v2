@@ -363,7 +363,7 @@ response key back to its owning column:
   (`ROLE_TTL_MS:97`), built by `getFieldRestrictions` (`:132-165`). A separate
   `roleIdCache` (`:96`) resolves `role_slug`→roleId (`:112`).
 - **Invalidation**: `__clearFieldRestrictionsCache()` (`:108`) is called by
-  `setFieldPermission()` (`field-permissions.ts:140`) — so a permission write
+  `setFieldPermission()` (`field-permissions.ts:146`) — so a permission write
   takes effect on the next request, no stale-cache leak.
 
 ## 4. Permissions API — `app/api/tenant/permissions/fields/route.ts`

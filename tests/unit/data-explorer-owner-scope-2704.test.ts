@@ -86,7 +86,20 @@ function answer(q: { sql: string; params: unknown[] }) {
   return visible ? [{ id: FOREIGN, first_name: 'Foreign', last_name: 'Lead' }] : [];
 }
 
-const mockDb = { execute: vi.fn() };
+// #3405: enforceFieldRead/Write now reach the branded client, whose no-context
+// fallback calls select() on this fake; no field restrictions are configured in
+// this test, so an empty result is the faithful answer.
+const mockDb = {
+  execute: vi.fn(),
+  select: vi.fn(() => {
+    const b: Record<string, unknown> = {};
+    b.from = () => b;
+    b.where = () => b;
+    b.limit = () => Promise.resolve([]);
+    b.then = (res: (v: unknown) => unknown) => Promise.resolve([]).then(res);
+    return b;
+  }),
+};
 
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
 vi.mock('@/lib/auth/middleware', async () => {
