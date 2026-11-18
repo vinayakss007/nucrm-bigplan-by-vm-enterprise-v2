@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -27,7 +28,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ));
 
     return NextResponse.json({ count: result?.count ?? 0 });
-  } catch {
-    return NextResponse.json({ count: 0 });
+  } catch (err) {
+    // #3408: a DB failure is not "zero unread notifications". Answering 200
+    // with count:0 made every consumer render a clean badge over an outage.
+    await logError({ error: err, context: 'tenant/notifications/unread GET', requestMethod: 'GET' });
+    return NextResponse.json({ error: 'Could not load unread count' }, { status: 500 });
   }
 });
