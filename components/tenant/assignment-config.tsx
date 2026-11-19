@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Settings, Trash2, ToggleLeft, ToggleRight, Loader2, Users, MapPin, Brain, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import type { LucideIcon } from 'lucide-react';
@@ -37,16 +38,23 @@ const TYPE_CONFIG: Record<string, { label: string; icon: LucideIcon; description
 export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: TeamMember[] }) {
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   const loadRules = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/assignment-rules', { signal });
-      const data = await res.json();
-      if (!signal?.aborted) setRules(data.data ?? []);
-    } catch { if (!signal?.aborted) setRules([]); }
-    if (!signal?.aborted) setLoading(false);
+    const result = await fetchJsonSafe<{ data?: AssignmentRule[] }>('/api/tenant/assignment-rules', { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setRules(result.data.data ?? []);
+      setLoadError(false);
+    } else {
+      // The old catch did setRules([]) — an outage rendered "No assignment
+      // rules configured", indistinguishable from a tenant with none.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load assignment rules');
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -90,10 +98,17 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: T
         </Button>
       </div>
 
+      {loadError && (
+        <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not load assignment rules — an empty list here would be a lie.
+        </div>
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : rules.length === 0 ? (
-        <div className="text-center py-8 text-sm text-muted-foreground">No assignment rules configured</div>
+        <div className="text-center py-8 text-sm text-muted-foreground" role={loadError ? 'alert' : undefined}>
+          {loadError ? 'Assignment rules could not be loaded.' : 'No assignment rules configured'}
+        </div>
       ) : (
         <div className="space-y-2">
           {rules.sort((a, b) => a.priority - b.priority).map((rule, i) => {
