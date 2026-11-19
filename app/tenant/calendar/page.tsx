@@ -44,7 +44,6 @@ export default function CalendarPage() {
 }
 
 interface ListResponse { data?: Record<string, unknown>[] }
-
 function CalendarInner() {
   const _router = useRouter();
   const queryClient = useQueryClient();
@@ -55,7 +54,6 @@ function CalendarInner() {
   const [editingEvent, setEditingEvent] = useState<Record<string, unknown> | null>(null);
   // Open the meeting form when arriving via ⌘K "New Meeting" (?action=create).
   useOpenCreateParam(() => setShowMeetingForm(true));
-
   // #1328: on-mount reads via TanStack Query. Meetings are keyed on the visible
   // month; tasks/contacts are month-independent lists.
   const monthStart = startOfMonth(currentMonth).toISOString().split('T')[0];
@@ -70,6 +68,7 @@ function CalendarInner() {
   });
   const [meetingsRes, tasksRes, contactsRes] = results;
   const loading = meetingsRes.isLoading || tasksRes.isLoading || contactsRes.isLoading;
+  const loadError = results.some(r => r.isError);
 
   const events: CalEvent[] = useMemo(() => {
     const meetings = meetingsRes.data?.data ?? [];
@@ -168,6 +167,7 @@ function CalendarInner() {
       </div>
 
       {/* Main layout: Calendar + Sidebar */}
+      {loadError && <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Calendar data could not be loaded — an empty calendar here would be a lie.</div>}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         {/* Calendar */}
         <div className="xl:col-span-3">
@@ -292,13 +292,13 @@ function CalendarInner() {
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="p-3 border-b border-border">
               <h3 className="font-semibold text-sm">{format(selectedDay, 'EEEE, MMM d')}</h3>
-              <p className="text-xs text-muted-foreground">{selectedEvents.length} event{selectedEvents.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-muted-foreground">{loadError ? 'Events could not be loaded.' : `${selectedEvents.length} event${selectedEvents.length !== 1 ? 's' : ''}`}</p>
             </div>
             <div className="p-2 space-y-1.5 max-h-[300px] overflow-y-auto">
               {!selectedEvents.length ? (
                 <div className="text-center py-6">
                   <Calendar className="w-6 h-6 text-muted-foreground/30 mx-auto mb-1.5" />
-                  <p className="text-xs text-muted-foreground">No events</p>
+                  <p className={`text-xs ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>{loadError ? 'Events could not be loaded.' : 'No events'}</p>
                 </div>
               ) : selectedEvents.map(e => (
                 <div key={e.id} className="group">
@@ -377,13 +377,13 @@ function CalendarInner() {
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="p-3 border-b border-border">
             <h3 className="font-semibold text-sm">{format(selectedDay, 'EEEE, MMM d')}</h3>
-            <p className="text-xs text-muted-foreground">{selectedEvents.length} event{selectedEvents.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-muted-foreground">{loadError ? 'Events could not be loaded.' : `${selectedEvents.length} event${selectedEvents.length !== 1 ? 's' : ''}`}</p>
           </div>
           <div className="p-2 space-y-1.5">
             {!selectedEvents.length ? (
               <div className="text-center py-6">
                 <Calendar className="w-6 h-6 text-muted-foreground/30 mx-auto mb-1.5" />
-                <p className="text-xs text-muted-foreground">No events</p>
+                <p className={`text-xs ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>{loadError ? 'Events could not be loaded.' : 'No events'}</p>
               </div>
             ) : selectedEvents.map(e => (
               <div key={e.id} className="group">
