@@ -548,7 +548,6 @@
       "filedAs": "#3405",
       "files": [
         "lib/ai/activity-log.ts",
-        "lib/ai/at-risk.ts",
         "lib/ai/auto-followup.ts",
         "lib/ai/common.ts",
         "lib/ai/credits-claim.ts",
