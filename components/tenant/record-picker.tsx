@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 export type RecordKind = 'contact' | 'lead' | 'deal';
 
@@ -60,6 +61,7 @@ export function RecordPicker({
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<RecordOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -83,13 +85,14 @@ export function RecordPicker({
       setLoading(true);
       const params = new URLSearchParams({ limit: '20', offset: '0' });
       if (q.trim()) params.set('q', q.trim());
-      fetch(`${ENDPOINT[kind]}?${params.toString()}`, { signal: controller.signal })
-        .then(r => (r.ok ? r.json() : { data: [] }))
-        .then(d => {
-          if (controller.signal.aborted) return;
-          setOptions((d.data ?? []).map((row: RecordRow) => toLabel(kind, row)));
+      fetchJsonSafe<{ data?: RecordRow[] }>(`${ENDPOINT[kind]}?${params.toString()}`, { signal: controller.signal })
+        .then(result => {
+          if (result.status === 'aborted') return;
+          if (result.status === 'ok') {
+            setOptions((result.data.data ?? []).map((row) => toLabel(kind, row)));
+            setFetchError(false);
+          } else setFetchError(true);
         })
-        .catch(e => { if ((e as Error)?.name !== 'AbortError') setOptions([]); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     },
     [kind],
@@ -156,8 +159,8 @@ export function RecordPicker({
           </div>
           <div className="max-h-56 overflow-y-auto">
             {options.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-muted-foreground text-center">
-                {loading ? 'Searching…' : 'No matches'}
+              <p className={`px-3 py-3 text-xs text-center ${fetchError && !loading ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={fetchError && !loading ? 'alert' : undefined}>
+                {loading ? 'Searching…' : fetchError ? 'Search could not be completed — an empty list here would be a lie.' : 'No matches'}
               </p>
             ) : (
               options.map(opt => (
