@@ -9,7 +9,8 @@
  * Split out of `lib/ai/gateway.ts` because that file sits on the #1843 file-size
  * ratchet and the credit-reservation work in #3359 had nowhere to grow.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { logError } from '@/lib/errors-server';
 
@@ -34,23 +35,24 @@ export type { LogPayload };
 
 export async function logActivity(p: LogPayload): Promise<string | null> {
   try {
-    const [row] = await db.insert(aiActivity).values({
-      tenantId: p.tenantId,
-      userId: p.userId,
-      action: p.action,
-      provider: p.provider,
-      model: p.model,
-      status: p.status,
-      tokensIn: p.tokensIn,
-      tokensOut: p.tokensOut,
-      tokensUsed: p.tokensIn + p.tokensOut,
-      costCents: p.costCents,
-      latencyMs: p.latencyMs,
-      entityType: p.entityType,
-      entityId: p.entityId,
-      errorMessage: p.errorMessage,
-      metadata: p.metadata,
-    }).returning({ id: aiActivity.id });
+    const [row] = await withTenantDb(p.tenantId, p.userId ?? NO_USER_SENTINEL, async (db) =>
+      db.insert(aiActivity).values({
+        tenantId: p.tenantId,
+        userId: p.userId,
+        action: p.action,
+        provider: p.provider,
+        model: p.model,
+        status: p.status,
+        tokensIn: p.tokensIn,
+        tokensOut: p.tokensOut,
+        tokensUsed: p.tokensIn + p.tokensOut,
+        costCents: p.costCents,
+        latencyMs: p.latencyMs,
+        entityType: p.entityType,
+        entityId: p.entityId,
+        errorMessage: p.errorMessage,
+        metadata: p.metadata,
+      }).returning({ id: aiActivity.id }));
     return row?.id ?? null;
   } catch (err) {
     // Never let activity logging break the actual call — but never hide it
