@@ -645,11 +645,6 @@
       "filedAs": "#3405",
       "files": ["lib/import/contacts.ts"]
     },
-    "lib/lead-scoring": {
-      "reason": "Lead scoring reads/writes scores per tenant inside the caller transaction.",
-      "filedAs": "#3405",
-      "files": ["lib/lead-scoring/auto-recalculate.ts"]
-    },
     "lib/lead-warming": {
       "reason": "Lead-warming campaigns are per tenant; the campaign row fixes the tenant before any contact read.",
       "filedAs": "#3405",
