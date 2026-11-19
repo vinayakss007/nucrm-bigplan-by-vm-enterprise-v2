@@ -70,14 +70,26 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     const description = `Status: ${prev.leadStatus} → ${lead_status}${reason ? ` — ${reason}` : ''}`;
 
+    // #3407: the "X → Y" activity below records `prev.leadStatus` as the
+    // from-state, so the write must claim that exact value in the WHERE.
+    // Without it a concurrent status edit wins the race and the activity
+    // records a transition that never happened. A zero-row write (tombstone
+    // landed in the gap) must not produce a phantom activity either.
     const [contact] = await db.transaction(async (tx) => {
       const [c] = await tx.update(contacts)
-        .set({ 
-          leadStatus: lead_status, 
-          updatedAt: new Date() 
+        .set({
+          leadStatus: lead_status,
+          updatedAt: new Date()
         })
-        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)))
+        .where(and(
+          eq(contacts.id, id),
+          eq(contacts.tenantId, ctx.tenantId),
+          isNull(contacts.deletedAt),
+          eq(contacts.leadStatus, prev.leadStatus)
+        ))
         .returning();
+
+      if (!c) return [undefined];
 
       await tx.insert(activities).values({
         tenantId: ctx.tenantId,
@@ -85,11 +97,11 @@ export const PATCH = withApiRoute(async (request: NextRequest,
         contactId: id,
         eventType: 'note',
         description,
-        metadata: { 
-          status_change: true, 
-          from: prev.leadStatus, 
-          to: lead_status, 
-          reason 
+        metadata: {
+          status_change: true,
+          from: prev.leadStatus,
+          to: lead_status,
+          reason
         },
         entityType: 'contact',
         entityId: id,
@@ -98,6 +110,13 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
       return [c];
     });
+
+    if (!contact) {
+      return NextResponse.json(
+        { error: `Contact status changed concurrently — cannot move '${prev.leadStatus}' to '${lead_status}'. Reload and retry.` },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ data: contact });
  
