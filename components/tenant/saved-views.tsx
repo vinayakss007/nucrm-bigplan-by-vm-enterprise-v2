@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark, BookmarkPlus, X, Trash2, Share2, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -34,6 +35,7 @@ interface SavedViewsProps {
 export function SavedViews({ entityType, currentFilters, currentQuery, onApplyView }: SavedViewsProps) {
   const [views, setViews] = useState<SavedView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveShared, setSaveShared] = useState(false);
@@ -41,12 +43,19 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
 
   const loadViews = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/views?entity_type=${entityType}`, { signal });
-      const data = await res.json();
-      if (!signal?.aborted) setViews(data.data ?? []);
-    } catch { if (!signal?.aborted) setViews([]); }
-    if (!signal?.aborted) setLoading(false);
+    const result = await fetchJsonSafe<{ data?: SavedView[] }>(
+      `/api/tenant/views?entity_type=${entityType}`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setViews(result.data.data ?? []);
+      setLoadError(false);
+    } else {
+      // Never replace the list with [] on failure — "no saved views" is a
+      // claim about the tenant, not about whether the request succeeded.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load saved views');
+    }
+    setLoading(false);
   }, [entityType]);
 
   useEffect(() => {
@@ -112,6 +121,10 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
         <DropdownMenuContent align="start" className="w-56">
           {loading ? (
             <div className="flex items-center justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+          ) : loadError ? (
+            <div role="alert" className="px-3 py-3 text-xs text-center text-amber-700 dark:text-amber-300">
+              Saved views could not be loaded.
+            </div>
           ) : views.length === 0 ? (
             <div className="px-3 py-3 text-xs text-muted-foreground text-center">No saved views yet</div>
           ) : (
