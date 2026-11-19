@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { SCOPES, visibleForRole } from './settings-config';
 
 /**
@@ -19,14 +20,17 @@ import { SCOPES, visibleForRole } from './settings-config';
 export default function SettingsNav() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminCheckFailed, setAdminCheckFailed] = useState(false);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/me', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { if (!abort.signal.aborted) setIsAdmin(d.is_admin ?? false); })
-      .catch((err) => clientLogError('settings-nav:fetch-me', err));
+    fetchJsonSafe<{ is_admin?: boolean }>('/api/tenant/me', { signal: abort.signal })
+      .then(result => {
+        if (result.status === 'aborted') return;
+        if (result.status === 'ok') { setIsAdmin(result.data.is_admin ?? false); setAdminCheckFailed(false); }
+        else { setAdminCheckFailed(true); clientLogError('settings-nav:fetch-me', new Error(result.message)); }
+      });
 
     try {
       const q = sessionStorage.getItem('nucrm.settings.query');
@@ -101,6 +105,12 @@ export default function SettingsNav() {
             <Search className="w-4 h-4 text-muted-foreground/40 mx-auto mb-2" />
             <p className="text-xs text-muted-foreground">No settings match "{query}"</p>
           </div>
+        )}
+
+        {adminCheckFailed && (
+          <p role="alert" className="mx-1 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            Admin status could not be read — admin-only settings may be hidden.
+          </p>
         )}
 
         {/* Three-scope nav */}
