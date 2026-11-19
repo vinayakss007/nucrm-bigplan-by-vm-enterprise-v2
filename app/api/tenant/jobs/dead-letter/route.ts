@@ -37,7 +37,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .limit(limit)
         .offset(offset),
       db
-        .select({ count: sql<number>`count(*)` })
+        // int8 comes back from node-postgres as a STRING (no setTypeParser in
+        // this repo), so `pagination.total` used to be "3" instead of 3. The
+        // `::int` cast is the convention the other list routes use; keep it.
+        .select({ count: sql<number>`count(*)::int` })
         .from(deadLetterQueue)
         .where(and(...filters)),
     ]);
