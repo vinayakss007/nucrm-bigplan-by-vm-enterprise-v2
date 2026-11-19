@@ -65,7 +65,10 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         createdAt: tenants.createdAt,
         ownerId: tenants.ownerId,
         ownerEmail: users.email,
-        backupCount: sql<number>`(SELECT COUNT(*) FROM tenant_backup_records WHERE tenant_id = ${tenants.id} AND status = 'completed')`,
+        // #2755: COUNT(*) is int8, which node-postgres returns as a STRING
+        // (no setTypeParser in this repo). Cast so the JSON `backupCount` is a
+        // number, matching the other list routes' `count(*)::int` convention.
+        backupCount: sql<number>`(SELECT COUNT(*)::int FROM tenant_backup_records WHERE tenant_id = ${tenants.id} AND status = 'completed')`,
         lastBackup: sql<Date>`(SELECT MAX(created_at) FROM tenant_backup_records WHERE tenant_id = ${tenants.id} AND status = 'completed')`
       })
       .from(tenants)
