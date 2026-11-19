@@ -15,6 +15,13 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * Super Admin Platform Stats API
  * Returns all platform statistics in a single request
  * Cached on client-side for 2 minutes
+ *
+ * #3408: every query used to end in `.catch(() => empty/)`, so a database
+ * outage rendered a confident "0 tenants, 0 active, no errors" platform —
+ * the failure was consumed and reported as an all-clear. Each query now
+ * rejects on error and the outer catch answers 500, the same contract every
+ * other superadmin stats endpoint uses. A failed read must never look like
+ * a healthy empty workspace.
  */
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -33,7 +40,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const [statsRes, recentTenants, recentErrors, recentActivity, expiringSoon, platformUsageRes] = await Promise.all([
-      db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { void logError({ error: err, context: 'superadmin/stats platform_stats query' }); return { rows: [{ data: {} }] }; }),
+      db.execute(sql`SELECT public.platform_stats() as data`),
       
       db.select({
         id: tenants.id,
@@ -49,8 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .innerJoin(plans, eq(plans.id, tenants.planId))
       .leftJoin(users, eq(users.id, tenants.ownerId))
       .orderBy(desc(tenants.createdAt))
-      .limit(6)
-      .catch((err) => { void logError({ error: err, context: 'superadmin/stats recentTenants query' }); return []; }),
+      .limit(6),
 
       db.select({
         level: errorLogs.level,
@@ -60,8 +66,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .from(errorLogs)
       .where(and(eq(errorLogs.resolved, false), or(eq(errorLogs.level, 'error'), eq(errorLogs.level, 'fatal'))))
       .orderBy(desc(errorLogs.createdAt))
-      .limit(5)
-      .catch((err) => { void logError({ error: err, context: 'superadmin/stats recentErrors query' }); return []; }),
+      .limit(5),
 
       db.select({
         name: tenants.name,
@@ -71,8 +76,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(gt(tenants.createdAt, sql`now() - interval '7 days'`))
       .orderBy(desc(tenants.createdAt))
       .limit(8)
-      .then(rows => rows.map(r => ({ type: 'tenant_created', ...r })))
-      .catch((err) => { void logError({ error: err, context: 'superadmin/stats recentActivity query' }); return []; }),
+      .then(rows => rows.map(r => ({ type: 'tenant_created', ...r }))),
 
       db.select({
         id: tenants.id,
@@ -82,8 +86,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       })
       .from(tenants)
       .where(and(eq(tenants.status, 'trialing'), between(tenants.trialEndsAt, sql`now()`, sql`now() + interval '3 days'`)))
-      .orderBy(tenants.trialEndsAt)
-      .catch((err) => { void logError({ error: err, context: 'superadmin/stats expiringSoon query' }); return []; }),
+      .orderBy(tenants.trialEndsAt),
 
       db.select({
         totalTenants: sql<number>`COUNT(*)::int`,
@@ -95,8 +98,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         suspendedTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'suspended')::int`,
       })
       .from(tenants)
-      .then(rows => rows[0])
-      .catch((err) => { void logError({ error: err, context: 'superadmin/stats platformUsage query' }); return { totalTenants: 0, activeTenants: 0, trialingTenants: 0, suspendedTenants: 0 }; }),
+      .then(rows => rows[0]),
     ]);
 
     const s = ((statsRes.rows[0] as Record<string, unknown>)?.data ?? {}) as Record<string, unknown>;
