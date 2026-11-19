@@ -7,6 +7,19 @@
 
 import { useState, useEffect } from 'react';
 import { Activity, Phone, Mail, Video, CheckSquare, TrendingUp } from 'lucide-react';
+import { fetchJsonSafe, type FetchJsonResult } from '@/lib/fetch-json';
+
+type TimelinePayload = {
+  data?: Record<string, unknown>[];
+  activities?: Record<string, unknown>[];
+  calls?: Record<string, unknown>[];
+  meetings?: Record<string, unknown>[];
+  tasks?: Record<string, unknown>[];
+  deals?: Record<string, unknown>[];
+};
+
+const rows = (result: FetchJsonResult<TimelinePayload>, key: keyof TimelinePayload): Record<string, unknown>[] =>
+  result.status === 'ok' ? (result.data[key] ?? result.data.data ?? []) : [];
 
 interface TimelineEntry {
   id: string;
@@ -23,50 +36,55 @@ interface TimelineEntry {
 export default function ContactTimeline({ contactId }: { contactId: string }) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     async function load() {
       try {
+        // A refused feed used to be rewritten to `{ data: [] }` here, so a
+        // partial outage rendered exactly the same "No interactions recorded
+        // yet." as a genuinely quiet contact. Read each outcome separately.
         const [actRes, callRes, meetRes, taskRes, dealRes] = await Promise.all([
-          fetch(`/api/tenant/activities?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/calls?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/meetings?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/tasks?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/deals?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetchJsonSafe<TimelinePayload>(`/api/tenant/activities?contact_id=${contactId}`, { signal }),
+          fetchJsonSafe<TimelinePayload>(`/api/tenant/calls?contact_id=${contactId}`, { signal }),
+          fetchJsonSafe<TimelinePayload>(`/api/tenant/meetings?contact_id=${contactId}`, { signal }),
+          fetchJsonSafe<TimelinePayload>(`/api/tenant/tasks?contact_id=${contactId}`, { signal }),
+          fetchJsonSafe<TimelinePayload>(`/api/tenant/deals?contact_id=${contactId}`, { signal }),
         ]);
         if (signal.aborted) return;
+        setLoadError([actRes, callRes, meetRes, taskRes, dealRes].some(r => r.status === 'error'));
 
-        const activities: TimelineEntry[] = (actRes.data ?? actRes.activities ?? []).map((a: Record<string, unknown>) => ({
+        const activities: TimelineEntry[] = rows(actRes, 'activities').map((a) => ({
           id: a.id as string, type: 'activity' as const,
           title: (a.action ?? a.eventType ?? 'Activity') as string,
           description: a.description as string | undefined,
           created_at: (a.created_at ?? a.createdAt) as string,
         }));
 
-        const calls: TimelineEntry[] = (callRes.data ?? callRes.calls ?? []).map((c: Record<string, unknown>) => ({
+        const calls: TimelineEntry[] = rows(callRes, 'calls').map((c) => ({
           id: c.id as string, type: 'call' as const,
           title: `${(c.direction ?? 'outbound') as string} call${c.duration ? ` (${c.duration}s)` : ''}`,
           description: c.notes as string | undefined,
           created_at: (c.created_at ?? c.createdAt ?? c.start_time) as string,
         }));
 
-        const meetings: TimelineEntry[] = (meetRes.data ?? meetRes.meetings ?? []).map((m: Record<string, unknown>) => ({
+        const meetings: TimelineEntry[] = rows(meetRes, 'meetings').map((m) => ({
           id: m.id as string, type: 'meeting' as const,
           title: (m.title ?? 'Meeting') as string,
           description: m.description as string | undefined,
           created_at: (m.created_at ?? m.createdAt ?? m.start_time) as string,
         }));
 
-        const taskEntries: TimelineEntry[] = (taskRes.data ?? taskRes.tasks ?? []).map((t: Record<string, unknown>) => ({
+        const taskEntries: TimelineEntry[] = rows(taskRes, 'tasks').map((t) => ({
           id: t.id as string, type: 'task' as const,
           title: (t.title ?? 'Task') as string,
           description: `Status: ${t.status ?? 'pending'}`,
           created_at: (t.created_at ?? t.createdAt) as string,
         }));
 
-        const dealEntries: TimelineEntry[] = (dealRes.data ?? dealRes.deals ?? []).map((d: Record<string, unknown>) => ({
+        const dealEntries: TimelineEntry[] = rows(dealRes, 'deals').map((d) => ({
           id: d.id as string, type: 'deal' as const,
           title: (d.title ?? 'Deal') as string,
           description: d.amount ? `$${Number(d.amount).toLocaleString()}` : undefined,
@@ -102,7 +120,11 @@ export default function ContactTimeline({ contactId }: { contactId: string }) {
 
   if (loading) return <div className="animate-pulse space-y-3">{[1,2,3,4].map(i => <div key={i} className="h-12 bg-muted rounded" />)}</div>;
 
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground py-4">No interactions recorded yet.</p>;
+  if (entries.length === 0) return (
+    <p className={`text-sm py-4 ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>
+      {loadError ? 'Interactions could not be loaded — an empty timeline here would be a lie.' : 'No interactions recorded yet.'}
+    </p>
+  );
 
   return (
     <div className="space-y-1">
