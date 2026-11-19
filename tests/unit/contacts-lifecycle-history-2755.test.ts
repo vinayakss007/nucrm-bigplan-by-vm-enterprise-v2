@@ -221,6 +221,15 @@ describe('the transition is recorded, not just claimed (#2755)', () => {
     expect(updates[0]!.params).toContain(OWNED);
   });
 
+  it('claims the from-stage so a concurrent re-stage cannot be overwritten (#3407)', async () => {
+    // OWNED starts at 'lead' (the fixture). The write must carry that exact
+    // stage in the WHERE — the history row's from_stage is only honest if the
+    // update cannot win from a different stage than the one that was read.
+    await post(ctxWith(REP), OWNED);
+    expect(updates[0]!.sql).toMatch(/"contacts"\."lifecycle_stage" = /i);
+    expect(updates[0]!.params).toContain('lead');
+  });
+
   it('an absent reason is stored as null, not as the string "undefined"', async () => {
     body = { lifecycle_stage: 'churned' };
     await post(ctxWith(REP), OWNED);
