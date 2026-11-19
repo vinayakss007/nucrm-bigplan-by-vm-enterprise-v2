@@ -3,7 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, isNull, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
@@ -104,12 +105,13 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
   
  
  
-  let data: Record<string, unknown>[] = [];
-  
-  switch (entityType) {
+  // #3405: every entity's export query runs on one branded tenant client.
+  let data: Record<string, unknown>[] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) => {
+    let rows: Record<string, unknown>[] = [];
+    switch (entityType) {
     case 'contacts': {
       const q = filters['q'];
-      data = await db.select({
+      rows = await db.select({
         first_name: contacts.firstName,
         last_name: contacts.lastName,
         email: contacts.email,
@@ -150,7 +152,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     }
       
     case 'deals':
-      data = await db.select({
+      rows = await db.select({
         title: deals.title,
         amount: deals.amount,
         stage_id: deals.stageId,
@@ -174,7 +176,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       break;
       
     case 'tasks':
-      data = await db.select({
+      rows = await db.select({
         title: tasks.title,
         description: tasks.description,
         due_date: tasks.dueDate,
@@ -194,7 +196,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       break;
 
     case 'companies':
-      data = await db.select({
+      rows = await db.select({
         name: companies.name,
         domain: companies.domain,
         industry: companies.industry,
@@ -220,7 +222,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       // #2678 — the columns `app/api/tenant/leads/route.ts:139-165` selects for
       // the list, and the same `q`/`lead_status` predicates it builds at `:93-95`
       // and `:119-128`, so the download matches the rows on screen.
-      data = await db.select({
+      rows = await db.select({
         first_name: leads.firstName,
         last_name: leads.lastName,
         full_name: leads.fullName,
@@ -259,7 +261,9 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
 
     default:
       throw new Error(`Unsupported export entity type: ${entityType}`);
-  }
+    }
+    return rows;
+  });
 
   // #H2: if we fetched more than the cap, the export is too large to build
   // safely in memory. Reject rather than risk OOM / pool exhaustion.

@@ -3,7 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, or, isNull } from 'drizzle-orm';
 
@@ -364,11 +365,12 @@ export async function detectDuplicate(
     matchConditions.push(eq(contacts.phone, phone));
   }
 
-  const [existing] = await db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(and(...conditions, or(...matchConditions)))
-    .limit(1);
+  const [existing] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(...conditions, or(...matchConditions)))
+      .limit(1));
 
   if (existing) {
     return { isDuplicate: true, duplicateId: existing.id };
