@@ -10,6 +10,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 ;
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { EmptyState } from '@/components/shared/empty-state';
 
 interface DealRecord {
@@ -41,6 +42,7 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
   permissions: { canCreate:boolean; canEdit:boolean; canDelete:boolean };
 }) {
   const [deals, setDeals] = useState(initialDeals);
+  const [loadError, setLoadError] = useState(false);
   const [view, setView]   = useState<'kanban'|'list'>('kanban');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm]   = useState({ title:'', value:'', stage:'lead', contact_id:'', company_id:'', assigned_to:'', close_date:'', description:'' });
@@ -50,8 +52,10 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   const refreshDeals = useCallback(async () => {
-    const res = await fetch('/api/tenant/deals');
-    if (res.ok) { const data = await res.json(); setDeals(data.data || []); }
+    const result = await fetchJsonSafe<{ data?: DealRecord[] }>('/api/tenant/deals');
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') { setDeals(result.data.data || []); setLoadError(false); }
+    else { setLoadError(true); toast.error(result.message || 'Failed to load deals'); }
   }, []);
 
   const { deleteEntity } = useDeleteWithUndo('deal', refreshDeals);
@@ -247,6 +251,12 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
         </div>
       )}
 
+      {loadError && (
+        <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not refresh deals — an empty list here would be a lie.
+        </div>
+      )}
+
       {/* List view */}
       {view === 'list' && (
         <div className="admin-card overflow-hidden">
@@ -259,7 +269,7 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
             </tr></thead>
             <tbody>
               {!deals.length ? (
-                <tr><td colSpan={7}><EmptyState type="deals" className="py-12" /></td></tr>
+                <tr><td colSpan={7}><EmptyState type="deals" className="py-12" title={loadError ? 'Deals could not be loaded.' : undefined} description={loadError ? 'The list could not be read.' : undefined} /></td></tr>
               ) : deals.map(d => {
                 const stage = STAGES.find(s=>s.id===d.stage) ?? STAGES[0];
                 return (
