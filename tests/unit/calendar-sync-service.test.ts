@@ -18,14 +18,18 @@ const mockLimit = vi.fn();
 const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
+vi.mock('@/drizzle/db', () => {
+  // #3405: withTenantDb sets the tenant GUC with execute() inside a
+  // transaction; the fake must expose both and hand the same client to cb.
+  const db = {
+    execute: vi.fn(() => Promise.resolve()),
     select: (...args: unknown[]) => mockSelect(...args),
     insert: (...args: unknown[]) => mockInsert(...args),
     update: (...args: unknown[]) => mockUpdate(...args),
-    transaction: vi.fn(),
-  },
-}));
+    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(db)),
+  };
+  return { db };
+});
 
 vi.mock('@/drizzle/schema', () => ({
   meetings: { id: 'meetings.id', tenantId: 'meetings.tenantId', startTime: 'meetings.startTime', deletedAt: 'meetings.deletedAt', externalId: 'meetings.externalId' },
@@ -79,9 +83,15 @@ function setupDbChain(result: unknown[] = []) {
 
 
 describe('Calendar Sync Service', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    // #3405: clearAllMocks keeps implementations, so a prior test's rejected
+    // transaction would otherwise bleed into every later test now that all
+    // reads use the branded client too.
+    const { db } = await import('@/drizzle/db');
+    (db.transaction as ReturnType<typeof vi.fn>).mockImplementation(async (cb) => cb(db));
+    (db.execute as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
   describe('getProvider', () => {
@@ -149,6 +159,8 @@ describe('Calendar Sync Service', () => {
         const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
 
         const tx = {
+          // #3405: withTenantContext sets the tenant GUC via tx.execute().
+          execute: vi.fn(() => Promise.resolve()),
           select: vi.fn().mockReturnValue({ from: txSelectFrom }),
           update: vi.fn().mockReturnValue({ set: txUpdateSet }),
           insert: vi.fn(),
@@ -177,6 +189,8 @@ describe('Calendar Sync Service', () => {
         const txSelectFrom = vi.fn().mockReturnValue({ where: txSelectWhere });
 
         const tx = {
+          // #3405: withTenantContext sets the tenant GUC via tx.execute().
+          execute: vi.fn(() => Promise.resolve()),
           select: vi.fn().mockReturnValue({ from: txSelectFrom }),
           insert: vi.fn().mockReturnValue({ values: mockInsertValues }),
           update: vi.fn(),
@@ -243,9 +257,13 @@ describe('Calendar Sync Service', () => {
           };
         }
         // existingMeetings query
+        // Both a bare await (existingMeetings) and .limit() (the tx's config
+        // read) must work on this chain now that both use the branded client.
+        const rows: unknown[] = [];
+        Object.assign(rows, { limit: vi.fn().mockResolvedValue(rows) });
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
+            where: vi.fn().mockReturnValue(rows),
           }),
         };
       });
@@ -253,13 +271,13 @@ describe('Calendar Sync Service', () => {
       const txInsertValues = vi.fn().mockResolvedValue([{}]);
       const txUpdateWhere = vi.fn().mockResolvedValue([]);
       const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
-      const txSelectLimit = vi.fn().mockResolvedValue([{ id: 'int-1' }]);
-      const txSelectWhere = vi.fn().mockReturnValue({ limit: txSelectLimit });
-      const txSelectFrom = vi.fn().mockReturnValue({ where: txSelectWhere });
-
       (db.transaction as ReturnType<typeof vi.fn>).mockImplementation(async (fn) => {
         const tx = {
-          select: vi.fn().mockReturnValue({ from: txSelectFrom }),
+          // #3405: withTenantContext sets the tenant GUC via tx.execute().
+          execute: vi.fn(() => Promise.resolve()),
+          // getIntegrationConfig also runs on this branded client now, so the
+          // tx's select must share the call-ordered mock the test sets up.
+          select: (...args: unknown[]) => mockSelect(...args),
           insert: vi.fn().mockReturnValue({ values: txInsertValues }),
           update: vi.fn().mockReturnValue({ set: txUpdateSet }),
         };
@@ -309,9 +327,13 @@ describe('Calendar Sync Service', () => {
             }),
           };
         }
+        // Both a bare await (existingMeetings) and .limit() (the tx's config
+        // read) must work on this chain now that both use the branded client.
+        const rows: unknown[] = [];
+        Object.assign(rows, { limit: vi.fn().mockResolvedValue(rows) });
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
+            where: vi.fn().mockReturnValue(rows),
           }),
         };
       });
@@ -327,14 +349,15 @@ describe('Calendar Sync Service', () => {
       // saveIntegrationConfig transaction (refresh triggers it)
       // and syncCalendarEvents transaction
       (db.transaction as ReturnType<typeof vi.fn>).mockImplementation(async (fn) => {
-        const txSelectLimit = vi.fn().mockResolvedValue([{ id: 'int-1' }]);
-        const txSelectWhere = vi.fn().mockReturnValue({ limit: txSelectLimit });
-        const txSelectFrom = vi.fn().mockReturnValue({ where: txSelectWhere });
         const txUpdateWhere = vi.fn().mockResolvedValue([]);
         const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
 
         const tx = {
-          select: vi.fn().mockReturnValue({ from: txSelectFrom }),
+          // #3405: withTenantContext sets the tenant GUC via tx.execute().
+          execute: vi.fn(() => Promise.resolve()),
+          // getIntegrationConfig now shares the same branded client as the
+          // write transaction, so use the ordered mock rather than a local one.
+          select: (...args: unknown[]) => mockSelect(...args),
           insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue([{}]) }),
           update: vi.fn().mockReturnValue({ set: txUpdateSet }),
         };
@@ -390,9 +413,13 @@ describe('Calendar Sync Service', () => {
             }),
           };
         }
+        // Both a bare await (existingMeetings) and .limit() (the tx's config
+        // read) must work on this chain now that both use the branded client.
+        const rows: unknown[] = [];
+        Object.assign(rows, { limit: vi.fn().mockResolvedValue(rows) });
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
+            where: vi.fn().mockReturnValue(rows),
           }),
         };
       });

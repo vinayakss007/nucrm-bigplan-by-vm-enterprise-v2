@@ -611,11 +611,6 @@
       "filedAs": "#3405",
       "files": ["lib/billing/deal-invoice.ts", "lib/billing/payments.ts"]
     },
-    "lib/calendar-sync": {
-      "reason": "Calendar sync runs per connected account; the account row names the tenant it binds.",
-      "filedAs": "#3405",
-      "files": ["lib/calendar-sync/service.ts"]
-    },
     "lib/compliance": {
       "reason": "Retention/GDPR/SOC2 reporters read across tenants for one organization, binding the super-admin or tenant arm their caller established.",
       "filedAs": "#3405",
