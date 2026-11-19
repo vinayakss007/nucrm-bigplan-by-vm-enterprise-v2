@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import pLimit from 'p-limit';
 
@@ -49,35 +50,33 @@ interface Props {
 export default function DocumentsPanel({ entityType, entityId, readOnly = false }: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    try {
-      // #2782 — `route.ts:57-59` reads `entityType` / `entityId` / `folderId` and
-      // nothing else, so the `linked_entity_*` names this used to send matched no
-      // filter: `:73-75` then fell through to `isNull(folder_id)` and answered the
-      // whole tenant's loose files on a single deal's page.
-      const params = new URLSearchParams({
-        entityType,
-        entityId,
-      });
-      const res = await fetch(`/api/tenant/documents?${params}`, { signal });
-      const json = await res.json();
-      if (signal?.aborted) return;
-      if (!res.ok) throw new Error(json.error || 'Failed to load documents');
+    // #2782 — `route.ts:57-59` reads `entityType` / `entityId` / `folderId` and
+    // nothing else, so the `linked_entity_*` names this used to send matched no
+    // filter: `:73-75` then fell through to `isNull(folder_id)` and answered the
+    // whole tenant's loose files on a single deal's page.
+    const params = new URLSearchParams({ entityType, entityId });
+    const result = await fetchJsonSafe<{ data?: { documents?: DocumentRow[] } }>(
+      `/api/tenant/documents?${params}`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
       // The envelope is `{ data: { documents, folders }, page, limit, total }`
       // (`route.ts:106`), the same one `app/tenant/documents/page.tsx:52-53` reads.
-      setDocs(json.data?.documents ?? []);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      toast.error(err instanceof Error ? err.message : 'Failed to load');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+      setDocs(result.data.data?.documents ?? []);
+      setLoadError(false);
+    } else {
+      // Keep the last good list on screen — "nothing attached" is a claim
+      // about the record, not about whether the request succeeded.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load documents');
     }
+    setLoading(false);
   }, [entityType, entityId]);
 
   useEffect(() => {
@@ -224,13 +223,19 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
         </div>
       )}
 
+      {loadError && (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not load documents — an empty list here would be a lie.
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8 text-foreground/40">
           <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
         </div>
       ) : docs.length === 0 ? (
-        <div className="text-center py-6 text-sm text-foreground/50">
-          No documents attached yet.
+        <div className="text-center py-6 text-sm text-foreground/50" role={loadError ? 'alert' : undefined}>
+          {loadError ? 'Documents could not be loaded.' : 'No documents attached yet.'}
         </div>
       ) : (
         <div className="border border-border rounded-xl divide-y divide-border">
