@@ -105,7 +105,10 @@ async function cronRouteHandler(request: Request) {
               status: 'cancelled',
               updatedAt: new Date(),
             })
-            .where(eq(tenants.id, tenantId));
+            // #3407: the stale-subscription read above is unlocked. Claim the
+            // from-state so a tenant that was upgraded/reactivated in the gap
+            // is not written back to cancelled by this fallback job.
+            .where(inArray(tenants.status, ['trialing', 'active', 'past_due']));
 
           const subIds = staleSubscriptions.map(s => s.subscriptionId);
 
