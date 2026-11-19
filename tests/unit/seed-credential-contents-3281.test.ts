@@ -510,10 +510,10 @@ describe('#3281 the screen is wired where a regression cannot slip past', () => 
   it('is inserted below every cited coordinate and leaves constraint-vocab last', () => {
     const lines = ci.split('\n');
     const COORDINATES: Array<[number, string]> = [
-      [221, 'check-audit-baseline.mjs'],
-      [254, 'check-semgrep-baseline.mjs'],
-      [401, 'Schema drift check (column-level)'],
-      [447, 'check-env-coverage.mjs'],
+      [224, 'check-audit-baseline.mjs'],
+      [257, 'check-semgrep-baseline.mjs'],
+      [404, 'Schema drift check (column-level)'],
+      [450, 'check-env-coverage.mjs'],
     ];
     for (const [line, mustContain] of COORDINATES) {
       expect(lines[line - 1], `ci.yml:${line}`).toContain(mustContain);
@@ -522,7 +522,7 @@ describe('#3281 the screen is wired where a regression cannot slip past', () => 
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
     // The invariant is the anchor, not the rank. This job was second-to-last only while
     // it was the newest append; #3282 later inserted `destructive-gate` at exactly the
-    // place this one did — below the cited `:447`, above `constraint-vocab` — which is the
+    // place this one did — below the cited `:450`, above `constraint-vocab` — which is the
     // discipline both issues follow. Pin the order, so the next append does not have to
     // come edit a predecessor's assertion.
     expect(jobKeys.indexOf('seed-credential')).toBeGreaterThan(jobKeys.indexOf('jsonb-size-unit'));

@@ -65,10 +65,10 @@ const TAG = '0140_jsonb_size_octet_length';
  * of these moves the citation and breaks `npm run guard:coords`.
  */
 const COORDINATES: Array<[number, string]> = [
-  [221, 'check-audit-baseline.mjs'],
-  [254, 'check-semgrep-baseline.mjs'],
-  [401, 'Schema drift check (column-level)'],
-  [447, 'check-env-coverage.mjs'],
+  [224, 'check-audit-baseline.mjs'],
+  [257, 'check-semgrep-baseline.mjs'],
+  [404, 'Schema drift check (column-level)'],
+  [450, 'check-env-coverage.mjs'],
 ];
 
 /** A throwaway migration tree so a rule can be fired deliberately. */
@@ -395,7 +395,7 @@ describe('#3283 the screen is wired, with both controls', () => {
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
     // The invariant is the anchor, not the rank: this job was second-to-last only
     // while it was the newest append. #3281 later inserted `seed-credential` at the
-    // same place it did — above `constraint-vocab`, below `:447` — which is the
+    // same place it did — above `constraint-vocab`, below `:450` — which is the
     // discipline both issues follow, so pin the order rather than the offset.
     expect(jobKeys.indexOf('jsonb-size-unit'))
       .toBeGreaterThan(jobKeys.indexOf('rollback-coverage'));
@@ -410,7 +410,7 @@ describe('#3283 the screen is wired, with both controls', () => {
     for (const [line, mustContain] of COORDINATES) {
       expect(lines[line - 1], `ci.yml:${line}`).toContain(mustContain);
     }
-    // an insert above any of them would have moved it; below :447 nothing can
+    // an insert above any of them would have moved it; below :450 nothing can
     expect(lines.findIndex((l) => l.startsWith('  jsonb-size-unit:')) + 1).toBeGreaterThan(447);
   });
 

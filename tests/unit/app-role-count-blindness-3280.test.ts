@@ -312,7 +312,7 @@ describe('#3280 the screen is wired and the census says so', () => {
   });
 
   it('sits at the line the preprod register cites, so no coordinate moves', () => {
-    expect(lines.findIndex((l) => l.includes('npm run guard:raw-sql')) + 1).toBe(87);
+    expect(lines.findIndex((l) => l.includes('npm run guard:raw-sql')) + 1).toBe(90);
     expect(lines.findIndex((l) => l.includes('npm run guard:rls')) + 1).toBe(45);
   });
 
