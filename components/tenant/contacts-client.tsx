@@ -19,6 +19,7 @@ import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
 import toast from 'react-hot-toast';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { showUndoToast } from '@/lib/undo';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
@@ -175,6 +176,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const normalize = (data: ContactInput[]) => (data || []).map((c) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
+  const [loadError, setLoadError] = useState(false);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -215,16 +217,13 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       // router.push (server refetch) AND the client fetch below on every
       // keystroke — a double-load. replaceState keeps the URL in sync cheaply.
       window.history.replaceState(null, '', `/tenant/contacts?${params.toString()}`);
-      const res = await fetch('/api/tenant/contacts?'+params.toString(), { signal: controller.signal });
-      const data = await res.json();
-      setContacts(normalize(data.data));
-      setTotal(data.total ?? 0);
-      setOffset(newOffset);
-    } catch (error) {
-      if ((error as Error)?.name === 'AbortError') return;
-      console.error('Failed to load contacts:', error);
-      toast.error('Failed to load contacts');
-    }
+      const result = await fetchJsonSafe<{ data?: ContactInput[]; total?: number }>(
+        '/api/tenant/contacts?'+params.toString(), { signal: controller.signal });
+      if (result.status === 'aborted') return;
+      if (result.status === 'ok') {
+        setContacts(normalize(result.data.data ?? [])); setTotal(result.data.total ?? 0); setLoadError(false); setOffset(newOffset);
+      } else setLoadError(true);
+    } catch { setLoadError(true); }
     setLoading(false);
   }, [search, statusFilter]);
 
@@ -446,6 +445,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
       </div>
 
       {/* List view */}
+      {loadError&&<div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Could not load contacts — an empty list here would be a lie.</div>}
       {view==='list'&&(
         <div className="admin-card overflow-hidden">
           <div className="table-responsive">
@@ -470,9 +470,9 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                 <tr><td colSpan={8} className="py-20 text-center">
                   <div className="max-w-sm mx-auto">
                     <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-sky-400"/></div>
-                    <p className="text-sm font-semibold mb-1">{search||statusFilter!=='all'?'No contacts match your filters':'No contacts yet'}</p>
-                    <p className="text-xs text-muted-foreground mb-4">{search?'Try a different search term':'Add your first contact or import from CSV'}</p>
-                    {!search&&statusFilter==='all'&&permissions.canCreate&&(
+                    <p className="text-sm font-semibold mb-1">{loadError?'Could not load contacts':search||statusFilter!=='all'?'No contacts match your filters':'No contacts yet'}</p>
+                    <p className="text-xs text-muted-foreground mb-4">{loadError?'The contact list could not be read.':search?'Try a different search term':'Add your first contact or import from CSV'}</p>
+                    {!loadError&&!search&&statusFilter==='all'&&permissions.canCreate&&(
                       <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white" onClick={()=>setShowAdd(true)}><Plus className="w-3.5 h-3.5 mr-1.5"/>Add Contact</Button>
                     )}
                   </div>
