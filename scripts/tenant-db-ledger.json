@@ -653,11 +653,6 @@
       "filedAs": "#3405",
       "files": ["lib/onboarding/check.ts"]
     },
-    "lib/plugins": {
-      "reason": "Plugin engine resolves the plugin/tenant pair and binds the context before executing tenant code.",
-      "filedAs": "#3405",
-      "files": ["lib/plugins/engine.ts"]
-    },
     "lib/rbac": {
       "reason": "RBAC config readers/writers are scoped to one tenant and run inside the caller transaction.",
       "filedAs": "#3405",
