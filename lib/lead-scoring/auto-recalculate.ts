@@ -21,7 +21,8 @@
  * - Page visit (tracked): +3
  */
 
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { leads } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
@@ -67,13 +68,14 @@ export async function adjustLeadScore(
     const adjustment = SCORE_ADJUSTMENTS[event];
     if (!adjustment) return;
 
-    await db
-      .update(leads)
-      .set({
-        score: sql`LEAST(100, GREATEST(0, COALESCE(${leads.score}, 0) + ${adjustment}))`,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
+    await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db
+        .update(leads)
+        .set({
+          score: sql`LEAST(100, GREATEST(0, COALESCE(${leads.score}, 0) + ${adjustment}))`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId))));
   } catch (err) {
     await logError({ error: err, context: 'lead-scoring failed to adjust score', tenantId, metadata: { leadId } });
   }
@@ -108,10 +110,11 @@ export async function recalculateLeadScore(
   score = Math.max(0, Math.min(100, score));
 
   try {
-    await db
-      .update(leads)
-      .set({ score, updatedAt: new Date() })
-      .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
+    await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db
+        .update(leads)
+        .set({ score, updatedAt: new Date() })
+        .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId))));
   } catch (err) {
     await logError({ error: err, context: 'lead-scoring recalculate failed', tenantId, metadata: { leadId } });
   }
