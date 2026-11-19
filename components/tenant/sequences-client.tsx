@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { Plus, Mail, Pause, Play, Trash2, Users, TrendingUp, Edit } from 'lucide-react'
 import { confirmThen } from '@/components/ui/confirm-dialog'
+import { fetchJsonSafe } from '@/lib/fetch-json'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -56,6 +57,7 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingSequence, setEditingSequence] = useState<SequenceListItem | null>(null)
   const [sequencesList, setSequencesList] = useState(sequences)
+  const [loadError, setLoadError] = useState(false)
 
   const handleSaveSequence = async (sequenceData: Partial<Sequence>) => {
     const url = editingSequence 
@@ -75,10 +77,17 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
       throw new Error(data.error || 'Failed to save')
     }
     
-    // Reload sequences
-    const res2 = await fetch('/api/tenant/sequences')
-    const data = await res2.json()
-    setSequencesList(data.data || [])
+    // Reload sequences — a refused refresh must not wipe the list into
+    // "No sequences yet" right after a successful save.
+    const reloaded = await fetchJsonSafe<{ data?: SequenceListItem[] }>('/api/tenant/sequences')
+    if (reloaded.status === 'aborted') return
+    if (reloaded.status === 'ok') {
+      setSequencesList(reloaded.data.data || [])
+      setLoadError(false)
+    } else {
+      setLoadError(true)
+      toast.error(reloaded.message || 'Failed to load sequences')
+    }
     setShowBuilder(false)
     setEditingSequence(null)
   }
@@ -210,12 +219,17 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
 
       {/* Sequences List */}
       <div className="space-y-3">
+        {loadError && (
+          <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            Could not load sequences — an empty list here would be a lie.
+          </div>
+        )}
         {sequencesList.length === 0 ? (
-          <div className="admin-card p-12 text-center">
+          <div className="admin-card p-12 text-center" role={loadError ? 'alert' : undefined}>
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Mail className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h4 className="text-sm font-semibold mb-1">No sequences yet</h4>
+            <h4 className="text-sm font-semibold mb-1">{loadError ? 'Sequences could not be loaded.' : 'No sequences yet'}</h4>
             <p className="text-sm text-muted-foreground mb-4">
               Create your first email sequence to start nurturing leads automatically
             </p>
