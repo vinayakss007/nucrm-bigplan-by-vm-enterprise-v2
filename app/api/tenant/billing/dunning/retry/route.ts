@@ -208,7 +208,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       stripeInvoiceId,
       stripePaymentIntentId,
       updatedAt: new Date(),
-    }).where(eq(dunningAttempts.id, attempt.id));
+    }).where(and(
+      // #3407/#3405: the from-state and tenant belong in the write, not just
+      // the read. RLS is the backstop, not the only thing standing between this
+      // settlement and another tenant's attempt. Pin the 'pending' state we
+      // created above so a concurrent settlement cannot be silently overwritten.
+      eq(dunningAttempts.id, attempt.id),
+      eq(dunningAttempts.tenantId, ctx.tenantId),
+      eq(dunningAttempts.status, 'pending')
+    ));
 
     await db.insert(billingEvents).values({
       tenantId: ctx.tenantId,
