@@ -609,7 +609,7 @@
     "lib/billing": {
       "reason": "Billing helpers resolve the tenant from the subscription/tenant row and bind it before touching invoices.",
       "filedAs": "#3405",
-      "files": ["lib/billing/deal-invoice.ts", "lib/billing/payments.ts"]
+      "files": ["lib/billing/payments.ts"]
     },
     "lib/compliance": {
       "reason": "Retention/GDPR/SOC2 reporters read across tenants for one organization, binding the super-admin or tenant arm their caller established.",

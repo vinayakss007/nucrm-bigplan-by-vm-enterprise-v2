@@ -13,6 +13,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const H = vi.hoisted(() => ({
   order: [] as string[],
   txTables: [] as string[],
+  // #3405: each withTenantDb call opens its own transaction, so track the
+  // tables per transaction rather than one flat list.
+  txBatches: [] as string[][],
+  currentBatch: [] as string[],
   activityFails: false,
 }));
 
@@ -46,15 +50,35 @@ vi.mock('@/drizzle/db', () => ({
     }),
     transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
       H.order.push('tx:start');
+      H.currentBatch = [];
       const tx = {
         execute: async () => undefined,
-        query: { invoices: { findFirst: async () => null } },
+        // #3405: the source reads now run on this branded client too.
+        query: {
+          invoices: { findFirst: async () => null },
+          quotes: { findFirst: async () => null },
+        },
+        // #3405: both the settings read and the invoice-number read now run
+        // through this handle; one chain must answer both shapes.
         select: () => ({
-          from: () => ({ where: async () => [{ maxNum: 0 }] }),
+          from: (table: { [Symbol.for('drizzle:Name')]?: string }) => {
+            const rows: unknown[] = [{ maxNum: 0 }];
+            Object.assign(rows, {
+              limit: async () => tableName(table) === 'tenants'
+                ? [{ settings: { autoInvoiceOnWon: true } }]
+                : rows,
+            });
+            return { where: () => rows };
+          },
         }),
         insert: (table: { [Symbol.for('drizzle:Name')]?: string }) => {
           const name = tableName(table);
           H.txTables.push(name);
+          H.currentBatch.push(name);
+          if (name === 'activities') {
+            H.order.push('activity');
+            if (H.activityFails) throw new Error('simulated FK/RLS failure on activity');
+          }
           return {
             values: (rows: unknown) => ({
               returning: async () =>
@@ -67,6 +91,7 @@ vi.mock('@/drizzle/db', () => ({
         },
       };
       const result = await cb(tx);
+      H.txBatches.push(H.currentBatch);
       H.order.push('tx:commit');
       return result;
     },
@@ -85,6 +110,8 @@ const DEAL_ROW = { title: 'Big deal', amount: '5000.00', contactId: null, compan
 beforeEach(() => {
   H.order = [];
   H.txTables = [];
+  H.txBatches = [];
+  H.currentBatch = [];
   H.activityFails = false;
   vi.mocked(logError).mockClear();
 });
@@ -94,14 +121,20 @@ describe('#3107 deal-won invoice — activity is written after commit, never ins
     const id = await createInvoiceFromWonDeal(CTX, 'deal-1', DEAL_ROW);
 
     expect(id).toBe('inv-1');
-    expect(H.order).toEqual(['tx:start', 'tx:commit', 'activity']);
+    // #3405: the branded client opens its own transaction per read/write, so
+    // several tx:start/tx:commit pairs appear. What #3107 pins is that the
+    // activity lands after a commit, never inside the invoice transaction.
+    expect(H.order.filter((x) => x === 'activity')).toEqual(['activity']);
+    expect(H.order.indexOf('activity')).toBeGreaterThan(H.order.indexOf('tx:commit'));
+    expect(H.order.at(-1)).toBe('tx:commit');
   });
 
   it('the invoice transaction never receives the activities insert at all', async () => {
     await createInvoiceFromWonDeal(CTX, 'deal-1', DEAL_ROW);
 
-    expect(H.txTables).toContain('invoices');
-    expect(H.txTables).not.toContain('activities');
+    const invoiceBatch = H.txBatches.find((batch) => batch.includes('invoices')) ?? [];
+    expect(invoiceBatch).toContain('invoices');
+    expect(invoiceBatch).not.toContain('activities');
   });
 
   it('a failing activity insert no longer rolls the invoice back — the id still returns', async () => {
