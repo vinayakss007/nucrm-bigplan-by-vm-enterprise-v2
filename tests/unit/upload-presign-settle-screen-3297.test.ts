@@ -86,6 +86,19 @@ describe('every presigned uploader settles its row (#3297)', () => {
       .toMatch(SETTLE_CALLED);
   });
 
+  it('does not report a failed metadata create or presigned PUT as success (#3408)', () => {
+    // The panel checks both responses; the page used to ignore them and still
+    // rendered "uploaded successfully". A refused request is a failure, not an
+    // empty result.
+    const panel = read('components/documents/documents-panel.tsx');
+    expect(panel).toMatch(/if\s*\(!metaRes\.ok\)/);
+    expect(panel).toMatch(/if\s*\(!putRes\.ok\)/);
+
+    const page = read('app/tenant/documents/page.tsx');
+    expect(page).toMatch(/if\s*\(!res\.ok\)/);
+    expect(page, 'the presigned PUT response is discarded — a failed store write still looks like success').toMatch(/if\s*\(!put\.ok\)/);
+  });
+
   it('keeps the settle helper reachable from the modules that call it', () => {
     for (const rel of uploaders) {
       const src = read(rel);
