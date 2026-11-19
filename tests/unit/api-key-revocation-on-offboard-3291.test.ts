@@ -250,6 +250,21 @@ describe('member offboarding revokes keys (#3291 ask 2)', () => {
     expect(audit).toMatchObject({ entityId: 'user-target', tenantId: 'tenant-1', userId: 'user-admin' });
   });
 
+  it('a lost remove claim (already removed) writes no departure, keys, audit or sessions (#3407)', async () => {
+    // A concurrent removal won: the guarded membership UPDATE matches zero
+    // rows. The second caller must get 409 and NONE of the consequences — no
+    // duplicate departure row, no second revocation, no duplicate audit.
+    h.updateRows = [];
+    const res = await patch({ memberId: 'm-1', action: 'remove', reason: 'left' });
+    expect(res.status).toBe(409);
+    expect(h.revoked).toEqual([]);
+    expect(h.audits).toEqual([]);
+    expect(h.killedSessions).toEqual([]);
+    const membershipWrite = h.updates.find((u) => u.table === 'tenant_members');
+    expect(predicateText(membershipWrite?.where).toLowerCase()).toContain('status');
+    expect(predicateText(membershipWrite?.where).toLowerCase()).toContain('removed');
+  });
+
   it('revokes for a suspension too, not only for a removal', async () => {
     const res = await patch({ memberId: 'm-1', action: 'suspend' });
     expect(res.status).toBe(200);
