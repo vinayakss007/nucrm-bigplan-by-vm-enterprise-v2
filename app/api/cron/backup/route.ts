@@ -49,7 +49,9 @@ async function reportBackupFailure(
             errorMessage: detail.slice(0, 500),
             durationMs: opts.durationMs
           })
-          .where(eq(backupRecords.id, opts.backupId));
+          // #3407: a failed run may only move a row that is still running —
+          // never overwrite a completed backup from another run.
+          .where(and(eq(backupRecords.id, opts.backupId), eq(backupRecords.status, 'running')));
       }
 
       await tx.insert(errorLogs).values({
@@ -228,7 +230,9 @@ async function cronRouteHandler(request: NextRequest) {
             ...(offsiteError ? { offsite_error: offsiteError.slice(0, 500) } : {}),
           }
         })
-        .where(eq(backupRecords.id, backup.id));
+        // #3407: claim the from-state so a row already marked failed (e.g. by
+        // a concurrent timeout report) is not overwritten with a success.
+        .where(and(eq(backupRecords.id, backup.id), eq(backupRecords.status, 'running')));
 
       await tx.update(backupAlerts)
         .set({
