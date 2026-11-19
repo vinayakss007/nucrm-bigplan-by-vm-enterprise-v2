@@ -72,4 +72,11 @@ describe('withTenantDb (#3405)', () => {
     const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
     expect(ledger.groups).not.toHaveProperty('lib/formula');
   });
+
+  it('the compliance stale reaper no longer reaches for the raw client', () => {
+    expect(read('lib/compliance/stale-requests.ts')).toContain("from '@/lib/db'");
+    expect(read('lib/compliance/stale-requests.ts')).not.toContain("from '@/drizzle/db'");
+    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
+    expect(ledger.groups['lib/compliance'].files).not.toContain('lib/compliance/stale-requests.ts');
+  });
 });
