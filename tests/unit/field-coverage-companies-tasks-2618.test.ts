@@ -107,7 +107,16 @@ beforeEach(() => {
   mockEnforceFieldRead.mockReset();
   mockEnforceFieldRead.mockImplementation(async (_c: unknown, _e: string, rows: Record<string, unknown>[]) => rows);
   mockUpdate.mockReset();
-  mockUpdate.mockImplementation(() => ({ set: () => ({ where: () => Promise.resolve({ rowCount: 1 }) }) }));
+  // #3407: the tasks bulk complete/reopen writes now count actual rows via
+  // RETURNING; keep the old thenable shape and add the returning chain.
+  mockUpdate.mockImplementation(() => ({
+    set: () => ({
+      where: () => ({
+        then: (ok: (v: unknown) => unknown) => Promise.resolve({ rowCount: 1 }).then(ok),
+        returning: () => Promise.resolve([{ id: ID }]),
+      }),
+    }),
+  }));
   mockTransaction.mockReset();
   insertedRows.length = 0;
 });
