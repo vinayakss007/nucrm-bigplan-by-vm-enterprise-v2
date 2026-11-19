@@ -3,7 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { deals, atRiskRules, dealStages, contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 
@@ -32,6 +33,8 @@ export interface AtRiskResult {
  * Shared between the real-time API and the daily cron job.
  */
 export async function getAtRiskDeals(tenantId: string): Promise<AtRiskResult[]> {
+  // #3405: both reads run on one branded tenant client.
+  const { globalRule, stageRules, openDeals } = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) => {
   // 1. Fetch all active at-risk rules for this tenant
   const rules = await db.select()
     .from(atRiskRules)
@@ -72,6 +75,8 @@ export async function getAtRiskDeals(tenantId: string): Promise<AtRiskResult[]> 
     // Only open deals
     sql`COALESCE(${deals.metadata}->>'outcome', '') NOT IN ('won', 'lost')`
   ));
+  return { globalRule, stageRules, openDeals };
+  });
 
   const now = new Date();
 

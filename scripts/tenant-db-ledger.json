@@ -547,8 +547,6 @@
       "reason": "AI helpers read tenant rows inside a caller-supplied transaction; the GUC is already set by the route that invoked them.",
       "filedAs": "#3405",
       "files": [
-        "lib/ai/activity-log.ts",
-        "lib/ai/at-risk.ts",
         "lib/ai/auto-followup.ts",
         "lib/ai/common.ts",
         "lib/ai/credits-claim.ts",
@@ -566,7 +564,7 @@
     "lib/analytics": {
       "reason": "Analytics readers aggregate tenant rows under a caller-bound tenant context.",
       "filedAs": "#3405",
-      "files": ["lib/analytics/entitlement.ts", "lib/analytics/store.ts"]
+      "files": ["lib/analytics/store.ts"]
     },
     "lib/api": {
       "reason": "Shared API helpers that resolve the tenant from the request/session before they hand a bound client to the handler.",
