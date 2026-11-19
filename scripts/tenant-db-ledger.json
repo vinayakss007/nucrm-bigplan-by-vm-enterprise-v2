@@ -640,11 +640,6 @@
       "filedAs": "#3405",
       "files": ["lib/field-sales/card-scanner.ts"]
     },
-    "lib/import": {
-      "reason": "Import pipeline stages rows inside one transaction per tenant so a failed import leaves nothing behind.",
-      "filedAs": "#3405",
-      "files": ["lib/import/contacts.ts"]
-    },
     "lib/lead-warming": {
       "reason": "Lead-warming campaigns are per tenant; the campaign row fixes the tenant before any contact read.",
       "filedAs": "#3405",

@@ -16,7 +16,7 @@
  * call from a background worker where there is no request context.
  */
 
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
 import { contacts, companies, tenants, plans, activities } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
@@ -131,7 +131,9 @@ export async function processContactImport(
   const MAX_COMPANY_CACHE = 5000;
   const companyCache: Record<string, string> = {};
 
-  await db.transaction(async (tx) => {
+  // #3405: the whole import runs on one branded client. withTenantDb opens
+  // the transaction and sets the tenant GUC before the first statement.
+  await withTenantDb(tenantId, userId, async (tx) => {
     // Plan limits check (lock the tenant row for update)
     const [tenantWithPlan] = await tx
       .select({ currentContacts: tenants.currentContacts, maxContacts: plans.maxContacts })
