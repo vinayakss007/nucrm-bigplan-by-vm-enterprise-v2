@@ -50,30 +50,25 @@ interface Deal {
   assigned_to: string | null
   created_at: string
 }
-
 interface Stage {
   id: string
   name: string
   order: number
   pipelineId: string
 }
-
 interface Contact {
   id: string
   first_name: string
   last_name: string
 }
-
 interface Company {
   id: string
   name: string
 }
-
 interface TeamMember {
   user_id: string
   full_name: string
 }
-
 interface Props {
   initialDeals: Deal[]
   stages: Stage[]
@@ -152,17 +147,11 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
       toast.success('Deal created')
       setShowAdd(false)
       setForm({ title: '', amount: '', stage: stages[0]?.name?.toLowerCase() || 'lead', contact_id: '', company_id: '', assigned_to: '', close_date: '', description: '' })
-      // Refresh by fetching again — a refused refresh must not wipe the board
-      // into "0 deals" and make it look like the create never happened.
+      // A refused refresh must not wipe the board into "0 deals".
       const refresh = await fetchJsonSafe<{ data?: Record<string, unknown>[] }>('/api/tenant/deals?limit=200')
       if (refresh.status === 'aborted') return
-      if (refresh.status === 'ok') {
-        setDeals((refresh.data.data ?? []).map((d) => toSnakeCase(d) as unknown as Deal))
-        setLoadError(false)
-      } else {
-        setLoadError(true)
-        toast.error(refresh.message || 'Failed to refresh deals')
-      }
+      if (refresh.status === 'ok') { setDeals((refresh.data.data ?? []).map((d) => toSnakeCase(d) as unknown as Deal)); setLoadError(false) }
+      else { setLoadError(true); toast.error(refresh.message || 'Failed to refresh deals') }
     } catch {
       toast.error('Failed to create deal')
     }
@@ -308,11 +297,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
         )}
       </div>
 
-      {loadError && (
-        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
-          Could not refresh deals — an empty board here would be a lie.
-        </div>
-      )}
+      {loadError && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Could not refresh deals — an empty board here would be a lie.</div>}
 
       {/* Add Deal Form */}
       {showAdd && (
