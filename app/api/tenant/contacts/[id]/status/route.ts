@@ -85,7 +85,11 @@ export const PATCH = withApiRoute(async (request: NextRequest,
           eq(contacts.id, id),
           eq(contacts.tenantId, ctx.tenantId),
           isNull(contacts.deletedAt),
-          eq(contacts.leadStatus, prev.leadStatus)
+          // lead_status is nullable — eq() cannot bind null, so claim the
+          // read value with the matching IS NULL form when it is absent.
+          prev.leadStatus === null
+            ? isNull(contacts.leadStatus)
+            : eq(contacts.leadStatus, prev.leadStatus)
         ))
         .returning();
 
