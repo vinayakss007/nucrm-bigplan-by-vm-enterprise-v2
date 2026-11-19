@@ -21,12 +21,14 @@
  */
 
 import { withTenantDb, type TenantDb } from '@/lib/db';
+import type { RlsTransaction } from '@/lib/db/rls-client';
 import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { invoices, invoicePayments } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
-// #3405: the recalculation helper receives the branded client from its callers.
-type DbTransaction = TenantDb;
+// #3405: the helper is shared — its own callers pass a branded client, while
+// two external routes still pass a plain transaction handle they opened.
+type DbTransaction = TenantDb | RlsTransaction;
 
 /** Statuses that describe payment progress and may therefore be recomputed. */
 const PAYMENT_DRIVEN_STATUSES = new Set(['draft', 'sent', 'partially_paid', 'paid', 'overdue']);
