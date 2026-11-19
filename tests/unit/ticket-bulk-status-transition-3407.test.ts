@@ -207,3 +207,31 @@ describe('#3407 bulk ticket status — registry and claim', () => {
     expect(H.updates).toHaveLength(0);
   });
 });
+
+describe('#3408 bulk ticket assign/priority/delete — honest affected count', () => {
+  const cases: { action: string; payload: Record<string, unknown>; setField: string }[] = [
+    { action: 'assign', payload: { user_id: USER }, setField: 'assignedTo' },
+    { action: 'priority', payload: { priority: 'high' }, setField: 'priority' },
+    { action: 'delete', payload: {}, setField: 'deletedAt' },
+  ];
+
+  for (const { action, payload, setField } of cases) {
+    it(`${action}: affected is the rows actually written, not the ids requested`, async () => {
+      // Two ids passed ownership validation, but one was deleted in the gap —
+      // the guarded UPDATE touches only one row.
+      H.selectRows = [[{ id: 'a', status: 'open' }, { id: 'b', status: 'open' }]];
+      H.updateReturns = [[{ id: 'a' }]];
+
+      const res = await bulk({ action, ticket_ids: ['a', 'b'], payload });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body).toMatchObject({ ok: true, affected: 1, skipped: 1, action });
+      expect(H.updates).toHaveLength(1);
+      expect(H.updates[0].set[setField]).toBeDefined();
+      // The write re-asserts tenant and the live-tombstone gate.
+      expect(H.updates[0].sql).toContain('"support_tickets"."tenant_id" =');
+      expect(H.updates[0].sql).toContain('"support_tickets"."deleted_at" is null');
+    });
+  }
+});
