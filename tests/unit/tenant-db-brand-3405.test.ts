@@ -58,6 +58,7 @@ describe('withTenantDb (#3405)', () => {
     'lib/calendar-sync/service.ts',
     'lib/usage/notifications.ts',
     'lib/lead-scoring/auto-recalculate.ts',
+    'lib/usage/tracker.ts',
   ])('%s no longer reaches for the raw client', (file) => {
     expect(read(file)).toContain("from '@/lib/db'");
     expect(read(file)).not.toContain("from '@/drizzle/db'");
