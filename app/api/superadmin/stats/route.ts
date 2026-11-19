@@ -87,9 +87,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
       db.select({
         totalTenants: sql<number>`COUNT(*)::int`,
-        activeTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'active')`,
-        trialingTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'trialing')`,
-        suspendedTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'suspended')`,
+        // #2755: COUNT(*) FILTER is int8 → a JS string with no setTypeParser.
+        // The response's platformUsage.{active,trialing,suspended} must be
+        // numbers; cast like totalTenants above does.
+        activeTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'active')::int`,
+        trialingTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'trialing')::int`,
+        suspendedTenants: sql<number>`COUNT(*) FILTER (WHERE ${tenants.status} = 'suspended')::int`,
       })
       .from(tenants)
       .then(rows => rows[0])

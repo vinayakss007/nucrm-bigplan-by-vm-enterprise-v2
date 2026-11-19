@@ -2973,7 +2973,7 @@ tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476
   backup), `lib/restore/backup-parser.ts` (what the SQL-text path accepts) and `lib/sql-allowlist.ts` (what
   may be inserted) are four hand-maintained lists with no shared source and no assertion relating them.
   Set arithmetic over them — `TENANT_DELETE_ORDER ∌ sql-allowlist` — is a bug class PP-053 only described.
-- **Mechanism, end to end:** `app/api/admin/tenant-restore/route.ts:413` builds a `TenantDataImporter` and
+- **Mechanism, end to end:** `app/api/admin/tenant-restore/route.ts:416` (re-pinned 2026-11-19 from `:413`: the #2755 int8-count fix added a two-line comment above the SELECT; guard:coords) builds a `TenantDataImporter` and
   calls `importer.restore(tables, { deleteExisting, skipTables })`. Inside **one** transaction
   (`#2225`'s atomic restore) `lib/tenant-data-import.ts:138` runs `deleteTenantDataInTx(…, failFast: true)`
   over `TENANT_DELETE_ORDER`, then `:142` calls `importTable(…, failFast: true)`, whose first statement is
@@ -3052,7 +3052,7 @@ tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files 
 - **Files:** `lib/sql-allowlist.ts`, `lib/restore/backup-parser.ts` (one word: `TENANT_SCOPED_TABLES` becomes
   `export const`, no behaviour change), `tests/unit/tenant-junction-scoping.test.ts`, this register.
   Evidence read: `lib/tenant-data-import.ts:86,138,142,164-169,195,283`,
-  `app/api/admin/tenant-restore/route.ts:413-420`, `app/api/admin/tenant-restore/route.ts:261-265,362-390`
+  `app/api/admin/tenant-restore/route.ts:416-423` (re-pinned 2026-11-19 from `:413-420`: same two-line #2755 comment), `app/api/admin/tenant-restore/route.ts:261-265,362-390`
   (super-admin-only guard, and the restore detached with `runTenantRestore(...).catch(…)`),
   `drizzle/db.ts:59-89 (re-pinned 2026-10-15 from `:55-90`: #2623 shed the `any` suppressions inside the Proxy block)` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
   `lib/restore/restore-executor.ts:171,214,437,493`,
