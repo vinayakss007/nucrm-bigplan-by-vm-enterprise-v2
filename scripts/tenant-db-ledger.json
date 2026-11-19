@@ -715,7 +715,7 @@
     "lib/usage": {
       "reason": "Usage metering writes counters for the caller tenant, inside the request transaction.",
       "filedAs": "#3405",
-      "files": ["lib/usage/notifications.ts", "lib/usage/tracker.ts"]
+      "files": ["lib/usage/tracker.ts"]
     },
     "lib/webhooks": {
       "reason": "Outbound webhook dispatch reads delivery config for one tenant and binds it before signing the payload.",
