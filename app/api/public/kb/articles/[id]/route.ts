@@ -69,8 +69,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
       if (!row) return null;
 
-      // id already proven to be a published, live, same-tenant row above.
-      await tx.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
+      // id was already proven to be a published, live, same-tenant row above,
+      // but re-assert tenant + published + tombstone on the write so the view
+      // cannot be counted on a row that changed between the read and here.
+      await tx.update(kbArticles)
+        .set({ views: sql`${kbArticles.views} + 1` })
+        .where(and(
+          eq(kbArticles.id, id),
+          eq(kbArticles.tenantId, identity.tenantId),
+          eq(kbArticles.status, 'published'),
+          isNull(kbArticles.deletedAt),
+        ));
 
       return row;
     });
