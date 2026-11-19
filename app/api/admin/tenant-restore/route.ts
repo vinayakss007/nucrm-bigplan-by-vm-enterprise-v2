@@ -311,7 +311,7 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
         durationMs: duration,
         completedAt: new Date(),
       })
-      .where(eq(tenantBackupRecords.id, backupId));
+      .where(and(eq(tenantBackupRecords.id, backupId), eq(tenantBackupRecords.status, 'running'))); // #3407
 
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
@@ -323,7 +323,7 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
         durationMs: duration,
         completedAt: new Date(),
       })
-      .where(eq(tenantBackupRecords.id, backupId));
+      .where(and(eq(tenantBackupRecords.id, backupId), eq(tenantBackupRecords.status, 'running'))); // #3407
     throw err;
   }
 }
@@ -432,7 +432,7 @@ async function runTenantRestore(
         durationMs: duration,
         completedAt: new Date(),
       })
-      .where(eq(tenantRestoreRecords.id, restoreId));
+      .where(and(eq(tenantRestoreRecords.id, restoreId), eq(tenantRestoreRecords.status, 'running'))); // #3407
 
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
@@ -444,7 +444,7 @@ async function runTenantRestore(
         durationMs: duration,
         completedAt: new Date(),
       })
-      .where(eq(tenantRestoreRecords.id, restoreId));
+      .where(and(eq(tenantRestoreRecords.id, restoreId), eq(tenantRestoreRecords.status, 'running'))); // #3407
     throw err;
   } finally {
     // Always hand the tenant back: release the session-level advisory lock
