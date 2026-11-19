@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ImportModal from '@/components/tenant/import-modal';
 import toast from 'react-hot-toast';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 // ── Pipeline Configuration ──────────────────────────────────────
 const PIPELINE_CONFIG = {
@@ -120,6 +121,7 @@ export default function LeadsClient({
 }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState<string>('all');
@@ -210,15 +212,10 @@ export default function LeadsClient({
     const q = new URLSearchParams({ limit: '100' });
     if (activeStatus !== 'all') q.set('lead_status', activeStatus);
     if (search) q.set('q', search);
-    try {
-      const res = await fetch('/api/tenant/contacts?' + q, { signal });
-      const data = await res.json();
-      setLeads(data.data ?? []);
-    } catch {
-      toast.error('Failed to load leads');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
+    const result = await fetchJsonSafe<{ data?: Lead[] }>('/api/tenant/contacts?' + q, { signal });
+    if (result.status === 'ok') { setLeads(result.data.data ?? []); setLoadError(false); }
+    else if (result.status === 'error') { setLoadError(true); toast.error(result.message); }
+    if (result.status !== 'aborted') setLoading(false);
   }, [activeStatus, search]);
 
   useEffect(() => {
@@ -784,13 +781,13 @@ export default function LeadsClient({
                 <td colSpan={9} className="text-center py-12">
                   <div className="max-w-sm mx-auto">
                     <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                    <p className="text-sm font-medium">
-                      No leads {activeStatus !== 'all' ? `with status "${PIPELINE_CONFIG[activeStatus as keyof typeof PIPELINE_CONFIG]?.label}"` : ''}
+                    <p className={`text-sm font-medium ${loadError ? 'text-amber-700 dark:text-amber-300' : ''}`} role={loadError ? 'alert' : undefined}>
+                      {loadError ? 'Leads could not be loaded.' : <>No leads {activeStatus !== 'all' ? `with status "${PIPELINE_CONFIG[activeStatus as keyof typeof PIPELINE_CONFIG]?.label}"` : ''}</>}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {search ? 'Try adjusting your search' : 'Import a CSV or add leads manually to get started'}
+                      {loadError ? 'The list could not be read.' : search ? 'Try adjusting your search' : 'Import a CSV or add leads manually to get started'}
                     </p>
-                    {!search && (
+                    {!search && !loadError && (
                       <Button size="sm" className="mt-4" onClick={() => setShowQuickAdd(true)}>
                         <Plus className="w-4 h-4 mr-2" />
                         Add Your First Lead
