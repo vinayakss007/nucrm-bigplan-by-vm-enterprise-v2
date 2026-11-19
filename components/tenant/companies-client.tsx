@@ -9,11 +9,13 @@ import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface Company { id: string; name: string; industry?: string; size?: string; website?: string; phone?: string; address?: string; notes?: string; contact_count?: number }
 
 export default function TenantCompaniesClient({ initialCompanies, permissions, tenantId, userId }: { initialCompanies: Company[]; permissions: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean }; tenantId: string; userId: string }) {
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editCo, setEditCo] = useState<Company | null>(null);
@@ -22,9 +24,17 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
   const filtered = companies.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
 
   const reload = useCallback(async () => {
-    const res = await fetch('/api/tenant/companies');
-    const data = await res.json();
-    setCompanies(data.data || []);
+    const result = await fetchJsonSafe<{ data?: Company[] }>('/api/tenant/companies');
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setCompanies(result.data.data || []);
+      setLoadError(false);
+    } else {
+      // A refused refresh must not replace the list with [] — that would
+      // render "No companies yet" over an outage.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load companies');
+    }
     setShowForm(false); setEditCo(null);
   }, []);
 
@@ -49,8 +59,13 @@ export default function TenantCompaniesClient({ initialCompanies, permissions, t
           : <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs text-muted-foreground border border-border opacity-60 cursor-not-allowed"><Lock className="w-3.5 h-3.5" />Add Company</div>
         });
       </div>
+      {loadError && (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not load companies — an empty list here would be a lie.
+        </div>
+      )}
       {!filtered.length ? (
-        <div className="text-center py-16"><Building2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" /><p className="font-semibold">No companies {search ? 'found' : 'yet'}</p></div>
+        <div className="text-center py-16" role={loadError ? 'alert' : undefined}><Building2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" /><p className="font-semibold">{loadError ? 'Companies could not be loaded.' : `No companies ${search ? 'found' : 'yet'}`}</p></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((c) => (
