@@ -20,11 +20,15 @@
  * summary cannot drift from the payments that justify it.
  */
 
-import { db } from '@/drizzle/db';
+import { withTenantDb, type TenantDb } from '@/lib/db';
+import type { RlsTransaction } from '@/lib/db/rls-client';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { invoices, invoicePayments } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+// #3405: the helper is shared — its own callers pass a branded client, while
+// two external routes still pass a plain transaction handle they opened.
+type DbTransaction = TenantDb | RlsTransaction;
 
 /** Statuses that describe payment progress and may therefore be recomputed. */
 const PAYMENT_DRIVEN_STATUSES = new Set(['draft', 'sent', 'partially_paid', 'paid', 'overdue']);
@@ -182,7 +186,7 @@ export async function recordInvoicePayment(
     throw new PaymentError('Payment amount must be greater than zero', 400);
   }
 
-  return db.transaction(async (tx) => {
+  return withTenantDb(input.tenantId, input.userId, async (tx) => {
     const [invoice] = await tx
       .select({
         id: invoices.id,
@@ -292,7 +296,7 @@ export async function updateInvoicePayment(input: UpdatePaymentInput): Promise<R
     }
   }
 
-  return db.transaction(async (tx) => {
+  return withTenantDb(input.tenantId, input.userId, async (tx) => {
     const [payment] = await tx
       .select()
       .from(invoicePayments)
@@ -372,7 +376,7 @@ export async function voidInvoicePayment(opts: {
   tenantId: string;
   userId: string;
 }): Promise<InvoiceTotals> {
-  return db.transaction(async (tx) => {
+  return withTenantDb(opts.tenantId, opts.userId, async (tx) => {
     const [payment] = await tx
       .select({ id: invoicePayments.id })
       .from(invoicePayments)
@@ -404,15 +408,16 @@ export async function voidInvoicePayment(opts: {
 
 /** List the live payments for an invoice, newest first. */
 export async function listInvoicePayments(invoiceId: string, tenantId: string) {
-  return db
-    .select()
-    .from(invoicePayments)
-    .where(
-      and(
-        eq(invoicePayments.invoiceId, invoiceId),
-        eq(invoicePayments.tenantId, tenantId),
-        sql`${invoicePayments.deletedAt} IS NULL`
+  return withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select()
+      .from(invoicePayments)
+      .where(
+        and(
+          eq(invoicePayments.invoiceId, invoiceId),
+          eq(invoicePayments.tenantId, tenantId),
+          sql`${invoicePayments.deletedAt} IS NULL`
+        )
       )
-    )
-    .orderBy(sql`${invoicePayments.paymentDate} DESC`);
+      .orderBy(sql`${invoicePayments.paymentDate} DESC`));
 }
