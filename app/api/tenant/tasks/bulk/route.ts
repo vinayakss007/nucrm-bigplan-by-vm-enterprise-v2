@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
+import { eq, ne, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit, bulkIdsAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
@@ -192,7 +192,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const deny = requirePerm(ctx, 'tasks.edit');
         if (deny) return deny;
         const now = new Date();
-        const res = await db
+        // #3407: `status` is a transition. The ownership read above is unlocked,
+        // so carry the from-state (and the live tombstone + tenant) into the
+        // write: a task already completed, or moved/deleted in the gap, loses
+        // the claim and is reported as not affected instead of being stomped.
+        const rows = await db
           .update(tasks)
           .set({
             completed: true,
@@ -204,17 +208,23 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .where(
             and(
               inArray(tasks.id, validIds),
-              eq(tasks.tenantId, ctx.tenantId)
+              eq(tasks.tenantId, ctx.tenantId),
+              isNull(tasks.deletedAt),
+              ne(tasks.status, 'completed')
             )
-          );
-        affected = res.rowCount ?? 0;
+          )
+          .returning({ id: tasks.id });
+        affected = rows.length;
+        auditIds = rows.map(r => r.id);
         break;
       }
 
       case 'reopen': {
         const deny = requirePerm(ctx, 'tasks.edit');
         if (deny) return deny;
-        const res = await db
+        // #3407: mirror of `complete` — only a task still in the completed
+        // state may be reopened, asserted under the row lock.
+        const rows = await db
           .update(tasks)
           .set({
             completed: false,
@@ -226,10 +236,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .where(
             and(
               inArray(tasks.id, validIds),
-              eq(tasks.tenantId, ctx.tenantId)
+              eq(tasks.tenantId, ctx.tenantId),
+              isNull(tasks.deletedAt),
+              eq(tasks.status, 'completed')
             )
-          );
-        affected = res.rowCount ?? 0;
+          )
+          .returning({ id: tasks.id });
+        affected = rows.length;
+        auditIds = rows.map(r => r.id);
         break;
       }
 

@@ -75,7 +75,10 @@ function setup(rows: unknown[][], opts: { affected?: number; returning?: unknown
   selectCall = 0;
   rowsPerCall = rows;
   rowCount = opts.affected ?? 1;
-  returningRows = opts.returning ?? [];
+  // #3407: the tasks bulk complete/reopen writes now carry a from-state claim
+  // and count actual rows via RETURNING. Default that to the validated id set
+  // so the older `affected` expectations keep their meaning.
+  returningRows = opts.returning ?? rows[0] ?? [];
   mockDb.select.mockImplementation(() => {
     const r = rowsPerCall[selectCall] ?? [];
     selectCall += 1;
@@ -90,7 +93,10 @@ function setup(rows: unknown[][], opts: { affected?: number; returning?: unknown
           set: vals,
           where: { sql: rendered.sql, params: rendered.params as unknown[] },
         });
-        return Promise.resolve({ rowCount });
+        return {
+          then: (resolve: (v: unknown) => unknown) => resolve({ rowCount }),
+          returning: () => Promise.resolve(returningRows),
+        };
       },
     }),
   });
