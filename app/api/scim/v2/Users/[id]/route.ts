@@ -429,10 +429,22 @@ export async function DELETE(
       if (!existingUser) return false;
 
       await inScimTransaction(ctx, async (tx) => {
-        // Soft-delete: set THIS tenant's membership to inactive
-        await tx.update(tenantMembers)
+        // #3407: the membership read above is unlocked. Re-assert the tenant
+        // and a live from-state in the write, and use RETURNING so a row that
+        // moved or was already deactivated in the gap is not reported as a
+        // fresh deprovision.
+        const deactivated = await tx.update(tenantMembers)
           .set({ status: 'inactive', updatedAt: new Date() })
-          .where(eq(tenantMembers.id, existingUser.memberId));
+          .where(and(
+            eq(tenantMembers.id, existingUser.memberId),
+            eq(tenantMembers.tenantId, tenantId),
+            ne(tenantMembers.status, 'inactive')
+          ))
+          .returning({ id: tenantMembers.id });
+        if (!deactivated.length) throw NextResponse.json(
+          generateSCIMError('Stale data — record was modified. Please refresh.', 409),
+          { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
+        );
 
         // Revoke sessions only if the user has no other active workspace —
         // sessions are per-user (not tenant-scoped), so a blanket delete would
