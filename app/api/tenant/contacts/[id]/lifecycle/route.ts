@@ -104,8 +104,11 @@ export const POST = withApiRoute(async (request: NextRequest,
           // #3407: the history row records `oldStage → lifecycle_stage`, so
           // the write must claim the exact stage that was read. Otherwise a
           // concurrent re-stage wins the race while the history records a
-          // transition that never happened.
-          eq(contacts.lifecycleStage, oldStage),
+          // transition that never happened. lifecycle_stage is nullable, so
+          // claim a null read with the matching IS NULL form.
+          oldStage === null
+            ? isNull(contacts.lifecycleStage)
+            : eq(contacts.lifecycleStage, oldStage),
         ));
 
       await tx.insert(contactLifecycleHistory).values({
