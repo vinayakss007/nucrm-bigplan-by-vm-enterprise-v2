@@ -18,7 +18,8 @@
  *   - a manual paid-until date is set and still in the future.
  */
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
@@ -40,18 +41,19 @@ export async function resolveEntitlement(tenantId: string): Promise<Entitlement>
   if (!tenantId) return fallback;
 
   try {
-    const [row] = await db
-      .select({
-        planId: tenants.planId,
-        status: tenants.status,
-        billingType: tenants.billingType,
-        manualPaidUntil: tenants.manualPaidUntil,
-        stripeSubscriptionId: tenants.stripeSubscriptionId,
-        subscriptionId: tenants.subscriptionId,
-      })
-      .from(tenants)
-      .where(eq(tenants.id, tenantId))
-      .limit(1);
+    const [row] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db
+        .select({
+          planId: tenants.planId,
+          status: tenants.status,
+          billingType: tenants.billingType,
+          manualPaidUntil: tenants.manualPaidUntil,
+          stripeSubscriptionId: tenants.stripeSubscriptionId,
+          subscriptionId: tenants.subscriptionId,
+        })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1));
 
     if (!row) return fallback;
 

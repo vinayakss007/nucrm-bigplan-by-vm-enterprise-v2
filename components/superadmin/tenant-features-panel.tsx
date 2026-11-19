@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Save, Loader2, Shield, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface ModuleFeature {
   id: string;
@@ -33,27 +34,28 @@ interface TenantFeaturesPanelProps {
 export default function TenantFeaturesPanel({ tenantId, tenantName, plan, onClose }: TenantFeaturesPanelProps) {
   const [modules, setModules] = useState<ModuleFeature[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, { signal });
-      if (!res.ok) throw new Error('Failed to load');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      const mods = (data.data || []).filter((m: ModuleFeature) => m.features?.length > 0 && m.status === 'active');
+    const result = await fetchJsonSafe<{ data?: ModuleFeature[] }>(
+      `/api/superadmin/tenants/${tenantId}/modules`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      const mods = (result.data.data || []).filter((m: ModuleFeature) => m.features?.length > 0 && m.status === 'active');
       setModules(mods);
       const init: Record<string, string[]> = {};
       mods.forEach((m: ModuleFeature) => { init[m.id] = m.enabledFeatures || []; });
       setOverrides(init);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load tenant modules');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+      setLoadError(false);
+    } else {
+      // Keep the last good list on screen — "no active modules" is a claim
+      // about the tenant, not about whether the request succeeded.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load tenant modules');
     }
+    setLoading(false);
   }, [tenantId]);
 
   useEffect(() => {
@@ -109,15 +111,25 @@ export default function TenantFeaturesPanel({ tenantId, tenantName, plan, onClos
           </button>
         </div>
 
+        {loadError && (
+          <div role="alert" className="mx-6 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Could not load tenant modules — an empty list here would be a lie.
+          </div>
+        )}
+
         {loading ? (
           <div className="py-16 text-center">
             <Loader2 className="w-6 h-6 text-white/20 mx-auto animate-spin" />
             <p className="text-xs text-white/30 mt-2">Loading modules…</p>
           </div>
         ) : modules.length === 0 ? (
-          <div className="py-16 text-center">
+          <div className="py-16 text-center" role={loadError ? 'alert' : undefined}>
             <Shield className="w-10 h-10 text-white/10 mx-auto mb-3" />
-            <p className="text-xs text-white/30">No active modules with configurable features</p>
+            <p className="text-xs text-white/30">
+              {loadError
+                ? 'Tenant modules could not be loaded.'
+                : 'No active modules with configurable features'}
+            </p>
           </div>
         ) : (
           <div className="p-6 space-y-4">

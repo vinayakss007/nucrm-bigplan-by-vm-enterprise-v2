@@ -24,7 +24,8 @@
  * instead of trusting it.
  */
 import { and, eq, inArray, lt } from 'drizzle-orm';
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { complianceRequests } from '@/drizzle/schema/compliance';
 
 export const STALE_PROCESSING_MS = 15 * 60 * 1000;
@@ -35,21 +36,25 @@ export async function reapStaleProcessingRequests(
   now: Date = new Date(),
 ): Promise<number> {
   const cutoff = new Date(now.getTime() - STALE_PROCESSING_MS);
-  const reaped = await db
-    .update(complianceRequests)
-    .set({
-      status: 'failed',
-      errorMessage: `interrupted: still 'processing' after ${Math.round(STALE_PROCESSING_MS / 60000)} minutes with no terminal state (#2530 reap)`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(complianceRequests.tenantId, tenantId),
-        inArray(complianceRequests.type, types),
-        eq(complianceRequests.status, 'processing'),
-        lt(complianceRequests.createdAt, cutoff),
-      ),
-    )
-    .returning({ id: complianceRequests.id });
+  // #3405: the reap is a single tenant-keyed statement, so it runs on the
+  // branded client. It is NOT held across the long job — that is exactly the
+  // deadlock the note above warns about.
+  const reaped = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .update(complianceRequests)
+      .set({
+        status: 'failed',
+        errorMessage: `interrupted: still 'processing' after ${Math.round(STALE_PROCESSING_MS / 60000)} minutes with no terminal state (#2530 reap)`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(complianceRequests.tenantId, tenantId),
+          inArray(complianceRequests.type, types),
+          eq(complianceRequests.status, 'processing'),
+          lt(complianceRequests.createdAt, cutoff),
+        ),
+      )
+      .returning({ id: complianceRequests.id }));
   return reaped.length;
 }

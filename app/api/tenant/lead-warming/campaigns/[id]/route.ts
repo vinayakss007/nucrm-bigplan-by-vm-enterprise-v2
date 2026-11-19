@@ -208,6 +208,22 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const { id } = await params;
 
+    // #3407: archiving on delete is a status transition, so claim the
+    // from-state the way #3628/#3637 do. A concurrent activate/pause landing in
+    // the gap used to be silently overwritten by this tombstone.
+    const [existing] = await db
+      .select({ status: leadWarmingCampaigns.status })
+      .from(leadWarmingCampaigns)
+      .where(and(
+        eq(leadWarmingCampaigns.id, id),
+        eq(leadWarmingCampaigns.tenantId, ctx.tenantId)
+      ))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+
     // #3212: `lead_warming_campaigns` has no `deleted_by` column (this table
     // spreads `utils.lifecycle()`, not `utils.audit()`), and Drizzle builds the
     // SET clause from the table's own column map — a key it does not declare is
@@ -217,14 +233,18 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
       .set({ status: 'archived', deletedAt: new Date(), updatedAt: new Date() })
       .where(and(
         eq(leadWarmingCampaigns.id, id),
-        eq(leadWarmingCampaigns.tenantId, ctx.tenantId)
+        eq(leadWarmingCampaigns.tenantId, ctx.tenantId),
+        eq(leadWarmingCampaigns.status, existing.status)
       ))
       .returning({ id: leadWarmingCampaigns.id });
 
     // #3212: same read-back the PATCH above this already does — a campaign that
     // vanished since the auth check is not "archived".
     if (!archived) {
-      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: `Campaign status changed concurrently — cannot archive from '${existing.status}'. Reload and retry.` },
+        { status: 409 }
+      );
     }
 
     return NextResponse.json({ ok: true, message: 'Campaign archived' });

@@ -9,6 +9,8 @@ import { useState, useCallback, useMemo } from 'react'
 import { MoreHorizontal, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -61,6 +63,7 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
   const [errors, setErrors] = useState(initialErrors)
   const [total, setTotal] = useState(summary?.total || initialErrors.length)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [levelFilter, setLevelFilter] = useState('')
@@ -75,13 +78,16 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
     })
     if (globalFilter) params.set('q', globalFilter)
     if (levelFilter) params.set('level', levelFilter)
-    try {
-      const res = await fetch('/api/superadmin/errors?' + params)
-      const data = await res.json()
-      setErrors(data.errors ?? [])
-      setTotal(data.summary?.total ?? 0)
-    } catch (error) {
-      console.error('Failed to load errors:', error)
+    // #3408: an error body used to become errors=[], total=0 and the table's
+    // empty state declared "All systems operational" over a failed request.
+    const result = await fetchJsonSafe<{ errors?: ErrorLog[]; summary?: { total?: number } }>(
+      '/api/superadmin/errors?' + params)
+    if (result.status === 'ok') {
+      setErrors(result.data.errors ?? [])
+      setTotal(result.data.summary?.total ?? 0)
+      setLoadError(null)
+    } else if (result.status === 'error') {
+      setLoadError(result.message) // keep the last good rows on screen
     }
     setLoading(false)
   }, [pagination.pageSize, globalFilter, levelFilter, resolvedFilter])
@@ -301,6 +307,15 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
         </div>
       </div>
 
+      {loadError && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Could not load the error log — this is not an all-clear. (${loadError})`}
+            onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
+
       {/* DataTable */}
       <div className="table-responsive rounded-xl border border-white/5">
         <DataTable
@@ -318,8 +333,10 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
           onPaginationChange={handlePaginationChange}
           emptyState={{
             icon: <CheckCircle className="w-6 h-6 text-white/30" />,
-            title: summary?.unresolved ? 'No resolved errors' : 'No errors found',
-            description: summary?.unresolved ? 'Try adjusting your filters' : 'All systems operational',
+            title: loadError ? 'Error log unavailable' : summary?.unresolved ? 'No resolved errors' : 'No errors found',
+            description: loadError
+              ? 'The error log could not be read — this is not an all-clear.'
+              : summary?.unresolved ? 'Try adjusting your filters' : 'All systems operational',
           }}
         />
       </div>

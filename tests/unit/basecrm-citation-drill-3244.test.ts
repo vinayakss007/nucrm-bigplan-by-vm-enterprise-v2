@@ -224,9 +224,9 @@ const PINNED: Array<{
   },
   {
     doc: 'docs/BASECRM/03-RBAC-AUTHZ.md',
-    cite: 'field-permissions.ts:140',
+    cite: 'field-permissions.ts:146',
     src: 'lib/rbac/field-permissions.ts',
-    line: 140,
+    line: 146,
     has: '__clearFieldRestrictionsCache()',
     why: 'the invalidation call site the cache bullet names',
   },

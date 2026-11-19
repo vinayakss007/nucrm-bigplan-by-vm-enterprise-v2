@@ -7,6 +7,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Shield, ShieldCheck, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn, formatDateTimeShort, formatRelativeTime } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import toast from 'react-hot-toast';
 
 const ACTION_CFG: Record<string, { color: string; bg: string }> = {
   'tenant.created':          { color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
@@ -112,6 +114,7 @@ export default function AuditLogClient() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [actionF, setActionF] = useState('');
@@ -126,31 +129,29 @@ export default function AuditLogClient() {
 
   const fetchLogs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', String(PAGE_SIZE));
-      params.set('offset', String(page * PAGE_SIZE));
-      if (actionF) params.set('action', actionF);
-      if (targetF) params.set('target_type', targetF);
-      if (search) params.set('search', search);
-      if (tenantSearch) params.set('tenant_id', tenantSearch);
-      if (dateFrom) params.set('start_date', dateFrom);
-      if (dateTo) params.set('end_date', dateTo + 'T23:59:59Z');
+    const params = new URLSearchParams();
+    params.set('limit', String(PAGE_SIZE));
+    params.set('offset', String(page * PAGE_SIZE));
+    if (actionF) params.set('action', actionF);
+    if (targetF) params.set('target_type', targetF);
+    if (search) params.set('search', search);
+    if (tenantSearch) params.set('tenant_id', tenantSearch);
+    if (dateFrom) params.set('start_date', dateFrom);
+    if (dateTo) params.set('end_date', dateTo + 'T23:59:59Z');
 
-      const res = await fetch(`/api/super-admin/audit-logs?${params}`, { signal });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data: AuditLogResponse = await res.json();
-      if (signal?.aborted) return;
-      setLogs(data.data);
-      setTotal(data.total);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      setLogs([]);
-      setTotal(0);
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+    const result = await fetchJsonSafe<AuditLogResponse>(`/api/super-admin/audit-logs?${params}`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setLogs(result.data.data);
+      setTotal(result.data.total);
+      setLoadError(false);
+    } else {
+      // The old catch cleared logs and total to 0 — an outage rendered
+      // "No audit events match your filters". Keep the last good page.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load audit events');
     }
+    setLoading(false);
   }, [page, actionF, targetF, search, tenantSearch, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -285,14 +286,21 @@ export default function AuditLogClient() {
       </div>
 
       <div className="admin-card overflow-hidden">
+        {loadError && (
+          <div role="alert" className="m-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            Could not load audit events — an empty list here would be a lie.
+          </div>
+        )}
         {loading ? (
           <div className="py-12 text-center">
             <p className="text-sm text-muted-foreground">Loading…</p>
           </div>
         ) : !logs.length ? (
-          <div className="py-12 text-center">
+          <div className="py-12 text-center" role={loadError ? 'alert' : undefined}>
             <Shield className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No audit events match your filters</p>
+            <p className="text-sm text-muted-foreground">
+              {loadError ? 'Audit events could not be loaded.' : 'No audit events match your filters'}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-border">

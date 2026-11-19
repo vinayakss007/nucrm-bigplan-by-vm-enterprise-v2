@@ -253,12 +253,31 @@ export const DELETE = withApiRoute(async (request: NextRequest,
 
     const sequenceId = (await params).id;
 
+    // #3408/#3407: a missing or already-deleted sequence used to answer
+    // `ok: true` (the archive UPDATE matched zero rows and nothing checked),
+    // and a concurrent edit could be overwritten by an unclaimed archive.
+    // Read the live row first; the tombstone claims that exact from-state and
+    // only a won claim is reported as a successful delete.
+    const [existing] = await db
+      .select({ status: sequences.status })
+      .from(sequences)
+      .where(and(
+        eq(sequences.id, sequenceId),
+        eq(sequences.tenantId, ctx.tenantId),
+        isNull(sequences.deletedAt)
+      ))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Sequence not found' }, { status: 404 });
+    }
+
     // #2392: the tombstone and the enrollment cancel must commit together.
     // A bare UPDATE leaves every `sequence_enrollments` row at status
     // 'active', and the cron sweep filtered on nothing but that status, so a
     // deleted sequence kept mailing its contacts until each step ran out.
     const cancelledEnrollments = await db.transaction(async (tx) => {
-      await tx.update(sequences)
+      const [archived] = await tx.update(sequences)
         .set({
           deletedAt: new Date(),
           deletedBy: ctx.userId,
@@ -267,11 +286,23 @@ export const DELETE = withApiRoute(async (request: NextRequest,
         })
         .where(and(
           eq(sequences.id, sequenceId),
-          eq(sequences.tenantId, ctx.tenantId)
-        ));
+          eq(sequences.tenantId, ctx.tenantId),
+          isNull(sequences.deletedAt),
+          eq(sequences.status, existing.status)
+        ))
+        .returning({ id: sequences.id });
+
+      if (!archived) return null;
 
       return cancelOpenEnrollments(tx, ctx.tenantId, { sequenceId });
     });
+
+    if (cancelledEnrollments === null) {
+      return NextResponse.json(
+        { error: `Sequence status changed concurrently — cannot delete from '${existing.status}'. Reload and retry.` },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,

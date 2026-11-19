@@ -338,6 +338,25 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const invoiceId = (await params).id;
 
+    // #3407: DELETE forces status:'cancelled', which is a status transition
+    // like any other. Read the from-state and carry it into the UPDATE's WHERE,
+    // the way PUT does for a vetted status write (#3346). Without the claim a
+    // concurrent payment that moved the invoice to `paid` in the gap is silently
+    // overwritten by this tombstone, and revenue reports lose the payment.
+    const [existing] = await db
+      .select({ status: invoices.status })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.id, invoiceId),
+          eq(invoices.tenantId, ctx.tenantId),
+          sql`${invoices.deletedAt} IS NULL`
+        )
+      )
+      .limit(1);
+
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     const [row] = await db
       .update(invoices)
       .set({
@@ -349,12 +368,21 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
         and(
           eq(invoices.id, invoiceId),
           eq(invoices.tenantId, ctx.tenantId),
-          sql`${invoices.deletedAt} IS NULL`
+          sql`${invoices.deletedAt} IS NULL`,
+          eq(invoices.status, existing.status)
         )
       )
       .returning({ id: invoices.id });
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) {
+      return NextResponse.json(
+        {
+          error:
+            `Invoice status changed concurrently — cannot cancel '${existing.status}'. Reload and retry.`,
+        },
+        { status: 409 }
+      );
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,

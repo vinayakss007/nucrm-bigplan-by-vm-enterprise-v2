@@ -543,17 +543,10 @@
         "lib/errors-server.ts"
       ]
     },
-    "lib/activity": {
-      "reason": "Activity logger: writes carry an explicit tenantId column and run inside the caller transaction.",
-      "filedAs": "#3405",
-      "files": ["lib/activity/timeline.ts"]
-    },
     "lib/ai": {
       "reason": "AI helpers read tenant rows inside a caller-supplied transaction; the GUC is already set by the route that invoked them.",
       "filedAs": "#3405",
       "files": [
-        "lib/ai/activity-log.ts",
-        "lib/ai/at-risk.ts",
         "lib/ai/auto-followup.ts",
         "lib/ai/common.ts",
         "lib/ai/credits-claim.ts",
@@ -571,7 +564,7 @@
     "lib/analytics": {
       "reason": "Analytics readers aggregate tenant rows under a caller-bound tenant context.",
       "filedAs": "#3405",
-      "files": ["lib/analytics/entitlement.ts", "lib/analytics/store.ts"]
+      "files": ["lib/analytics/store.ts"]
     },
     "lib/api": {
       "reason": "Shared API helpers that resolve the tenant from the request/session before they hand a bound client to the handler.",
@@ -618,30 +611,19 @@
       "filedAs": "#3405",
       "files": ["lib/billing/deal-invoice.ts", "lib/billing/payments.ts"]
     },
-    "lib/calendar-sync": {
-      "reason": "Calendar sync runs per connected account; the account row names the tenant it binds.",
-      "filedAs": "#3405",
-      "files": ["lib/calendar-sync/service.ts"]
-    },
     "lib/compliance": {
       "reason": "Retention/GDPR/SOC2 reporters read across tenants for one organization, binding the super-admin or tenant arm their caller established.",
       "filedAs": "#3405",
       "files": [
         "lib/compliance/gdpr.ts",
         "lib/compliance/request-lifecycle.ts",
-        "lib/compliance/soc2.ts",
-        "lib/compliance/stale-requests.ts"
+        "lib/compliance/soc2.ts"
       ]
     },
     "lib/cron": {
       "reason": "Cron infrastructure (lock, health, job registry) in system context; jobs bind their own tenant per unit of work.",
       "filedAs": "#3405",
       "files": ["lib/cron/cron-lock.ts", "lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
-    },
-    "lib/dashboard": {
-      "reason": "Dashboard aggregate helper reading tenant rows inside the route the context was opened for.",
-      "filedAs": "#3405",
-      "files": ["lib/dashboard/layout-resolver.ts"]
     },
     "lib/email": {
       "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
@@ -657,11 +639,6 @@
       "reason": "Field-sales helpers read visit/route rows for the caller tenant, bound by the calling route.",
       "filedAs": "#3405",
       "files": ["lib/field-sales/card-scanner.ts"]
-    },
-    "lib/formula": {
-      "reason": "Formula evaluator that loads its inputs through a caller-supplied client bound to one tenant.",
-      "filedAs": "#3405",
-      "files": ["lib/formula/sync.ts"]
     },
     "lib/import": {
       "reason": "Import pipeline stages rows inside one transaction per tenant so a failed import leaves nothing behind.",
@@ -712,21 +689,13 @@
       "files": [
         "lib/rbac/approval-producer.ts",
         "lib/rbac/approval-workflows.ts",
-        "lib/rbac/enforce.ts",
-        "lib/rbac/field-permissions.ts",
-        "lib/rbac/record-permissions.ts",
-        "lib/rbac/record-scope.ts"
+        "lib/rbac/record-permissions.ts"
       ]
     },
     "lib/restore": {
       "reason": "Selective restore works across tenants by design and runs under the super-admin arm.",
       "filedAs": "#3405",
       "files": ["lib/restore/restore-executor.ts"]
-    },
-    "lib/segments": {
-      "reason": "Segment evaluation reads contact rows for one tenant, bound by the route that requested the segment.",
-      "filedAs": "#3405",
-      "files": ["lib/segments/evaluate.ts"]
     },
     "lib/templates": {
       "reason": "Industry template seeding writes rows for the tenant the setup flow just created.",

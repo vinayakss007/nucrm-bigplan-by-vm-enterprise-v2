@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Save, Loader2, Check, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 interface PlanOffering {
@@ -29,22 +30,23 @@ interface PlanOfferingsPanelProps {
 export default function PlanOfferingsPanel({ planId, planName, onClose }: PlanOfferingsPanelProps) {
   const [offerings, setOfferings] = useState<PlanOffering[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/superadmin/plans/${planId}/offerings`, { signal });
-      if (!res.ok) throw new Error('Failed to load');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setOfferings(data.offerings || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load module offerings');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+    const result = await fetchJsonSafe<{ offerings?: PlanOffering[] }>(
+      `/api/superadmin/plans/${planId}/offerings`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setOfferings(result.data.offerings || []);
+      setLoadError(false);
+    } else {
+      // Keep the last good list on screen — a refused request is not the same
+      // thing as a plan with no module offerings.
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load module offerings');
     }
+    setLoading(false);
   }, [planId]);
 
   useEffect(() => {
@@ -107,11 +109,18 @@ export default function PlanOfferingsPanel({ planId, planName, onClose }: PlanOf
           </button>
         </div>
 
+        {loadError && (
+          <div role="alert" className="mx-6 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Could not load module offerings — an empty list here would be a lie.
+          </div>
+        )}
         {loading ? (
           <div className="py-16 text-center">
             <Loader2 className="w-6 h-6 text-white/20 mx-auto animate-spin" />
             <p className="text-xs text-white/30 mt-2">Loading modules…</p>
           </div>
+        ) : loadError && offerings.length === 0 ? (
+          <div className="py-16 text-center text-xs text-white/30" role="alert">Module offerings could not be loaded.</div>
         ) : (
           <div className="p-6 space-y-6">
             {categories.map(cat => (

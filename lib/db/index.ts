@@ -25,6 +25,9 @@ export {
   invalidateCache,
 } from './cache';
 
+// #3405 PR-3A: branded tenant-bound client (the choke point callers should use)
+export { withTenantDb, type TenantDb } from './tenant-client';
+
 // Row Level Security helpers
 export {
   setTenantContext,

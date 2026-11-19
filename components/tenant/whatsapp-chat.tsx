@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Phone, Loader2, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { clientLogError } from '@/lib/client-logger'
+import { fetchJsonSafe } from '@/lib/fetch-json'
 import toast from 'react-hot-toast'
 
 interface WhatsAppMessage {
@@ -34,6 +35,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [messages, setMessages] = useState<WhatsAppMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendingTemplate, setSendingTemplate] = useState(false)
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
@@ -42,18 +44,20 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const loadMessages = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/tenant/whatsapp/messages?contact_id=${contactId}`, { signal })
-      if (!res.ok) throw new Error('Failed to load messages')
-      const data = await res.json()
-      if (!signal?.aborted) setMessages(data.data || [])
-
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) clientLogError('whatsapp:load-messages', err);
-    } finally {
-      if (!signal?.aborted) setLoading(false)
+    const result = await fetchJsonSafe<{ data?: WhatsAppMessage[] }>(
+      `/api/tenant/whatsapp/messages?contact_id=${contactId}`, { signal })
+    if (result.status === 'aborted') return
+    if (result.status === 'ok') {
+      setMessages(result.data.data || [])
+      setLoadError(false)
+    } else {
+      // Keep the last good thread on screen — "No messages yet" plus
+      // "Send a message to start the conversation" would be a lie during an
+      // outage.
+      setLoadError(true)
+      clientLogError('whatsapp:load-messages', new Error(result.message))
     }
+    setLoading(false)
   }, [contactId])
 
   const loadTemplates = useCallback(async (signal?: AbortSignal) => {
@@ -207,11 +211,20 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-muted/20 to-background">
+        {loadError && (
+          <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            Could not load messages — an empty thread here would be a lie.
+          </div>
+        )}
         {messages.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12" role={loadError ? 'alert' : undefined}>
             <Phone className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">No messages yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Send a message to start the conversation</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              {loadError ? 'Messages could not be loaded.' : 'No messages yet'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {loadError ? 'The conversation could not be read.' : 'Send a message to start the conversation'}
+            </p>
           </div>
         ) : (
           messages.map((msg) => (

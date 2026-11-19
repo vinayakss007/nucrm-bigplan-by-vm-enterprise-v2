@@ -13,8 +13,10 @@ import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
 import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { useSubmitLock } from '@/hooks/use-submit-lock'
-import { clientLogWarn, clientLogError } from '@/lib/client-logger'
+import { clientLogWarn } from '@/lib/client-logger'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -87,6 +89,7 @@ export default function ContactsDataTable({
 }: Props) {
   const [contacts, setContacts] = useState(initialContacts)
   const [total, setTotal] = useState(totalCount)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -117,14 +120,10 @@ export default function ContactsDataTable({
       offset: String(page * size),
     })
     if (search) params.set('q', search)
-    try {
-      const res = await fetch(`/api/tenant/contacts?${params}`)
-      const data = await res.json()
-      setContacts(data.data ?? [])
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      clientLogError('contacts:load', error)
-    }
+    // #3408: a failed refresh must not render "No contacts yet" over an outage.
+    const result = await fetchJsonSafe<{ data?: typeof contacts; total?: number }>(`/api/tenant/contacts?${params}`)
+    if (result.status === 'ok') { setContacts(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
+    else if (result.status === 'error') setLoadError(result.message)
     setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
@@ -158,16 +157,10 @@ export default function ContactsDataTable({
         offset: String(0),
       })
       if (globalFilter) params.set('q', globalFilter)
-      try {
-        const res = await fetch(`/api/tenant/contacts?${params}`, { signal: abortController.signal })
-        const data = await res.json()
-        setContacts(data.data ?? [])
-        setTotal(data.total ?? 0)
-      } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          clientLogError('contacts:load', error)
-        }
-      }
+      const result = await fetchJsonSafe<{ data?: typeof contacts; total?: number }>(
+        `/api/tenant/contacts?${params}`, { signal: abortController.signal })
+      if (result.status === 'ok') { setContacts(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
+      else if (result.status === 'error') setLoadError(result.message)
       setLoading(false)
     }
     loadDataWithAbort()
@@ -855,6 +848,14 @@ export default function ContactsDataTable({
       )}
 
       {/* DataTable */}
+      {loadError && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Could not load contacts — an empty list here would be a lie. (${loadError})`}
+            onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={contacts}
@@ -876,9 +877,9 @@ export default function ContactsDataTable({
         onSelectAllMatching={setSelectAllMatching}
         emptyState={{
           icon: <UserPlus className="w-6 h-6 text-muted-foreground" />,
-          title: "No contacts yet",
-          description: "Start building your contact list by adding your first contact or importing from CSV",
-          action: permissions.canCreate ? {
+          title: loadError ? "Contact list unavailable" : "No contacts yet",
+          description: loadError ? "The contact list could not be read." : "Start building your contact list by adding your first contact or importing from CSV",
+          action: loadError ? undefined : permissions.canCreate ? {
             label: "Add Contact",
             onClick: () => setShowAdd(true),
             icon: <Plus className="w-4 h-4 mr-2" />,

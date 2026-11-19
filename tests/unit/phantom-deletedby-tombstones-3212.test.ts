@@ -248,6 +248,8 @@ describe('#3212 — the phantom `deletedBy` is gone from all four tombstone writ
   });
 
   it('lead-warming campaigns DELETE writes only columns lead_warming_campaigns declares', async () => {
+    // #3407: DELETE now reads the from-status before archiving.
+    state.readRows = [{ status: 'active' }];
     state.updateReturns = [[{ id: CAMPAIGN_ID }]];
 
     const res = await deleteCampaign(CAMPAIGN_ID);
@@ -381,12 +383,16 @@ describe('#3194 doctrine — views/[id] DELETE claims the row it deletes', () =>
     expect(state.dbUpdates).toHaveLength(0);
   });
 
-  it('a campaign that vanished since the auth check is not reported as archived', async () => {
+  it('a campaign that changed status since the read is not reported as archived', async () => {
+    // #3407: the from-state claim now misses → 409, never a false "archived".
+    state.readRows = [{ status: 'active' }];
     state.updateReturns = [[]];
 
     const res = await deleteCampaign(CAMPAIGN_ID);
-    expect(res.status).toBe(404);
-    expect(await body(res)).toEqual({ error: 'Campaign not found' });
+    expect(res.status).toBe(409);
+    expect(await body(res)).toEqual({
+      error: "Campaign status changed concurrently — cannot archive from 'active'. Reload and retry.",
+    });
   });
 
   it('the two reads that were already in place still 404 on an empty read-back', async () => {

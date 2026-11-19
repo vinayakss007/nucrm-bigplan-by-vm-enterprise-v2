@@ -180,6 +180,9 @@ describe('Lead Warming routes', () => {
 
   describe('DELETE /api/tenant/lead-warming/campaigns/[id]', () => {
     it('archives campaign', async () => {
+      // #3407: DELETE now reads the from-status before archiving, so the
+      // select resolver must yield a row for that claim to succeed.
+      mockResolver(() => [{ status: 'active' }]);
       // #3212: the write now claims its row — `.returning({ id })` with a
       // non-empty result is what lets the handler answer `ok: true`.
       mockDb.update.mockReturnValue({
@@ -198,7 +201,10 @@ describe('Lead Warming routes', () => {
       expect(data.ok).toBe(true);
     });
 
-    it('answers 404 when the archive matched nothing', async () => {
+    it('answers 409 when the from-status claim loses the race', async () => {
+      // #3407: the from-status was read as active, but the guarded archive
+      // matched nothing — that is a lost race, not a missing campaign.
+      mockResolver(() => [{ status: 'active' }]);
       mockDb.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
@@ -210,7 +216,7 @@ describe('Lead Warming routes', () => {
         createTestRequest('/api/tenant/lead-warming/campaigns/cam-1', { method: 'DELETE' }),
         { params: Promise.resolve({ id: 'cam-1' }) },
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(409);
     });
   });
 

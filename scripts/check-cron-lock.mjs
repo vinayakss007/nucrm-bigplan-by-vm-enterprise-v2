@@ -60,12 +60,13 @@ export const LOCK_MODULE = '@/lib/cron/cron-lock';
  * crontab line without removing the name below fails the guard, which is what
  * stops this set from quietly becoming a catch-all.
  */
+// #3410 PR-2B scheduled process-lead-scoring and sla-check: they now have a
+// crontab line, so their tracked-debt entries were removed in the same PR.
+// The three below are still awaiting the owner's topology decision.
 export const UNSCHEDULED_IN_CRONTAB = new Set([
   'backup',
   'lead-warming',
-  'process-lead-scoring',
   'recurring-invoice-generator',
-  'sla-check',
 ]);
 
 // ── Pure parsers: text in, job-name list out (no filesystem touched) ────────

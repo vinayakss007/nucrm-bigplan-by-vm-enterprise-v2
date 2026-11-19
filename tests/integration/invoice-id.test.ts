@@ -172,6 +172,9 @@ describe('Invoice [id] API routes', () => {
   // ─── DELETE ────────────────────────────────────────────────────────────────
   describe('DELETE /api/tenant/invoices/[id]', () => {
     it('soft-deletes invoice', async () => {
+      // #3407: DELETE now claims the status it read before tombstoning, so the
+      // fixture must provide that existence read as well as the UPDATE result.
+      _selectResult = [INV];
       _updateResult = [{ id: 'inv-1' }];
       const { DELETE } = await import('@/app/api/tenant/invoices/[id]/route');
       const res = await DELETE(
@@ -184,6 +187,7 @@ describe('Invoice [id] API routes', () => {
     });
 
     it('returns 404 when invoice not found', async () => {
+      _selectResult = [];
       _updateResult = [];
       const { DELETE } = await import('@/app/api/tenant/invoices/[id]/route');
       const res = await DELETE(

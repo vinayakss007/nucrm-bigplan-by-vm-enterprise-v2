@@ -26,16 +26,15 @@ function healthyRows(): CronJobRunSummary[] {
 }
 
 describe('summarizeCronHealth (#3410)', () => {
-  it('a fully healthy fleet with tracked orphans reads degraded, never fail', () => {
+  it('a fully healthy fleet with no orphans reads healthy', () => {
     const report = summarizeCronHealth(healthyRows(), NOW);
-    expect(report.status).toBe('degraded');
+    expect(report.status).toBe('healthy');
     expect(report.neverRun).toEqual([]);
     expect(report.stale).toEqual([]);
-    expect(report.unscheduled.sort()).toEqual(
-      CRON_JOBS.filter((j) => !j.sources.crontab && !j.sources.vercel && !j.sources.scheduler)
-        .map((j) => j.name)
-        .sort(),
-    );
+    // #3410 PR-2B scheduled the last two orphans; a new all-false job must
+    // show up here instead of hiding as an unscheduled decision.
+    expect(report.unscheduled).toEqual([]);
+    expect(CRON_JOBS.filter((j) => !j.sources.crontab && !j.sources.vercel && !j.sources.scheduler)).toEqual([]);
   });
 
   it('a scheduled job with NO cron_runs row is never_run and fails the verdict', () => {
@@ -58,7 +57,7 @@ describe('summarizeCronHealth (#3410)', () => {
     );
     const report = summarizeCronHealth(rows, NOW);
     expect(report.jobs.find((j) => j.job === 'process-sequences')!.status).toBe('ok');
-    expect(report.status).toBe('degraded');
+    expect(report.status).toBe('healthy');
   });
 
   it('a job with attempts but no success in its expected window is stale', () => {
@@ -89,10 +88,21 @@ describe('summarizeCronHealth (#3410)', () => {
   });
 
   it('unscheduled jobs are never counted as never_run — they are a named decision', () => {
-    const report = summarizeCronHealth([], NOW);
-    for (const name of ['sla-check', 'process-lead-scoring']) {
-      expect(report.jobs.find((j) => j.job === name)!.status).toBe('unscheduled');
-    }
-    expect(report.neverRun).not.toContain('sla-check');
+    // #3410 PR-2B left no orphans in the real manifest, so inject a synthetic
+    // all-false spec to keep the unscheduled branch under test.
+    const synthetic = [{
+      name: 'synthetic-orphan',
+      path: '/api/cron/synthetic-orphan',
+      cron: '0 0 * * *',
+      owner: 'test',
+      maxDurationMs: 120_000,
+      expectedEveryMs: 86_400_000,
+      sources: { crontab: false, vercel: false, scheduler: false },
+    }];
+    const report = summarizeCronHealth([], NOW, 0, synthetic);
+    const entry = report.jobs.find((j) => j.job === 'synthetic-orphan')!;
+    expect(entry.status).toBe('unscheduled');
+    expect(report.neverRun).not.toContain('synthetic-orphan');
+    expect(report.status).toBe('degraded');
   });
 });

@@ -20,7 +20,8 @@
  * The stored filter shape (defined here — the codebase had none before):
  *   { match?: 'all' | 'any', rules: Array<{ field, operator, value? }> }
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { sql, type SQL } from 'drizzle-orm';
 
 export type SegmentEntityType = 'contact' | 'company' | 'lead' | 'deal';
@@ -306,6 +307,10 @@ export async function evaluateSegment(params: {
     LIMIT ${limit}
   `;
 
-  const result = await db.execute(query);
+  // #3405: the query is tenant-scoped in its SQL, but it must also run on a
+  // connection whose RLS GUC names that tenant — the branded client guarantees
+  // both instead of relying on the caller having set the ambient context.
+  const result = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db.execute(query));
   return (result.rows as Array<{ id: string }>).map((r) => r.id);
 }
