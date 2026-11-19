@@ -3,7 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import { meetings, integrations } from '@/drizzle/schema';
 import { eq, and, isNull, gte, lte } from 'drizzle-orm';
 import { createGoogleCalendarProvider } from './google';
@@ -22,18 +23,19 @@ export function getProvider(type: 'google' | 'outlook'): CalendarProvider {
 }
 
 export async function getIntegrationConfig(tenantId: string, providerType: 'google' | 'outlook') {
-  const [integration] = await db
-    .select()
-    .from(integrations)
-    .where(
-      and(
-        eq(integrations.tenantId, tenantId),
-        eq(integrations.type, providerType),
-        eq(integrations.isActive, true),
-        isNull(integrations.deletedAt)
+  const [integration] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select()
+      .from(integrations)
+      .where(
+        and(
+          eq(integrations.tenantId, tenantId),
+          eq(integrations.type, providerType),
+          eq(integrations.isActive, true),
+          isNull(integrations.deletedAt)
+        )
       )
-    )
-    .limit(1);
+      .limit(1));
 
   return integration || null;
 }
@@ -54,7 +56,8 @@ export async function saveIntegrationConfig(
     lastSyncAt: new Date().toISOString(),
   };
 
-  await db.transaction(async (tx) => {
+  // withTenantDb supplies the transaction and sets the tenant GUC on it.
+  await withTenantDb(tenantId, userId, async (tx) => {
     const [existing] = await tx
       .select({ id: integrations.id })
       .from(integrations)
@@ -96,7 +99,17 @@ export async function syncCalendarEvents(
   from: Date,
   to: Date
 ): Promise<SyncResult> {
-  const integration = await getIntegrationConfig(tenantId, providerType);
+  const result: SyncResult = { created: 0, updated: 0, deleted: 0, errors: [] };
+  // #3405: the config read now runs on the branded client, so a transaction
+  // failure there is part of the sync's failures — never an uncaught throw.
+  let integration;
+  try {
+    integration = await getIntegrationConfig(tenantId, providerType);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    result.errors.push(`Transaction failed: ${message}`);
+    return result;
+  }
   if (!integration) throw new Error('Calendar integration not configured');
 
   const config = integration.config as Record<string, unknown>;
@@ -113,20 +126,19 @@ export async function syncCalendarEvents(
   const provider = getProvider(providerType);
   const externalEvents = await provider.listEvents(accessToken, from, to);
 
-  const result: SyncResult = { created: 0, updated: 0, deleted: 0, errors: [] };
-
   // Get existing meetings in the time range
-  const existingMeetings = await db
-    .select()
-    .from(meetings)
-    .where(
-      and(
-        eq(meetings.tenantId, tenantId),
-        gte(meetings.startTime, from),
-        lte(meetings.startTime, to),
-        isNull(meetings.deletedAt)
-      )
-    );
+  const existingMeetings = await withTenantDb(tenantId, userId, async (db) =>
+    db
+      .select()
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.tenantId, tenantId),
+          gte(meetings.startTime, from),
+          lte(meetings.startTime, to),
+          isNull(meetings.deletedAt)
+        )
+      ));
 
   // Map external events by external_id
   const existingByExternal = new Map(
@@ -137,7 +149,7 @@ export async function syncCalendarEvents(
 
   // Sync events + integration config atomically
   try {
-    await db.transaction(async (tx) => {
+    await withTenantDb(tenantId, userId, async (tx) => {
       const inserts: (typeof meetings.$inferInsert)[] = [];
       const updatePromises: Promise<unknown>[] = [];
 
@@ -234,11 +246,12 @@ export async function pushMeetingToCalendar(
     accessToken = tokens.accessToken;
   }
 
-  const [meeting] = await db
-    .select()
-    .from(meetings)
-    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
-    .limit(1);
+  const [meeting] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select()
+      .from(meetings)
+      .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+      .limit(1));
 
   if (!meeting) throw new Error('Meeting not found');
 
@@ -262,15 +275,16 @@ export async function pushMeetingToCalendar(
   }
 
   // Update meeting with sync info
-  await db
-    .update(meetings)
-    .set({
-      externalId,
-      syncProvider: providerType,
-      syncDirection: 'outbound',
-      syncedAt: new Date(),
-    })
-    .where(eq(meetings.id, meetingId));
+  await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .update(meetings)
+      .set({
+        externalId,
+        syncProvider: providerType,
+        syncDirection: 'outbound',
+        syncedAt: new Date(),
+      })
+      .where(eq(meetings.id, meetingId)));
 
   return externalId;
 }
