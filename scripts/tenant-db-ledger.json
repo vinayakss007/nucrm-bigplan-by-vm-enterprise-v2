@@ -704,11 +704,6 @@
       "filedAs": "#3405",
       "files": ["lib/restore/restore-executor.ts"]
     },
-    "lib/segments": {
-      "reason": "Segment evaluation reads contact rows for one tenant, bound by the route that requested the segment.",
-      "filedAs": "#3405",
-      "files": ["lib/segments/evaluate.ts"]
-    },
     "lib/templates": {
       "reason": "Industry template seeding writes rows for the tenant the setup flow just created.",
       "filedAs": "#3405",

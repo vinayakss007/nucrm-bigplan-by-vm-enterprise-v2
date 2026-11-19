@@ -41,42 +41,23 @@ describe('withTenantDb (#3405)', () => {
     expect(seen).toEqual({ marker: 'bound' });
   });
 
-  it('the migrated RBAC module no longer reaches for the raw client', () => {
-    expect(read('lib/rbac/record-scope.ts')).toContain("from '@/lib/db'");
-    expect(read('lib/rbac/record-scope.ts')).not.toContain("from '@/drizzle/db'");
+  // Every module migrated so far: it must use the branded client and have no
+  // entry in the shrink-only ledger (a stale entry fails guard:tenant-db-context).
+  it.each([
+    'lib/rbac/record-scope.ts',
+    'lib/rbac/enforce.ts',
+    'lib/rbac/field-permissions.ts',
+    'lib/dashboard/layout-resolver.ts',
+    'lib/activity/timeline.ts',
+    'lib/formula/sync.ts',
+    'lib/compliance/stale-requests.ts',
+    'lib/segments/evaluate.ts',
+  ])('%s no longer reaches for the raw client', (file) => {
+    expect(read(file)).toContain("from '@/lib/db'");
+    expect(read(file)).not.toContain("from '@/drizzle/db'");
     const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
-    const rbac = Object.values(ledger.groups as Record<string, { files: string[] }>)
+    const listed = Object.values(ledger.groups as Record<string, { files: string[] }>)
       .flatMap((g) => g.files);
-    expect(rbac).not.toContain('lib/rbac/record-scope.ts');
-    expect(rbac).not.toContain('lib/rbac/enforce.ts');
-    expect(rbac).not.toContain('lib/rbac/field-permissions.ts');
-  });
-
-  it('the dashboard layout resolver no longer reaches for the raw client', () => {
-    expect(read('lib/dashboard/layout-resolver.ts')).toContain("from '@/lib/db'");
-    expect(read('lib/dashboard/layout-resolver.ts')).not.toContain("from '@/drizzle/db'");
-    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
-    expect(ledger.groups).not.toHaveProperty('lib/dashboard');
-  });
-
-  it('the activity timeline no longer reaches for the raw client', () => {
-    expect(read('lib/activity/timeline.ts')).toContain("from '@/lib/db'");
-    expect(read('lib/activity/timeline.ts')).not.toContain("from '@/drizzle/db'");
-    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
-    expect(ledger.groups).not.toHaveProperty('lib/activity');
-  });
-
-  it('the formula sync service no longer reaches for the raw client', () => {
-    expect(read('lib/formula/sync.ts')).toContain("from '@/lib/db'");
-    expect(read('lib/formula/sync.ts')).not.toContain("from '@/drizzle/db'");
-    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
-    expect(ledger.groups).not.toHaveProperty('lib/formula');
-  });
-
-  it('the compliance stale reaper no longer reaches for the raw client', () => {
-    expect(read('lib/compliance/stale-requests.ts')).toContain("from '@/lib/db'");
-    expect(read('lib/compliance/stale-requests.ts')).not.toContain("from '@/drizzle/db'");
-    const ledger = JSON.parse(read('scripts/tenant-db-ledger.json'));
-    expect(ledger.groups['lib/compliance'].files).not.toContain('lib/compliance/stale-requests.ts');
+    expect(listed).not.toContain(file);
   });
 });
