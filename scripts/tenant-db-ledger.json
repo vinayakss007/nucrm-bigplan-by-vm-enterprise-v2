@@ -633,11 +633,6 @@
         "lib/lead-warming/reply-analyzer.ts"
       ]
     },
-    "lib/leads": {
-      "reason": "Lead helpers take the tenant from the caller context; the route that owns the request binds it.",
-      "filedAs": "#3405",
-      "files": ["lib/leads/convert.ts"]
-    },
     "lib/modules": {
       "reason": "Module enablement checks read tenant_modules for the caller tenant, bound by the route.",
       "filedAs": "#3405",

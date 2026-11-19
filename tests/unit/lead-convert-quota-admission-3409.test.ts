@@ -82,6 +82,8 @@ function tableName(table: unknown): string | undefined {
 }
 
 const tx = {
+  // #3405: withTenantDb sets the tenant GUC via tx.execute() inside the tx.
+  execute: async () => undefined,
   select: () => {
     const builder: Record<string, unknown> = {};
     const chain = () => builder;
@@ -93,6 +95,8 @@ const tx = {
     return builder;
   },
   query: {
+    // #3405: the lead lookup now runs on the branded client's tx too.
+    leads: { findFirst: async () => state.lead },
     companies: { findFirst: async () => null },
     contacts: { findFirst: async () => state.existingContactByEmail },
     pipelines: { findFirst: async () => ({ id: 'pipeline-1' }) },

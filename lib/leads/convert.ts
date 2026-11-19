@@ -3,7 +3,7 @@
  * Used by POST /api/tenant/leads/[id]/convert and the bulk lead operations route,
  * so bulk conversions run the exact same pipeline as single-lead conversion.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
 import {
   leads,
   contacts,
@@ -99,14 +99,15 @@ export async function convertLeadCore(
   const enforceLimits = explicitEnforceLimits ?? (process.env['USAGE_LIMITS'] === 'on');
 
   // Load the lead
-  const lead = await db.query.leads.findFirst({
+  // #3405: the lead lookup runs on a branded client bound to the tenant.
+  const lead = await withTenantDb(tenantId, actorId, async (db) => db.query.leads.findFirst({
     where: and(
       eq(leads.id, id),
       eq(leads.tenantId, tenantId),
       isNull(leads.deletedAt),
       leadScope
     )
-  });
+  }));
 
   if (!lead) {
     return { ok: false, reason: 'not_found' };
@@ -145,7 +146,7 @@ export async function convertLeadCore(
         .join('\n')
     : '';
 
-  const result = await db.transaction(async (tx) => {
+  const result = await withTenantDb(tenantId, actorId, async (tx) => {
     // #3409 — lock the tenant row FOR UPDATE and fetch plan limits
     let lockedTenant: {
       currentContacts: number | null;
