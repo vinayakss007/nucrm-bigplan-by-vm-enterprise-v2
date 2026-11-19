@@ -16,6 +16,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Link2, Plus, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface RelatedRecord {
   linkId: string;
@@ -39,6 +40,7 @@ function hrefFor(type: string, id: string): string | null {
 export default function ProjectRelatedPanel({ projectId }: { projectId: string }) {
   const [records, setRecords] = useState<RelatedRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [adding, setAdding] = useState(false);
   const [entityType, setEntityType] = useState('lead');
   const [entityId, setEntityId] = useState('');
@@ -46,15 +48,20 @@ export default function ProjectRelatedPanel({ projectId }: { projectId: string }
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/projects/${projectId}/related`, { signal });
-      const data = await res.json();
-      if (!signal?.aborted) setRecords(data.data ?? []);
-    } catch (err) {
-      if ((err as Error)?.name !== 'AbortError') toast.error('Failed to load related records');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
+    const result = await fetchJsonSafe<{ data?: RelatedRecord[] }>(
+      `/api/tenant/projects/${projectId}/related`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setRecords(result.data.data ?? []);
+      setLoadError(false);
+    } else {
+      // Keep the last good list on screen and say plainly that it could not
+      // be refreshed — an empty panel here would claim "nothing is linked"
+      // when the truth is "we could not ask".
+      setLoadError(true);
+      toast.error(result.message || 'Failed to load related records');
     }
+    setLoading(false);
   }, [projectId]);
 
   useEffect(() => {
@@ -108,6 +115,12 @@ export default function ProjectRelatedPanel({ projectId }: { projectId: string }
         </button>
       </div>
 
+      {loadError && (
+        <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not load related records — an empty list here would be a lie.
+        </div>
+      )}
+
       {adding && (
         <form onSubmit={addLink} className="flex flex-wrap gap-2 mb-3">
           <select aria-label="Record type" value={entityType} onChange={(e) => setEntityType(e.target.value)} className="px-3 py-2 rounded-lg border border-border bg-card text-sm">
@@ -123,7 +136,11 @@ export default function ProjectRelatedPanel({ projectId }: { projectId: string }
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
       ) : grouped.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No leads, contacts, companies or deals linked yet.</p>
+        <p className="text-sm text-muted-foreground" role={loadError ? 'alert' : undefined}>
+          {loadError
+            ? 'Related records could not be loaded.'
+            : 'No leads, contacts, companies or deals linked yet.'}
+        </p>
       ) : (
         <div className="space-y-3">
           {grouped.map((g) => (
