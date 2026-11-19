@@ -609,7 +609,7 @@
     "lib/billing": {
       "reason": "Billing helpers resolve the tenant from the subscription/tenant row and bind it before touching invoices.",
       "filedAs": "#3405",
-      "files": ["lib/billing/deal-invoice.ts", "lib/billing/payments.ts"]
+      "files": ["lib/billing/payments.ts"]
     },
     "lib/compliance": {
       "reason": "Retention/GDPR/SOC2 reporters read across tenants for one organization, binding the super-admin or tenant arm their caller established.",
@@ -629,21 +629,6 @@
       "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
       "filedAs": "#3405",
       "files": ["lib/email/service.ts", "lib/email/tracking.ts", "lib/email/warmup.ts"]
-    },
-    "lib/export": {
-      "reason": "Export builder streams tenant rows under the caller transaction so a partial export cannot outlive it.",
-      "filedAs": "#3405",
-      "files": ["lib/export/index.ts"]
-    },
-    "lib/field-sales": {
-      "reason": "Field-sales helpers read visit/route rows for the caller tenant, bound by the calling route.",
-      "filedAs": "#3405",
-      "files": ["lib/field-sales/card-scanner.ts"]
-    },
-    "lib/import": {
-      "reason": "Import pipeline stages rows inside one transaction per tenant so a failed import leaves nothing behind.",
-      "filedAs": "#3405",
-      "files": ["lib/import/contacts.ts"]
     },
     "lib/lead-warming": {
       "reason": "Lead-warming campaigns are per tenant; the campaign row fixes the tenant before any contact read.",
