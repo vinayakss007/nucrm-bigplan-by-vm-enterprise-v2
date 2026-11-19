@@ -7,6 +7,20 @@
 
 import { useState, useEffect } from 'react';
 import { Activity, Phone, Video } from 'lucide-react';
+import { fetchJsonSafe, type FetchJsonResult } from '@/lib/fetch-json';
+
+// A feed may answer a raw array, or an envelope under `data` or a plural key.
+const rows = (result: FetchJsonResult<unknown>, ...keys: string[]): Record<string, unknown>[] => {
+  if (result.status !== 'ok') return [];
+  const body = result.data;
+  if (Array.isArray(body)) return body as Record<string, unknown>[];
+  if (!body || typeof body !== 'object') return [];
+  for (const key of keys) {
+    const value = (body as Record<string, unknown>)[key];
+    if (Array.isArray(value)) return value as Record<string, unknown>[];
+  }
+  return [];
+};
 
 interface TimelineEntry {
   id: string;
@@ -19,23 +33,27 @@ interface TimelineEntry {
 export default function DealTimeline({ dealId }: { dealId: string }) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     async function load() {
       try {
+        // A refused feed used to become `{ data: [] }`, making a partial
+        // outage indistinguishable from a quiet deal.
         const [actRes, callRes, meetRes] = await Promise.all([
-          fetch(`/api/tenant/activities?deal_id=${dealId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/calls?deal_id=${dealId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetchJsonSafe(`/api/tenant/activities?deal_id=${dealId}`, { signal }),
+          fetchJsonSafe(`/api/tenant/calls?deal_id=${dealId}`, { signal }),
           // NOTE: GET /api/tenant/meetings has no deal filter, so it is
           // narrowed client-side on dealId below. Without that, every meeting
           // in the tenant would appear on every deal's timeline.
-          fetch(`/api/tenant/meetings?limit=500`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetchJsonSafe(`/api/tenant/meetings?limit=500`, { signal }),
         ]);
         if (signal.aborted) return;
+        setLoadError([actRes, callRes, meetRes].some(r => r.status === 'error'));
 
-        const activities: TimelineEntry[] = ((actRes.data ?? actRes.activities ?? actRes) as Array<Record<string, unknown>>).map((a) => ({
+        const activities: TimelineEntry[] = rows(actRes, 'data', 'activities').map((a) => ({
           id: a.id as string,
           type: 'activity' as const,
           title: (a.action ?? a.eventType ?? 'Activity') as string,
@@ -43,7 +61,7 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
           created_at: (a.created_at ?? a.createdAt) as string,
         }));
 
-        const calls: TimelineEntry[] = ((callRes.data ?? callRes.calls ?? callRes) as Array<Record<string, unknown>>).map((c) => ({
+        const calls: TimelineEntry[] = rows(callRes, 'data', 'calls').map((c) => ({
           id: c.id as string,
           type: 'call' as const,
           title: (c.subject ?? c.direction ?? 'Call') as string,
@@ -51,7 +69,7 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
           created_at: (c.created_at ?? c.createdAt ?? c.start_time) as string,
         }));
 
-        const meetings: TimelineEntry[] = ((meetRes.data ?? meetRes.meetings ?? meetRes) as Array<Record<string, unknown>>)
+        const meetings: TimelineEntry[] = rows(meetRes, 'data', 'meetings')
           .filter((m) => (m.dealId ?? m.deal_id) === dealId)
           .map((m) => ({
             id: m.id as string,
@@ -86,7 +104,11 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
 
   if (loading) return <div className="animate-pulse space-y-3"><div className="h-6 bg-muted rounded w-40" />{[1,2,3].map(i => <div key={i} className="h-12 bg-muted rounded" />)}</div>;
 
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground py-4">No communication history for this deal yet.</p>;
+  if (entries.length === 0) return (
+    <p className={`text-sm py-4 ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>
+      {loadError ? 'Communication history could not be loaded — an empty timeline here would be a lie.' : 'No communication history for this deal yet.'}
+    </p>
+  );
 
   return (
     <div className="space-y-2">
