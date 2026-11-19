@@ -40,8 +40,16 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Increment view count
-    await db.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
+    // Increment view count. Re-assert what the read above proved: the same
+    // tenant and a live row. RLS is the backstop, not the only guard — and a
+    // tombstone landing in the gap must not collect a view.
+    await db.update(kbArticles)
+      .set({ views: sql`${kbArticles.views} + 1` })
+      .where(and(
+        eq(kbArticles.id, id),
+        eq(kbArticles.tenantId, ctx.tenantId),
+        isNull(kbArticles.deletedAt),
+      ));
 
     return NextResponse.json({ data: article });
  
