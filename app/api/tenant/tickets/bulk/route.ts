@@ -105,9 +105,20 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const userId = payload.user_id;
         if (!userId) return NextResponse.json({ error: 'payload.user_id required' }, { status: 400 });
         await db.transaction(async (tx) => {
-          await tx.update(supportTickets).set({ assignedTo: userId, updatedAt: new Date() }).where(inArray(supportTickets.id, validIds));
-          affected = validIds.length;
-          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_assign', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, user_id: userId }, dbOrTx: tx as DbClient });
+          // #3408/#3407: report how many rows the write ACTUALLY touched, and
+          // re-assert tenant + live-tombstone in the WHERE — the validation
+          // read above is unlocked, so a ticket can be deleted in the gap.
+          const rows = await tx.update(supportTickets)
+            .set({ assignedTo: userId, updatedAt: new Date() })
+            .where(and(
+              eq(supportTickets.tenantId, ctx.tenantId),
+              inArray(supportTickets.id, validIds),
+              isNull(supportTickets.deletedAt),
+            ))
+            .returning({ id: supportTickets.id });
+          affected = rows.length;
+          skipped = ticket_ids.length - affected;
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_assign', entityType: 'ticket', entityId: validIds[0], newData: { count: affected, skipped, user_id: userId }, dbOrTx: tx as DbClient });
         });
         break;
       }
@@ -156,17 +167,35 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           return NextResponse.json({ error: `payload.priority must be one of: ${VALID_PRIORITIES.join(', ')}` }, { status: 400 });
         }
         await db.transaction(async (tx) => {
-          await tx.update(supportTickets).set({ priority, updatedAt: new Date() }).where(inArray(supportTickets.id, validIds));
-          affected = validIds.length;
-          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_priority', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length, priority }, dbOrTx: tx as DbClient });
+          const rows = await tx.update(supportTickets)
+            .set({ priority, updatedAt: new Date() })
+            .where(and(
+              eq(supportTickets.tenantId, ctx.tenantId),
+              inArray(supportTickets.id, validIds),
+              isNull(supportTickets.deletedAt),
+            ))
+            .returning({ id: supportTickets.id });
+          affected = rows.length;
+          skipped = ticket_ids.length - affected;
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_priority', entityType: 'ticket', entityId: validIds[0], newData: { count: affected, skipped, priority }, dbOrTx: tx as DbClient });
         });
         break;
       }
       case 'delete': {
         await db.transaction(async (tx) => {
-          await tx.update(supportTickets).set({ deletedAt: new Date() }).where(inArray(supportTickets.id, validIds));
-          affected = validIds.length;
-          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_delete', entityType: 'ticket', entityId: validIds[0], newData: { count: validIds.length }, dbOrTx: tx as DbClient });
+          // Re-assert the live tombstone in the WHERE so a ticket deleted in
+          // the gap is not counted as freshly deleted by this operation.
+          const rows = await tx.update(supportTickets)
+            .set({ deletedAt: new Date() })
+            .where(and(
+              eq(supportTickets.tenantId, ctx.tenantId),
+              inArray(supportTickets.id, validIds),
+              isNull(supportTickets.deletedAt),
+            ))
+            .returning({ id: supportTickets.id });
+          affected = rows.length;
+          skipped = ticket_ids.length - affected;
+          await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: 'bulk_delete', entityType: 'ticket', entityId: validIds[0], newData: { count: affected, skipped }, dbOrTx: tx as DbClient });
         });
         break;
       }
