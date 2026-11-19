@@ -12,6 +12,7 @@ import { Swipeable } from '@/components/ui/swipeable';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { showUndoToast } from '@/lib/undo';
 import { EmptyState } from '@/components/shared/empty-state';
 
@@ -53,6 +54,7 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
 }) {
   const router = useRouter();
   const [tasks, setTasks]       = useState(initialTasks);
+  const [loadError, setLoadError] = useState(false);
   const [filter, setFilter]     = useState<'all'|'open'|'overdue'|'today'|'done'>('open');
   const [showAdd, setShowAdd]   = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -62,8 +64,10 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   const refreshTasks = useCallback(async () => {
-    const res = await fetch('/api/tenant/tasks');
-    if (res.ok) { const data = await res.json(); setTasks(data.data || []); }
+    const result = await fetchJsonSafe<{ data?: TaskRow[] }>('/api/tenant/tasks');
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') { setTasks(result.data.data || []); setLoadError(false); }
+    else { setLoadError(true); toast.error(result.message || 'Failed to load tasks'); }
   }, []);
 
   const { deleteEntity } = useDeleteWithUndo('task', refreshTasks);
@@ -226,13 +230,19 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
         </label>
       )}
 
+      {loadError && (
+        <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Could not refresh tasks — an empty list here would be a lie.
+        </div>
+      )}
+
       {/* Task list */}
       <div className="admin-card overflow-hidden divide-y divide-border">
         {!filtered.length ? (
           <EmptyState
             type="tasks"
-            title={filter==='overdue' ? 'No overdue tasks' : filter==='done' ? 'No completed tasks' : filter==='today' ? 'No tasks due today' : undefined}
-            description={filter==='overdue' ? 'Great job staying on top of things!' : filter==='done' ? 'Completed tasks will show up here.' : filter==='today' ? 'Nothing due today.' : undefined}
+            title={loadError ? 'Tasks could not be loaded.' : filter==='overdue' ? 'No overdue tasks' : filter==='done' ? 'No completed tasks' : filter==='today' ? 'No tasks due today' : undefined}
+            description={loadError ? 'The list could not be read.' : filter==='overdue' ? 'Great job staying on top of things!' : filter==='done' ? 'Completed tasks will show up here.' : filter==='today' ? 'Nothing due today.' : undefined}
             className="py-12"
           />
         ) : filtered.map(t => {
