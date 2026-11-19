@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/sanitize';
-import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -132,15 +132,17 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const [converting, setConverting] = useState(false);
   const [convertDraft, setConvertDraft] = useState({ create_deal: false, deal_title: '', deal_value: '', pipeline_id: '', stage_id: '' });
   const [pipelinesData, setPipelinesData] = useState<Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }>>([]);
+  const [pipelinesError, setPipelinesError] = useState(false);
 
   // Fetch pipelines for convert dialog
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    fetch('/api/tenant/pipelines', { signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (signal.aborted) return; setPipelinesData(d.data ?? d.pipelines ?? d ?? []); })
-      .catch((err) => clientLogError('lead:fetch-pipelines', err));
+    fetchJsonSafe('/api/tenant/pipelines', { signal }).then(result => {
+      if (signal.aborted) return;
+      if (result.status === 'ok') { const d = result.data as { data?: typeof pipelinesData; pipelines?: typeof pipelinesData } | typeof pipelinesData; setPipelinesData(Array.isArray(d) ? d : (d.data ?? d.pipelines ?? [])); setPipelinesError(false); }
+      else setPipelinesError(true);
+    });
     return () => controller.abort();
   }, []);
 
@@ -942,9 +944,9 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                       disabled={converting}
                     />
                   </div>
-                  {pipelinesData.length > 0 && (
+                  {(pipelinesData.length > 0 || pipelinesError) && (
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground block mb-1">Pipeline</label>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1" role={pipelinesError ? 'alert' : undefined}>{pipelinesError ? 'Pipeline options could not be loaded — the default will be used.' : 'Pipeline'}</label>
                       <select
                         className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm"
                         value={convertDraft.pipeline_id}
