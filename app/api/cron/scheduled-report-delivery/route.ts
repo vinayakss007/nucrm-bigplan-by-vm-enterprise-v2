@@ -299,7 +299,7 @@ async function cronRouteHandler(req: NextRequest) {
             status: 'active',
             config: cleanConfig,
             updatedAt: new Date(),
-          }).where(eq(scheduledReports.id, report.id));
+          }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.status, 'active'))); // #3407
 
           delivered += 1;
         } catch (err) {
@@ -325,7 +325,7 @@ async function cronRouteHandler(req: NextRequest) {
               _lastError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
             },
             updatedAt: new Date(),
-          }).where(eq(scheduledReports.id, report.id));
+          }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.status, 'active'))); // #3407
         }
       }
     });
