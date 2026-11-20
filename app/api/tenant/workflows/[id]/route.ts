@@ -9,7 +9,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { workflows, workflowActions, workflowExecutions } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
@@ -120,13 +120,24 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     // Validation before publishing
     if (status === 'active') {
+      // #3407/#3408: scope the activation validation to THIS tenant's live
+      // workflow. An unscoped read could be satisfied by another tenant's row,
+      // and the write below (tenant-scoped) would then match zero rows while
+      // the handler still reported success.
       const workflowResult = await db.query.workflows.findFirst({
-        where: eq(workflows.id, id),
+        where: and(
+          eq(workflows.id, id),
+          eq(workflows.tenantId, ctx.tenantId),
+          isNull(workflows.deletedAt),
+        ),
         columns: { nodes: true }
       });
       const actionsCountResult = await db.select({ count: sql<number>`count(*)::int` })
         .from(workflowActions)
-        .where(eq(workflowActions.workflowId, id));
+        .where(and(
+          eq(workflowActions.workflowId, id),
+          eq(workflowActions.tenantId, ctx.tenantId),
+        ));
       
       const currentNodes = nodes || workflowResult?.nodes || [];
       const currentActionsCount = actions !== undefined ? actions.length : (actionsCountResult[0]?.count || 0);
@@ -139,10 +150,10 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       }
     }
 
-    await db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       // Update workflow fields
- 
- 
+  
+  
       const updateData: Partial<typeof workflows.$inferInsert> = { updatedAt: new Date(), updatedBy: ctx.userId };
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
@@ -152,15 +163,25 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       if (nodes !== undefined) updateData.nodes = nodes;
 
       if (Object.keys(updateData).length > 2) { // More than just updatedAt and updatedBy
-        await tx.update(workflows)
+        const [updated] = await tx.update(workflows)
           .set(updateData)
-          .where(and(eq(workflows.id, id), eq(workflows.tenantId, ctx.tenantId)));
+          .where(and(
+            eq(workflows.id, id),
+            eq(workflows.tenantId, ctx.tenantId),
+            isNull(workflows.deletedAt),
+          ))
+          .returning({ id: workflows.id });
+        if (!updated) return null;
       }
 
       // Update actions if provided
       if (actions !== undefined) {
-        // Delete existing actions
-        await tx.delete(workflowActions).where(eq(workflowActions.workflowId, id));
+        // Tenant-scope the action delete too — the workflow id came from the
+        // URL; RLS must not be the only guard on a destructive write (#3405).
+        await tx.delete(workflowActions).where(and(
+          eq(workflowActions.workflowId, id),
+          eq(workflowActions.tenantId, ctx.tenantId),
+        ));
 
         // Insert new actions
         if (actions.length > 0) {
@@ -178,7 +199,16 @@ export const PATCH = withApiRoute(async (request: NextRequest,
           await tx.insert(workflowActions).values(actionValues);
         }
       }
+
+      return true;
     });
+
+    // A tenant-scoped write that matched nothing is a miss, not a success —
+    // report it so a stale client cannot believe it updated a workflow it
+    // cannot even see (#3408).
+    if (!updated) {
+      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
       ok: true,
