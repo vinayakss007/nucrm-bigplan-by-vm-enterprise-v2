@@ -176,8 +176,8 @@ vi.mock('@/lib/stripe', () => ({
 const checkoutPlan = vi.hoisted(() => ({ ok: true as boolean, planId: 'pro', priceId: 'price_pro_monthly', reason: '', resolution: undefined as unknown }));
 vi.mock('@/lib/stripe-plan-resolution', () => ({
   resolveCheckoutPlan: async () => (checkoutPlan.resolution ?? (checkoutPlan.ok
-    ? { ok: true, planId: checkoutPlan.planId, priceId: checkoutPlan.priceId, source: 'subscription' }
-    : { ok: false, planId: null, priceId: checkoutPlan.priceId, reason: checkoutPlan.reason || 'unmapped_price' })),
+    ? { ok: true, data: { planId: checkoutPlan.planId, priceId: checkoutPlan.priceId, source: 'subscription' } }
+    : { ok: false, error: { reason: checkoutPlan.reason || 'unmapped_price', priceId: checkoutPlan.priceId } })),
   planFromPriceId: () => checkoutPlan.planId,
   priceIdFromSubscription: () => checkoutPlan.priceId,
 }));

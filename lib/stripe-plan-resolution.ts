@@ -27,7 +27,12 @@
  *      The caller must keep the tenant in a non-entitled status and alert
  *      admins. There is deliberately no amount-based fallback, opt-in or
  *      otherwise, and no `|| 'starter'` default.
+ *
+ * #3408 PR-5A: the resolution is a discriminated `Result<T,E>` from
+ * `@/lib/result`. Its failure is a value the webhook must read — the screen in
+ * `scripts/check-result-consumed.mjs` fails a discarded call.
  */
+import { fail, ok, type Result } from '@/lib/result';
 
 /** Minimal structural shape of a checkout session as seen in a webhook payload. */
 interface PriceBearingItem {
@@ -59,22 +64,22 @@ export interface PlanResolutionDeps {
   fetchCheckoutSession?: (sessionId: string) => Promise<unknown>;
 }
 
-export type CheckoutPlanResolution =
-  | {
-      ok: true;
-      planId: string;
-      priceId: string;
-      /** Where the price id came from — useful for alerts/metrics. */
-      source: 'session-subscription' | 'session-line-items' | 'fetched-session';
-    }
-  | {
-      ok: false;
-      reason: 'no-price-id' | 'unmapped-price-id' | 'session-fetch-failed';
-      /** The price id that could not be mapped, when one was found. */
-      priceId: string | null;
-      /** Error thrown by the Stripe retrieval, when applicable. */
-      fetchError?: unknown;
-    };
+export interface PlanResolutionSuccess {
+  planId: string;
+  priceId: string;
+  /** Where the price id came from — useful for alerts/metrics. */
+  source: 'session-subscription' | 'session-line-items' | 'fetched-session';
+}
+
+export interface PlanResolutionFailure {
+  reason: 'no-price-id' | 'unmapped-price-id' | 'session-fetch-failed';
+  /** The price id that could not be mapped, when one was found. */
+  priceId: string | null;
+  /** Error thrown by the Stripe retrieval, when applicable. */
+  fetchError?: unknown;
+}
+
+export type CheckoutPlanResolution = Result<PlanResolutionSuccess, PlanResolutionFailure>;
 
 // ── Price catalog (env STRIPE_PRICE_*) ───────────────────────────────────────
 
@@ -131,7 +136,7 @@ export function priceIdFromCheckoutPayload(session: CheckoutSessionLike): string
 
 /**
  * Resolve the plan for a `checkout.session.completed` event. Fail closed: an
- * absent or unmapped price id yields `{ ok: false }` — never a guessed tier.
+ * absent or unmapped price id yields a failed `Result` — never a guessed tier.
  */
 export async function resolveCheckoutPlan(
   session: CheckoutSessionLike,
@@ -147,18 +152,18 @@ export async function resolveCheckoutPlan(
         sub && typeof sub === 'object' && priceIdFromSubscription(sub) === payloadPriceId
           ? 'session-subscription'
           : 'session-line-items';
-      return { ok: true, planId, priceId: payloadPriceId, source };
+      return ok({ planId, priceId: payloadPriceId, source });
     }
     // A price id WAS present and is not in the catalog. Retrieving the session
     // would return the same id, so skip the API call and fail closed.
-    return { ok: false, reason: 'unmapped-price-id', priceId: payloadPriceId };
+    return fail({ reason: 'unmapped-price-id', priceId: payloadPriceId });
   }
 
   // Payload carries no price id (e.g. `subscription` is a plain string id and
   // `line_items` is unexpanded — the default on recent Stripe API versions).
   // Ask Stripe rather than guessing from the event shape.
   if (!session.id) {
-    return { ok: false, reason: 'no-price-id', priceId: null };
+    return fail({ reason: 'no-price-id', priceId: null });
   }
 
   // Stripe API responses are untyped runtime JSON — the same structural-cast
@@ -169,18 +174,18 @@ export async function resolveCheckoutPlan(
     const fetcher = deps.fetchCheckoutSession ?? ((id: string) => getCheckoutSession(id));
     fetchedRaw = await fetcher(session.id);
   } catch (err) {
-    return { ok: false, reason: 'session-fetch-failed', priceId: null, fetchError: err };
+    return fail({ reason: 'session-fetch-failed', priceId: null, fetchError: err });
   }
 
   const fetched = (fetchedRaw ?? {}) as CheckoutSessionLike;
   const fetchedPriceId = priceIdFromCheckoutPayload(fetched);
   if (!fetchedPriceId) {
-    return { ok: false, reason: 'no-price-id', priceId: null };
+    return fail({ reason: 'no-price-id', priceId: null });
   }
 
   const planId = planFromPriceId(fetchedPriceId);
   if (!planId) {
-    return { ok: false, reason: 'unmapped-price-id', priceId: fetchedPriceId };
+    return fail({ reason: 'unmapped-price-id', priceId: fetchedPriceId });
   }
-  return { ok: true, planId, priceId: fetchedPriceId, source: 'fetched-session' };
+  return ok({ planId, priceId: fetchedPriceId, source: 'fetched-session' });
 }

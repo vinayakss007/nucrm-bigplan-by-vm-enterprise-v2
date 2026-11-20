@@ -221,13 +221,13 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
       updatedAt: new Date(),
     }, 'checkout.session.completed (fail closed)');
 
-    const detail = resolution.priceId
-      ? `price '${resolution.priceId}' is not in the STRIPE_PRICE_* catalog`
-      : `no price id available (reason: ${resolution.reason})`;
+    const detail = resolution.error.priceId
+      ? `price '${resolution.error.priceId}' is not in the STRIPE_PRICE_* catalog`
+      : `no price id available (reason: ${resolution.error.reason})`;
     void logError({
       error: new Error(`[Stripe] checkout.session.completed fail-closed for tenant ${tenantId}: ${detail}`),
       context: 'webhooks/stripe unmapped checkout price',
-      metadata: { tenantId, sessionId: session.id, subscriptionId, reason: resolution.reason, priceId: resolution.priceId },
+      metadata: { tenantId, sessionId: session.id, subscriptionId, reason: resolution.error.reason, priceId: resolution.error.priceId },
       level: 'error',
     });
     // Admin alert — the repo's established admin path (sendAdminTelegram).
@@ -236,7 +236,7 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
       title: 'Stripe plan NOT activated (fail-closed)',
       message:
         `Tenant: \`${tenantId}\`\nSession: \`${session.id ?? 'unknown'}\`\n` +
-        `Reason: ${resolution.reason}\nPrice: \`${resolution.priceId ?? 'n/a'}\`\n` +
+        `Reason: ${resolution.error.reason}\nPrice: \`${resolution.error.priceId ?? 'n/a'}\`\n` +
         'Tenant kept past_due — verify STRIPE_PRICE_* config or the Stripe price, then re-deliver the event.',
     }).catch((e) => void logError({ error: e, context: 'webhooks/stripe fail-closed admin telegram', level: 'warning' }));
 
@@ -247,13 +247,13 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
   await billing.patchTenant(tenantId, {
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
-    planId: resolution.planId,
+    planId: resolution.data.planId,
     status: 'active',
     billingType: 'stripe',
     updatedAt: new Date(),
   }, 'checkout.session.completed');
 
-  logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${resolution.planId} (price ${resolution.priceId}, source ${resolution.source})`);
+  logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${resolution.data.planId} (price ${resolution.data.priceId}, source ${resolution.data.source})`);
 }
 
 async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
