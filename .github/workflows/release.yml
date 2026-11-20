@@ -188,6 +188,12 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       ALLOWED_ORIGINS: http://localhost:3000
       LAUNCH_GATE_SERVER_URL: http://localhost:3000
+      # The gate reaches the built app directly, with no nginx in front of it.
+      # Production sets TRUST_PROXY=true in deploy/docker-compose.production.yml,
+      # and scripts/smoke-test.sh supplies X-Forwarded-For, so the auth rate
+      # limiter keys a real client IP instead of failing closed on 'unknown'
+      # (#2630). Without this, stage 5 logs in against a 503 every time.
+      TRUST_PROXY: "true"
       # Stage 5 signs in, so it needs an identity that exists in the database it is
       # pointed at. admin@test.com is the account scripts/seed-dev.ts creates, on a
       # database that dies with the runner. The PASSWORD is deliberately not here:

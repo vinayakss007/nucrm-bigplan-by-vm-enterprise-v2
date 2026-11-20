@@ -58,6 +58,7 @@ fi
 # Test login API
 RESP=$(curl -s --max-time 30 -X POST "${SERVER_URL}/api/auth/login" \
   -H 'Content-Type: application/json' \
+  -H 'X-Forwarded-For: 127.0.0.1' \
   -d "{\"email\":\"${SMOKE_EMAIL}\",\"password\":\"${SMOKE_PASSWORD}\"}" \
   -c "$COOKIE_JAR" 2>&1)
 if echo "$RESP" | grep -q '"ok":true'; then
@@ -72,6 +73,7 @@ fi
 
 # Test protected page
 HTTP_CODE=$(curl -s --max-time 30 -o /dev/null -w "%{http_code}" \
+  -H 'X-Forwarded-For: 127.0.0.1' \
   -b "$COOKIE_JAR" "${SERVER_URL}/tenant/dashboard")
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "307" ]; then
   echo "✅ Dashboard: HTTP $HTTP_CODE (200 or 307 = ok)"
