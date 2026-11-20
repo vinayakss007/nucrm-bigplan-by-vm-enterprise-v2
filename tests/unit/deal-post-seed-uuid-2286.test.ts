@@ -58,7 +58,13 @@ const txMock = {
 vi.mock('@/drizzle/db', () => ({
   db: {
     transaction: async (cb: (tx: typeof txMock) => Promise<unknown>) => cb(txMock),
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+    select: () => ({
+      from: () => ({
+        // #2597: the producer's rule lookup ends in `.limit(100)`; callers
+        // elsewhere still await `.where()` directly, so keep both shapes.
+        where: () => Object.assign(Promise.resolve([]), { limit: async () => [] }),
+      }),
+    }),
   },
 }));
 

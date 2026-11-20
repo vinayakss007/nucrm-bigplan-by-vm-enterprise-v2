@@ -86,6 +86,14 @@ vi.mock('@/drizzle/schema', () => ({
   contacts: { id: 'contacts.id' },
   leadActivities: { __table: 'lead_activities' },
   activities: { __table: 'activities' },
+  // #2597: the leads POST now imports the approval producer, which reads
+  // these tables at module load. Keep the mock complete so the route can load
+  // without leaking a missing-export error as a 500.
+  deals: { __table: 'deals' },
+  tasks: { __table: 'tasks' },
+  tenants: { __table: 'tenants' },
+  approvalRequests: { __table: 'approval_requests' },
+  approvalRules: { __table: 'approval_rules' },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn(() => ({})), and: vi.fn(() => ({})), or: vi.fn(() => ({})),
