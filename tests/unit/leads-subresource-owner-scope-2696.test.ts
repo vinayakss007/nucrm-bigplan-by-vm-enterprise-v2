@@ -288,7 +288,10 @@ describe('conversion refuses a lead the caller does not own (#2696)', () => {
     expect(lookup, `no lead lookup rendered: ${JSON.stringify(reads.map(r => r.sql))}`).toBeTruthy();
     expect(lookup.sql).toMatch(ownerClause('leads'));
     expect(lookup.params.filter(p => p === MINE)).toHaveLength(2);
-    expect(mockDb.transaction).not.toHaveBeenCalled();
+    // #3405: the scoped read now runs through the branded client, which opens
+    // a transaction. The invariant is that no conversion WRITE happens —
+    // the earlier "no transaction at all" assertion no longer describes it.
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('a lead the caller owns converts', async () => {

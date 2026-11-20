@@ -633,11 +633,6 @@
         "lib/lead-warming/reply-analyzer.ts"
       ]
     },
-    "lib/leads": {
-      "reason": "Lead helpers take the tenant from the caller context; the route that owns the request binds it.",
-      "filedAs": "#3405",
-      "files": ["lib/leads/convert.ts"]
-    },
     "lib/modules": {
       "reason": "Module enablement checks read tenant_modules for the caller tenant, bound by the route.",
       "filedAs": "#3405",
@@ -652,11 +647,6 @@
       "reason": "Onboarding state is keyed by tenant and read after the session binds it.",
       "filedAs": "#3405",
       "files": ["lib/onboarding/check.ts"]
-    },
-    "lib/plugins": {
-      "reason": "Plugin engine resolves the plugin/tenant pair and binds the context before executing tenant code.",
-      "filedAs": "#3405",
-      "files": ["lib/plugins/engine.ts"]
     },
     "lib/rbac": {
       "reason": "RBAC config readers/writers are scoped to one tenant and run inside the caller transaction.",
