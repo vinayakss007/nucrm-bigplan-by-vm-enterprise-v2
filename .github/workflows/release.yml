@@ -242,6 +242,10 @@ jobs:
           # and special that lib/auth/session.ts:38-46 requires; the hex alone
           # could miss one of them.
           CHAIN_PASSWORD="Release!$(od -An -tx1 -N10 /dev/urandom | tr -d ' \n')7Q"
+          # GITHUB_ENV reaches later steps only; the seed and smoke test run in
+          # THIS step, so export both names into the current shell as well.
+          export SEED_PASSWORD="$CHAIN_PASSWORD"
+          export SMOKE_LOGIN_PASSWORD="$CHAIN_PASSWORD"
           echo "SEED_PASSWORD=$CHAIN_PASSWORD" >> "$GITHUB_ENV"
           echo "SMOKE_LOGIN_PASSWORD=$CHAIN_PASSWORD" >> "$GITHUB_ENV"
           unset CHAIN_PASSWORD
