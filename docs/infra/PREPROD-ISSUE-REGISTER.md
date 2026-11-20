@@ -3011,7 +3011,7 @@ tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476
   refuses** (`users`, `sessions`, `refresh_tokens`, `plans`, `contacts`… `error_logs`, `attachments`,
   `automation_*`, `ticket_replies`, `support_tickets`, `email_sequences`, `email_verifications`, `kb_articles`,
   `follow_ups`, `activity_logs`). I did **not** collapse the parser's list onto `sql-allowlist.ts`, because
-  that is the moment the panel's SQL-text restore path (`app/api/superadmin/selective-restore/execute/route.ts:153`)
+  that is the moment the panel's SQL-text restore path (`app/api/superadmin/selective-restore/execute/route.ts:154`, re-pinned 2026-11-20 from `:153` — #3407's from-state claim added one line above; guard:coords)
   starts writing `users`, `sessions`, `plans` and `refresh_tokens` from a paste-able dump — an auth-state
   widening, not a bug fix. It stays out of scope for both #2352 (PP-053) and this PR; the reason it is safe to leave is
   `TENANT_TABLES ⊆ TENANT_SCOPED_TABLES` (measured: `exportedNotInParser == []`), which the 15th assertion now

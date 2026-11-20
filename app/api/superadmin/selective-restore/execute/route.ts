@@ -11,7 +11,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -134,7 +134,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               status: 'running', 
               startedAt: new Date() 
             })
-            .where(eq(selectiveRestoreLogs.id, restoreLog.id));
+            // #3407: claim the loaded from-state so a concurrent write cannot
+            // be overwritten by a stale progress update.
+            .where(and(eq(selectiveRestoreLogs.id, restoreLog.id), eq(selectiveRestoreLogs.status, 'pending')));
 
           sendEvent('progress', {
             step: 'snapshot',
@@ -170,7 +172,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               completedAt: new Date(),
               errorMessage: result.error || null,
             })
-            .where(eq(selectiveRestoreLogs.id, restoreLog.id));
+            .where(and(eq(selectiveRestoreLogs.id, restoreLog.id), eq(selectiveRestoreLogs.status, 'running')));
 
           if (result.success) {
             sendEvent('complete', {
@@ -229,7 +231,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               errorMessage, 
               completedAt: new Date() 
             })
-            .where(eq(selectiveRestoreLogs.id, restoreLog.id));
+            .where(and(eq(selectiveRestoreLogs.id, restoreLog.id), inArray(selectiveRestoreLogs.status, ['pending', 'running'])));
 
           sendEvent('error', {
             success: false,
