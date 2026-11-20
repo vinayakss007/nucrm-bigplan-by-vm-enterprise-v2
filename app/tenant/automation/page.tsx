@@ -110,40 +110,56 @@ export default function AutomationPage() {
 
   const togglePrebuiltMutation = useMutation({
     mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
-      await fetch('/api/tenant/automation/workflows', {
+      const res = await fetch('/api/tenant/automation/workflows', {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ workflow_id: id, enabled: !current }),
       });
+      // #3408: a refused toggle used to still flash the success toast.
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Failed to update automation (${res.status})`);
+      }
       return current;
     },
     onSuccess: (current) => {
       toast.success(current ? 'Automation paused' : 'Automation enabled');
       queryClient.invalidateQueries({ queryKey: WORKFLOWS_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const toggleCustomMutation = useMutation({
     mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
-      await fetch(`/api/tenant/automations/${id}`, {
+      const res = await fetch(`/api/tenant/automations/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ is_active: !current }),
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Failed to update automation (${res.status})`);
+      }
       return current;
     },
     onSuccess: (current) => {
       toast.success(current ? 'Automation paused' : 'Automation enabled');
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const deleteCustomMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
+      const res = await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Failed to delete automation (${res.status})`);
+      }
     },
     onSuccess: () => {
       toast.success('Deleted');
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const createCustomMutation = useMutation({
