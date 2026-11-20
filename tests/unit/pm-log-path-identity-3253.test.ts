@@ -87,10 +87,10 @@ describe('the tree this branch ships', () => {
     expect(CI).toContain('npm run guard:pm-log-paths');
     const lines = CI.split('\n');
     const jobLine = lines.findIndex((l) => l.includes('npm run guard:pm-log-paths')) + 1;
-    // :221, :254, :401 and :447 are the coordinates the register cites; the job
+    // :224, :257, :404 and :450 are the coordinates the register cites; the job
     // is appended, so none of them moved.
-    expect(jobLine).toBeGreaterThan(447);
-    for (const n of [221, 254, 401, 447]) {
+    expect(jobLine).toBeGreaterThan(450);
+    for (const n of [224, 257, 404, 450]) {
       expect(lines[n - 1]).toMatch(/check-audit-baseline|check-semgrep-baseline|Schema drift|check-env-coverage/);
     }
     expect(CI).toMatch(/constraint-vocab:/);

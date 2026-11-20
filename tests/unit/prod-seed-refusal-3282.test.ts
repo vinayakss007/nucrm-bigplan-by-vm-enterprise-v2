@@ -402,12 +402,12 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
   const ci = read('.github/workflows/ci.yml');
   // The coordinates `docs/README.md` and the register cite by line number, pinned against
   // this file's own content rather than a branch ref — the #3010 rule. An insert above any
-  // of them would have moved it; below `:447` nothing can.
+  // of them would have moved it; below `:450` nothing can.
   const COORDINATES: Array<[number, string]> = [
-    [221, 'check-audit-baseline.mjs'],
-    [254, 'check-semgrep-baseline.mjs'],
-    [401, 'Schema drift check (column-level)'],
-    [447, 'check-env-coverage.mjs'],
+    [224, 'check-audit-baseline.mjs'],
+    [257, 'check-semgrep-baseline.mjs'],
+    [404, 'Schema drift check (column-level)'],
+    [450, 'check-env-coverage.mjs'],
   ];
   const jobStart = ci.indexOf('\n  destructive-gate:');
   const job = jobStart === -1 ? '' : ci.slice(jobStart, ci.indexOf('\n  # PP-059 / #3241', jobStart));
