@@ -19,6 +19,7 @@ import { cache } from '@/lib/cache';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
+import { stageTaskCreateResponse } from '@/lib/rbac/approval-producer';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -156,6 +157,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         }, { status: 403 });
       }
     }
+
+    // #2597 POST staging: a rule-matched create is held for approval. The task
+    // limit check above has already run; only the row write is deferred.
+    const staged = await stageTaskCreateResponse(ctx, v, v);
+    if (staged) return staged;
 
     let newTask: typeof tasks.$inferSelect | undefined;
 

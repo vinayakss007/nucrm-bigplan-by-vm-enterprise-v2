@@ -23,6 +23,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { resolveDealStage, stageFailureMessage } from '@/lib/deals/resolve-stage';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
+import { stageDealCreateResponse } from '@/lib/rbac/approval-producer';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body so the
 // auth check's setTenantContext() and every db query below (count + list) share
@@ -177,6 +178,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // Plan limit check (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
     const overLimit = await checkLimit(ctx, 'deals');
     if (overLimit) return overLimit;
+
+    // #2597 POST staging: a rule-matched create is held for approval instead of
+    // being written now. The resolved stage and amount are what the rule sees.
+    const staged = await stageDealCreateResponse(
+      ctx,
+      { ...v, amount, stage_id: stageId, pipeline_id: pipelineId },
+      { ...v, amount, stage_id: stageId, pipeline_id: pipelineId },
+    );
+    if (staged) return staged;
 
     // #3409: the pre-flight checkLimit above records the violation and alerts the
     // owner, but cannot prevent two concurrent requests from seeing "1 slot

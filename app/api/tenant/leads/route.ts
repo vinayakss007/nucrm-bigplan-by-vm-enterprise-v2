@@ -24,6 +24,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
+import { stageLeadCreateResponse } from '@/lib/rbac/approval-producer';
 
 // Whitelist for sort columns to prevent SQL injection
 
@@ -282,6 +283,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         if (overContactLimit) return overContactLimit;
       }
     }
+
+    // #2597 POST staging: a rule-matched create is held for approval. Dedup and
+    // contact/lead quota preflights above have already run. Core replay only:
+    // the staged lead keeps an explicit contact_id when one was supplied.
+    const staged = await stageLeadCreateResponse(ctx, v, v);
+    if (staged) return staged;
 
     // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
     // #2343: lead_oid now collides loudly against the unique
