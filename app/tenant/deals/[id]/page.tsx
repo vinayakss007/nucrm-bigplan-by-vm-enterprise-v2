@@ -132,7 +132,10 @@ export default async function DealDetailPage({ params }: PageProps) {
   .orderBy(desc(tasksTable.createdAt));
 
   // #1815: the deal's follow-ups (followUps.dealId FK already existed but was
-  // never surfaced on the deal). Fallback so a failure never breaks the page.
+  // never surfaced on the deal). #3408: a refused read is NOT "no follow-ups" —
+  // keep the page up, but tell the client the read failed so the panel cannot
+  // print a false "No follow-ups scheduled".
+  let followUpsLoadFailed = false;
   const followUpsList = await db.select({
     id: followUpsTable.id,
     title: followUpsTable.title,
@@ -150,7 +153,10 @@ export default async function DealDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(followUpsTable.dueDate))
   .limit(50)
-  .catch(() => []);
+  .catch(() => {
+    followUpsLoadFailed = true;
+    return [];
+  });
 
   // #1820: unified activity timeline — merges activities + calls + notes for
   // this deal into one chronological feed.
@@ -168,6 +174,7 @@ export default async function DealDetailPage({ params }: PageProps) {
       tasks={tasks}
       activities={activities}
       followUps={followUpsList}
+      followUpsLoadFailed={followUpsLoadFailed}
       sourceLead={sourceLead}
       permissions={permissions}
       tenantId={ctx.tenantId}

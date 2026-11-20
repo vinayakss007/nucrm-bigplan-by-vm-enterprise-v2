@@ -103,6 +103,8 @@ interface Props {
   tasks: DealTask[];
   activities: DealActivity[];
   followUps?: DealFollowUp[];
+  /** #3408 — the server-side follow-ups read was refused; an empty array is not proof there are none. */
+  followUpsLoadFailed?: boolean;
   sourceLead?: { id: string; name: string } | null;
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
@@ -111,7 +113,7 @@ interface Props {
   _userId?: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, followUps = [], sourceLead = null, permissions, _tenantId, _userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, followUps = [], followUpsLoadFailed = false, sourceLead = null, permissions, _tenantId, _userId }: Props) {
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
   const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
@@ -506,12 +508,14 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <h2 className="text-sm font-semibold flex items-center gap-2">
                   <Calendar className="w-4 h-4" /> Follow-ups
-                  <span className="text-xs font-normal text-muted-foreground">
-                    ({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)
-                  </span>
+                  {!followUpsLoadFailed && <span className="text-xs font-normal text-muted-foreground">({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)</span>}
                 </h2>
               </div>
-              {!followUps.length ? (
+              {followUpsLoadFailed ? (
+                <div role="alert" className="px-5 py-6 text-sm text-amber-700 dark:text-amber-300 flex flex-col items-center gap-2">
+                  <span>Follow-ups could not be loaded — “none scheduled” would be a lie here.</span><Button variant="outline" size="sm" onClick={() => router.refresh()}>Retry</Button>
+                </div>
+              ) : !followUps.length ? (
                 <p className="px-5 py-6 text-sm text-muted-foreground text-center">No follow-ups scheduled</p>
               ) : (
                 <div className="divide-y divide-border">
