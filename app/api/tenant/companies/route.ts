@@ -18,6 +18,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
+import { stageCompanyCreateResponse } from '@/lib/rbac/approval-producer';
 import { ownerScope } from '@/lib/api/owner-scope';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -141,6 +142,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const validated = validateBody(createCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // #2597 POST staging: a rule-matched create is held for approval.
+    const staged = await stageCompanyCreateResponse(ctx, v, v);
+    if (staged) return staged;
 
     const [row] = await db.insert(companies)
       .values({

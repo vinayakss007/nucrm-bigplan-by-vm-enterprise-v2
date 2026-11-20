@@ -19,10 +19,11 @@
  * Other entities and stage transitions (which need their own side effects) are
  * explicitly out of scope, not silently ignored.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { activities, approvalRequests, approvalRules, companies, contacts, deals, leads, tasks } from '@/drizzle/schema';
+import { activities, approvalRequests, approvalRules, companies, contacts, deals, leads, tasks, tenants } from '@/drizzle/schema';
 import { checkNeedsApproval, requestApproval, type ApprovalRule } from '@/lib/rbac/approval-workflows';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import type { AuthContext } from '@/lib/auth/middleware';
@@ -41,6 +42,9 @@ const ENTITY_NAMES: Record<EntityKey, string[]> = {
 const ENTITY_FIELDS: Record<EntityKey, Record<string, string>> = {
   deals: {
     title: 'title', amount: 'amount', value: 'amount', close_date: 'closeDate',
+    // A create needs the resolved stage id; PATCH staging rejects stage changes
+    // before this allowlist is reached, so adding it does not widen replay.
+    stage_id: 'stageId',
     contact_id: 'contactId', company_id: 'companyId', pipeline_id: 'pipelineId',
     assigned_to: 'assignedTo', metadata: 'metadata',
   },
@@ -91,15 +95,20 @@ const ENTITY_TABLES = {
 type StagedBody = Record<string, unknown>;
 
 export interface PendingData {
+  /** Legacy staged PATCHes have no `kind` and are treated as updates. */
+  kind?: 'update' | 'create';
   body: StagedBody;
-  baseUpdatedAt: string;
+  /** Only present for updates: the base row version used for the CAS. */
+  baseUpdatedAt?: string;
 }
 
 function asPending(raw: unknown): PendingData | null {
   if (!raw || typeof raw !== 'object') return null;
   const p = raw as Partial<PendingData>;
-  if (!p.body || typeof p.body !== 'object' || typeof p.baseUpdatedAt !== 'string') return null;
-  return { body: p.body as StagedBody, baseUpdatedAt: p.baseUpdatedAt };
+  if (!p.body || typeof p.body !== 'object') return null;
+  const kind = p.kind === 'create' ? 'create' : 'update';
+  if (kind === 'update' && typeof p.baseUpdatedAt !== 'string') return null;
+  return { kind, body: p.body as StagedBody, baseUpdatedAt: p.baseUpdatedAt };
 }
 
 function normalizeEntity(entityType: string): EntityKey | null {
@@ -253,6 +262,66 @@ export const stageCompanyPatchResponse = patchResponseFor('companies');
 export const stageTaskPatchResponse = patchResponseFor('tasks');
 
 /**
+ * #2597 POST staging. A create has no base row to CAS against, so the future
+ * row's id is reserved here and stored on the approval request (whose
+ * `entity_id` is NOT NULL). Nothing is written to the entity table until the
+ * final approval replays the staged body.
+ *
+ * Only the core row is replayed (#2597 "core replay only"): no follow-up
+ * tasks, notifications or webhooks fire from a staged create. Create-time
+ * validation, dedup and quota admission still happen in the POST handler
+ * before a request is staged; the deal quota counter is incremented on replay
+ * so the tenant's usage stays accurate.
+ */
+async function stageEntityCreate(
+  ctx: AuthContext,
+  entityType: EntityKey,
+  entityData: Record<string, unknown>,
+  body: StagedBody,
+): Promise<StageResult> {
+  if (ctx.isAdmin || ctx.isSuperAdmin) return { kind: 'none' };
+
+  const rule = await findMatchingApprovalRule(ctx.tenantId, entityType, entityData);
+  if (!rule) return { kind: 'none' };
+
+  const entityId = randomUUID();
+  const canonical = ENTITY_NAMES[entityType][0]!;
+  const chain = [rule.approverRoleSlug, ...rule.autoApproveRoles];
+  const request = await requestApproval(
+    ctx.tenantId, canonical, entityId, rule.id, ctx.userId, chain,
+    { kind: 'create', body } satisfies PendingData,
+  );
+  return { kind: 'staged', requestId: request.id, currentStep: request.currentStep };
+}
+
+function createResponseFor(entityType: EntityKey) {
+  return (
+    ctx: AuthContext, entityData: Record<string, unknown>, body: StagedBody,
+  ): Promise<NextResponse | null> => stageEntityCreate(ctx, entityType, entityData, body)
+    .then((staged) => {
+      if (staged.kind === 'none') return null;
+      if (staged.kind === 'unsupported') {
+        return NextResponse.json({ error: staged.reason }, { status: 400 });
+      }
+      if (staged.kind === 'conflict') {
+        return NextResponse.json({
+          error: `An approval is already pending for this ${ENTITY_NAMES[entityType][0]!.replace(/s$/, '')}`,
+          approval_id: staged.requestId,
+        }, { status: 409 });
+      }
+      return NextResponse.json({
+        ok: true, pending: true, approval_id: staged.requestId, current_step: staged.currentStep,
+      }, { status: 202 });
+    });
+}
+
+export const stageDealCreateResponse = createResponseFor('deals');
+export const stageContactCreateResponse = createResponseFor('contacts');
+export const stageLeadCreateResponse = createResponseFor('leads');
+export const stageCompanyCreateResponse = createResponseFor('companies');
+export const stageTaskCreateResponse = createResponseFor('tasks');
+
+/**
  * Companies PATCH only loads `updatedAt` inside the non-admin branch, so the
  * staging path needs its own read for the CAS base.
  */
@@ -275,7 +344,59 @@ export interface ApprovalLike {
   entityType: string;
   entityId: string;
   status: string;
+  requestedBy?: string | null;
   pendingData: unknown;
+}
+
+function coerceField(column: string, value: unknown): unknown {
+  if (DATE_COLUMNS.has(column)) return value ? new Date(value as string) : null;
+  if (STRING_COLUMNS.has(column)) return value == null ? null : String(value);
+  return value;
+}
+
+/** Replay a staged create with the id reserved when the request was made. */
+async function applyStagedCreate(
+  entity: EntityKey,
+  request: ApprovalLike,
+  pending: PendingData,
+  approvedBy: string,
+): Promise<{ applied: boolean; reason?: string }> {
+  const values: Record<string, unknown> = {
+    id: request.entityId,
+    tenantId: request.tenantId,
+    createdBy: request.requestedBy,
+  };
+  const fields = ENTITY_FIELDS[entity];
+  for (const [key, value] of Object.entries(pending.body)) {
+    const column = fields[key];
+    if (!column) continue;
+    values[column] = coerceField(column, value);
+  }
+
+  const table = ENTITY_TABLES[entity];
+  // Idempotent: a double decision or a retry must not create a duplicate row.
+  const [inserted] = await db.insert(table).values(values as (typeof table)['$inferInsert'])
+    .onConflictDoNothing()
+    .returning({ id: table.id });
+  if (!inserted) return { applied: false, reason: 'already_applied' };
+
+  // Deals quota is priced at staging time; replay must still count the row.
+  if (entity === 'deals') {
+    await db.update(tenants)
+      .set({ currentDeals: sql`COALESCE(${tenants.currentDeals}, 0) + 1` })
+      .where(eq(tenants.id, request.tenantId));
+  }
+
+  await db.insert(activities).values({
+    tenantId: request.tenantId,
+    userId: approvedBy,
+    entityType: entity,
+    entityId: request.entityId,
+    eventType: 'approval_change_applied',
+    description: `Approved ${ENTITY_NAMES[entity][0]!.replace(/s$/, '')} create applied to ${request.entityId}`,
+    metadata: { requestId: request.id },
+  });
+  return { applied: true };
 }
 
 /**
@@ -292,19 +413,14 @@ export async function applyApprovedChange(
   if (!entity) return { applied: false, reason: 'unsupported_entity' };
   const pending = asPending(request.pendingData);
   if (!pending) return { applied: false, reason: 'no_staged_change' };
+  if (pending.kind === 'create') return applyStagedCreate(entity, request, pending, approvedBy);
 
   const fields = ENTITY_FIELDS[entity];
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   for (const [key, value] of Object.entries(pending.body)) {
     const column = fields[key];
     if (!column) continue;
-    if (DATE_COLUMNS.has(column)) {
-      patch[column] = value ? new Date(value as string) : null;
-    } else if (STRING_COLUMNS.has(column)) {
-      patch[column] = value == null ? null : String(value);
-    } else {
-      patch[column] = value;
-    }
+    patch[column] = coerceField(column, value);
   }
 
   const table = ENTITY_TABLES[entity];
@@ -316,7 +432,7 @@ export async function applyApprovedChange(
       eq(table.id, request.entityId),
       eq(table.tenantId, request.tenantId),
       isNull(table.deletedAt),
-      updatedAtMs(table, pending.baseUpdatedAt),
+      updatedAtMs(table, pending.baseUpdatedAt!),
     ))
     .returning({ id: table.id });
 

@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   ruleRows: [] as Record<string, unknown>[],
   pendingRows: [] as unknown[][],
   inserts: [] as { table: string; values: Record<string, unknown> }[],
+  insertReturns: [] as unknown[][],
   updates: [] as { table: string; set: Record<string, unknown>; where: { sql: string; params: unknown[] } }[],
   updateReturns: [] as unknown[][],
 }));
@@ -53,7 +54,9 @@ vi.mock('@/drizzle/db', async () => {
         h.inserts.push({ table: getTableName(table as never), values: v });
         return b;
       };
-      b.returning = () => Promise.resolve([{ id: RULE + '-request', currentStep: 1, ...h.inserts.at(-1)!.values }]);
+      b.onConflictDoNothing = () => b;
+      b.returning = () => Promise.resolve(h.insertReturns.shift()
+        ?? [{ id: RULE + '-request', currentStep: 1, ...h.inserts.at(-1)!.values }]);
       return b;
     },
     update: (table: unknown) => {
@@ -74,6 +77,8 @@ vi.mock('@/drizzle/db', async () => {
 
 import {
   stageDealChange, stageContactChange, stageLeadChange, stageCompanyChange, stageTaskChange,
+  stageDealCreateResponse, stageContactCreateResponse, stageLeadCreateResponse,
+  stageCompanyCreateResponse, stageTaskCreateResponse,
   applyApprovedChange,
 } from '@/lib/rbac/approval-producer';
 
@@ -89,7 +94,8 @@ const rule = {
 };
 
 beforeEach(() => {
-  h.ruleRows = []; h.pendingRows = []; h.inserts = []; h.updates = []; h.updateReturns = [];
+  h.ruleRows = []; h.pendingRows = []; h.inserts = []; h.insertReturns = [];
+  h.updates = []; h.updateReturns = [];
 });
 
 describe('stageDealChange (#2597 A3)', () => {
@@ -243,6 +249,89 @@ describe('applyApprovedChange (#2597 A3)', () => {
   });
 });
 
+describe('POST create staging (#2597)', () => {
+  it('does not stage when no rule matches the proposed create', async () => {
+    expect(await stageDealCreateResponse(ctx(), { amount: 100 }, { amount: 100 })).toBeNull();
+    expect(h.inserts).toHaveLength(0);
+  });
+
+  it('admins bypass create staging entirely', async () => {
+    h.ruleRows = [rule];
+    expect(await stageDealCreateResponse(ctx({ isAdmin: true }), { amount: 20000 }, { amount: 20000 }))
+      .toBeNull();
+    expect(h.inserts).toHaveLength(0);
+  });
+
+  it('stages a rule-matched create under the canonical name with a reserved id', async () => {
+    h.ruleRows = [rule];
+    const res = await stageDealCreateResponse(
+      ctx(), { amount: 20000, title: 'Big deal' }, { title: 'Big deal', amount: 20000 },
+    );
+    expect(res?.status).toBe(202);
+    await expect(res!.json()).resolves.toMatchObject({
+      ok: true, pending: true, current_step: 1,
+    });
+    const request = h.inserts.find((i) => i.table === 'approval_requests')!;
+    expect(request.values).toMatchObject({
+      tenantId: TENANT, entityType: 'deals', ruleId: RULE, requestedBy: USER, status: 'pending',
+    });
+    expect(typeof request.values.entityId).toBe('string');
+    expect(request.values.entityId).not.toBe('');
+    expect(request.values.pendingData).toMatchObject({
+      kind: 'create', body: { title: 'Big deal', amount: 20000 },
+    });
+  });
+
+  it.each([
+    ['contacts', 'contact', stageContactCreateResponse],
+    ['leads', 'lead', stageLeadCreateResponse],
+    ['companies', 'company', stageCompanyCreateResponse],
+    ['tasks', 'task', stageTaskCreateResponse],
+  ] as const)('stages a rule-matched %s create', async (entity, singular, stage) => {
+    h.ruleRows = [{ ...rule, entityType: singular }];
+    const res = await stage(ctx(), { amount: 20000 }, { title: 'staged' });
+    expect(res?.status).toBe(202);
+    const request = h.inserts.find((i) => i.table === 'approval_requests')!;
+    expect(request.values.entityType).toBe(entity);
+    expect(request.values.pendingData).toMatchObject({ kind: 'create' });
+  });
+});
+
+describe('applyApprovedChange — staged creates (#2597)', () => {
+  const createBase = {
+    id: 'req-create', tenantId: TENANT, entityType: 'deals', entityId: DEAL,
+    status: 'approved', requestedBy: USER,
+    pendingData: { kind: 'create', body: { title: 'Approved', amount: 20000, stage_id: 'stage-1' } },
+  };
+
+  it('inserts the row with the reserved id, tenant and creator, and counts the deal', async () => {
+    expect(await applyApprovedChange(createBase, USER)).toEqual({ applied: true });
+    const row = h.inserts.find((i) => i.table === 'deals')!;
+    expect(row.values).toMatchObject({
+      id: DEAL, tenantId: TENANT, createdBy: USER, title: 'Approved', amount: '20000',
+      stageId: 'stage-1',
+    });
+    expect(h.updates.some((u) => u.table === 'tenants')).toBe(true);
+    expect(h.inserts.some((i) => i.table === 'activities')).toBe(true);
+  });
+
+  it('does not touch a quota counter for non-deal creates', async () => {
+    expect(await applyApprovedChange({
+      ...createBase, entityType: 'companies',
+      pendingData: { kind: 'create', body: { name: 'Acme' } },
+    }, USER)).toEqual({ applied: true });
+    expect(h.updates.some((u) => u.table === 'tenants')).toBe(false);
+  });
+
+  it('is idempotent when the reserved row already exists', async () => {
+    h.insertReturns = [[]];
+    expect(await applyApprovedChange(createBase, USER))
+      .toEqual({ applied: false, reason: 'already_applied' });
+    expect(h.updates.some((u) => u.table === 'tenants')).toBe(false);
+    expect(h.inserts.some((i) => i.table === 'activities')).toBe(false);
+  });
+});
+
 describe('#2597 A3 wiring anti-rot', () => {
   const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, 'utf8');
   it('the deal PATCH stages and both decision endpoints replay', () => {
@@ -257,5 +346,17 @@ describe('#2597 A3 wiring anti-rot', () => {
     }
     expect(read('app/api/tenant/approvals/[id]/route.ts')).toMatch(/applyApprovedChange\(/);
     expect(read('app/api/tenant/permissions/approvals/route.ts')).toMatch(/applyApprovedChange\(/);
+  });
+
+  it('every entity POST stages rule-matched creates', () => {
+    for (const [entity, fn] of [
+      ['deals', 'stageDealCreateResponse'],
+      ['contacts', 'stageContactCreateResponse'],
+      ['leads', 'stageLeadCreateResponse'],
+      ['companies', 'stageCompanyCreateResponse'],
+      ['tasks', 'stageTaskCreateResponse'],
+    ] as const) {
+      expect(read(`app/api/tenant/${entity}/route.ts`)).toMatch(new RegExp(`${fn}\\(`));
+    }
   });
 });

@@ -23,6 +23,7 @@ import { cachedListCount, buildFilterKey } from '@/lib/api/list-count';
 import { invalidateTenantCache } from '@/lib/cache/index';
 import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { getRecordGrantCondition } from '@/lib/rbac/record-scope';
+import { stageContactCreateResponse } from '@/lib/rbac/approval-producer';
 
  
  
@@ -212,6 +213,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // The pre-flight stays because it is the half that records the violation and
     // alerts the owner; the two are not interchangeable.
     const enforceLimits = limitsEnforce(ctx);
+
+    // #2597 POST staging: a rule-matched create is held for approval. Dedup and
+    // quota admission above have already run, so only the row write is deferred.
+    const staged = await stageContactCreateResponse(ctx, v, v);
+    if (staged) return staged;
 
     const admission = await db.transaction(async (tx) => {
       if (enforceLimits) {
