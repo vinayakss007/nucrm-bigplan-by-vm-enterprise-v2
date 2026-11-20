@@ -63,7 +63,11 @@ function makeUpdateChain() {
 }
 
 const tx = {
+  // #3405: withTenantDb sets the tenant GUC via tx.execute() inside the tx.
+  execute: async () => undefined,
   query: {
+    // #3405: the lead lookup now runs on this branded client's tx too.
+    leads: { findFirst: async () => LEAD },
     companies: { findFirst: async () => ({ id: 'company-1' }) },
     contacts: { findFirst: async () => ({ id: 'contact-1', score: 0 }) },
     pipelines: { findFirst: async () => ({ id: 'pipeline-1' }) },

@@ -158,14 +158,16 @@ describe('ContactTimeline', () => {
     await waitFor(() => expect(screen.getByText('Survived')).toBeTruthy());
   });
 
-  it('stops loading even when every request rejects', async () => {
+  it('stops loading and reports the failure when every request rejects', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
     render(<ContactTimeline contactId="c1" />);
 
-    // The catch is followed by finally { setLoading(false) }, so the skeleton
-    // must not be left on screen forever.
+    // #3408: a refused read is not a quiet contact — the skeleton must clear,
+    // and the panel must say it could not read rather than claiming
+    // "No interactions recorded yet.".
     await waitFor(() => {
-      expect(screen.getByText('No interactions recorded yet.')).toBeTruthy();
+      expect(screen.getByText(/Interactions could not be loaded/)).toBeTruthy();
+      expect(screen.queryByText('No interactions recorded yet.')).toBeNull();
     });
   });
 });

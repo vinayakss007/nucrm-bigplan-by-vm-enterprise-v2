@@ -240,8 +240,14 @@ describe('subscription-check cron — per-tenant sweep', () => {
     expect(tenantScoped).toHaveLength(4);
     expect(tenantScoped.map((c) => c.value)).toEqual([TENANT_A, TENANT_A, TENANT_B, TENANT_B]);
 
-    // The inArray filter should be called once per tenant with the stale subscription IDs.
-    expect(mockState.inArrayCalls).toHaveLength(2);
+    // One inArray per tenant for the stale subscription ids, plus one per
+    // tenant for the #3407 from-state claim on the tenant status write.
+    expect(mockState.inArrayCalls).toHaveLength(4);
+    const statusClaims = mockState.inArrayCalls.filter((c) => c.column === 'tenants.status');
+    expect(statusClaims).toHaveLength(2);
+    for (const claim of statusClaims) {
+      expect(claim.values).toEqual(['trialing', 'active', 'past_due']);
+    }
 
     // The join target is pinned to the same tenant, never left to RLS alone.
     expect(mockState.eqCalls.some((c) => c.column === 'tenants.id')).toBe(true);

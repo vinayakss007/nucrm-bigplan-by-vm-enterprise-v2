@@ -37,12 +37,15 @@ type Row = Record<string, unknown>;
 let inserted: Row[] = [];
 let updated: Row[] = [];
 let deleted = 0;
+let updateMatchesRow = true;
 
 function recorder() {
   return {
     insert: () => ({ values: (rows: Row | Row[]) => { inserted.push(...(Array.isArray(rows) ? rows : [rows])); return Promise.resolve(inserted); } }),
     delete: () => ({ where: async () => { deleted += 1; } }),
-    update: () => ({ set: (values: Row) => { updated.push(values); return { where: async () => [] }; } }),
+    // #3407/#3408: the workflow PATCH now re-reads its own write via
+    // `.returning()` so a tenant-scoped zero-row update is a 404, not ok:true.
+    update: () => ({ set: (values: Row) => { updated.push(values); return { where: () => ({ returning: async () => updateMatchesRow ? [{ id: 'wf-1' }] : [] }) }; } }),
   };
 }
 
@@ -90,6 +93,7 @@ const workflowRow = (): Row | null => updated.find((r) => 'nodes' in r || 'name'
 const actionRows = (): Row[] => inserted.filter((r) => 'actionType' in r);
 
 beforeEach(() => {
+  updateMatchesRow = true;
   (requireAuth as ReturnType<typeof vi.fn>).mockResolvedValue({
     userId: USER, tenantId: TENANT, roleSlug: 'admin',
     permissions: { all: true }, isAdmin: true, isSuperAdmin: false,
@@ -98,6 +102,15 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('workflow PATCH does not report a tenant-missed write as success (#3407/#3408)', () => {
+  it('a zero-row tenant-scoped write answers 404, not ok:true', async () => {
+    updateMatchesRow = false;
+    const res = await patch({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Workflow not found' });
+  });
 });
 
 describe('the workflows update route takes snake_case and stores camelCase (#2805)', () => {

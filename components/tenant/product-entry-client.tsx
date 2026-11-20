@@ -80,6 +80,13 @@ export default function ProductEntryClient({ product, _tenantId, _userId }: Prod
         </div>
       </div>
 
+      {templatesQuery.isError && (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300 flex items-center justify-between gap-3">
+          <span>Module information could not be loaded — an empty section here would be a lie.</span>
+          <button onClick={() => templatesQuery.refetch()} className="shrink-0 underline">Retry</button>
+        </div>
+      )}
+
       {/* Quick stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {product.dashboardCards.map((card) => {

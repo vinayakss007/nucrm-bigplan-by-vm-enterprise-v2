@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CheckCircle, Circle, Users, TrendingUp, Zap, Mail, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface Step {
   id: string;
@@ -35,29 +36,27 @@ const STEPS: Omit<Step, 'check'>[] = [
 export default function OnboardingChecklist() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     async function checkProgress() {
-      try {
-        const res = await fetch('/api/tenant/onboarding/progress', { signal });
-        if (signal.aborted) return;
-        if (!res.ok) { setLoading(false); return; }
-        const data = await res.json();
-        if (signal.aborted) return;
-        const done = new Set<string>(data.completed || []);
+      const result = await fetchJsonSafe<{ completed?: string[] }>(
+        '/api/tenant/onboarding/progress', { signal });
+      if (result.status === 'aborted') return;
+      if (result.status === 'ok') {
+        const done = new Set<string>(result.data.completed || []);
         setCompleted(done);
+        setLoadError(false);
         // Auto-dismiss if all done
         if (done.size >= STEPS.length) setDismissed(true);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        // non-critical
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
+      } else {
+        // A refused read is not "0 of 5 steps completed".
+        setLoadError(true);
       }
+      setLoading(false);
     }
     // Check if user previously dismissed
     if (typeof window !== 'undefined' && localStorage.getItem('nucrm_onboarding_dismissed') === '1') {
@@ -85,48 +84,54 @@ export default function OnboardingChecklist() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-bold">Getting Started</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">{completed.size}/{STEPS.length} steps completed</p>
+          <p className={`text-xs mt-0.5 ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>
+            {loadError ? 'Progress could not be loaded — the counts below would be a guess.' : `${completed.size}/${STEPS.length} steps completed`}
+          </p>
         </div>
         <button onClick={handleDismiss} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
           Dismiss
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-        <div className="h-full bg-violet-600 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-      </div>
+      {!loadError && (
+        <>
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-violet-600 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+          </div>
 
-      {/* Steps */}
-      <div className="space-y-2">
-        {STEPS.map(step => {
-          const done = completed.has(step.id);
-          const Icon = step.icon;
-          return (
-            <Link
-              key={step.id}
-              href={step.href}
-              className={cn(
-                'flex items-center gap-3 p-3 rounded-lg border transition-all',
-                done
-                  ? 'border-green-200 dark:border-green-900/30 bg-green-50/50 dark:bg-green-950/10'
-                  : 'border-border hover:border-violet-200 dark:hover:border-violet-800 hover:bg-muted/30'
-              )}
-            >
-              {done ? (
-                <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-              ) : (
-                <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{step.label}</p>
-                <p className="text-xs text-muted-foreground truncate">{step.description}</p>
-              </div>
-              <Icon className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-            </Link>
-          );
-        })}
-      </div>
+          {/* Steps */}
+          <div className="space-y-2">
+            {STEPS.map(step => {
+              const done = completed.has(step.id);
+              const Icon = step.icon;
+              return (
+                <Link
+                  key={step.id}
+                  href={step.href}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-lg border transition-all',
+                    done
+                      ? 'border-green-200 dark:border-green-900/30 bg-green-50/50 dark:bg-green-950/10'
+                      : 'border-border hover:border-violet-200 dark:hover:border-violet-800 hover:bg-muted/30'
+                  )}
+                >
+                  {done ? (
+                    <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{step.label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{step.description}</p>
+                  </div>
+                  <Icon className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

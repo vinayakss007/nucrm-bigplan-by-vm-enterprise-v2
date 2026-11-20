@@ -18,7 +18,8 @@
  * Writes a `limit_violations` row when a tenant exceeds a hard limit so that
  * super-admin dashboards and alert pipelines can pick it up.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import {
   tenants,
   plans,
@@ -81,20 +82,21 @@ const NULL_LIMITS: PlanLimits = {
  * that as "unlimited" (we never block on missing data).
  */
 export async function getPlanLimits(tenantId: string): Promise<PlanLimits> {
-  const row = await db
-    .select({
-      maxContacts: plans.maxContacts,
-      maxDeals: plans.maxDeals,
-      maxUsers: plans.maxUsers,
-      maxAutomations: plans.maxAutomations,
-      maxForms: plans.maxForms,
-      maxApiCallsDay: plans.maxApiCallsDay,
-      maxStorageGb: plans.maxStorageGb,
-    })
-    .from(tenants)
-    .innerJoin(plans, eq(plans.id, tenants.planId))
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
+  const row = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select({
+        maxContacts: plans.maxContacts,
+        maxDeals: plans.maxDeals,
+        maxUsers: plans.maxUsers,
+        maxAutomations: plans.maxAutomations,
+        maxForms: plans.maxForms,
+        maxApiCallsDay: plans.maxApiCallsDay,
+        maxStorageGb: plans.maxStorageGb,
+      })
+      .from(tenants)
+      .innerJoin(plans, eq(plans.id, tenants.planId))
+      .where(eq(tenants.id, tenantId))
+      .limit(1));
   const r = row[0];
   if (!r) return NULL_LIMITS;
   return {
@@ -139,10 +141,11 @@ export async function getCount(tenantId: string, kind: LimitKind): Promise<numbe
     case 'automations':
       return countWhere(automations, automations.tenantId, automations.deletedAt, tenantId);
     case 'users': {
-      const rows = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(tenantMembers)
-        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.status, 'active')));
+      const rows = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+        db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(tenantMembers)
+          .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.status, 'active'))));
       return rows[0]?.c ?? 0;
     }
     case 'apiCallsDay': {
@@ -154,10 +157,11 @@ export async function getCount(tenantId: string, kind: LimitKind): Promise<numbe
       // writes, so it answered 0 for every tenant on every day.
       const startOfUtcDay = new Date();
       startOfUtcDay.setUTCHours(0, 0, 0, 0);
-      const rows = await db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(apiKeyUsage)
-        .where(and(eq(apiKeyUsage.tenantId, tenantId), gte(apiKeyUsage.createdAt, startOfUtcDay)));
+      const rows = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+        db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(apiKeyUsage)
+          .where(and(eq(apiKeyUsage.tenantId, tenantId), gte(apiKeyUsage.createdAt, startOfUtcDay))));
       return rows[0]?.c ?? 0;
     }
     case 'storageGb': {
@@ -175,15 +179,16 @@ export async function getCount(tenantId: string, kind: LimitKind): Promise<numbe
       // Soft-deleted rows are excluded because the object is deleted eagerly on
       // delete (drizzle/schema/files.ts header) and the same predicate is what
       // counts every other resource here.
-      const result = await db.execute<{ bytes: string | number | null }>(sql`
-        SELECT coalesce(sum(bytes), 0) AS bytes FROM (
-          SELECT ${documents.sizeBytes} AS bytes FROM ${documents}
-            WHERE ${documents.tenantId} = ${tenantId} AND ${documents.deletedAt} IS NULL
-          UNION ALL
-          SELECT ${fileAttachments.fileSize} FROM ${fileAttachments}
-            WHERE ${fileAttachments.tenantId} = ${tenantId} AND ${fileAttachments.deletedAt} IS NULL
-        ) uploaded
-      `);
+      const result = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+        db.execute<{ bytes: string | number | null }>(sql`
+          SELECT coalesce(sum(bytes), 0) AS bytes FROM (
+            SELECT ${documents.sizeBytes} AS bytes FROM ${documents}
+              WHERE ${documents.tenantId} = ${tenantId} AND ${documents.deletedAt} IS NULL
+            UNION ALL
+            SELECT ${fileAttachments.fileSize} FROM ${fileAttachments}
+              WHERE ${fileAttachments.tenantId} = ${tenantId} AND ${fileAttachments.deletedAt} IS NULL
+          ) uploaded
+        `));
       const bytes = Number(result.rows[0]?.bytes ?? 0);
       return bytes / 1024 ** 3;
     }
@@ -215,26 +220,31 @@ export async function recordViolation(
 ): Promise<{ created: boolean }> {
   const violationType = `${kind}_exceeded`;
   // Look for an unresolved row created in the last 24 hours.
-  const existing = await db
-    .select({ id: limitViolations.id })
-    .from(limitViolations)
-    .where(
-      and(
-        eq(limitViolations.tenantId, tenantId),
-        eq(limitViolations.violationType, violationType),
-        eq(limitViolations.resolved, false),
-        sql`${limitViolations.exceededAt} > now() - interval '24 hours'`,
-      ),
-    )
-    .limit(1);
-  if (existing[0]) return { created: false };
+  // #3405: the existence check and the insert run on one branded client.
+  const created = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) => {
+    const existing = await db
+      .select({ id: limitViolations.id })
+      .from(limitViolations)
+      .where(
+        and(
+          eq(limitViolations.tenantId, tenantId),
+          eq(limitViolations.violationType, violationType),
+          eq(limitViolations.resolved, false),
+          sql`${limitViolations.exceededAt} > now() - interval '24 hours'`,
+        ),
+      )
+      .limit(1);
+    if (existing[0]) return false;
 
-  await db.insert(limitViolations).values({
-    tenantId,
-    violationType,
-    limitValue: limit,
-    actualValue: actual,
+    await db.insert(limitViolations).values({
+      tenantId,
+      violationType,
+      limitValue: limit,
+      actualValue: actual,
+    });
+    return true;
   });
+  return { created };
   return { created: true };
 }
 
@@ -261,9 +271,10 @@ async function countWhere(
 ): Promise<number> {
   // The helper is reused for several tables, so the table is widened to
   // AnyPgTable and only the count expression is selected.
-  const rows = await db
-    .select({ c: sql<number>`count(*)::int` })
-    .from(table)
-    .where(and(eq(tenantCol, tenantId), isNull(deletedCol)));
+  const rows = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+    db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(table)
+      .where(and(eq(tenantCol, tenantId), isNull(deletedCol))));
   return rows[0]?.c ?? 0;
 }

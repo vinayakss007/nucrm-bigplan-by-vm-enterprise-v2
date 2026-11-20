@@ -144,6 +144,22 @@ describe('GET /api/public/kb/articles/[id] — portal tenant scoping (#2284)', (
     expect(colName(softDelete!.args[0])).toBe('deleted_at');
   });
 
+  it('the views-increment write re-asserts tenant + published + live (#3407)', async () => {
+    mockResolvePortalIdentity.mockResolvedValue({ email: 'a@b.c', tenantId: TENANT_A });
+    await callGet();
+    expect(captured.updates).toHaveLength(1);
+    const updateWhere = captured.updates[0]!.where as Marker;
+    expect(updateWhere.op).toBe('and');
+    const filters = updateWhere.args as Marker[];
+    const tenantFilter = filters.find(f => f.op === 'eq' && colName(f.args[0]) === 'tenant_id');
+    expect(tenantFilter, 'view bump must carry the tenant, not just the id').toBeDefined();
+    expect(tenantFilter!.args[1]).toBe(TENANT_A);
+    const statusFilter = filters.find(f => f.op === 'eq' && colName(f.args[0]) === 'status');
+    expect(statusFilter!.args[1]).toBe('published');
+    const softDelete = filters.find(f => f.op === 'isNull');
+    expect(colName(softDelete!.args[0])).toBe('deleted_at');
+  });
+
   it('cross-state access (draft / other tenant / deleted row) -> 404 with zero row content leaked and no views bump', async () => {
     // The scoped WHERE makes such rows simply not match: db returns [].
     mockResolvePortalIdentity.mockResolvedValue({ email: 'a@b.c', tenantId: TENANT_A });

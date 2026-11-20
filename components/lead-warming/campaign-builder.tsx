@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -80,6 +81,7 @@ type Props = {
 export function CampaignBuilder({ onCreated, onClose }: Props) {
   const [step, setStep] = useState<Step>('basics');
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventsError, setEventsError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CampaignData>({
@@ -105,10 +107,12 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    fetch('/api/tenant/lead-warming/events', { signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (signal.aborted) return; setEvents(d.data ?? []); })
-      .catch((err) => clientLogError('lead-warming:fetch-events', err));
+    fetchJsonSafe<{ data?: Event[] }>('/api/tenant/lead-warming/events', { signal })
+      .then((result) => {
+        if (result.status === 'aborted') return;
+        if (result.status === 'ok') { setEvents(result.data.data ?? []); setEventsError(false); }
+        else { setEventsError(true); clientLogError('lead-warming:fetch-events', new Error(result.message)); }
+      });
     return () => controller.abort();
   }, []);
 
@@ -180,7 +184,7 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
             <BasicsStep data={data} update={update} />
           )}
           {step === 'audience' && (
-            <AudienceStep data={data} update={update} events={events} />
+            <AudienceStep data={data} update={update} events={events} eventsError={eventsError} />
           )}
           {step === 'ai' && (
             <AiStep data={data} update={update} />
@@ -255,7 +259,7 @@ function BasicsStep({ data, update }: { data: CampaignData; update: <K extends k
 
 // ── Step 2: Audience ───────────────────────────────────────────────────────
 
-function AudienceStep({ data, update, events }: { data: CampaignData; update: <K extends keyof CampaignData>(key: K, val: CampaignData[K]) => void; events: Event[] }) {
+function AudienceStep({ data, update, events, eventsError }: { data: CampaignData; update: <K extends keyof CampaignData>(key: K, val: CampaignData[K]) => void; events: Event[]; eventsError: boolean }) {
   const toggleEvent = (id: string) => {
     const ids = data.event_ids.includes(id)
       ? data.event_ids.filter(e => e !== id)
@@ -284,7 +288,9 @@ function AudienceStep({ data, update, events }: { data: CampaignData; update: <K
             </button>
           ))}
           {events.length === 0 && (
-            <p className="text-xs text-muted-foreground col-span-2">No events available. Create events first.</p>
+            <p className={`text-xs col-span-2 ${eventsError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={eventsError ? 'alert' : undefined}>
+              {eventsError ? 'Events could not be loaded — an empty list here would be a lie.' : 'No events available. Create events first.'}
+            </p>
           )}
         </div>
       </div>

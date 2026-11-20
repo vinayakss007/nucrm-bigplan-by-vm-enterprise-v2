@@ -18,7 +18,7 @@
  * oauth2_client_credentials, and none.
  */
 
-import { db } from '@/drizzle/db';
+import { withTenantDb, type TenantDb } from '@/lib/db';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { pluginExecutionLogs, customPlugins } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -198,7 +198,8 @@ export async function executePluginAction(
     const success = response.ok;
 
     // Log execution + update plugin atomically
-    await db.transaction(async (tx) => {
+    // #3405: the plugin row names the tenant/user this execution belongs to.
+    await withTenantDb(plugin.tenantId, plugin.userId, async (tx) => {
       await logExecution(tx, plugin, action, {
         requestUrl: resolvedUrl.toString(),
         requestHeaders,
@@ -239,7 +240,8 @@ export async function executePluginAction(
       ? `Blocked by SSRF protection: ${err.reason}`
       : err instanceof Error ? err.message : 'Unknown error';
 
-    await db.transaction(async (tx) => {
+    // #3405: the plugin row names the tenant/user this execution belongs to.
+    await withTenantDb(plugin.tenantId, plugin.userId, async (tx) => {
       await logExecution(tx, plugin, action, {
         requestUrl,
         requestHeaders,
@@ -321,7 +323,7 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
  * Log a plugin execution to the database.
  */
 async function logExecution(
-  dbOrTx: NodePgDatabase | typeof db,
+  dbOrTx: NodePgDatabase | TenantDb,
   plugin: PluginDefinition,
   action: PluginAction,
   details: {

@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation';
 import { Search, X, ChevronRight, Menu, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SCOPES, findCurrent, visibleForRole } from './settings-config';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 /**
  * Mobile-only settings picker.
@@ -21,14 +22,18 @@ import { SCOPES, findCurrent, visibleForRole } from './settings-config';
 export default function SettingsMobilePicker() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminCheckFailed, setAdminCheckFailed] = useState(false);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d.is_admin ?? false); })
-      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; console.error('[mobile-picker] admin check failed:', e); });
+    fetchJsonSafe<{ is_admin?: boolean }>('/api/tenant/me', { signal: controller.signal })
+      .then(result => {
+        if (result.status === 'aborted') return;
+        if (result.status === 'ok') { setIsAdmin(result.data.is_admin ?? false); setAdminCheckFailed(false); }
+        else { setAdminCheckFailed(true); console.error('[mobile-picker] admin check failed:', result.message); }
+      });
     return () => controller.abort();
   }, []);
 
@@ -123,6 +128,11 @@ export default function SettingsMobilePicker() {
 
             {/* List */}
             <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 space-y-3 pb-12">
+              {adminCheckFailed && (
+                <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                  Admin status could not be read — admin-only settings may be hidden.
+                </p>
+              )}
               {q && totalMatches === 0 && (
                 <div className="text-center py-12 text-sm text-muted-foreground">
                   No settings match "{query}"

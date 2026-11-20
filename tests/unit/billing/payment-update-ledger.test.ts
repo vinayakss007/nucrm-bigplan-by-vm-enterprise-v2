@@ -27,6 +27,8 @@ const m = vi.hoisted(() => {
   const state = { updateErrorCode: null as string | null, updateCallCount: 0 };
 
   const chain: Record<string, unknown> = {};
+  // #3405: withTenantDb sets the tenant GUC via tx.execute() inside the tx.
+  chain.execute = vi.fn(() => Promise.resolve());
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);

@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, ListChecks, Receipt } from 'lucide-react';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 /**
  * Field names below are the camelCase Drizzle row shapes actually returned by
@@ -57,6 +58,7 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,15 +66,9 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
     const { signal } = controller;
 
     async function load() {
-      const getJson = async (url: string): Promise<Record<string, unknown>> => {
-        try {
-          const r = await fetch(url, { signal });
-          if (!r.ok) return {};
-          return (await r.json()) as Record<string, unknown>;
-        } catch {
-          return {};
-        }
-      };
+      // A refused feed used to become `{}`, rendering "No … linked to this
+      // deal" for every section during a partial outage.
+      const getJson = (url: string) => fetchJsonSafe<Record<string, unknown>>(url, { signal });
 
       const [fuRes, qRes, iRes] = await Promise.all([
         // follow-ups filters server-side on deal_id (snake_case param)
@@ -84,12 +80,16 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
       ]);
 
       if (cancelled || signal.aborted) return;
+      setLoadError([fuRes, qRes, iRes].some(r => r.status === 'error'));
+      const fu = fuRes.status === 'ok' ? fuRes.data : {};
+      const q = qRes.status === 'ok' ? qRes.data : {};
+      const i = iRes.status === 'ok' ? iRes.data : {};
 
-      setFollowUps(Array.isArray(fuRes.data) ? (fuRes.data as FollowUpItem[]) : []);
-      setQuotes(Array.isArray(qRes.quotes) ? (qRes.quotes as QuoteItem[]) : []);
+      setFollowUps(Array.isArray(fu.data) ? (fu.data as FollowUpItem[]) : []);
+      setQuotes(Array.isArray(q.quotes) ? (q.quotes as QuoteItem[]) : []);
       setInvoices(
-        Array.isArray(iRes.data)
-          ? (iRes.data as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
+        Array.isArray(i.data)
+          ? (i.data as InvoiceItem[]).filter((inv) => inv.dealId === dealId)
           : []
       );
       setLoading(false);
@@ -113,13 +113,18 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+          Some related records could not be loaded — empty sections here would be a lie.
+        </div>
+      )}
       {/* Follow-ups */}
       <section>
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
           <ListChecks className="w-4 h-4" /> Follow-Ups ({followUps.length})
         </h3>
         {followUps.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No follow-ups linked to this deal</p>
+          <p className={`text-xs ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>{loadError ? 'Follow-ups could not be loaded.' : 'No follow-ups linked to this deal'}</p>
         ) : (
           <div className="space-y-1">
             {followUps.slice(0, 5).map((fu) => {
@@ -144,7 +149,7 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
           <FileText className="w-4 h-4" /> Quotes ({quotes.length})
         </h3>
         {quotes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No quotes linked to this deal</p>
+          <p className={`text-xs ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>{loadError ? 'Quotes could not be loaded.' : 'No quotes linked to this deal'}</p>
         ) : (
           <div className="space-y-1">
             {quotes.slice(0, 5).map((q) => {
@@ -173,7 +178,7 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
           <Receipt className="w-4 h-4" /> Invoices ({invoices.length})
         </h3>
         {invoices.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No invoices linked to this deal</p>
+          <p className={`text-xs ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`} role={loadError ? 'alert' : undefined}>{loadError ? 'Invoices could not be loaded.' : 'No invoices linked to this deal'}</p>
         ) : (
           <div className="space-y-1">
             {invoices.slice(0, 5).map((inv) => {

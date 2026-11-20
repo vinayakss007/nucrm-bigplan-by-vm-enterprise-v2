@@ -22,7 +22,8 @@
  *    are copied; otherwise a single amount-only draft is created from
  *    `deal.amount`.
  */
-import { db } from '@/drizzle/db';
+import { withTenantDb } from '@/lib/db';
+import { NO_USER_SENTINEL } from '@/lib/db/rls';
 import {
   invoices,
   invoiceLineItems,
@@ -49,11 +50,12 @@ interface WonDealRow {
  */
 async function isAutoInvoiceEnabled(tenantId: string): Promise<boolean> {
   try {
-    const [row] = await db
-      .select({ settings: tenants.settings })
-      .from(tenants)
-      .where(eq(tenants.id, tenantId))
-      .limit(1);
+    const [row] = await withTenantDb(tenantId, NO_USER_SENTINEL, async (db) =>
+      db
+        .select({ settings: tenants.settings })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1));
     const settings = (row?.settings as { autoInvoiceOnWon?: boolean } | null) ?? null;
     return settings?.autoInvoiceOnWon === true;
   } catch (err) {
@@ -79,24 +81,29 @@ export async function createInvoiceFromWonDeal(
     if (!(await isAutoInvoiceEnabled(ctx.tenantId))) return null;
 
     // 2. Idempotency: skip if this deal already has an invoice.
-    const existing = await db.query.invoices.findFirst({
-      where: and(eq(invoices.dealId, dealId), isNull(invoices.deletedAt)),
-    });
+    // #3405: the idempotency/source reads run on one branded tenant client.
+    const { existing, acceptedQuote, quoteItems } = await withTenantDb(
+      ctx.tenantId, ctx.userId, async (db) => {
+        const existing = await db.query.invoices.findFirst({
+          where: and(eq(invoices.dealId, dealId), isNull(invoices.deletedAt)),
+        });
+        if (existing) return { existing, acceptedQuote: null, quoteItems: [] };
+
+        // 3. Prefer an accepted quote on this deal as the richer source.
+        const acceptedQuote = await db.query.quotes.findFirst({
+          where: and(
+            eq(quotes.dealId, dealId),
+            eq(quotes.tenantId, ctx.tenantId),
+            eq(quotes.status, 'accepted'),
+            isNull(quotes.deletedAt),
+          ),
+        });
+        const quoteItems = acceptedQuote
+          ? await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, acceptedQuote.id))
+          : [];
+        return { existing, acceptedQuote, quoteItems };
+      });
     if (existing) return null;
-
-    // 3. Prefer an accepted quote on this deal as the richer source.
-    const acceptedQuote = await db.query.quotes.findFirst({
-      where: and(
-        eq(quotes.dealId, dealId),
-        eq(quotes.tenantId, ctx.tenantId),
-        eq(quotes.status, 'accepted'),
-        isNull(quotes.deletedAt),
-      ),
-    });
-
-    const quoteItems = acceptedQuote
-      ? await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, acceptedQuote.id))
-      : [];
 
     // Totals: from the accepted quote if present, else the deal amount.
     const subtotal = acceptedQuote?.subtotal ?? row.amount ?? '0';
@@ -109,7 +116,7 @@ export async function createInvoiceFromWonDeal(
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        const result = await db.transaction(async (tx) => {
+        const result = await withTenantDb(ctx.tenantId, ctx.userId, async (tx) => {
           // Re-check idempotency inside the tenant lock to close the race.
           await tx.execute(sql`SELECT id FROM tenants WHERE id = ${ctx.tenantId} FOR UPDATE`);
 
@@ -208,17 +215,18 @@ export async function createInvoiceFromWonDeal(
       // COMMIT becomes a ROLLBACK, and the invoice vanishes while this function
       // still reports success. It is genuinely non-critical only AFTER commit.
       try {
-        await db.insert(activities).values({
-          tenantId: ctx.tenantId,
-          userId: ctx.userId,
-          entityType: 'deal',
-          entityId: dealId,
-          contactId: row.contactId ?? null,
-          dealId,
-          eventType: 'invoice_created',
-          description: `Draft invoice ${createdInvoiceNumber} created for won deal "${row.title ?? ''}"`,
-          metadata: { deal_id: dealId, invoice_id: createdInvoiceId, invoice_number: createdInvoiceNumber },
-        });
+        await withTenantDb(ctx.tenantId, ctx.userId, async (db) =>
+          db.insert(activities).values({
+            tenantId: ctx.tenantId,
+            userId: ctx.userId,
+            entityType: 'deal',
+            entityId: dealId,
+            contactId: row.contactId ?? null,
+            dealId,
+            eventType: 'invoice_created',
+            description: `Draft invoice ${createdInvoiceNumber} created for won deal "${row.title ?? ''}"`,
+            metadata: { deal_id: dealId, invoice_id: createdInvoiceId, invoice_number: createdInvoiceNumber },
+          }));
       } catch (err) {
         await logError({ error: err, context: 'deal-invoice: activity insert' });
       }

@@ -14,7 +14,7 @@ import {
   contacts, deals, tasks, userDepartures, 
   tenants, leadAssignments 
 } from '@/drizzle/schema';
-import { eq, and, or, sql, desc, asc, isNull, type SQL } from 'drizzle-orm';
+import { eq, and, or, ne, sql, desc, asc, isNull, type SQL } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/session';
@@ -288,14 +288,30 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       // #3291: revocation is a consequence of the membership write, not a separate
       // manual step. The UPDATE commits with the removal, and the audit names the
       // count so an admin can see what was taken away.
-      const revokedKeyIds = await db.transaction(async (tx) => {
+      // #3407: the removal claims the from-state (any status other than
+      // 'removed') and the optional client concurrency token. A zero-row claim
+      // means someone already removed this member — short-circuit the whole
+      // consequence chain so a concurrent double-remove cannot write two
+      // departure rows, duplicate audits or revoke twice.
+      const removal = await db.transaction(async (tx) => {
+        const concurrencyWhere = concurrencyGuard(tenantMembers, rawPatch.expectedUpdatedAt);
+        const [updated] = await tx.update(tenantMembers)
+          .set({ status: 'removed' })
+          .where(and(
+            eq(tenantMembers.id, memberId),
+            eq(tenantMembers.tenantId, ctx.tenantId),
+            ne(tenantMembers.status, 'removed'),
+            ...(concurrencyWhere ? [concurrencyWhere] : []),
+          ))
+          .returning();
+
+        const stale = checkStaleUpdate(updated);
+        if (stale) return { stale, revokedKeyIds: [] as string[] };
+
         // Reassign data
         await tx.update(contacts).set({ assignedTo: reassignUserId, lastAssignedAt: new Date() }).where(and(eq(contacts.assignedTo, target.userId), eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
         await tx.update(deals).set({ assignedTo: reassignUserId }).where(and(eq(deals.assignedTo, target.userId), eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
         await tx.update(tasks).set({ assignedTo: reassignUserId }).where(and(eq(tasks.assignedTo, target.userId), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt), eq(tasks.status, 'pending')));
-
-        // Mark member as removed
-        await tx.update(tenantMembers).set({ status: 'removed' }).where(eq(tenantMembers.id, memberId));
 
         const keyIds = await revokeUserApiKeys(tx as unknown as DbClient, ctx.tenantId, target.userId);
 
@@ -324,8 +340,11 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
           .set({ currentUsers: userCountResult?.count || 0 })
           .where(eq(tenants.id, ctx.tenantId));
 
-        return keyIds;
+        return { stale: null, revokedKeyIds: keyIds };
       });
+
+      if (removal.stale) return removal.stale;
+      const revokedKeyIds = removal.revokedKeyIds;
 
       // Notify
       if (reassignTo && reassignTo !== ctx.userId) {

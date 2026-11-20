@@ -13,6 +13,7 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { logError } from '@/lib/errors-client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 interface KBArticle { id: string; title?: string; content?: string; excerpt?: string; categoryId?: string; status?: string; helpful?: number; notHelpful?: number; categoryName?: string; createdAt?: string; views?: number }
 
@@ -21,24 +22,26 @@ export default function KBArticlePage() {
   const router = useRouter();
   const [article, setArticle] = useState<KBArticle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/tenant/kb/articles/${params.id}`, { signal });
-      if (signal?.aborted) return;
-      if (!res.ok) { router.push('/tenant/kb'); return; }
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setArticle(d.data as KBArticle);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      logError({ error: err, context: "catch:[context]" });
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+    const result = await fetchJsonSafe<{ data?: KBArticle }>(`/api/tenant/kb/articles/${params.id}`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      setArticle(result.data.data ?? null);
+      setLoadError(false);
+    } else if (result.statusCode === 404) {
+      // A missing article still belongs on the KB index.
+      router.push('/tenant/kb');
+      return;
+    } else {
+      // A refused read is not a blank article page.
+      setLoadError(true);
+      logError({ error: new Error(result.message), context: 'kb-article:load' });
     }
+    setLoading(false);
   }, [params.id, router]);
 
   useEffect(() => {
@@ -76,6 +79,13 @@ export default function KBArticlePage() {
       <div className="h-8 w-64 bg-muted rounded animate-pulse" />
       <div className="h-4 w-96 bg-muted rounded animate-pulse" />
       <div className="h-64 bg-muted rounded-xl animate-pulse" />
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="space-y-4 max-w-3xl" role="alert">
+      <p className="text-sm text-amber-700 dark:text-amber-300">This article could not be loaded — a blank page here would be a lie.</p>
+      <button onClick={() => { setLoading(true); load(); }} className="px-3 py-2 rounded-lg border border-border text-sm hover:bg-accent">Retry</button>
     </div>
   );
 

@@ -14,6 +14,8 @@ const m = vi.hoisted(() => {
   const next = (): unknown[] => (selects.length ? (selects.shift() as unknown[]) : []);
 
   const chain: Record<string, unknown> = {};
+  // #3405: withTenantDb sets the tenant GUC via tx.execute() inside the tx.
+  chain.execute = vi.fn(() => Promise.resolve());
   chain.select = vi.fn(() => chain);
   chain.from = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);

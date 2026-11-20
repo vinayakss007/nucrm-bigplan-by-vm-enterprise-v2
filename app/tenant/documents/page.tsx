@@ -95,20 +95,28 @@ export default function DocumentsPage() {
           }),
         });
 
-        if (res.ok) {
-          const { data } = await res.json();
-          // Upload file to presigned URL
-          if (data.uploadUrl) {
-            await fetch(data.uploadUrl, {
-              method: 'PUT',
-              body: file,
-              headers: { 'Content-Type': file.type || 'application/octet-stream' },
-            });
-            // #3297 — the row holds the size this page declared, not the size the
-            // store received. Settle it, or the workspace keeps reporting a usage
-            // figure nobody measured.
-            if (data.document?.id) await verifyUploadedDocument(data.document.id);
+        // #3408: a refused metadata create or a failed presigned PUT used to
+        // fall through to the unconditional "uploaded successfully" below —
+        // the response was consumed as if any status meant success. Fail loudly
+        // so the operator is told the bytes did not land.
+        if (!res.ok) {
+          throw new Error(`Could not register ${file.name} (${res.status})`);
+        }
+        const { data } = await res.json();
+        // Upload file to presigned URL
+        if (data.uploadUrl) {
+          const put = await fetch(data.uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          });
+          if (!put.ok) {
+            throw new Error(`Could not store ${file.name} (${put.status})`);
           }
+          // #3297 — the row holds the size this page declared, not the size the
+          // store received. Settle it, or the workspace keeps reporting a usage
+          // figure nobody measured.
+          if (data.document?.id) await verifyUploadedDocument(data.document.id);
         }
       }
       setMessage({ type: 'success', text: `${files.length} file(s) uploaded successfully` });

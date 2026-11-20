@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Calendar, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 // #2757 — the keys GET /api/tenant/deals/[id]/forecast actually answers: it is a raw
@@ -28,6 +29,7 @@ interface Forecast {
 export default function DealForecast({ dealId }: { dealId: string }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     expected_close_date: '',
@@ -37,12 +39,11 @@ export default function DealForecast({ dealId }: { dealId: string }) {
   });
 
   const fetchForecast = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/tenant/deals/${dealId}/forecast`, { signal });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (signal?.aborted) return;
-      const f = data.data;
+    const result = await fetchJsonSafe<{ data?: Forecast | null }>(
+      `/api/tenant/deals/${dealId}/forecast`, { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'ok') {
+      const f = result.data.data;
       if (f) {
         setForecast(f);
         setForm({
@@ -52,13 +53,12 @@ export default function DealForecast({ dealId }: { dealId: string }) {
           confidence_level: f.confidenceLevel || 'medium',
         });
       }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // non-critical
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
+      setLoadError(false);
+    } else {
+      // A refused read is not the same as a deal with no forecast.
+      setLoadError(true);
     }
+    setLoading(false);
   }, [dealId]);
 
   useEffect(() => {
@@ -98,9 +98,11 @@ export default function DealForecast({ dealId }: { dealId: string }) {
 
   if (!forecast && !editing) {
     return (
-      <div className="text-center py-6">
+      <div className="text-center py-6" role={loadError ? 'alert' : undefined}>
         <TrendingUp className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground mb-3">No forecast for this deal yet</p>
+        <p className={`text-sm mb-3 ${loadError ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>
+          {loadError ? 'Forecast could not be loaded — an empty state here would be a lie.' : 'No forecast for this deal yet'}
+        </p>
         <Button size="sm" onClick={() => setEditing(true)}>Create Forecast</Button>
       </div>
     );
