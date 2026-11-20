@@ -196,6 +196,12 @@ jobs:
       # refuses to run without SEED_PASSWORD. The step that seeds generates one and
       # exports both names, so the gate logs in with the value it just wrote.
       SMOKE_LOGIN_EMAIL: admin@test.com
+      # The gate starts Next.js directly, with no nginx in front of it. Auth
+      # rate limiting fails closed on an unknown client IP (#2630), so the
+      # throwaway runner trusts a loopback header that smoke-test.sh supplies.
+      # Production sets TRUST_PROXY=true only behind nginx (scripts/deploy-vm.sh).
+      TRUST_PROXY: "true"
+      SMOKE_CLIENT_IP: 127.0.0.1
       LAUNCH_GATE_STRICT: "1"
     services:
       postgres:

@@ -24,6 +24,15 @@ fi
 SMOKE_EMAIL="$SMOKE_LOGIN_EMAIL"
 SMOKE_PASSWORD="$SMOKE_LOGIN_PASSWORD"
 
+# #2630: auth endpoints fail closed when the client IP is unknown. Production
+# runs behind nginx, which sets X-Forwarded-For; the release gate runs `next
+# start` directly on a throwaway runner, so SMOKE_CLIENT_IP supplies a loopback
+# address when there is no proxy in front of the server.
+CLIENT_IP_HEADER=()
+if [ -n "${SMOKE_CLIENT_IP:-}" ]; then
+  CLIENT_IP_HEADER=(-H "X-Forwarded-For: ${SMOKE_CLIENT_IP}")
+fi
+
 echo "═══════════════════════════════════════════"
 echo "  SMOKE TEST"
 echo "═══════════════════════════════════════════"
@@ -58,6 +67,7 @@ fi
 # Test login API
 RESP=$(curl -s --max-time 30 -X POST "${SERVER_URL}/api/auth/login" \
   -H 'Content-Type: application/json' \
+  "${CLIENT_IP_HEADER[@]}" \
   -d "{\"email\":\"${SMOKE_EMAIL}\",\"password\":\"${SMOKE_PASSWORD}\"}" \
   -c "$COOKIE_JAR" 2>&1)
 if echo "$RESP" | grep -q '"ok":true'; then
