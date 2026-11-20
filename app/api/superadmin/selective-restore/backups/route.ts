@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { superAdminBackups, users } from '@/drizzle/schema';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -217,7 +217,7 @@ async function parseBackupAsync(backupId: string, filePath: string) {
         // The original used several columns like tenants_included, total_record_count, tables_available.
         // If they are missing in schema, we skip or use execute.
       })
-      .where(eq(superAdminBackups.id, backupId));
+.where(and(eq(superAdminBackups.id, backupId), eq(superAdminBackups.status, 'pending'))); // #3407
  
  
   } catch (err) {
@@ -225,6 +225,6 @@ async function parseBackupAsync(backupId: string, filePath: string) {
     await db
       .update(superAdminBackups)
       .set({ status: 'failed' })
-      .where(eq(superAdminBackups.id, backupId));
+.where(and(eq(superAdminBackups.id, backupId), eq(superAdminBackups.status, 'pending'))); // #3407
   }
 }
