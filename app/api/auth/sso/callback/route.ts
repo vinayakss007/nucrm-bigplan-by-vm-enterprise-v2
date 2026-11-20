@@ -22,7 +22,8 @@ import {
   roles,
   sessions,
 } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { ConcurrencyError } from '@/lib/concurrency';
 import { exchangeAndVerify, loadProviderConfig } from '@/lib/auth/sso/oidc';
 import { readSsoState, clearSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
 import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
@@ -255,10 +256,18 @@ async function upsertUserAndMembership(args: {
       // 'suspended'), but NOT members an admin explicitly removed — SSO must not
       // silently undo a deliberate removal. A removed member has to be re-invited
       // by an admin. Active members are left untouched.
-      await tx
+      // #3407: the read above is unlocked — carry the from-set into the write
+      // so an admin who removes this member in the gap wins. SSO must never
+      // silently undo a deliberate removal by reactivating on an id-only write.
+      const reactivated = await tx
         .update(tenantMembers)
         .set({ status: 'active', updatedAt: new Date() })
-        .where(eq(tenantMembers.id, existingMember.id));
+        .where(and(
+          eq(tenantMembers.id, existingMember.id),
+          inArray(tenantMembers.status, ['invited', 'pending', 'suspended'])
+        ))
+        .returning({ id: tenantMembers.id });
+      if (!reactivated.length) throw new ConcurrencyError('Membership');
     }
 
     return userId;
