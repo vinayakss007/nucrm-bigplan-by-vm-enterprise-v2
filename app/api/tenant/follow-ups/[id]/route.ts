@@ -39,8 +39,25 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const guard = await concurrencyGuard(db, followUps, id, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
- 
- 
+    // #3407: when the payload writes status, claim the exact status that is
+    // live now. concurrencyGuard only compares when the client supplied a
+    // token; without one a concurrent complete/reopen could be overwritten,
+    // leaving completedAt/missedDays inconsistent with the new status.
+    let fromStatus: string | undefined;
+    if (v.status !== undefined) {
+      const [current] = await db
+        .select({ status: followUps.status })
+        .from(followUps)
+        .where(and(
+          eq(followUps.id, id),
+          eq(followUps.tenantId, ctx.tenantId),
+          isNull(followUps.deletedAt),
+        ))
+        .limit(1);
+      if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      fromStatus = current.status;
+    }
+
     const updateData: Partial<typeof followUps.$inferInsert> = {
       updatedAt: new Date(),
     };
@@ -66,11 +83,17 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       .where(and(
         eq(followUps.id, id),
         eq(followUps.tenantId, ctx.tenantId),
-        isNull(followUps.deletedAt)
+        isNull(followUps.deletedAt),
+        ...(fromStatus !== undefined ? [eq(followUps.status, fromStatus)] : []),
       ))
       .returning();
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!row) {
+      return NextResponse.json(
+        { error: `Follow-up status changed concurrently — cannot update from '${fromStatus}'. Reload and retry.` },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ data: row });
  
