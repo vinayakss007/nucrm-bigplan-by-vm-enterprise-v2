@@ -73,7 +73,9 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
       body: JSON.stringify({
         name: saveName.trim(),
         entity_type: entityType,
-        filters: currentFilters,
+        // #3755: persist the query with the filters so applying the view
+        // restores the exact result set it was saved from.
+        filters: { ...currentFilters, query: currentQuery },
         is_shared: saveShared,
       }),
     });
@@ -102,7 +104,9 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
   };
 
   const applyView = (view: SavedView) => {
-    const q = typeof view.filters?.['query'] === 'string' ? view.filters['query'] : currentQuery;
+    // #3755: an empty/absent saved query means 'no query', not 'whatever is
+    // on screen now' — otherwise the view shows a different result set.
+    const q = typeof view.filters?.['query'] === 'string' ? view.filters['query'] : '';
     onApplyView(view.filters, q);
   };
 
