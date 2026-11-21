@@ -1,0 +1,189 @@
+{
+  "app/auth/invite/page.tsx": [
+    "isLoggedIn"
+  ],
+  "app/dev/dashboard/page.tsx": [
+    "errors",
+    "queries"
+  ],
+  "app/superadmin/backups/page.tsx": [
+    "backups",
+    "deleted",
+    "schedules",
+    "stats"
+  ],
+  "app/superadmin/data-explorer/page.tsx": [
+    "summary"
+  ],
+  "app/superadmin/errors/page.tsx": [
+    "errors",
+    "summary"
+  ],
+  "app/superadmin/health/page.tsx": [
+    "checks"
+  ],
+  "app/superadmin/selective-restore/page.tsx": [
+    "logs"
+  ],
+  "app/superadmin/tenants/[id]/modules/page.tsx": [
+    "plan"
+  ],
+  "app/superadmin/tenants/page.tsx": [
+    "plan"
+  ],
+  "app/superadmin/tickets/page.tsx": [
+    "counts",
+    "tickets"
+  ],
+  "app/superadmin/token-control/page.tsx": [
+    "alerts",
+    "budgets",
+    "tenants"
+  ],
+  "app/superadmin/usage/page.tsx": [
+    "growth",
+    "tenantUsage"
+  ],
+  "app/tenant/activities/page.tsx": [
+    "activities"
+  ],
+  "app/tenant/ai/draft/page.tsx": [
+    "companies",
+    "contacts",
+    "deals",
+    "seeds",
+    "templates"
+  ],
+  "app/tenant/ai/lead-scoring/page.tsx": [
+    "leads"
+  ],
+  "app/tenant/ai/page.tsx": [
+    "at_risk_count",
+    "draft_count_today",
+    "enabled_count",
+    "providers",
+    "scoring_runs_today",
+    "tokens_today"
+  ],
+  "app/tenant/ai/summarize/page.tsx": [
+    "companies",
+    "contacts",
+    "deals"
+  ],
+  "app/tenant/approvals/page.tsx": [
+    "summary"
+  ],
+  "app/tenant/data-explorer/page.tsx": [
+    "page"
+  ],
+  "app/tenant/emails/page.tsx": [
+    "emails"
+  ],
+  "app/tenant/forms/[id]/analytics/page.tsx": [
+    "fields",
+    "submissions",
+    "timeSeries",
+    "views"
+  ],
+  "app/tenant/forms/page.tsx": [
+    "submissions"
+  ],
+  "app/tenant/forms/public/[id]/page.tsx": [
+    "No",
+    "description",
+    "fields",
+    "settings"
+  ],
+  "app/tenant/meetings/page.tsx": [
+    "meetings"
+  ],
+  "app/tenant/offers/page.tsx": [
+    "offers",
+    "summary"
+  ],
+  "app/tenant/quotes/[id]/page.tsx": [
+    "invoiceId",
+    "invoiceNumber"
+  ],
+  "app/tenant/segments/page.tsx": [
+    "segments"
+  ],
+  "app/tenant/settings/admin/page.tsx": [
+    "plan",
+    "usage"
+  ],
+  "app/tenant/settings/ai-providers/page.tsx": [
+    "is_admin",
+    "providers"
+  ],
+  "app/tenant/settings/ai-templates/page.tsx": [
+    "seeds"
+  ],
+  "app/tenant/settings/api-keys/page.tsx": [
+    "key"
+  ],
+  "app/tenant/settings/backup/page.tsx": [
+    "backups"
+  ],
+  "app/tenant/settings/bulk-transfer/page.tsx": [
+    "counts",
+    "is_admin",
+    "user"
+  ],
+  "app/tenant/settings/custom-fields/page.tsx": [
+    "features",
+    "fields"
+  ],
+  "app/tenant/settings/email/warmup/page.tsx": [
+    "config",
+    "pool"
+  ],
+  "app/tenant/settings/general/page.tsx": [
+    "const"
+  ],
+  "app/tenant/settings/localization/page.tsx": [
+    "is_admin",
+    "localization"
+  ],
+  "app/tenant/settings/login-policy/page.tsx": [
+    "is_admin",
+    "login_policy"
+  ],
+  "app/tenant/settings/notifications/page.tsx": [
+    "matrix"
+  ],
+  "app/tenant/settings/out-of-office/page.tsx": [
+    "out_of_office",
+    "user"
+  ],
+  "app/tenant/settings/page.tsx": [
+    "is_admin",
+    "statuses",
+    "summary"
+  ],
+  "app/tenant/settings/picklists/page.tsx": [
+    "is_admin",
+    "picklists"
+  ],
+  "app/tenant/settings/preferences/page.tsx": [
+    "preferences",
+    "workspace_defaults"
+  ],
+  "app/tenant/settings/profile/page.tsx": [
+    "user"
+  ],
+  "app/tenant/settings/security/page.tsx": [
+    "user"
+  ],
+  "app/tenant/settings/tags-manager/page.tsx": [
+    "is_admin",
+    "tags"
+  ],
+  "app/tenant/settings/telegram/page.tsx": [
+    "settings"
+  ],
+  "app/tenant/settings/user-defaults/page.tsx": [
+    "is_admin",
+    "user_defaults"
+  ]
+}
