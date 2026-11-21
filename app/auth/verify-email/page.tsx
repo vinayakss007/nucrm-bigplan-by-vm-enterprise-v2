@@ -8,6 +8,7 @@ import { Suspense, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -18,8 +19,12 @@ function VerifyEmailContent() {
   // to the error panel without running the mutation.
   const verifyMutation = useMutation({
     mutationFn: async (t: string) => {
-      const r = await fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:t}) });
-      return r.json() as Promise<{ ok?: boolean; email?: string; error?: string }>;
+      // #3408: the canonical client throws on a refused verification (with the
+      // server's message) instead of resolving a body the UI might treat as ok.
+      return fetchJsonOrThrow<{ ok?: boolean; email?: string; error?: string }>(
+        '/api/auth/verify-email',
+        { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:t}) },
+      );
     },
     onSuccess: (d) => {
       // #1267: intentional full reload — email verification changes auth

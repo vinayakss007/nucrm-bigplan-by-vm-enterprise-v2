@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Zap, Eye, EyeOff, Loader2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 function ResetPasswordContent() {
   const [password, setPassword] = useState('');
@@ -23,13 +24,12 @@ function ResetPasswordContent() {
   // #1328: reset via useMutation (was raw fetch + useState loading flag).
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/auth/reset-password', {
+      // #3408: a refused reset throws with the server's message, so onError
+      // reports the real reason instead of a generic failure.
+      return fetchJsonOrThrow('/api/auth/reset-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      return data;
     },
     onSuccess: () => {
       toast.success('Password reset! Logging you in...');
