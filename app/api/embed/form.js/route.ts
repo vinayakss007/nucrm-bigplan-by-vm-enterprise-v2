@@ -45,6 +45,18 @@ const WIDGET_JS = `
     return 'Failed to load form (HTTP ' + status + ')';
   }
 
+  // #3408: the submit endpoint still answers legacy { error: "..." } today,
+  // but the canonical envelope is { ok:false, error:{ code, message } }. Read
+  // both so a switch on the server cannot turn a refusal into "[object Object]".
+  function submitError(body) {
+    if (body && typeof body === 'object') {
+      if (typeof body.error === 'string') return body.error;
+      if (body.error && typeof body.error.message === 'string') return body.error.message;
+      if (typeof body.message === 'string') return body.message;
+    }
+    return 'Submission failed';
+  }
+
   function fetchForm() {
     return fetch(BASE + '/api/tenant/forms/public/' + FORM_ID)
       .then(function(r) {
@@ -184,7 +196,7 @@ const WIDGET_JS = `
           form.style.display = 'none';
           document.getElementById('nucrm-form-success').style.display = 'block';
         } else {
-          throw new Error(res.error || 'Submission failed');
+          throw new Error(submitError(res));
         }
       })
       .catch(function(err) {
