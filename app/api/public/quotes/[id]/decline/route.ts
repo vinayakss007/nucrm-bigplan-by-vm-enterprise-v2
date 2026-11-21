@@ -5,14 +5,16 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
-import { allowedFromStatus, canTransition } from '@/lib/offers';
+import { canTransition } from '@/lib/offers';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the RLS
@@ -90,16 +92,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!canTransition(String(quote.status), 'declined')) return { kind: 'bad_state' };
 
       const now = new Date();
-      const [declined] = await tx
-        .update(quotes)
-        .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(and(
-          eq(quotes.id, quote.id),
-          eq(quotes.tenantId, quote.tenantId),
-          inArray(quotes.status, allowedFromStatus('declined')),
-        ))
-        .returning({ id: quotes.id });
-      if (!declined) {
+      // #3407 PR-4A: the status claim belongs to the shared helper and the
+      // registry, and the helper adds the tombstone gate the old write lacked.
+      const declined = await transitionStatus(tx, {
+        table: quotes,
+        id: quote.id,
+        tenantId: quote.tenantId,
+        from: transitionFrom('quotes', 'declined'),
+        to: 'declined',
+        patch: { declinedAt: now, updatedAt: now },
+      });
+      if (!declined.ok) {
         // What the winning commit actually left behind. The re-read keeps the
         // tombstone filter (#2382), so a delete that landed while this claim was
         // losing answers as the same 404 the pre-read would have given rather
