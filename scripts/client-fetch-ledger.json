@@ -1,6 +1,5 @@
 {
   "app/auth/forgot-password/page.tsx": 1,
-  "app/auth/invite/page.tsx": 2,
   "app/auth/login-simple/page.tsx": 1,
   "app/auth/login/login-form.tsx": 1,
   "app/auth/signup/page.tsx": 1,
