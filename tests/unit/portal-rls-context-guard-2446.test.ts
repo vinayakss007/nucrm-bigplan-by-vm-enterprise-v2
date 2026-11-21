@@ -402,8 +402,12 @@ describe('the bearer-token surface #2446 deferred is bound, with no baseline (#2
       const src = readFileSync(join(ROOT, file), 'utf8');
       const found = analyzeSource(file, src, repoTables, [], ROOT);
       expect(found.violations.map((v) => `${v.table}@${v.line}: ${v.problem}`)).toEqual([]);
-      // Non-vacuity, two ways: the analyzer still finds these tables here…
-      const read = findReads(src, repoTables).filter((r) => r.isQuery);
+      // Non-vacuity, two ways: the analyzer still finds these tables here.
+      // #3407: a status write routed through `transitionStatus(tx, {table})`
+      // is a recognized read with `isQuery:false` (the helper owns the query),
+      // so count both forms — filtering on isQuery alone would make the
+      // guard look vacuous after a legitimate conversion.
+      const read = findReads(src, repoTables);
       expect([...new Set(read.map((r) => r.js))].sort()).toEqual(expect.arrayContaining(expected.slice().sort()));
       // …and none of them hangs off the bare pool any more.
       expect(read.filter((r) => r.handle === 'db').map((r) => `${r.js}@${r.line}`)).toEqual([]);

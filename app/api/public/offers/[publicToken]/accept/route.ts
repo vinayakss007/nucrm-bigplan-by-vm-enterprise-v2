@@ -20,7 +20,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -29,7 +30,6 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
-  allowedFromStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -89,30 +89,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       // of winning. The auto-expire arm was the same problem in reverse — an
       // accept that committed first was being flattened to 'expired'.
       if (offer.expiresAt && new Date(offer.expiresAt).getTime() < Date.now()) {
-        const [expired] = await tx
-          .update(quotes)
-          .set({ status: 'expired', updatedAt: new Date() })
-          .where(and(
-            eq(quotes.id, offer.id),
-            eq(quotes.tenantId, offer.tenantId),
-            inArray(quotes.status, allowedFromStatus('expired')),
-          ))
-          .returning({ id: quotes.id });
-        if (!expired) return { kind: 'conflict' };
+        // #3407 PR-4A: the status claim belongs to the shared helper and the
+        // registry, with the tenant scope and tombstone gate it adds.
+        const expired = await transitionStatus(tx, {
+          table: quotes,
+          id: offer.id,
+          tenantId: offer.tenantId,
+          from: transitionFrom('quotes', 'expired'),
+          to: 'expired',
+          patch: { updatedAt: new Date() },
+        });
+        if (!expired.ok) return { kind: 'conflict' };
         return { kind: 'expired' };
       }
 
       const now = new Date();
-      const [accepted] = await tx
-        .update(quotes)
-        .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(and(
-          eq(quotes.id, offer.id),
-          eq(quotes.tenantId, offer.tenantId),
-          inArray(quotes.status, allowedFromStatus('accepted')),
-        ))
-        .returning({ id: quotes.id });
-      if (!accepted) return { kind: 'conflict' };
+      const accepted = await transitionStatus(tx, {
+        table: quotes,
+        id: offer.id,
+        tenantId: offer.tenantId,
+        from: transitionFrom('quotes', 'accepted'),
+        to: 'accepted',
+        patch: { acceptedAt: now, updatedAt: now },
+      });
+      if (!accepted.ok) return { kind: 'conflict' };
 
       // One jsonb merge through patchOfferMetadata instead of the second inline
       // jsonb_set this route used to run: same merge semantics as decline, and it

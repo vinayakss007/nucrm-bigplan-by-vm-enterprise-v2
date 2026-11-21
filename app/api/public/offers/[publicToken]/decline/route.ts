@@ -13,7 +13,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
@@ -22,7 +23,6 @@ import {
   findOfferByToken,
   patchOfferMetadata,
   canTransition,
-  allowedFromStatus,
 } from '@/lib/offers';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -67,16 +67,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       // #3159 — same guarded claim as the accept sibling: `WHERE id` alone let a
       // decline overwrite an accept that committed in the gap after the read
       // above, and the buyer's own confirmation was the thing that vanished.
-      const [won] = await tx
-        .update(quotes)
-        .set({ status: 'declined', declinedAt: now, updatedAt: now })
-        .where(and(
-          eq(quotes.id, offer.id),
-          eq(quotes.tenantId, offer.tenantId),
-          inArray(quotes.status, allowedFromStatus('declined')),
-        ))
-        .returning({ id: quotes.id });
-      if (!won) return false;
+      // #3407 PR-4A: the claim belongs to the shared helper and the registry.
+      const won = await transitionStatus(tx, {
+        table: quotes,
+        id: offer.id,
+        tenantId: offer.tenantId,
+        from: transitionFrom('quotes', 'declined'),
+        to: 'declined',
+        patch: { declinedAt: now, updatedAt: now },
+      });
+      if (!won.ok) return false;
 
       await patchOfferMetadata(offer.id, offer.tenantId, {
         decline_reason: reason || undefined,
