@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   responseKeys,
   routeForUrl,
-  useApiQueryVars,
+  collectQueryVars,
   apiUrls,
   readKeys,
   checkContractShape,
@@ -33,7 +33,7 @@ describe('contract-shape detection (#3773)', () => {
       const { data: contactsData, error } = useApiQuery<{ data: unknown[] }>(KEY, '/api/tenant/contacts');
       const result = useApiQuery(KEY2, '/api/tenant/tickets');
     `;
-    expect([...useApiQueryVars(src)].sort()).toEqual(['contactsData', 'result.data']);
+    expect([...collectQueryVars(src)].sort()).toEqual(['contactsData', 'result.data']);
     expect([...apiUrls(src)].sort()).toEqual(['/api/tenant/contacts', '/api/tenant/tickets']);
   });
 

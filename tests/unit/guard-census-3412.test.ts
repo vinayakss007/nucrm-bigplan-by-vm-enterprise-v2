@@ -27,9 +27,10 @@ describe('guard-census over the real repository (#3412)', () => {
   it('measures the complete guard estate in package.json', () => {
     // #3402 added guard:mutating-route-permissions (46 → 47); #2597 added
     // guard:rbac-wiring (47 → 48); #3408 guard:client-fetch (48 → 49 aliases,
-    // 47 → 48 wired) and guard:api-envelope (49 → 50 aliases, unwired by design).
-    expect(census.total).toBe(50);
-    expect(census.wiredCount).toBe(48);
+    // 47 → 48 wired) and guard:api-envelope (49 → 50 aliases, unwired by design);
+    // #3773 guard:contract-shape (50 → 51 aliases, 48 → 49 wired).
+    expect(census.total).toBe(51);
+    expect(census.wiredCount).toBe(49);
     expect(census.unwiredCount).toBe(2);
     expect(census.unwired).toEqual(['guard:api-envelope', 'guard:migration-redecl']);
   });
@@ -42,7 +43,7 @@ describe('guard-census over the real repository (#3412)', () => {
   });
 
   it('accurately attributes guards per workflow', () => {
-    expect(census.perWorkflow['ci.yml']?.length).toBe(43);
+    expect(census.perWorkflow['ci.yml']?.length).toBe(44);
     expect(census.perWorkflow['nightly-soak.yml']?.length).toBe(5);
   });
 
@@ -51,8 +52,8 @@ describe('guard-census over the real repository (#3412)', () => {
       cwd: ROOT,
       encoding: 'utf8',
     });
-    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 50');
-    expect(stdout).toContain('[guard-census] Wired in workflows: 48/50');
+    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 51');
+    expect(stdout).toContain('[guard-census] Wired in workflows: 49/51');
     expect(stdout).toContain('[guard-census] Unwired (2): guard:api-envelope, guard:migration-redecl');
   });
 
@@ -62,8 +63,8 @@ describe('guard-census over the real repository (#3412)', () => {
       encoding: 'utf8',
     });
     const parsed = JSON.parse(stdout);
-    expect(parsed.total).toBe(50);
-    expect(parsed.wiredCount).toBe(48);
+    expect(parsed.total).toBe(51);
+    expect(parsed.wiredCount).toBe(49);
     expect(parsed.unwired).toEqual(['guard:api-envelope', 'guard:migration-redecl']);
     expect(Array.isArray(parsed.bareInvocations)).toBe(true);
   });

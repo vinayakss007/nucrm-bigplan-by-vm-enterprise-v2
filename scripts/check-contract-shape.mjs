@@ -101,7 +101,7 @@ export function routeForUrl(url, routeFiles) {
   return null;
 }
 
-export function useApiQueryVars(src) {
+export function collectQueryVars(src) {
   const vars = new Set();
   const re = /const\s*\{([^}]*)\}\s*=\s*useApiQuery\b/g;
   let m;
@@ -147,7 +147,7 @@ export function contractFindings(src, routeFiles) {
     if (!rf) continue;
     for (const k of responseKeys(readFileSync(join(ROOT, rf), 'utf8'))) declared.add(k);
   }
-  const keys = readKeys(src, useApiQueryVars(src));
+  const keys = readKeys(src, collectQueryVars(src));
   return [...keys].filter((k) => !IGNORED.has(k) && !declared.has(k)).sort();
 }
 
