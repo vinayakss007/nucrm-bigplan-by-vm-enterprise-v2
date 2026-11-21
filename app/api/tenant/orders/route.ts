@@ -45,7 +45,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const results = await db.select().from(orders).where(and(...whereConditions)).orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(orders).where(and(eq(orders.tenantId, tenantId), isNull(orders.deletedAt)));
+    // #3737: the count must use the same status/contactId filters as the rows.
+    const [countResult] = await db.select({ count: count() }).from(orders).where(and(...whereConditions));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 

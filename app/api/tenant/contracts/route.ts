@@ -37,7 +37,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const results = await db.select().from(contracts).where(and(...filters)).orderBy(desc(contracts.startDate)).limit(limit).offset(offset);
-    const countResult = await db.select({ count: count() }).from(contracts).where(and(eq(contracts.tenantId, tenantId), isNull(contracts.deletedAt)));
+    // #3737: the count must describe the SAME filtered set as the rows above —
+    // a status filter that is applied only to the rows breaks every page after 1.
+    const countResult = await db.select({ count: count() }).from(contracts).where(and(...filters));
     const total = countResult[0]?.count ?? 0;
 
     return NextResponse.json({ contracts: results, total, page, limit, totalPages: Math.ceil(total / limit) });
