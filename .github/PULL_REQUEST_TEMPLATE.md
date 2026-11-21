@@ -7,7 +7,14 @@ Target branch is always `main`. Never push directly to `main`.
 
 <!-- One or two sentences: what does this change and what problem does it solve? -->
 
-Closes #<!-- issue number, or remove this line if no tracked issue -->
+<!--
+  REPLACE the next line with: Closes #<the issue number>, or delete it if there is no
+  tracked issue. GitHub auto-closes an issue only on a keyword in the PR BODY text
+  (Closes / Fixes / Resolves #N). A title like "fix(#123)" does NOT close it, and a
+  number hidden inside an HTML comment does NOT count — the issue will stay open
+  after the PR merges and the backlog will be wrong (this happened to 13 issues).
+-->
+Closes #TODO
 
 ## Changes
 

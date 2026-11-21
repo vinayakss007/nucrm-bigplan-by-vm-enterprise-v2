@@ -17,6 +17,11 @@
 3. **PR base**: always target `main`
 4. **Test after EVERY fix**: run `postman/full-test-suite.sh` and verify 100% pass rate before pushing
 5. **One issue per PR** — keep PRs focused and reviewable
+6. **Close the tracked issue from the PR body** — put `Closes #N` (or `Fixes #N` /
+   `Resolves #N`) on its own line in the PR description. GitHub only auto-closes on
+   keywords in the **body text**: a title like `fix(#N)` does **not** close the issue,
+   and neither does a number written inside an HTML comment. This is not cosmetic —
+   without it the fix merges and the issue stays open, leaving a phantom backlog.
 
 ## Completed (Merged PRs #537–#551)
 
