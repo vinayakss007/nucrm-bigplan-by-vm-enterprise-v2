@@ -1,6 +1,5 @@
 {
   "app/auth/forgot-password/page.tsx": 1,
-  "app/auth/login-simple/page.tsx": 1,
   "app/auth/login/login-form.tsx": 1,
   "app/forms/public/[id]/public-form-client.tsx": 1,
   "app/p/offers/[publicToken]/page.tsx": 3,

@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 export default function SimpleLogin() {
   const [email, setEmail] = useState('');
@@ -16,19 +17,18 @@ export default function SimpleLogin() {
   // #1328: login via useMutation (was raw fetch + useState loading/message).
   const loginMutation = useMutation({
     mutationFn: async () => {
-      let res: Response;
-      try {
-        res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-      } catch {
-        throw new Error('Error: Cannot connect to server');
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error('Error: ' + (data.error || 'Login failed'));
-      return data;
+      // #3408: the canonical client throws with the server's message on a
+      // refused login; a network failure keeps the connection-error wording.
+      return fetchJsonOrThrow<{ token?: string }>('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      }).catch((err: unknown) => {
+        if (err instanceof Error && /Network error/.test(err.message)) {
+          throw new Error('Error: Cannot connect to server');
+        }
+        throw new Error('Error: ' + (err instanceof Error ? err.message : 'Login failed'));
+      });
     },
     onSuccess: () => {
       setTimeout(() => router.push('/tenant/dashboard'), 1500);
