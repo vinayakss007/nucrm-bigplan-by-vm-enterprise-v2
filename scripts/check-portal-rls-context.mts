@@ -481,6 +481,29 @@ export function findReads(src: string, tables: Map<string, TenantTable>): Read[]
       if (t) push(t.js, t.sql, m.index + m[0].indexOf(tableIdent));
     }
   }
+  // #3407 PR-4A: status writes moved into `transitionStatus(tx, { table })`
+  // have no `.from/.update` chain in this file, so the patterns above would go
+  // blind to a tenant-policyed table. Name the helper's transaction handle
+  // explicitly — the same handle the guard would have found on a direct chain.
+  const transitionRef = /\btransitionStatus(?:Many)?\s*\(\s*([A-Za-z_$][\w$]*)\s*,[^;]*?\btable:\s*([A-Za-z]\w*)/g;
+  while ((m = transitionRef.exec(src)) !== null) {
+    const handle = m[1];
+    const tableIdent = m[2];
+    if (!handle || !tableIdent) continue;
+    const t = tables.get(tableIdent);
+    if (!t) continue;
+    const statement = spanAt(spans, m.index);
+    if (!statement) continue;
+    found.push({
+      offset: m.index + m[0].lastIndexOf(tableIdent),
+      stmtStart: statement.start,
+      read: {
+        js: t.js, sql: t.sql, line: lineOf(src, m.index), handle,
+        isQuery: false, statement: statement.text,
+      },
+    });
+  }
+
   const queryRef = /\.query\s*\.\s*([A-Za-z][\w]*)/g;
   while ((m = queryRef.exec(src)) !== null) {
     const js = m[1];

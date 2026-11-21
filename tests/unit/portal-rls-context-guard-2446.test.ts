@@ -145,6 +145,19 @@ describe('violations the guard must name (#2446)', () => {
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('not bound by a context-establishing call');
   });
 
+  it('still sees a table whose status write moved into transitionStatus (#3407)', () => {
+    // A helper call has no `.update(table)` chain in the route file. Without
+    // this case the guard would go quietly blind as routes adopt the single
+    // transition owner — and its statement floor would drop with it.
+    const src = `await withTenantContext(t, NO_USER_SENTINEL, (tx) => transitionStatus(tx, {
+      table: invoices, id: 'x', from: ['draft'], to: 'sent',
+    }));`;
+    expect(findReads(src, tables)).toEqual([
+      expect.objectContaining({ js: 'invoices', handle: 'tx', isQuery: false }),
+    ]);
+    expect(problems('app/api/public/x/route.ts', src)).toEqual([]);
+  });
+
   it('reports a statement that reads a policyed table with no handle it can name', () => {
     const src = 'const rows = await pool().select({ id: invoices.id }).from(invoices);';
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('hangs off nothing');
