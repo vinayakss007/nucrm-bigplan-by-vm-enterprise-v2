@@ -7,7 +7,7 @@ import { createHmac, randomUUID } from 'crypto';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, lte, lt, asc, isNull, sql } from 'drizzle-orm';
+import { eq, and, lte, asc, isNull, sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 
@@ -246,7 +246,10 @@ export async function retryFailedWebhooks(): Promise<number> {
       .from(webhookQueue)
       .where(and(
         eq(webhookQueue.status, 'failed'),
-        lt(webhookQueue.attempt, MAX_RETRIES),
+        // #3743: the failure writer schedules a REAL 24h retry at attempt
+        // MAX_RETRIES (getRetryDelay(5) is 24h, 6 is the dead letter). An
+        // exclusive lt() filtered that retry out forever.
+        lte(webhookQueue.attempt, MAX_RETRIES),
         lte(webhookQueue.nextRetryAt, new Date()),
         // A paused or tombstoned integration must not receive traffic from this
         // sweep; the `fireWebhooks` path already honours both, and this one is
