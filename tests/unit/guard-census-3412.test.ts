@@ -26,11 +26,12 @@ describe('guard-census over the real repository (#3412)', () => {
 
   it('measures the complete guard estate in package.json', () => {
     // #3402 added guard:mutating-route-permissions (46 → 47); #2597 added
-    // guard:rbac-wiring (47 → 48); #3408 guard:client-fetch (48 → 49 aliases, 47 → 48 wired).
-    expect(census.total).toBe(49);
+    // guard:rbac-wiring (47 → 48); #3408 guard:client-fetch (48 → 49 aliases,
+    // 47 → 48 wired) and guard:api-envelope (49 → 50 aliases, unwired by design).
+    expect(census.total).toBe(50);
     expect(census.wiredCount).toBe(48);
-    expect(census.unwiredCount).toBe(1);
-    expect(census.unwired).toEqual(['guard:migration-redecl']);
+    expect(census.unwiredCount).toBe(2);
+    expect(census.unwired).toEqual(['guard:api-envelope', 'guard:migration-redecl']);
   });
 
   it('identifies the 3 bare script invocations in ci.yml', () => {
@@ -50,9 +51,9 @@ describe('guard-census over the real repository (#3412)', () => {
       cwd: ROOT,
       encoding: 'utf8',
     });
-    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 49');
-    expect(stdout).toContain('[guard-census] Wired in workflows: 48/49');
-    expect(stdout).toContain('[guard-census] Unwired (1): guard:migration-redecl');
+    expect(stdout).toContain('[guard-census] Total guard aliases in package.json: 50');
+    expect(stdout).toContain('[guard-census] Wired in workflows: 48/50');
+    expect(stdout).toContain('[guard-census] Unwired (2): guard:api-envelope, guard:migration-redecl');
   });
 
   it('CLI --json mode produces parseable JSON with all fields', () => {
@@ -61,9 +62,9 @@ describe('guard-census over the real repository (#3412)', () => {
       encoding: 'utf8',
     });
     const parsed = JSON.parse(stdout);
-    expect(parsed.total).toBe(49);
+    expect(parsed.total).toBe(50);
     expect(parsed.wiredCount).toBe(48);
-    expect(parsed.unwired).toEqual(['guard:migration-redecl']);
+    expect(parsed.unwired).toEqual(['guard:api-envelope', 'guard:migration-redecl']);
     expect(Array.isArray(parsed.bareInvocations)).toBe(true);
   });
 });
