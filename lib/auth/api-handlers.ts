@@ -87,7 +87,7 @@ export async function POST_login(request: NextRequest) {
       return loginRespond(request, isForm, { 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
-        retry_after: Math.ceil(((ipBlockCheck.blockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000 / 60),
+        retry_after: Math.ceil(((ipBlockCheck.blockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000),
       }, 429);
     }
 
@@ -106,7 +106,7 @@ export async function POST_login(request: NextRequest) {
       return loginRespond(request, isForm, { 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),
-        retry_after: Math.ceil(((emailBlockCheck.blockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000 / 60),
+        retry_after: Math.ceil(((emailBlockCheck.blockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000),
       }, 429);
     }
 
