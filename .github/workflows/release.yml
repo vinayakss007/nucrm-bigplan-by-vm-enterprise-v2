@@ -330,6 +330,8 @@ jobs:
         with:
           ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
+          # Needed to find the previous tag for the bounded changelog below.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -345,9 +347,35 @@ jobs:
           GATE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          # The changelog is GitHub's own generated note: the merged PR list since
-          # the previous tag (#2541 step 4). The metadata asset is the part a human
+          # GitHub rejects a release body over 125,000 characters. The first
+          # v0.9.1 range is 1,337 commits, so --generate-notes is not usable here:
+          # it fails with HTTP 422 "body is too long" after the gate has gone green.
+          # Build a bounded subject list instead; the curated full notes ship as
+          # the RELEASE_NOTES.md asset. The metadata asset is the part a human
           # cannot reconstruct later — which commit, which version, which gate run.
+          PREV_TAG="$(git describe --tags --abbrev=0 "${REL_SHA}^" 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ]; then
+            git log --no-merges --pretty=format:'- %s (%h)' \
+              "$PREV_TAG..$REL_SHA" > "$RUNNER_TEMP/changelog.txt"
+          else
+            git log -1 --no-merges --pretty=format:'- %s (%h)' \
+              "$REL_SHA" > "$RUNNER_TEMP/changelog.txt"
+          fi
+          {
+            echo "# ${REL_TAG}"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "Changes since ${PREV_TAG}:"
+            else
+              echo "Initial tagged release."
+            fi
+            echo
+            # Well under the 125,000 API limit, including the header above.
+            head -c 110000 "$RUNNER_TEMP/changelog.txt"
+            echo
+            echo
+            echo "Full release notes: see the RELEASE_NOTES.md asset on this release."
+          } > "$RUNNER_TEMP/release-notes.md"
           node -e '
             const fs = require("fs");
             const meta = {
@@ -376,7 +404,7 @@ jobs:
             gh release upload "$REL_TAG" "$RUNNER_TEMP/release-metadata.json" \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
-            ARGS=(--target "$REL_SHA" --generate-notes)
+            ARGS=(--target "$REL_SHA" --notes-file "$RUNNER_TEMP/release-notes.md")
             if [ "$REL_PRERELEASE" = "true" ]; then
               ARGS+=(--prerelease)
             fi
