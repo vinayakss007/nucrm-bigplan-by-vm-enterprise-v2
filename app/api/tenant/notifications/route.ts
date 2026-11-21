@@ -36,7 +36,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     // Perf: count + page + unread badge in parallel (was 3 serial round-trips).
-    const [countResult, data, unreadCount] = await Promise.all([
+    const [countResult, data, unreadCount, allCount] = await Promise.all([
       db.select({ count: sql<number>`count(*)::int` })
         .from(notifications)
         .where(and(...filters)).then((r) => r[0]),
@@ -54,11 +54,21 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           isNull(notifications.deletedAt),
           isNull(notifications.readAt),
         )).then((r) => r[0]),
+      // #3754: a stable tenant-wide total for the header, unaffected by the
+      // unread filter the page now sends.
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(and(
+          eq(notifications.tenantId, ctx.tenantId),
+          eq(notifications.userId, ctx.userId),
+          isNull(notifications.deletedAt),
+        )).then((r) => r[0]),
     ]);
 
     return NextResponse.json({
       data,
       total: countResult?.count ?? 0,
+      totalAll: allCount?.count ?? 0,
       unread: unreadCount?.count ?? 0,
       limit,
       offset,

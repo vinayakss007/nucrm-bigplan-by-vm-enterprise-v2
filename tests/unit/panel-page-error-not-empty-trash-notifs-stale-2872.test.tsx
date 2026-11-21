@@ -93,8 +93,8 @@ import TrashPage from '@/app/tenant/trash/page';
 const TRASH = '/api/tenant/trash';
 const TRASH_CONTACTS = '/api/tenant/trash?type=contact';
 const TRASH_DEALS = '/api/tenant/trash?type=deal';
-const NOTIFS = '/api/tenant/notifications?limit=20&offset=0';
-const NOTIFS_PAGE2 = '/api/tenant/notifications?limit=20&offset=20';
+const NOTIFS = '/api/tenant/notifications?limit=20&offset=0&unread=false';
+const NOTIFS_PAGE2 = '/api/tenant/notifications?limit=20&offset=20&unread=false';
 
 const NOW = '2026-03-04T10:00:00.000Z';
 const trashRows = {
@@ -111,8 +111,12 @@ const notificationRows = {
     { id: 'n3', type: 'trial_expiring', title: 'Trial ends in 3 days', body: null, link: null, createdAt: NOW },
   ],
   total: 45,
+  // #3754: tenant-wide counts the header now reads from the API envelope.
+  // `total` stays 45 for the pager; page length is 3 as before.
+  totalAll: 3,
+  unread: 2,
 };
-const emptyInbox = { data: [], total: 0 };
+const emptyInbox = { data: [], total: 0, totalAll: 0, unread: 0 };
 
 const ok = (data: unknown): QueryResult => ({ data, error: null, isLoading: false, refetch: vi.fn() });
 const failed = (message = 'Request failed (500)'): QueryResult => ({
