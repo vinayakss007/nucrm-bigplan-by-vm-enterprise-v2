@@ -20,6 +20,7 @@ import { supportTickets } from '@/drizzle/schema';
 import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { canTransitionTicket } from '@/lib/tickets';
+import { transitionStatusMany } from '@/lib/state/transition';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -141,19 +142,19 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         if (status === 'resolved') update.resolvedAt = new Date();
 
         await db.transaction(async (tx) => {
-          // #3407: each group claims the exact from-state it was read in.
-          // Postgres re-evaluates the WHERE under the row lock, so a ticket
-          // another agent moved in the gap is skipped instead of stomped.
+          // #3407 PR-4A: the claim belongs to the shared transition owner.
+          // Each from-state group goes through transitionStatusMany, whose
+          // UPDATE pins tenant, from-state and tombstone under the row lock;
+          // a ticket another agent moved is simply absent from `rows`.
           for (const [fromStatus, ids] of byFromStatus) {
-            const rows = await tx.update(supportTickets)
-              .set(update)
-              .where(and(
-                eq(supportTickets.tenantId, ctx.tenantId),
-                inArray(supportTickets.id, ids),
-                eq(supportTickets.status, fromStatus),
-                isNull(supportTickets.deletedAt),
-              ))
-              .returning({ id: supportTickets.id });
+            const { rows } = await transitionStatusMany(tx, {
+              table: supportTickets,
+              ids,
+              tenantId: ctx.tenantId,
+              from: [fromStatus],
+              to: status,
+              patch: update,
+            });
             affected += rows.length;
           }
           skipped = validIds.length - affected;

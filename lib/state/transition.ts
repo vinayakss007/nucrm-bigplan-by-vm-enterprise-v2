@@ -82,6 +82,37 @@ export async function transitionStatus(
   return row ? { ok: true, row } : { ok: false, reason: 'conflict' };
 }
 
+export interface TransitionManyArgs extends Omit<TransitionArgs, 'id'> {
+  /** The ids in one from-state group; empty means no rows can be claimed. */
+  ids: readonly string[];
+}
+
+/**
+ * Bulk form of the same claim. One statement per from-state group keeps the
+ * registry-supplied from-state in the WHERE; a concurrent edit loses its row
+ * and simply does not appear in `rows`, which the caller reports as skipped.
+ */
+export async function transitionStatusMany(
+  db: TransitionDb,
+  args: TransitionManyArgs,
+): Promise<{ rows: unknown[] }> {
+  const { table, ids, tenantId, from, to, patch, extraWhere } = args;
+  const cols = table as StatusTable;
+  const claim: SQL[] = [
+    inArray(cols.id, [...ids]),
+    ...(tenantId !== undefined && cols.tenantId ? [eq(cols.tenantId, tenantId)] : []),
+    ...(cols.deletedAt ? [isNull(cols.deletedAt)] : []),
+    inArray(cols.status, [...from]),
+    ...(extraWhere ? [extraWhere] : []),
+  ];
+  const rows = await db
+    .update(table)
+    .set({ ...(patch ?? {}), status: to })
+    .where(and(...claim))
+    .returning();
+  return { rows };
+}
+
 /** Map a lost claim to the HTTP contract callers must use. */
 export function transitionStatusResponse(
   entity: string,
