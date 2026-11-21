@@ -45,8 +45,8 @@ BEGIN
       p.polname AS policy_name,
       t.relname AS table_name,
       p.polcmd AS command,
-      p.polusing AS using_clause,
-      p.polwithcheck AS with_check_clause
+      pg_get_expr(p.polqual, p.polrelid) AS using_clause,
+      pg_get_expr(p.polwithcheck, p.polrelid) AS with_check_clause
     FROM pg_policy p
     JOIN pg_class t ON p.polrelid = t.oid
     JOIN pg_namespace n ON t.relnamespace = n.oid
@@ -61,8 +61,8 @@ BEGIN
       )
       -- Skip policies that already mention deleted_at (already armed)
       AND (
-        p.polusing IS NULL
-        OR p.polusing !~* 'deleted_at'
+        pg_get_expr(p.polqual, p.polrelid) IS NULL
+        OR pg_get_expr(p.polqual, p.polrelid) !~* 'deleted_at'
       )
       -- Skip policies on tables that do not carry tenant_id — those are platform
       -- tables (plans, modules, etc.) whose SELECT policies are USING (true), and
@@ -77,7 +77,10 @@ BEGIN
       -- Determine whether this policy is a super_admin-only or read_all policy that
       -- should NOT get the deleted_at arm, because it already scopes by a different
       -- dimension (is_super_admin flag, or world-readable by design).
-      is_super_admin_policy := r.using_clause ~* 'app.is_super_admin';
+      -- INSERT policies store their gate in WITH CHECK (polqual is NULL), so
+      -- look at both clauses before deciding a policy is super-admin-only.
+      is_super_admin_policy := coalesce(r.using_clause, '') ~* 'app.is_super_admin'
+                            OR coalesce(r.with_check_clause, '') ~* 'app.is_super_admin';
       is_read_all_policy := r.command = 'r' AND (r.using_clause ~* '^\s*(true|\(\s*true\s*\))\s*$');
 
       -- Arm the policy only when it is a tenant-scoped data policy. Platform read-all
@@ -110,20 +113,21 @@ BEGIN
           using_clause := '((deleted_at IS NULL) OR (NULLIF(current_setting(''app.include_deleted'', true), '''') = ''true''))';
         ELSIF r.using_clause ~* '^\s*\(\s*$' THEN
           -- Already wrapped in parens: append inside
-          using_clause := r.using_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app/include_deleted'', true), '''') = ''true''))';
+          using_clause := r.using_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app.include_deleted'', true), '''') = ''true''))';
         ELSE
-          using_clause := r.using_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app/include_deleted'', true), '''') = ''true''))';
+          using_clause := r.using_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app.include_deleted'', true), '''') = ''true''))';
         END IF;
 
-        -- WITH CHECK gets the same predicate on INSERT/UPDATE paths, so a caller
-        -- cannot write a tombstoned row through a policy that would read it (the
-        -- read and write arms stay consistent). For DELETE the WITH CHECK is not
-        -- applied by Postgres, so we keep it symmetric.
+        -- WITH CHECK gets the same predicate on INSERT/UPDATE/ALL paths, so a
+        -- caller cannot write a tombstoned row through a policy that would read
+        -- it. PostgreSQL rejects WITH CHECK on SELECT/DELETE and USING on
+        -- INSERT, so each command may only be recreated with the clauses it
+        -- accepts (#2537 simulation).
         IF r.with_check_clause IS NOT NULL AND r.with_check_clause != '' THEN
           IF r.with_check_clause ~* '^\s*\(\s*$' THEN
-            with_check_clause := r.with_check_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app/include_deleted'', true), '''') = ''true''))';
+            with_check_clause := r.with_check_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app.include_deleted'', true), '''') = ''true''))';
           ELSE
-            with_check_clause := r.with_check_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app/include_deleted'', true), '''') = ''true''))';
+            with_check_clause := r.with_check_clause || ' AND ((deleted_at IS NULL) OR (NULLIF(current_setting(''app.include_deleted'', true), '''') = ''true''))';
           END IF;
         ELSE
           with_check_clause := using_clause;
@@ -133,24 +137,33 @@ BEGIN
           'DROP POLICY IF EXISTS %I ON %I',
           r.policy_name, r.table_name
         );
-        EXECUTE format(
-          'CREATE POLICY %I ON %I FOR %s USING (%s) WITH CHECK (%s)',
-          r.policy_name, r.table_name,
-          CASE r.command
-            WHEN 'r' THEN 'SELECT'
-            WHEN 'a' THEN 'INSERT'
-            WHEN 'w' THEN 'UPDATE'
-            WHEN 'd' THEN 'DELETE'
-            WHEN 'wd' THEN 'DELETE'
-            WHEN 'rw' THEN 'UPDATE'
-            WHEN 'ra' THEN 'INSERT'
-            WHEN 'rwD' THEN 'DELETE'
-            WHEN 'rwd' THEN 'DELETE'
-            ELSE 'ALL'
-          END,
-          using_clause,
-          with_check_clause
-        );
+        CASE r.command
+          WHEN 'r' THEN
+            EXECUTE format(
+              'CREATE POLICY %I ON %I FOR SELECT USING (%s)',
+              r.policy_name, r.table_name, using_clause
+            );
+          WHEN 'd' THEN
+            EXECUTE format(
+              'CREATE POLICY %I ON %I FOR DELETE USING (%s)',
+              r.policy_name, r.table_name, using_clause
+            );
+          WHEN 'a' THEN
+            EXECUTE format(
+              'CREATE POLICY %I ON %I FOR INSERT WITH CHECK (%s)',
+              r.policy_name, r.table_name, with_check_clause
+            );
+          WHEN 'w' THEN
+            EXECUTE format(
+              'CREATE POLICY %I ON %I FOR UPDATE USING (%s) WITH CHECK (%s)',
+              r.policy_name, r.table_name, using_clause, with_check_clause
+            );
+          ELSE
+            EXECUTE format(
+              'CREATE POLICY %I ON %I FOR ALL USING (%s) WITH CHECK (%s)',
+              r.policy_name, r.table_name, using_clause, with_check_clause
+            );
+        END CASE;
       END IF;
     END LOOP;
 END $$;
@@ -174,9 +187,23 @@ BEGIN
         AND c.table_name = t.relname
         AND c.column_name = 'deleted_at'
     )
-    AND (
-      p.polusing IS NULL
-      OR p.polusing !~* 'deleted_at'
+    -- Measure exactly the set the loop above arms: tenant-scoped tables only,
+    -- excluding the policies it deliberately leaves alone (super-admin gates
+    -- and bare-true read-all). INSERT policies carry the arm in WITH CHECK
+    -- (polqual is NULL), so check both expressions.
+    AND EXISTS (
+      SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema = n.nspname
+        AND c.table_name = t.relname
+        AND c.column_name = 'tenant_id'
+    )
+    AND coalesce(pg_get_expr(p.polqual, p.polrelid), '') !~* 'deleted_at'
+    AND coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') !~* 'deleted_at'
+    AND coalesce(pg_get_expr(p.polqual, p.polrelid), '') !~* 'app.is_super_admin'
+    AND coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') !~* 'app.is_super_admin'
+    AND NOT (
+      p.polcmd = 'r'
+      AND coalesce(pg_get_expr(p.polqual, p.polrelid), '') ~* '^\s*(true|\(\s*true\s*\))\s*$'
     );
 
   IF missed > 0 THEN
