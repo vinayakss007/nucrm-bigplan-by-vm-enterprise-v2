@@ -19,7 +19,11 @@ const src = readFileSync(join(ROOT, 'app/api/scim/v2/Users/[id]/route.ts'), 'utf
 
 describe('#3407: SCIM deprovision goes through the single transition owner', () => {
   it('claims active→inactive with the tenant and registry from-states', () => {
-    const idx = src.indexOf('await transitionStatus(tx, {');
+    // The PATCH path now also uses the helper; target the DELETE deprovision
+    // write (the last one in the file) by searching from the delete handler.
+    const deleteAt = src.indexOf('export async function DELETE');
+    expect(deleteAt).toBeGreaterThan(-1);
+    const idx = src.indexOf('await transitionStatus(tx, {', deleteAt);
     expect(idx).toBeGreaterThan(-1);
     const tail = src.slice(idx, idx + 520);
     expect(tail).toMatch(/table: tenantMembers/);

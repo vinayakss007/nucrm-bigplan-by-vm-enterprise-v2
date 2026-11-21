@@ -314,15 +314,20 @@ export async function PATCH(
           if (memberUpdates) {
             const guard = await concurrencyGuard(tx as unknown as DbClient, tenantMembers, memberUpdates.id, tenantId, expectedMemberUpdatedAt);
             if (guard) throw guard;
-            const [updatedMember] = await tx
-              .update(tenantMembers)
-              .set({ status: memberUpdates.status, updatedAt: new Date() })
-              .where(and(
-                eq(tenantMembers.id, memberUpdates.id),
-                eq(tenantMembers.updatedAt, new Date(expectedMemberUpdatedAt as string | Date)),
-              ))
-              .returning({ id: tenantMembers.id });
-            if (!updatedMember) throw NextResponse.json(
+            // #3407 PR-4A: the status write belongs to the shared owner and the
+            // tenant_members registry, not this route. The client's
+            // expectedUpdatedAt check above stays; the helper adds the from-state
+            // claim and tombstone gate under the row lock, so a concurrent
+            // activate/deactivate cannot be stomped by a stale PATCH.
+            const updatedMember = await transitionStatus(tx, {
+              table: tenantMembers,
+              id: memberUpdates.id,
+              tenantId,
+              from: transitionFrom('tenantMembers', memberUpdates.status),
+              to: memberUpdates.status,
+              patch: { updatedAt: new Date() },
+            });
+            if (!updatedMember.ok) throw NextResponse.json(
               generateSCIMError('Stale data — record was modified. Please refresh.', 409),
               { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
             );
