@@ -194,7 +194,10 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
 
     const resGet = await GET(new Request('http://x/api/tenant/tasks/foobar', { method: 'GET' }) as never, undefined as never);
     expect(resGet!.status).toBe(404);
-    expect(await resGet!.json()).toEqual({ error: 'Not found' });
+    expect(await resGet!.json()).toEqual({
+      ok: false,
+      error: { code: 'DB_CLIENT_ERROR', message: 'Not found' },
+    });
 
     const resPost = await POST(new Request('http://x/api/tenant/tasks', { method: 'POST' }) as never, undefined as never);
     expect(resPost!.status).toBe(400);
@@ -216,12 +219,19 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     const dup = await mk('23505', 'duplicate key value violates unique constraint "roles_name_tenant_key"')(
       new Request('http://x/api/tenant/roles', { method: 'POST' }) as never, undefined as never);
     expect(dup!.status).toBe(409);
-    expect(await dup!.json()).toEqual({ error: 'Conflict: value already exists' });
+    // #3408 PR-5B: the wrapper emits the one canonical failure envelope.
+    expect(await dup!.json()).toEqual({
+      ok: false,
+      error: { code: 'DB_CLIENT_ERROR', message: 'Conflict: value already exists' },
+    });
 
     const fk = await mk('23503', 'violates foreign key constraint "tasks_contact_id_fkey"')(
       new Request('http://x/api/tenant/tasks', { method: 'PUT' }) as never, undefined as never);
     expect(fk!.status).toBe(400);
-    expect(await fk!.json()).toEqual({ error: 'Invalid reference' });
+    expect(await fk!.json()).toEqual({
+      ok: false,
+      error: { code: 'DB_CLIENT_ERROR', message: 'Invalid reference' },
+    });
   });
 
   it('pool checkout timeout fast-fails as 503 with Retry-After (#2122)', async () => {
@@ -234,7 +244,10 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
       new Request('http://x/api/tenant/contacts', { method: 'GET' }) as never, undefined as never);
     expect(res!.status).toBe(503);
     expect(res!.headers.get('retry-after')).toBe('2');
-    expect(await res!.json()).toEqual({ error: 'Service temporarily overloaded, please retry' });
+    expect(await res!.json()).toEqual({
+      ok: false,
+      error: { code: 'POOL_SATURATED', message: 'Service temporarily overloaded, please retry' },
+    });
   });
 });
 
