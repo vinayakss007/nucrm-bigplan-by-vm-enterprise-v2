@@ -1986,7 +1986,7 @@ costs off)` with RLS engaged: `Index Scan using idx_email_opens_tenant on email_
   is `POST /api/superadmin/selective-restore/execute`'s **first write**, before the SSE stream opens. The
   probe used the strongest context a super admin can have — bypass GUC on, no tenant pinned — and it
   still lost, so no request shape fixes it: `requireAuth` pins one pooled client for the whole request
-  (`lib/api/with-api-route.ts:88`) whose tenant is the **caller's**, never the restore target's, and the
+  (`lib/api/with-api-route.ts:89 (re-pinned 2026-11-21 from `:88` — #3716 added the canonical API-envelope import; guard:register-drift)`) whose tenant is the **caller's**, never the restore target's, and the
   policy compares `tenant_id` to exactly that setting. `createAuditLog` swallows its own failure, so the
   attempt leaves no row anywhere. The HTTP endpoint itself was not exercised against preprod: a
   successful `execute` restores data into a real tenant, so the policy was tested at the database.
@@ -2497,7 +2497,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   (77 s ×4, 80 s ×2) ⇒ those exceeded 77 s. 75.3 s sits at the top of the band. The match is only as good as the instrument:
   **a 30 s tick can bound a 75 s job to ±30 s and nothing better.**
 - **The one metric that could measure the duration cannot see this job.** `http_request_duration` is recorded only inside
-  `withApiRoute`'s `finally` (`lib/api/with-api-route.ts:155-164 (re-pinned 2026-11-17 from `:153-162` — the `finally` block moved two lines down; guard:register-drift)`), and per PP-049 only 3 of 22 cron routes are wrapped.
+  `withApiRoute`'s `finally` (`lib/api/with-api-route.ts:162-171 (re-pinned 2026-11-21 from `:155-164` — #3716 added apiFail() to the two synthesized error branches above the finally; re-pinned 2026-11-17 from `:153-162`; guard:register-drift)`), and per PP-049 only 3 of 22 cron routes are wrapped.
   `topk(6, max_over_time(http_request_duration_ms{path=~"/api/cron/.*"}[24h]))` returns exactly three series —
   `POST /api/cron/cleanup` **70299 ms**, `/api/cron/auto-backup` 7299, `/api/cron/retry-webhooks` 6796 — and
   **`/api/cron/process-sequences` is absent**. So the only route-duration metric in the stack is blind to the 75 s job.
@@ -2598,7 +2598,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:36-67,73-119,129,326 (**#3348** rewrote the :36 secret check in place; two lines in, two out, so no coordinate in the file moved)`
   (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1; again 2026-10-18 from `:35-66,72-118,128,297` — **#2795**/**#2810** added one more line above `POST` *and* 28 lines between `:129` and `:326`, so the far coordinate moved 29, not 1),
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:272` (same #3016 shift, re-pinned 2026-11-13 from `:231` for **#3516**),
-  `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
+  `lib/api/with-api-route.ts:107-168 (re-pinned 2026-11-21 from `:106-162` — #3716 shifted the wrapper body with the envelope import and apiFail() branches; guard:register-drift)`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
   `deploy/pgbouncer/pgbouncer.ini:2,10,20`, `deploy/docker-compose.preprod.yml:36,47,144,152`. Related: **PP-028** (the 200 ms
   budget), **PP-030/PP-049** (cron honesty), **PP-036/037/039** (the same latency on the request side), **PP-051** (which
   sweeps are even on the schedule).
@@ -2641,7 +2641,7 @@ entry ships nothing.
   `lead-warming/route.ts:12` "Schedule: Daily at 9:00 AM", `backup/route.ts:20` "Called daily by cron — runs pg_dump",
   `sla-check/route.ts:21` "Runs periodically (e.g., every 5-10 minutes)", `process-lead-scoring/route.ts:8` "Cron: Nightly
   Lead Scoring Recompute". And nothing else calls them: `checkSLABreach`'s only non-test consumer is
-  `app/api/cron/sla-check/route.ts:156` (re-pinned 2026-10-28 from `:150`: **#3315** added the recipient-reporting counters
+  `app/api/cron/sla-check/route.ts:189 (re-pinned 2026-11-21 from `:156` — #3741 added the real-policy-UUID resolver above the breach check; re-pinned 2026-10-28 from `:150`: **#3315** added the recipient-reporting counters
   above the scan loop); `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
   `processLeadWarming` is reached only through `lib/lead-warming/index.ts` and its own route. A repo-wide grep for
   `/api/cron/<name>` across these five returns tests, the dead scheduler and `postman/full-test-suite.sh` — **no UI caller, no
@@ -4874,7 +4874,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
-  three bulk callers (`leads/bulk/route.ts:382 (re-pinned 2026-11-17 from `:376` — later edits grew the audit-ids block above the insert by six lines; guard:register-drift; re-pinned 2026-10-16 from `:326`: #2647 bulk gate; re-pinned again the same day from `:348`: #2692/#2693 added the lead owner scope 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** grew the audit-ids block above it and rewrote the enroll as a `.returning()` chain)`, `contacts/bulk/route.ts:468 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter; re-pinned 2026-10-18 from `:452`: #2813 added 4 lines above, returning it to the number it briefly held before that move; re-pinned 2026-10-23 from `:456`: #3123's `restore` case — the `auditIds` declaration and the `restoreBulkContacts` branch — added 12 lines above; the number did not move on 2026-10-25 but its text did: **#3220** replaced the one-line `onConflictDoNothing()` with the `const inserted = await db` chain, so the cite re-pins to this revision to keep saying what the sentence claims)`,
+  three bulk callers (`leads/bulk/route.ts:382 (re-pinned 2026-11-17 from `:376` — later edits grew the audit-ids block above the insert by six lines; guard:register-drift; re-pinned 2026-10-16 from `:326`: #2647 bulk gate; re-pinned again the same day from `:348`: #2692/#2693 added the lead owner scope 13 lines above; re-pinned 2026-10-18 from `:361`: #2793's `firstStepDueAt` import (#2813) added one line above; re-pinned 2026-10-23 from `:362`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:364`: **#3220** grew the audit-ids block above it and rewrote the enroll as a `.returning()` chain)`, `contacts/bulk/route.ts:470 (re-pinned 2026-11-21 from `:468` — #3746 added the payload/updates fallback two lines above; guard:register-drift) (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter; re-pinned 2026-10-18 from `:452`: #2813 added 4 lines above, returning it to the number it briefly held before that move; re-pinned 2026-10-23 from `:456`: #3123's `restore` case — the `auditIds` declaration and the `restoreBulkContacts` branch — added 12 lines above; the number did not move on 2026-10-25 but its text did: **#3220** replaced the one-line `onConflictDoNothing()` with the `const inserted = await db` chain, so the cite re-pins to this revision to keep saying what the sentence claims)`,
   `deals/bulk/route.ts:435 (re-pinned 2026-11-17: **#3409**'s quota-admission rewrite shortened the file by 44 lines; re-pinned 2026-10-16 from `:472`: #2671 added the `deals.view_all` scope 6 lines above; was `:446` for #2616/#2641; re-pinned 2026-10-23 from `:478`: #3148's `add_to_segment` role gate added 2 lines above; re-pinned 2026-10-25 from `:480`: **#3220**'s chain replaced the statement and the `affected =` line took the old number)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
@@ -5469,7 +5469,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `compliance_requests` in the loop whose generated policy is `CREATE POLICY tenant_isolation …` with no
   `FOR` clause (`:178-180`) — therefore `FOR ALL`, so a tenant-scoped UPDATE is permitted — and the GUC
   that policy reads is held for the whole handler by `withApiRoute`'s
-  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:201 (re-pinned 2026-11-17 from `:199` — shutdown-drain comments above the carrier call grew two lines; guard:register-drift)`,
+  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:208 (re-pinned 2026-11-21 from `:201` — #3716 grew the catch block above with apiFail(); re-pinned 2026-11-17 from `:199`; guard:register-drift)`,
   `lib/db/tenant-carrier.ts:11`). The reaper's `UPDATE` pins `id` + `tenant_id` + `status = 'processing'`,
   so it is CAS-guarded against a marker that landed during the read and cannot move another tenant's row
   even if a future caller handed it one; the two markers pin `id` + `tenant_id` and hold **no** status
