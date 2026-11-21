@@ -34,7 +34,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { Pool } from 'pg';
+import { Pool, type QueryResultRow } from 'pg';
 
 import { pgSslConfig } from '../lib/db/ssl-config';
 import {
@@ -88,7 +88,12 @@ export async function ledgerRows(pool: Pool): Promise<LedgerRowLike[]> {
 }
 
 export async function catalogCounts(pool: Pool) {
-  const q = async <T>(text: string): Promise<T> => (await pool.query<T>(text)).rows[0];
+  const q = async <T extends QueryResultRow,>(text: string): Promise<T> => {
+    const { rows } = await pool.query<T>(text);
+    const first = rows[0];
+    if (first === undefined) throw new Error(`catalog query returned no rows: ${text}`);
+    return first;
+  };
   const tables = await q<{ n: string }>(
     `SELECT COUNT(*)::text n FROM information_schema.tables WHERE table_schema = 'public'`,
   );
