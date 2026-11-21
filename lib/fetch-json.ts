@@ -29,6 +29,14 @@ export type FetchJsonResult<T> =
 function messageFromBody(body: unknown): string | null {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
+    // #3408 PR-5B: the canonical failure body is { ok:false, error:{ code,
+    // message } }. Read the structured error before the legacy bare string so
+    // both shapes surface their message instead of a generic status line.
+    const error = record['error'];
+    if (error && typeof error === 'object') {
+      const message = (error as Record<string, unknown>)['message'];
+      if (typeof message === 'string' && message) return message;
+    }
     for (const key of ['error', 'message']) {
       if (typeof record[key] === 'string' && record[key]) return record[key] as string;
     }

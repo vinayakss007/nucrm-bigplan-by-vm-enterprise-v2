@@ -43,6 +43,19 @@ describe('fetchJsonSafe (#2231)', () => {
     expect(out).toMatchObject({ statusCode: 500, message: 'Database connection lost' });
   });
 
+  it('500 with the canonical { ok:false, error:{ code, message } } surfaces the message', async () => {
+    // #3408 PR-5B: withApiRoute now emits this shape for its own synthesized
+    // errors; a consumer of fetchJsonSafe must not fall back to a generic line.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(500,
+      { ok: false, error: { code: 'POOL_SATURATED', message: 'Service temporarily overloaded, please retry' } })));
+    const out = await fetchJsonSafe('/api/x');
+    expect(out).toMatchObject({
+      status: 'error',
+      statusCode: 500,
+      message: 'Service temporarily overloaded, please retry',
+    });
+  });
+
   it('500 with an HTML body (gateway page) resolves as error, never rejects', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(500, '<!doctype html><h1>500</h1>', { contentType: 'text/html' })));
     const out = await fetchJsonSafe('/api/x');
