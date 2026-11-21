@@ -15,10 +15,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
-import { canTransition, allowedFromStatus } from '@/lib/offers';
+import { canTransition } from '@/lib/offers';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
@@ -53,12 +55,17 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // transition's from-set into the write makes the loser fail here instead of
     // silently winning, and `returning()` is how the handler finds that out.
     const cancelled = await db.transaction(async (tx) => {
-      const [won] = await tx
-        .update(quotes)
-        .set({
-          status: 'cancelled',
+      // #3407 PR-4A: the status claim belongs to the shared helper and the
+      // quotes registry. Stripping the public_token stays in the patch — the
+      // tombstone gate the helper adds is the only new predicate.
+      const won = await transitionStatus(tx, {
+        table: quotes,
+        id: quoteId,
+        tenantId: ctx.tenantId,
+        from: transitionFrom('quotes', 'cancelled'),
+        to: 'cancelled',
+        patch: {
           updatedAt: new Date(),
-          // Strip the public_token so /p/offers/<token> 404s cleanly going forward
           metadata: sql`
             CASE
               WHEN ${quotes.metadata}->'offer' IS NULL THEN ${quotes.metadata}
@@ -69,14 +76,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
               )
             END
           `,
-        })
-        .where(and(
-          eq(quotes.id, quoteId),
-          eq(quotes.tenantId, ctx.tenantId),
-          inArray(quotes.status, allowedFromStatus('cancelled')),
-        ))
-        .returning({ id: quotes.id });
-      if (!won) return false;
+        },
+      });
+      if (!won.ok) return false;
 
       if (quote.contactId) {
         await tx.insert(activities).values({

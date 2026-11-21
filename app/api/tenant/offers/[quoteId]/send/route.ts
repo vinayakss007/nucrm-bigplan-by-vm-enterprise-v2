@@ -23,7 +23,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, contacts, activities } from '@/drizzle/schema';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
@@ -34,7 +36,6 @@ import {
   patchOfferMetadata,
   readOfferMetadata,
   canTransition,
-  allowedFromStatus,
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -122,21 +123,22 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // metadata keeps one URL per offer.
     let committedToken = publicToken;
     const sent = await db.transaction(async (tx) => {
-      const [won] = await tx
-        .update(quotes)
-        .set({
-          status: 'sent',
+      // #3407 PR-4A: the status claim belongs to the shared helper and the
+      // quotes registry; the tenant scope and from-state it adds are the same
+      // rule this route had inlined.
+      const won = await transitionStatus(tx, {
+        table: quotes,
+        id: quoteId,
+        tenantId: ctx.tenantId,
+        from: transitionFrom('quotes', 'sent'),
+        to: 'sent',
+        patch: {
           sentAt: new Date(),
           ...(expiresAt ? { expiresAt } : {}),
           updatedAt: new Date(),
-        })
-        .where(and(
-          eq(quotes.id, quoteId),
-          eq(quotes.tenantId, ctx.tenantId),
-          inArray(quotes.status, allowedFromStatus('sent')),
-        ))
-        .returning({ id: quotes.id });
-      if (!won) return false;
+        },
+      });
+      if (!won.ok) return false;
 
       const fresh = await tx.query.quotes.findFirst({
         where: and(eq(quotes.id, quoteId), eq(quotes.tenantId, ctx.tenantId)),
