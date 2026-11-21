@@ -634,7 +634,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
                 <button
                   key={stage.id}
                   onClick={async () => {
-                    await updateDealStage(showMobileStagePicker.dealId, stage.name.toLowerCase())
+                    await updateDealStage(showMobileStagePicker.dealId, stage.id)
                     setShowMobileStagePicker(null)
                   }}
                   className={cn(
