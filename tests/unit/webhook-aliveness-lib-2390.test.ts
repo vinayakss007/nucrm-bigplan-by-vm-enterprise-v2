@@ -176,7 +176,9 @@ describe('retryFailedWebhooks (#2390)', () => {
   it('still keeps its own status / attempt / due predicates', async () => {
     const sql = await retrySql();
     expect(sql).toMatch(/"?status"?\s*=/i);
-    expect(sql).toMatch(/"?attempt"?\s*<\s*\$/i);
+    // #3743: inclusive — the 24-hour retry scheduled at attempt MAX_RETRIES
+    // must be selectable; the exclusive '<' made it unreachable.
+    expect(sql).toMatch(/"?attempt"?\s*<=\s*\$/i);
     expect(sql).toMatch(/"?next_retry_at"?\s*<=\s*\$/i);
   });
 

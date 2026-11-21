@@ -31,6 +31,7 @@ import { NextResponse } from 'next/server';
 import type { CronTenantSweep } from '@/lib/cron/tenant-scope';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
+const DEFAULT_POLICY_ID = '44444444-4444-4444-8444-444444444444';
 
 vi.mock('@/lib/auth/cron', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth/cron')>()),
@@ -106,7 +107,13 @@ vi.mock('@/drizzle/db', () => {
           Promise.resolve(rowsFor(seen.table)).then(resolve, reject);
         return chain;
       },
-      insert: () => ({ values: () => Promise.resolve(events.push('insert-recorded')) }),
+      // #3741: resolving a real policy UUID inserts a default sla_policies row
+      // with .returning(); keep the breach-insert event shape unchanged.
+      insert: (source: unknown) => ({
+        values: () => tableName(source) === 'sla_policies'
+          ? { returning: () => Promise.resolve([{ id: DEFAULT_POLICY_ID }]) }
+          : Promise.resolve(events.push('insert-recorded')),
+      }),
       update: () => ({ set: () => ({ where: () => Promise.resolve(events.push('escalation-recorded')) }) }),
       query: { slaPolicies: { findMany: async () => policyRows } },
     },

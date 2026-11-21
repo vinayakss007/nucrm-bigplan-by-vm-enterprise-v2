@@ -90,12 +90,15 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
 
-  const loadData = useCallback(async (page = 0) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
+    const q = filterOverride !== undefined ? filterOverride : globalFilter
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
+    if (q) params.set('q', q)
     // #3408: a failed refresh must not render "No projects yet" over an outage.
     const result = await fetchJsonSafe<{ data?: ApiProjectRow[]; total?: number }>(`/api/tenant/projects?${params}`)
     if (result.status === 'ok') {
@@ -116,7 +119,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
       setTotal(result.data.total ?? 0)
     } else if (result.status === 'error') setLoadError(result.message)
     setLoading(false)
-  }, [pagination.pageSize])
+  }, [pagination.pageSize, globalFilter])
 
   const { deleteEntity } = useDeleteWithUndo('project', loadData)
 
@@ -127,11 +130,13 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
 
   const handlePageSizeChange = useCallback((size: number) => {
     setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+    loadData(0, undefined, size)
+  }, [loadData])
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-  }, [])
+    loadData(0, filter)
+  }, [loadData])
 
   const openCreate = () => {
     setForm(emptyForm)

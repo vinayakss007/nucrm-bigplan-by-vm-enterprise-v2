@@ -24,6 +24,7 @@ import { parsePageLimit, parseLimitOffset } from '@/lib/api/query-params';
 import type { CronTenantSweep } from '@/lib/cron/tenant-scope';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
+const DEFAULT_POLICY_ID = '44444444-4444-4444-8444-444444444444';
 
 // ---------------------------------------------------------------------------
 // Part 1 — shared clamp helper behavior
@@ -289,11 +290,21 @@ vi.mock('@/drizzle/db', () => {
   return {
     db: {
       select: () => makeChain(),
-      insert: () => ({
-        values: () =>
-          insertShouldFail
+      // #3741: sla-check now resolves a REAL policy UUID. With no configured
+      // policy it inserts a default sla_policies row and calls .returning() on
+      // the result — the mock must support that chain, and forced-failure
+      // applies only to breach inserts (the thing that #2229 is about).
+      insert: (source: unknown) => ({
+        values: () => {
+          if (tableName(source) === 'sla_policies') {
+            return {
+              returning: () => Promise.resolve([{ id: DEFAULT_POLICY_ID }]),
+            };
+          }
+          return insertShouldFail
             ? Promise.reject(new Error('forced breach-insert failure'))
-            : Promise.resolve(events.push('insert-recorded')),
+            : Promise.resolve(events.push('insert-recorded'));
+        },
       }),
       update: () => ({
         set: () => ({

@@ -135,7 +135,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid contacts found' }, { status: 404 });
 
-    const payload = rawBody.payload ?? {};
+    // #3746: the schema and the client both use `updates`; `payload` was the
+    // only key this handler read, so tag/assign/status always saw an empty bag.
+    const payload = rawBody.payload ?? rawBody.updates ?? {};
     let affected = 0;
     // The audit trail logs the ids the action actually touched, which for `restore`
     // is the re-resolved set rather than this live one.

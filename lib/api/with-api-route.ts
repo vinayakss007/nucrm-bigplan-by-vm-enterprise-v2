@@ -58,6 +58,7 @@ import { withPinnedConnection } from '@/lib/db/request-connection';
 import { runWithTenantCarrier } from '@/lib/db/tenant-carrier';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
 import { clientErrorFromDbCode, runWithHttpMethod } from '@/lib/api/db-client-error';
+import { apiFail } from '@/lib/api/api-envelope';
 import { metrics } from '@/lib/metrics';
 
 /**
@@ -141,15 +142,21 @@ export function withApiRoute<C = unknown>(
       // pool drains instead of piling on doomed requests.
       if (err instanceof Error && /timeout exceeded when trying to connect/i.test(err.message)) {
         metricStatus = 503;
+        // #3408 PR-5B: errors the WRAPPER synthesizes use the one canonical
+        // envelope. The widget reads body.error.message and the shared clients
+        // read { error: { message } }, so this shape is already understood.
         return NextResponse.json(
-          { error: 'Service temporarily overloaded, please retry' },
+          apiFail('POOL_SATURATED', 'Service temporarily overloaded, please retry'),
           { status: 503, headers: { 'Retry-After': '2' } }
         );
       }
       const mapped = clientErrorFromDbCode(err, metricMethod);
       if (mapped) {
         metricStatus = mapped.status;
-        return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+        return NextResponse.json(
+          apiFail('DB_CLIENT_ERROR', mapped.message),
+          { status: mapped.status }
+        );
       }
       throw err;
     } finally {

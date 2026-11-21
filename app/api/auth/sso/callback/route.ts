@@ -22,7 +22,8 @@ import {
   roles,
   sessions,
 } from '@/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { transitionStatus } from '@/lib/state/transition';
 import { ConcurrencyError } from '@/lib/concurrency';
 import { exchangeAndVerify, loadProviderConfig } from '@/lib/auth/sso/oidc';
 import { readSsoState, clearSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
@@ -259,15 +260,20 @@ async function upsertUserAndMembership(args: {
       // #3407: the read above is unlocked — carry the from-set into the write
       // so an admin who removes this member in the gap wins. SSO must never
       // silently undo a deliberate removal by reactivating on an id-only write.
-      const reactivated = await tx
-        .update(tenantMembers)
-        .set({ status: 'active', updatedAt: new Date() })
-        .where(and(
-          eq(tenantMembers.id, existingMember.id),
-          inArray(tenantMembers.status, ['invited', 'pending', 'suspended'])
-        ))
-        .returning({ id: tenantMembers.id });
-      if (!reactivated.length) throw new ConcurrencyError('Membership');
+      // #3407 PR-4A: the claim goes through the shared helper, which adds the
+      // tenant + tombstone gate. The from-set stays SSO-specific: only lapsed
+      // access is revived here — a deliberately removed member is never
+      // silently reactivated by an IdP login (that is the registry's job for
+      // SCIM's inactive state, a different rule).
+      const reactivated = await transitionStatus(tx, {
+        table: tenantMembers,
+        id: existingMember.id,
+        tenantId: args.tenantId,
+        from: ['invited', 'pending', 'suspended'],
+        to: 'active',
+        patch: { updatedAt: new Date() },
+      });
+      if (!reactivated.ok) throw new ConcurrencyError('Membership');
     }
 
     return userId;

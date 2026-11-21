@@ -20,7 +20,8 @@ const data = vi.hoisted(() => ({
 
 vi.mock('@/lib/query/client', () => ({
   useApiQuery: () => ({
-    data: { data: data.notifications, total: 1 },
+    // #3754: the page now reads tenant-wide counts from the API envelope.
+    data: { data: data.notifications, total: 1, totalAll: 1, unread: 1 },
     error: null, isLoading: false, refetch: vi.fn(),
   }),
 }));

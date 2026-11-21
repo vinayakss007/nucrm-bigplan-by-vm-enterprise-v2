@@ -28,6 +28,8 @@ import { clampInt } from '@/lib/api/query-params';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { inScimTransaction, withScimEmailLookup, withScimTenantContext, withScimUserIdentity } from '@/lib/db/scim-context';
 import { authenticateSCIMRequest } from '@/lib/scim/user-route-support';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, ilike, sql } from 'drizzle-orm';
 import {
@@ -308,10 +310,20 @@ export async function POST(request: NextRequest) {
             joinedAt: new Date(),
           });
         } else {
-          // Reactivate if inactive
-          await tx.update(tenantMembers)
-            .set({ status: 'active', updatedAt: new Date() })
-            .where(eq(tenantMembers.id, existingMember.id));
+          // #3407: a reactivation is a state transition, owned by the shared
+          // helper and the tenant_members registry. The old write keyed on the
+          // id alone and could stomp a concurrent deactivation; the claim now
+          // carries tenant + from-state + tombstone under the row lock. A lost
+          // claim means another writer already settled the state — provisioning
+          // is idempotent, so that is a no-op, not a 500.
+          await transitionStatus(tx, {
+            table: tenantMembers,
+            id: existingMember.id,
+            tenantId,
+            from: transitionFrom('tenantMembers', 'active'),
+            to: 'active',
+            patch: { updatedAt: new Date() },
+          });
         }
 
         return { userId: uid, isNew: created };

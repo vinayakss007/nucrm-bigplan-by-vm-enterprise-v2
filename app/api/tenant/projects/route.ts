@@ -12,7 +12,8 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { projects, users } from '@/drizzle/schema';
-import { eq, and, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull, ilike, or } from 'drizzle-orm';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { ModuleRegistry } from '@/lib/modules/registry';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
@@ -24,11 +25,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const { searchParams } = new URL(request.url);
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
+    const q = searchParams.get('q')?.trim();
 
     const filters = [
       eq(projects.tenantId, ctx.tenantId),
       isNull(projects.deletedAt),
     ];
+    // #3752: server-side search so the projects table's q filters the whole
+    // tenant, not just the current page (DataTable only filters loaded rows).
+    if (q) filters.push(or(ilike(projects.name, `%${escapeLike(q)}%`), ilike(projects.description, `%${escapeLike(q)}%`))!);
 
     const [countRes] = await db.select({
       count: sql<number>`count(*)::int`,

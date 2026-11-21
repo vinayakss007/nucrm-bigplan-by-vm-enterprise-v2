@@ -76,8 +76,8 @@ describe('transitionStatus', () => {
     expect(outcome).toEqual({ ok: false, reason: 'conflict' });
   });
 
-  it('does not issue an UPDATE for a row that is gone', async () => {
-    const { db, set } = makeDb({ exists: false });
+  it('makes one UPDATE and no classifying read when the claim is lost', async () => {
+    const { db, set, fromFn } = makeDb({ exists: false });
     const outcome = await transitionStatus(db, {
       table,
       id: 'inv-1',
@@ -85,8 +85,9 @@ describe('transitionStatus', () => {
       from: ['draft'],
       to: 'sent',
     });
-    expect(outcome).toEqual({ ok: false, reason: 'not_found' });
-    expect(set).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ ok: false, reason: 'conflict' });
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(fromFn).not.toHaveBeenCalled();
   });
 });
 

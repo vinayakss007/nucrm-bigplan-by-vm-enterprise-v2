@@ -27,6 +27,8 @@ import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { canTransitionTicket } from '@/lib/tickets';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus } from '@/lib/state/transitions';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -237,25 +239,38 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
       // the CSAT branch below. `.returning()` makes "did I own this row?" a
       // fact instead of an assumption.
       //
-      // #3407: when this request writes `status`, the WHERE also claims the
-      // exact state the vet above read. Postgres re-evaluates it under the row
-      // lock, so a concurrent close/reopen becomes zero rows instead of a
-      // silent stomp. The `deletedAt` gate the vet applied is retained for the
-      // same reason: a soft-deleted ticket is not this handler's to edit.
-      const [updated] = await tx.update(supportTickets)
-        .set(updates)
-        .where(and(
-          eq(supportTickets.tenantId, ctx.tenantId),
-          eq(supportTickets.id, id),
-          isNull(supportTickets.deletedAt),
-          ...(v.status ? [eq(supportTickets.status, existing.status)] : []),
-        ))
-        .returning({ id: supportTickets.id });
-
-      if (!updated) {
-        if (v.status) lostStatusClaim = true;
-        else notFound = true;
-        return;
+      // #3407 PR-4A: a status write goes through the one owner of status.
+      // The transition registry supplies the allowed from-states, and
+      // transitionStatus pins them in the UPDATE's WHERE under the row lock,
+      // so a concurrent close/reopen loses the claim instead of stomping it.
+      // Non-status PATCHes keep the ordinary guarded UPDATE below.
+      if (v.status) {
+        const outcome = await transitionStatus(tx, {
+          table: supportTickets,
+          id,
+          tenantId: ctx.tenantId,
+          from: allowedFromStatus('supportTickets', v.status),
+          to: v.status,
+          patch: updates,
+        });
+        if (!outcome.ok) {
+          if (outcome.reason === 'conflict') lostStatusClaim = true;
+          else notFound = true;
+          return;
+        }
+      } else {
+        const [row] = await tx.update(supportTickets)
+          .set(updates)
+          .where(and(
+            eq(supportTickets.tenantId, ctx.tenantId),
+            eq(supportTickets.id, id),
+            isNull(supportTickets.deletedAt),
+          ))
+          .returning({ id: supportTickets.id });
+        if (!row) {
+          notFound = true;
+          return;
+        }
       }
 
       // #3407: only a real move into `resolved` mints a survey. Re-clicking

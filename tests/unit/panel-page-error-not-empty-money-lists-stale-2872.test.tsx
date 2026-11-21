@@ -99,7 +99,9 @@ const subRows = {
     { id: 's1', name: 'Fleet telemetry', planName: 'Pro', status: 'active', startDate: NOW, currentPeriodEnd: null, amount: '129.00', billingFrequency: 'monthly', autoRenew: true },
   ],
 };
-const contactRows = { contacts: [{ id: 'ct1', firstName: 'Kestrel', lastName: 'Vane', email: 'kestrel@example.test' }] };
+// #3750: feed the REAL /api/tenant/contacts envelope — { data: [...] } with
+// snake_case fields, as the sibling invoice/contract test already does.
+const contactRows = { data: [{ id: 'ct1', first_name: 'Kestrel', last_name: 'Vane', email: 'kestrel@example.test' }], total: 1, offset: 0, limit: 200 };
 
 const ok = (data: unknown): QueryResult => ({ data, error: null, isLoading: false, refetch: vi.fn() });
 const failed = (message = 'Request failed (500)'): QueryResult => ({

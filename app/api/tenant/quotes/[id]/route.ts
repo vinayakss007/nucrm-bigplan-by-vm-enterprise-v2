@@ -14,6 +14,8 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { withConcurrencyGuard } from '@/lib/concurrency';
 import { allowedFromStatus, canTransition, type OfferStatus } from '@/lib/offers';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -217,23 +219,24 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const quoteId = (await params).id;
 
-    const [row] = await db
-      .update(quotes)
-      .set({
+    // #3407 PR-4A: the cancel-on-delete status claim belongs to the shared
+    // helper and the quotes registry. The tombstone columns stay in the patch;
+    // a concurrent accept/decline in the gap now loses the claim instead of
+    // being overwritten by the soft-delete.
+    const outcome = await transitionStatus(db, {
+      table: quotes,
+      id: quoteId,
+      tenantId: ctx.tenantId,
+      from: transitionFrom('quotes', 'cancelled'),
+      to: 'cancelled',
+      patch: {
         deletedAt: new Date(),
         deletedBy: ctx.userId,
-        status: 'cancelled',
-      })
-      .where(
-        and(
-          eq(quotes.id, quoteId),
-          eq(quotes.tenantId, ctx.tenantId),
-          sql`${quotes.deletedAt} IS NULL`
-        )
-      )
-      .returning({ id: quotes.id });
+      },
+    });
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!outcome.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const row = outcome.row as { id: string };
 
     await logAudit({
       tenantId: ctx.tenantId,

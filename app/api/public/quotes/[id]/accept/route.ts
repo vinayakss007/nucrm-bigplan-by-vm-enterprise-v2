@@ -5,13 +5,15 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
-import { allowedFromStatus, canTransition } from '@/lib/offers';
+import { canTransition } from '@/lib/offers';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 
 /**
  * What the one transaction decided. Mapped to a response below, outside the
@@ -111,29 +113,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       };
 
       if (quote.expiresAt && new Date(quote.expiresAt).getTime() < now.getTime()) {
-        const [expired] = await tx
-          .update(quotes)
-          .set({ status: 'expired', updatedAt: now })
-          .where(and(
-            eq(quotes.id, quote.id),
-            eq(quotes.tenantId, quote.tenantId),
-            inArray(quotes.status, allowedFromStatus('expired')),
-          ))
-          .returning({ id: quotes.id });
-        if (expired) return { kind: 'expired' };
+        // #3407 PR-4A: the status claim belongs to the shared helper and the
+        // registry, not this route. The tenant scope and the lost-claim re-read
+        // stay; the helper adds the tombstone gate.
+        const expired = await transitionStatus(tx, {
+          table: quotes,
+          id: quote.id,
+          tenantId: quote.tenantId,
+          from: transitionFrom('quotes', 'expired'),
+          to: 'expired',
+          patch: { updatedAt: now },
+        });
+        if (expired.ok) return { kind: 'expired' };
         return lostClaim();
       }
 
-      const [accepted] = await tx
-        .update(quotes)
-        .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
-        .where(and(
-          eq(quotes.id, quote.id),
-          eq(quotes.tenantId, quote.tenantId),
-          inArray(quotes.status, allowedFromStatus('accepted')),
-        ))
-        .returning({ id: quotes.id });
-      if (!accepted) return lostClaim();
+      const accepted = await transitionStatus(tx, {
+        table: quotes,
+        id: quote.id,
+        tenantId: quote.tenantId,
+        from: transitionFrom('quotes', 'accepted'),
+        to: 'accepted',
+        patch: { acceptedAt: now, updatedAt: now },
+      });
+      if (!accepted.ok) return lostClaim();
 
       await tx.insert(activities).values({
         tenantId: quote.tenantId,

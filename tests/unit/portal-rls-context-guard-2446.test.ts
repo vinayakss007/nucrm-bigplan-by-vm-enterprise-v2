@@ -145,6 +145,19 @@ describe('violations the guard must name (#2446)', () => {
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('not bound by a context-establishing call');
   });
 
+  it('still sees a table whose status write moved into transitionStatus (#3407)', () => {
+    // A helper call has no `.update(table)` chain in the route file. Without
+    // this case the guard would go quietly blind as routes adopt the single
+    // transition owner — and its statement floor would drop with it.
+    const src = `await withTenantContext(t, NO_USER_SENTINEL, (tx) => transitionStatus(tx, {
+      table: invoices, id: 'x', from: ['draft'], to: 'sent',
+    }));`;
+    expect(findReads(src, tables)).toEqual([
+      expect.objectContaining({ js: 'invoices', handle: 'tx', isQuery: false }),
+    ]);
+    expect(problems('app/api/public/x/route.ts', src)).toEqual([]);
+  });
+
   it('reports a statement that reads a policyed table with no handle it can name', () => {
     const src = 'const rows = await pool().select({ id: invoices.id }).from(invoices);';
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('hangs off nothing');
@@ -389,8 +402,12 @@ describe('the bearer-token surface #2446 deferred is bound, with no baseline (#2
       const src = readFileSync(join(ROOT, file), 'utf8');
       const found = analyzeSource(file, src, repoTables, [], ROOT);
       expect(found.violations.map((v) => `${v.table}@${v.line}: ${v.problem}`)).toEqual([]);
-      // Non-vacuity, two ways: the analyzer still finds these tables here…
-      const read = findReads(src, repoTables).filter((r) => r.isQuery);
+      // Non-vacuity, two ways: the analyzer still finds these tables here.
+      // #3407: a status write routed through `transitionStatus(tx, {table})`
+      // is a recognized read with `isQuery:false` (the helper owns the query),
+      // so count both forms — filtering on isQuery alone would make the
+      // guard look vacuous after a legitimate conversion.
+      const read = findReads(src, repoTables);
       expect([...new Set(read.map((r) => r.js))].sort()).toEqual(expect.arrayContaining(expected.slice().sort()));
       // …and none of them hangs off the bare pool any more.
       expect(read.filter((r) => r.handle === 'db').map((r) => `${r.js}@${r.line}`)).toEqual([]);

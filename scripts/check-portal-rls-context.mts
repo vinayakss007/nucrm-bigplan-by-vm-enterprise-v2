@@ -481,6 +481,29 @@ export function findReads(src: string, tables: Map<string, TenantTable>): Read[]
       if (t) push(t.js, t.sql, m.index + m[0].indexOf(tableIdent));
     }
   }
+  // #3407 PR-4A: status writes moved into `transitionStatus(tx, { table })`
+  // have no `.from/.update` chain in this file, so the patterns above would go
+  // blind to a tenant-policyed table. Name the helper's transaction handle
+  // explicitly — the same handle the guard would have found on a direct chain.
+  const transitionRef = /\btransitionStatus(?:Many)?\s*\(\s*([A-Za-z_$][\w$]*)\s*,[^;]*?\btable:\s*([A-Za-z]\w*)/g;
+  while ((m = transitionRef.exec(src)) !== null) {
+    const handle = m[1];
+    const tableIdent = m[2];
+    if (!handle || !tableIdent) continue;
+    const t = tables.get(tableIdent);
+    if (!t) continue;
+    const statement = spanAt(spans, m.index);
+    if (!statement) continue;
+    found.push({
+      offset: m.index + m[0].lastIndexOf(tableIdent),
+      stmtStart: statement.start,
+      read: {
+        js: t.js, sql: t.sql, line: lineOf(src, m.index), handle,
+        isQuery: false, statement: statement.text,
+      },
+    });
+  }
+
   const queryRef = /\.query\s*\.\s*([A-Za-z][\w]*)/g;
   while ((m = queryRef.exec(src)) !== null) {
     const js = m[1];
@@ -913,8 +936,10 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     deferredTo: '#2539',
     why: 'Scheduled jobs authenticate by cron secret and then iterate every tenant deliberately; '
       + 'the per-tenant context loop is the work #2539 tracks, and these reads are its, not a route '
-      + 'that forgot withTenantContext().',
-    maxFindings: 59,
+      + 'that forgot withTenantContext(). #3741 added one more: the default sla_policies row is '
+      + 'inserted inside sweepTenants, which sets the tenant GUC on the pinned connection, so the '
+      + 'write is context-bound at runtime even though a static walk cannot see it.',
+    maxFindings: 60,
   },
 ];
 

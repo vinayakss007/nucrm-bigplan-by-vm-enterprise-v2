@@ -76,6 +76,35 @@ async function cronRouteHandler(request: NextRequest) {
         policyMap.set(`${p.tenantId}:${p.priority}`, p);
       }
 
+      // #3741: sla_breaches.policy_id is a UUID (migration 0066) — a policy
+      // NAME cannot be written there. A tenant with no configured policy still
+      // needs a real row to link its breaches to; create one per priority once
+      // per sweep and reuse it, so every recorded breach has a true FK value.
+      const defaultPolicyIds = new Map<string, string>();
+      const resolvePolicyId = async (tenantId: string, sla: SLADefinition): Promise<string | undefined> => {
+        const configured = policyMap.get(`${tenantId}:${sla.priority}`);
+        if (configured) return configured.id;
+        const key = `${tenantId}:${sla.priority}`;
+        const reused = defaultPolicyIds.get(key);
+        if (reused) return reused;
+        try {
+          const [created] = await db.insert(slaPolicies).values({
+            tenantId,
+            name: sla.name,
+            priority: sla.priority,
+            responseTimeMinutes: sla.responseTimeMinutes,
+            resolutionTimeMinutes: sla.resolutionTimeMinutes,
+            escalationRules: [],
+            isActive: true,
+          }).returning({ id: slaPolicies.id });
+          if (created?.id) defaultPolicyIds.set(key, created.id);
+          return created?.id;
+        } catch (err) {
+          void logError({ error: err, context: 'cron/sla-check:default-policy-create' });
+          return undefined;
+        }
+      };
+
       // Bounded keyset-ish scan: ordered by id, one batch at a time, so the
       // job cannot time out as the ticket table grows (#2229).
       let lastId: string | null = null;
@@ -153,6 +182,10 @@ async function cronRouteHandler(request: NextRequest) {
             escalationRules: [],
           };
 
+          // #3741: resolve the REAL policy id before attempting the insert —
+          // sla.name is a human label, not a valid policy_id.
+          const policyId = await resolvePolicyId(ticket.tenantId, sla);
+
           const result = checkSLABreach(sla, ticket.createdAt, ticket.firstResponseAt, ticket.resolvedAt, now);
 
           if (!result.breached) continue;
@@ -194,7 +227,8 @@ async function cronRouteHandler(request: NextRequest) {
             try {
               await db.insert(slaBreaches).values({
                 tenantId: ticket.tenantId,
-                policyId: sla.name,
+                // #3741: a real UUID from sla_policies, never the label.
+                policyId: policyId!,
                 entityType: 'ticket',
                 entityId: ticket.id,
                 breachType: result.breachType!,
@@ -231,7 +265,11 @@ async function cronRouteHandler(request: NextRequest) {
       // `breaches_without_recipient` (a ticket with no assignee) is reported but
       // does not flip `ok`: no read happened, so it is a data gap on the ticket,
       // not a broken notification path.
-      ok: sweep.failed.length === 0 && escalationsWithoutRecipient === 0 && assigneeRowsMissing === 0,
+      // #3741: a breach that could not be RECORDED is a failed run even when
+      // the sweep itself visited every tenant — otherwise the health monitor
+      // sees green while no SLA enforcement data exists.
+      ok: sweep.failed.length === 0 && escalationsWithoutRecipient === 0 &&
+        assigneeRowsMissing === 0 && unrecordedBreaches === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

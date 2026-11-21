@@ -154,7 +154,9 @@ describe('#3407 bulk ticket status — registry and claim', () => {
     expect(H.updates[1].params).toContain('in_progress');
     for (const update of H.updates) {
       expect(update.set.status).toBe('resolved');
-      expect(update.sql).toContain('"support_tickets"."status" =');
+      // PR-4A: the from-state is claimed through the shared helper's
+      // `status in (...)` form, sourced from the transition registry.
+      expect(update.sql).toContain('"support_tickets"."status" in (');
       expect(update.sql).toContain('"support_tickets"."tenant_id" =');
       expect(update.sql).toContain('"support_tickets"."deleted_at" is null');
     }

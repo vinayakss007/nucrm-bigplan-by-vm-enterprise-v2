@@ -17,6 +17,21 @@
 3. **PR base**: always target `main`
 4. **Test after EVERY fix**: run `postman/full-test-suite.sh` and verify 100% pass rate before pushing
 5. **One issue per PR** — keep PRs focused and reviewable
+6. **Close the tracked issue from the PR body** — put `Closes #N` (or `Fixes #N` /
+   `Resolves #N`) on its own line in the PR description. GitHub only auto-closes on
+   keywords in the **body text**: a title like `fix(#N)` does **not** close the issue,
+   and neither does a number written inside an HTML comment. This is not cosmetic —
+   without it the fix merges and the issue stays open, leaving a phantom backlog.
+7. **Adding a guard alias requires census bookkeeping in the same PR** — the docs
+   register pins `ci.yml` line coordinates and `guard:coords`/`guard:citation-bounds`
+   check them, so **chain the new `npm run guard:X` onto an existing `run:` line**
+   rather than adding a new step (which shifts every cited line below it). Then
+   update, in that same PR: `docs/README.md`'s guard list and totals, and the
+   hardcoded counts in `tests/unit/guard-census-3412.test.ts`,
+   `tests/unit/seed-credential-contents-3281.test.ts`,
+   `tests/unit/prod-seed-refusal-3282.test.ts` and
+   `tests/unit/app-role-count-blindness-3280.test.ts`. Skipping this turns CI red
+   (it happened on #3723, #3775 and #3779).
 
 ## Completed (Merged PRs #537–#551)
 

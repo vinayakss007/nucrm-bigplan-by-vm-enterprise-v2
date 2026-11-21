@@ -21,7 +21,8 @@ import { NextResponse } from 'next/server';
 import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 
 type AppDb = (typeof import('@/drizzle/db'))['db'];
-type WritableDb = Pick<AppDb, 'update' | 'select'>;
+/** A db handle or a transaction — both expose update/select identically. */
+export type TransitionDb = Pick<AppDb, 'update' | 'select'>;
 
 /** The columns every guarded status write needs. */
 type StatusTable = AnyPgTable & {
@@ -53,7 +54,7 @@ export type TransitionOutcome =
  * failure so the caller can answer 404 (gone) or 409 (someone else moved it).
  */
 export async function transitionStatus(
-  db: WritableDb,
+  db: TransitionDb,
   args: TransitionArgs,
 ): Promise<TransitionOutcome> {
   const { table, id, tenantId, from, to, patch, extraWhere } = args;
@@ -63,21 +64,15 @@ export async function transitionStatus(
   if (tenantId !== undefined && cols.tenantId) identity.push(eq(cols.tenantId, tenantId));
   if (cols.deletedAt) identity.push(isNull(cols.deletedAt));
 
-  // Existence is checked only to classify the failure. The write below is the
-  // authoritative guard — this read is never used to decide whether to update.
-  const [existing] = await db
-    .select({ id: cols.id })
-    .from(table)
-    .where(and(...identity))
-    .limit(1);
-
-  if (!existing) return { ok: false, reason: 'not_found' };
-
   const claim: SQL[] = [
     ...identity,
     inArray(cols.status, [...from]),
     ...(extraWhere ? [extraWhere] : []),
   ];
+  // One statement, no read-check-write gap: the caller already vetted the
+  // from-state, and Postgres re-evaluates this WHERE under the row lock. A
+  // second classifying read would only add another chance to race, so zero
+  // rows is always reported as a lost claim.
   const [row] = await db
     .update(table)
     .set({ ...(patch ?? {}), status: to })
@@ -85,6 +80,37 @@ export async function transitionStatus(
     .returning();
 
   return row ? { ok: true, row } : { ok: false, reason: 'conflict' };
+}
+
+export interface TransitionManyArgs extends Omit<TransitionArgs, 'id'> {
+  /** The ids in one from-state group; empty means no rows can be claimed. */
+  ids: readonly string[];
+}
+
+/**
+ * Bulk form of the same claim. One statement per from-state group keeps the
+ * registry-supplied from-state in the WHERE; a concurrent edit loses its row
+ * and simply does not appear in `rows`, which the caller reports as skipped.
+ */
+export async function transitionStatusMany(
+  db: TransitionDb,
+  args: TransitionManyArgs,
+): Promise<{ rows: unknown[] }> {
+  const { table, ids, tenantId, from, to, patch, extraWhere } = args;
+  const cols = table as StatusTable;
+  const claim: SQL[] = [
+    inArray(cols.id, [...ids]),
+    ...(tenantId !== undefined && cols.tenantId ? [eq(cols.tenantId, tenantId)] : []),
+    ...(cols.deletedAt ? [isNull(cols.deletedAt)] : []),
+    inArray(cols.status, [...from]),
+    ...(extraWhere ? [extraWhere] : []),
+  ];
+  const rows = await db
+    .update(table)
+    .set({ ...(patch ?? {}), status: to })
+    .where(and(...claim))
+    .returning();
+  return { rows };
 }
 
 /** Map a lost claim to the HTTP contract callers must use. */

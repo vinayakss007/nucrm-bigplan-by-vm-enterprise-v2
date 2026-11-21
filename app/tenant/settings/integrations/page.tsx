@@ -46,8 +46,8 @@ interface ConnectedIntegration {
   id: string;
   type: string;
   name: string;
-  created_at: string;
-  is_active: boolean;
+  createdAt: string;
+  isActive: boolean;
 }
 
 const TEST_PAYLOADS: Record<string, Record<string, unknown>> = {
@@ -253,12 +253,12 @@ export default function IntegrationsPage() {
                   <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0"><Icon className="w-4 h-4 text-muted-foreground"/></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{i.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{i.type} · Added {formatDate(i.created_at)}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{i.type} · Added {formatDate(i.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={()=>toggle(i.id,i.is_active)}
-                      className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors', i.is_active?'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:bg-emerald-950/20':'border-border text-muted-foreground hover:bg-accent')}>
-                      {i.is_active?<><CheckCircle className="w-3 h-3"/>Active</>:<><XCircle className="w-3 h-3"/>Inactive</>}
+                    <button onClick={()=>toggle(i.id,i.isActive)}
+                      className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors', i.isActive?'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:bg-emerald-950/20':'border-border text-muted-foreground hover:bg-accent')}>
+                      {i.isActive?<><CheckCircle className="w-3 h-3"/>Active</>:<><XCircle className="w-3 h-3"/>Inactive</>}
                     </button>
                     <button onClick={()=>del(i.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20 text-muted-foreground transition-colors">
                       <Trash2 className="w-3.5 h-3.5"/>

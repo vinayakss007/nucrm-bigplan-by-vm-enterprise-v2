@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
+import { contactOptionsFromEnvelope } from '@/lib/contacts/list-options';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -73,11 +74,11 @@ function ContractsPageInner() {
   const stale = Boolean(contractsError) && Boolean(contractsData);
   const reason = contractsError?.message || 'no response from the server';
 
-  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ data?: Array<{ id: string; first_name?: string | null; last_name?: string | null; email?: string | null }> }>(
     CONTRACT_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
-  const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
+  const contacts: Contact[] = useMemo(() => contactOptionsFromEnvelope(contactsData), [contactsData]);
   useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
 
   // The secondary read guard:panel-error-state cannot see: it feeds getContactName (every row's

@@ -99,7 +99,9 @@ const contractRows = {
     { id: 'c1', title: 'Master services agreement', contractNumber: 'MSA-12', contractType: 'msa', status: 'active', startDate: NOW, endDate: SOON, totalValue: '60000.00', contactId: 'ct1' },
   ],
 };
-const contactRows = { contacts: [{ id: 'ct1', firstName: 'Kestrel', lastName: 'Vane', email: 'kestrel@example.test' }] };
+// #3750: feed the REAL /api/tenant/contacts envelope — { data: [...] } with
+// snake_case fields. The old { contacts: [...] } mock masked a broken picker.
+const contactRows = { data: [{ id: 'ct1', first_name: 'Kestrel', last_name: 'Vane', email: 'kestrel@example.test' }], total: 1, offset: 0, limit: 200 };
 
 const ok = (data: unknown): QueryResult => ({ data, error: null, isLoading: false, refetch: vi.fn() });
 const failed = (message = 'Request failed (500)'): QueryResult => ({

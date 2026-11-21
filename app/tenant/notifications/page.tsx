@@ -43,7 +43,7 @@ const TYPE_CFG: Record<string, { icon: LucideIcon; color: string; bg: string; la
   system:          { icon: Bell,         color:'text-slate-600',  bg:'bg-slate-100 dark:bg-slate-800',     label:'System' },
 };
 
-interface NotificationsResponse { data?: Record<string, unknown>[]; total?: number }
+interface NotificationsResponse { data?: Record<string, unknown>[]; total?: number; totalAll?: number; unread?: number }
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -67,10 +67,10 @@ export default function NotificationsPage() {
   // header reported an empty inbox over the notifications the operator was reading.
   // `offset` is part of the key, so a page that has never answered is a failure, not a
   // stale read: `failed` shows the outage, `stale` keeps the list and caveats it.
-  const NOTIFICATIONS_KEY = ['tenant', 'notifications', { offset }] as const;
+  const NOTIFICATIONS_KEY = ['tenant', 'notifications', { offset, filter }] as const;
   const { data, isLoading: loading, error, refetch } = useApiQuery<NotificationsResponse>(
     NOTIFICATIONS_KEY,
-    `/api/tenant/notifications?limit=${limit}&offset=${offset}`,
+    `/api/tenant/notifications?limit=${limit}&offset=${offset}&unread=${filter === 'unread'}`,
   );
   const notifications: NotificationItem[] = useMemo(
     () => (data?.data ?? []).map((n) => toSnakeCase(n) as NotificationItem),
@@ -151,7 +151,9 @@ export default function NotificationsPage() {
   };
 
   const visible = filter === 'unread' ? notifications.filter(n => isUnread(n)) : notifications;
-  const unreadCount = notifications.filter(n => isUnread(n)).length;
+  // #3754: tenant-wide counts from the API, not the current page's rows.
+  const unreadCount = failed ? 0 : (data?.unread ?? 0);
+  const totalAll = failed ? 0 : (data?.totalAll ?? 0);
 
   return (
     <div className="max-w-2xl space-y-4 animate-fade-in">
@@ -164,9 +166,7 @@ export default function NotificationsPage() {
             )}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {/* Both figures count the rows below, so an unread list reports unavailable
-                rather than "0 total · 0 unread" (#2829's rule, as on the SMS stats). */}
-            {failed ? '—' : notifications.length} total · {failed ? '—' : unreadCount} unread
+            {failed ? '—' : totalAll} total · {failed ? '—' : unreadCount} unread
           </p>
         </div>
         <div className="flex gap-2">
@@ -186,7 +186,7 @@ export default function NotificationsPage() {
       {/* Filter tabs */}
       <div className="flex gap-1 bg-muted/30 rounded-xl p-1 w-fit">
         {[['all','All'], ['unread','Unread']].map(([v,l]) => (
-          <button key={v} onClick={() => setFilter(v as 'all' | 'unread')}
+          <button key={v} onClick={() => { setFilter(v as 'all' | 'unread'); setOffset(0); }}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               filter===v ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             {l} {v==='unread' && (failed ? '(—)' : unreadCount > 0 && `(${unreadCount})`)}

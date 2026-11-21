@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { Zap, Building2, Loader2, LogOut } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 export default function NoWorkspacePage() {
   const [name, setName] = useState('');
@@ -18,14 +19,12 @@ export default function NoWorkspacePage() {
   // #1328: workspace create via useMutation (was raw fetch + useState flag).
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/workspace', {
+      // #3408: a refused workspace create throws with the server's message.
+      return fetchJsonOrThrow('/api/tenant/workspace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      return data;
     },
     onSuccess: () => {
       toast.success('Workspace created!');
@@ -43,7 +42,7 @@ export default function NoWorkspacePage() {
 
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetchJsonOrThrow('/api/auth/logout', { method: 'POST' });
       router.push('/auth/login');
     });
   };

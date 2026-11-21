@@ -136,11 +136,14 @@ describe('the reopen claims the state the read vetted (#3354)', () => {
     expect(res.status, said).toBe(201);
     expect(state.committed.updates).toHaveLength(1);
     const up = state.committed.updates[0];
-    expect(up.sql).toMatch(/"support_tickets"\."status" = /i);
+    // PR-4A: the claim now comes from the registry via transitionStatus, so
+    // the from-state is an `in (...)` list rather than an `=` on 'resolved'.
+    expect(up.sql).toMatch(/"support_tickets"\."status" in \(/i);
     expect(up.sql).toMatch(/"support_tickets"\."tenant_id"/);
     expect(up.sql).toMatch(/"support_tickets"\."contact_id"/);
     expect(up.sql).toMatch(/"support_tickets"\."deleted_at" is null/i);
-    expect(up.params).toEqual([TICKET, TENANT, CONTACT, 'resolved']);
+    // The registry's allowed from-states replace the hard-coded 'resolved'.
+    expect(up.params).toEqual(expect.arrayContaining([TICKET, TENANT, CONTACT, 'resolved', 'open']));
     expect(up.set).toMatchObject({ status: 'open' });
     expect(state.committed.inserts).toHaveLength(1);
   });

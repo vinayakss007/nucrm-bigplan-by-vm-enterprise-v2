@@ -478,10 +478,11 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
     for (const alias of named) expect(invoked.has(alias), `${alias} claimed but not invoked`).toBe(true);
     const total = Object.keys(JSON.parse(read('package.json')).scripts).filter((k) => k.startsWith('guard:'));
     expect(readme).toMatch(new RegExp(`defines \\*\\*${total.length}\\*\\* aliases in total`));
-    // and exactly one alias has no workflow step at all, which the paragraph says by name.
-    // "Wired" here is the census's own sense: three aliases run in ci.yml as bare commands
-    // and three more only in `nightly-soak.yml`, so a ci.yml-only read of `npm run` would
-    // call six wired aliases unwired — the mistake #3239 exists to catch.
+    // and exactly one alias has no workflow step at all, which the paragraph names by
+    // name. "Wired" here is the census's own sense: three aliases run in ci.yml as bare
+    // commands and three more only in `nightly-soak.yml`, so a ci.yml-only read of `npm
+    // run` would call six wired aliases unwired — the mistake #3239 exists to catch.
+    // #3408 wired guard:api-envelope into ci.yml; only migration-redecl is unwired now.
     expect(total.filter((k) => !hasStep(k))).toEqual(['guard:migration-redecl']);
   });
 
