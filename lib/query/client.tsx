@@ -132,19 +132,51 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * #3408 PR-5C — one state discriminator for every query-backed panel.
+ *
+ * Before this, each panel re-derived "failed" vs "stale" from `error` and
+ * `data` by hand, and the common mistake was `Boolean(error) || !data` — which
+ * renders a failed read as an empty list. The four states are exhaustive and
+ * mutually exclusive:
+ *
+ *   loading — no data, no error (the first load is still in flight)
+ *   ok      — data, no error
+ *   stale   — data AND error (a background refetch failed; keep showing data)
+ *   failed  — no data AND error (nothing to show; render a failure, not empty)
+ *
+ * Pure and structural so it can be tested without mounting React.
+ */
+export type ApiQueryState = 'loading' | 'ok' | 'stale' | 'failed';
+
+export function apiQueryState(result: {
+  data: unknown;
+  error: unknown;
+}): ApiQueryState {
+  const hasData = result.data !== undefined && result.data !== null;
+  const hasError = Boolean(result.error);
+  if (hasError) return hasData ? 'stale' : 'failed';
+  return hasData ? 'ok' : 'loading';
+}
+
+/**
  * Thin wrapper over useQuery that defaults the fetcher to `apiFetcher(url)`.
  * `key` doubles as the URL when it's a single string.
  *
- *   const { data, isLoading, error } = useApiQuery<MyType>(['companies', id], `/api/.../${id}`);
+ *   const { data, state } = useApiQuery<MyType>(['companies', id], `/api/.../${id}`);
+ *   if (state === 'failed') return <Failure />;
+ *
+ * The extra `state` field is additive: existing callers destructuring
+ * `data`/`isLoading`/`error` keep working unchanged.
  */
 export function useApiQuery<T = unknown>(
   key: readonly unknown[],
   url: string,
   options?: Omit<UseQueryOptions<T, ApiQueryError>, 'queryKey' | 'queryFn'>,
 ) {
-  return useQuery<T, ApiQueryError>({
+  const query = useQuery<T, ApiQueryError>({
     queryKey: key,
     queryFn: () => apiFetcher<T>(url),
     ...options,
   });
+  return { ...query, state: apiQueryState(query) };
 }
