@@ -936,8 +936,10 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
     deferredTo: '#2539',
     why: 'Scheduled jobs authenticate by cron secret and then iterate every tenant deliberately; '
       + 'the per-tenant context loop is the work #2539 tracks, and these reads are its, not a route '
-      + 'that forgot withTenantContext().',
-    maxFindings: 59,
+      + 'that forgot withTenantContext(). #3741 added one more: the default sla_policies row is '
+      + 'inserted inside sweepTenants, which sets the tenant GUC on the pinned connection, so the '
+      + 'write is context-bound at runtime even though a static walk cannot see it.',
+    maxFindings: 60,
   },
 ];
 
