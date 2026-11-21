@@ -111,7 +111,7 @@ export default function ServicesPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
+          ...form, hourly_rate: form.hourlyRate, monthly_rate: form.monthlyPrice, yearly_rate: form.yearlyPrice, is_active: true,
           contactId: form.contactId || null,
           companyId: form.companyId || null,
         }),
