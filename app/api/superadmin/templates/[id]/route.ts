@@ -14,6 +14,8 @@ import { apiError } from '@/lib/api-error';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { transitionStatus, transitionStatusResponse } from '@/lib/state/transition';
+import { allowedFromStatus } from '@/lib/state/transitions';
 
 export const GET = withApiRoute(async (req: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -136,15 +138,21 @@ export const DELETE = withApiRoute(async (req: NextRequest,
 
     const { id } = await params;
 
-    const [archived] = await db
-      .update(productTemplates)
-      .set({ status: 'archived', deletedAt: new Date() })
-      .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`))
-      .returning();
-
-    if (!archived) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
+    // #3407: the archive write used to claim only `deleted_at IS NULL`, so a
+    // second DELETE on an already-archived template restamped the tombstone and
+    // answered 200. The status rule lives in lib/templates/transitions.ts and
+    // the same from-set travels into the UPDATE's WHERE under the row lock, so
+    // a concurrent archive can't both win. Zero rows is a lost claim, not a
+    // successful no-op.
+    const from = allowedFromStatus('productTemplates', 'archived');
+    const outcome = await transitionStatus(db, {
+      table: productTemplates,
+      id,
+      from,
+      to: 'archived',
+      patch: { deletedAt: new Date() },
+    });
+    if (!outcome.ok) return transitionStatusResponse('Template', from, 'archived', outcome);
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

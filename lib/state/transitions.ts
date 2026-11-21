@@ -18,10 +18,12 @@
  */
 import { allowedFromStatus as offerFromStatus } from '@/lib/offers';
 import { allowedTicketFromStatus as ticketFromStatus } from '@/lib/tickets';
+import { allowedTemplateFromStatus } from '@/lib/templates/transitions';
 
 export const TRANSITIONS = {
   quotes: offerFromStatus,
   supportTickets: ticketFromStatus,
+  productTemplates: allowedTemplateFromStatus,
 } as const;
 
 export type TransitionTable = keyof typeof TRANSITIONS;
