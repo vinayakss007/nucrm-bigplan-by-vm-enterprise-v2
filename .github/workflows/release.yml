@@ -329,6 +329,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.verify.outputs.sha }}
+          fetch-depth: 0 # the bounded changelog below needs the previous tag
           persist-credentials: false
 
       - uses: actions/setup-node@v7
@@ -345,9 +346,31 @@ jobs:
           GATE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          # The changelog is GitHub's own generated note: the merged PR list since
-          # the previous tag (#2541 step 4). The metadata asset is the part a human
-          # cannot reconstruct later — which commit, which version, which gate run.
+          # GitHub's --generate-notes exceeds the 125,000-character API body limit
+          # on large ranges (#3713): v0.9.1 had 1,337 commits and the release job
+          # failed with HTTP 422. Build a bounded note instead — compare link plus
+          # the first 100 commits — so the body stays in the low kilobytes.
+          PREV_TAG="$(git describe --tags --abbrev=0 "${REL_TAG}^" 2>/dev/null || true)"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              COMMIT_COUNT="$(git rev-list --no-merges --count "$PREV_TAG..$REL_TAG")"
+              echo "$COMMIT_COUNT commits since $PREV_TAG — [full compare](https://github.com/$GITHUB_REPOSITORY/compare/$PREV_TAG...$REL_TAG)"
+              echo
+              echo "### Commits (first 100 of $COMMIT_COUNT)"
+              git log --no-merges -n 100 --format='- %h %s' "$PREV_TAG..$REL_TAG"
+              if [ "$COMMIT_COUNT" -gt 100 ]; then
+                echo
+                echo "_Showing the first 100 commits; see the compare link for all $COMMIT_COUNT._"
+              fi
+            else
+              echo "Initial release."
+            fi
+          } > "$NOTES"
+          # The metadata asset is the part a human cannot reconstruct later — which
+          # commit, which version, which gate run.
           node -e '
             const fs = require("fs");
             const meta = {
@@ -376,7 +399,7 @@ jobs:
             gh release upload "$REL_TAG" "$RUNNER_TEMP/release-metadata.json" \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
-            ARGS=(--target "$REL_SHA" --generate-notes)
+            ARGS=(--target "$REL_SHA" --notes-file "$NOTES")
             if [ "$REL_PRERELEASE" = "true" ]; then
               ARGS+=(--prerelease)
             fi
