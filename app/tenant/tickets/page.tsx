@@ -31,10 +31,10 @@ interface Ticket {
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   category: string;
-  created_at: string;
-  first_name: string | null;
-  last_name: string | null;
-  assigned_name: string | null;
+  createdAt: string;
+  firstName: string | null;
+  lastName: string | null;
+  assignedName: string | null;
 }
 
 const limit = 50;
@@ -321,15 +321,15 @@ export default function TicketsPage() {
                       <div className="flex items-center gap-4 mt-2">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <User className="w-3 h-3" />
-                          {ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}` : 'System'}
+                          {ticket.firstName ? `${ticket.firstName} ${ticket.lastName || ''}` : 'System'}
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <MessageSquare className="w-3 h-3" />
-                          {ticket.assigned_name ? `Assigned: ${ticket.assigned_name}` : 'Unassigned'}
+                          {ticket.assignedName ? `Assigned: ${ticket.assignedName}` : 'Unassigned'}
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />
-                          {formatDate(ticket.created_at)}
+                          {formatDate(ticket.createdAt)}
                         </div>
                       </div>
                     </div>
