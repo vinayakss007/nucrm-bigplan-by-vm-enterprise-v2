@@ -121,7 +121,7 @@ export async function analyzeReply(input: AnalyzeReplyInput): Promise<ReplyAnaly
       entityType: 'lead_warming_reply',
     });
 
-    return parseAIResponse(response.text);
+    return parseAIResponse(response.text, input.replyContent);
   } catch (err) {
     logger.error('[lead-warming] AI reply analysis failed', { error: err instanceof Error ? err.message : String(err) });
     // Fallback: rule-based analysis
@@ -146,7 +146,7 @@ function buildUserPrompt(input: AnalyzeReplyInput): string {
   return parts.join('\n');
 }
 
-function parseAIResponse(raw: string): ReplyAnalysis {
+function parseAIResponse(raw: string, replyContent: string): ReplyAnalysis {
   // Strip markdown code blocks if present
   let cleaned = raw.trim();
   if (cleaned.startsWith('```')) {
@@ -168,7 +168,10 @@ function parseAIResponse(raw: string): ReplyAnalysis {
     };
   } catch {
     logger.error('[lead-warming] Failed to parse AI response', { raw: raw.slice(0, 200) });
-    return fallbackAnalysis(raw);
+    // #3726: `raw` is the PROVIDER's body. Keyword-scanning it means an error
+    // page ("unable to answer", "out of office") decides the lead's intent.
+    // Classify what the lead actually wrote, as the throw path above does.
+    return fallbackAnalysis(replyContent);
   }
 }
 
@@ -205,6 +208,24 @@ function fallbackAnalysis(content: string): ReplyAnalysis {
     };
   }
 
+  // #3726: negation MUST be checked first — "not interested" contains the
+  // substring "interested", so the old order reported a rejection as positive
+  // interest (owner notification + high-priority follow-up task).
+  // Not interested patterns
+  if (lower.includes('not interested') || lower.includes('no thanks') || lower.includes('not relevant') ||
+      lower.includes('not for us') || lower.includes('already have')) {
+    return {
+      intent: 'not_interested',
+      intentConfidence: 80,
+      sentiment: 'neutral',
+      sentimentScore: -20,
+      summary: 'Contact is not interested',
+      suggestedAction: 'Move to long-term nurture, reduce frequency',
+      extractedEntities: {},
+      requiresFollowUp: false,
+    };
+  }
+
   // Interested patterns
   if (lower.includes('interested') || lower.includes('tell me more') || lower.includes('pricing') ||
       lower.includes('demo') || lower.includes('schedule a call') || lower.includes('let\'s talk') ||
@@ -218,21 +239,6 @@ function fallbackAnalysis(content: string): ReplyAnalysis {
       suggestedAction: 'Follow up with pricing/demo within 24 hours',
       extractedEntities: {},
       requiresFollowUp: true,
-    };
-  }
-
-  // Not interested patterns
-  if (lower.includes('not interested') || lower.includes('no thanks') || lower.includes('not relevant') ||
-      lower.includes('not for us') || lower.includes('already have')) {
-    return {
-      intent: 'not_interested',
-      intentConfidence: 80,
-      sentiment: 'neutral',
-      sentimentScore: -20,
-      summary: 'Contact is not interested',
-      suggestedAction: 'Move to long-term nurture, reduce frequency',
-      extractedEntities: {},
-      requiresFollowUp: false,
     };
   }
 
