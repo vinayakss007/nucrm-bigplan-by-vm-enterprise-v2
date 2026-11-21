@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import type { ReactNode } from 'react';
 
 const data = vi.hoisted(() => ({
-  integrations: [{ id: 'I1', type: 'webhook', name: 'Zapier feed', created_at: '2026-11-18T00:00:00Z', is_active: false }],
+  integrations: [{ id: 'I1', type: 'webhook', name: 'Zapier feed', createdAt: '2026-11-18T00:00:00Z', isActive: false }],
 }));
 
 vi.mock('@/lib/query/client', () => ({
