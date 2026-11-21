@@ -163,7 +163,8 @@ export function AdvancedSearchFilters({ type, query, filters, onQueryChange, onF
           currentFilters={filters as Record<string, unknown>}
           currentQuery={query}
           onApplyView={(viewFilters, q) => {
-            if (q) onQueryChange(q);
+            // #3755: always apply the saved query, including clearing it.
+            onQueryChange(q ?? '');
             // A saved view stores this component's own filter shape; narrow the
             // generic Record back to SearchFilters at the boundary (#1268).
             onFiltersChange(viewFilters as SearchFilters);
