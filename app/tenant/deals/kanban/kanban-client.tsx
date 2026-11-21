@@ -18,6 +18,7 @@ import {
   User, Clock, TrendingUp
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { normalizeDealRow } from '@/lib/deals/normalize-api-row';
 import { isWonStageName } from '@/lib/deals/won-stage';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
@@ -217,7 +218,7 @@ export default function DealsKanbanPage() {
     // board actually populates.
     const list = res?.data ?? res?.deals;
     if (Array.isArray(list)) {
-      setDeals(list as Deal[]);
+      setDeals(list.map(normalizeDealRow) as Deal[]);
     }
   }, [res]);
 
@@ -263,7 +264,7 @@ export default function DealsKanbanPage() {
       const res = await fetch(`/api/tenant/deals/${activeDeal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stageId: newStageId }),
+        body: JSON.stringify({ stage_id: newStageId }),
       });
       
       if (res.ok) {

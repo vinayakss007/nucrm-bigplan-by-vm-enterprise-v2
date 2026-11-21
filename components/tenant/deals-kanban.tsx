@@ -4,12 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 "use client"
-
 import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Trash2 } from 'lucide-react'
-import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { normalizeDealRow } from '@/lib/deals/normalize-api-row'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { fetchJsonSafe } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
@@ -150,7 +150,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
       // A refused refresh must not wipe the board into "0 deals".
       const refresh = await fetchJsonSafe<{ data?: Record<string, unknown>[] }>('/api/tenant/deals?limit=200')
       if (refresh.status === 'aborted') return
-      if (refresh.status === 'ok') { setDeals((refresh.data.data ?? []).map((d) => toSnakeCase(d) as unknown as Deal)); setLoadError(false) }
+      if (refresh.status === 'ok') { setDeals((refresh.data.data ?? []).map((d) => normalizeDealRow(d as never) as unknown as Deal)); setLoadError(false) }
       else { setLoadError(true); toast.error(refresh.message || 'Failed to refresh deals') }
     } catch {
       toast.error('Failed to create deal')
