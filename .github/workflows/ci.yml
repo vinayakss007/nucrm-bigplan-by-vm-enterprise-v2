@@ -57,7 +57,7 @@ jobs:
         run: npm run guard:filesize
 
       - name: Client raw-fetch ratchet (#3408)
-        run: npm run guard:client-fetch && npm run guard:contract-shape && npm run guard:status-owner # #3773 #3407
+        run: npm run guard:client-fetch && npm run guard:contract-shape && npm run guard:status-owner && npm run guard:api-envelope # #3773 #3407 #3408
 
       - name: no-explicit-any suppression ratchet (#1268)
         run: npm run guard:any-suppressions
