@@ -5600,8 +5600,11 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   (`users_insert_auth`, `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:351`).
 - **Where each read now lives.** `app/api/scim/v2/Users/route.ts:105` (the list and its `count(*)`)
   and `:210`/`:244`/`:266`/`:229` (provision, its nested write, the adopted-identity insert, the
-  email probe); `app/api/scim/v2/Users/[id]/route.ts:59` (GET), `:140` (PATCH), `:417`/`:431`
-  (DELETE) and `:249` (the "does this user work elsewhere" read). The bare `db` import is gone from
+  email probe); `app/api/scim/v2/Users/[id]/route.ts:61` (GET), `:142` (PATCH), `:419`/`:433`
+  (DELETE) and `:251` (the "does this user work elsewhere" read).
+  <!-- 2026-11-21 #3407: re-pinned from :59/:140/:417/:431/:249 after two transition-helper
+       imports shifted this file by +2 lines. -->
+  The bare `db` import is gone from
   both files, and the helpers the item route carried moved out once wrapping it pushed the file past
   **#1843**'s 500-line ceiling (541 at the first draft, **456** now): `authenticateSCIMRequest`
   (`lib/scim/user-route-support.ts:29`), `scimUserNotFound` (`:61`) and
