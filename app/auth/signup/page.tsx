@@ -15,6 +15,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
 import { track } from '@/lib/analytics/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 function getPasswordStrength(password: string): { level: 'weak' | 'medium' | 'strong'; score: number } {
   let score = 0;
@@ -77,25 +78,25 @@ export default function SignupPage() {
   // #1328: signup POST via useMutation (was raw fetch + useState loading).
   const signupMutation = useMutation({
     mutationFn: async () => {
-      let res: Response;
-      try {
-        res = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            email,
-            password,
-            full_name: name,
-            workspace_name: workspaceName,
-          }),
-        });
-      } catch {
-        throw new Error('Connection error. Please try again.');
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Signup failed');
-      return data;
+      // #3408: the canonical client throws on a refused signup with the
+      // server's message, and reports a network failure as a connection error —
+      // the UI cannot proceed as if the workspace was created.
+      return fetchJsonOrThrow('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: name,
+          workspace_name: workspaceName,
+        }),
+      }).catch((err: unknown) => {
+        if (err instanceof Error && /Network error/.test(err.message)) {
+          throw new Error('Connection error. Please try again.');
+        }
+        throw err;
+      });
     },
     onSuccess: () => {
       track('signup', { method: 'password' });
