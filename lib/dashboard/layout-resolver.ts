@@ -73,14 +73,9 @@ export async function saveLayout(
 ): Promise<void> {
   // withTenantDb supplies the transaction, so no nested one is opened here.
   await withTenantDb(tenantId, userId, async (tx) => {
-    await tx.update(dashboardLayouts)
-      .set({ isDefault: false })
-      .where(and(
-        eq(dashboardLayouts.tenantId, tenantId),
-        eq(dashboardLayouts.userId, userId),
-        eq(dashboardLayouts.isDefault, true),
-      ));
-
+    // #3730: read the live default BEFORE clearing its isDefault flag. The old
+    // order ran the UPDATE first, so the findFirst below could never match and
+    // every save inserted a fresh row instead of updating in place.
     const existing = await tx.query.dashboardLayouts.findFirst({
       where: and(
         eq(dashboardLayouts.tenantId, tenantId),
@@ -88,6 +83,14 @@ export async function saveLayout(
         eq(dashboardLayouts.isDefault, true),
       ),
     });
+
+    await tx.update(dashboardLayouts)
+      .set({ isDefault: false })
+      .where(and(
+        eq(dashboardLayouts.tenantId, tenantId),
+        eq(dashboardLayouts.userId, userId),
+        eq(dashboardLayouts.isDefault, true),
+      ));
 
     if (existing) {
       await tx.update(dashboardLayouts)
