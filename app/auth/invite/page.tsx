@@ -8,6 +8,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, AlertTriangle, Loader2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { useApiQuery } from '@/lib/query/client';
 import { getInviteView, inviteErrorMessage, inviteWelcomeMessage, type InviteDetailsLike } from '@/lib/auth/invite-view';
 
@@ -57,27 +58,32 @@ function AcceptInviteContent() {
     if (!invitation) return;
     setAccepting(true);
 
-    // If not logged in, create account first
-    if (!isLoggedIn) {
-      const res = await fetch('/api/auth/signup', {
+    // #3408: both writes go through the canonical client, which throws on a
+    // refusal with the server's message. The whole flow is wrapped so a
+    // network failure or a refused signup/accept reports the real reason and
+    // always clears the `accepting` flag — previously a thrown fetch left the
+    // button stuck with no feedback.
+    try {
+      if (!isLoggedIn) {
+        await fetchJsonOrThrow('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: invitation.email, password, full_name: name, workspace_name: '__invite__' }),
+        });
+      }
+
+      await fetchJsonOrThrow('/api/auth/accept-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: invitation.email, password, full_name: name, workspace_name: '__invite__' }),
+        body: JSON.stringify({ token }),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error); setAccepting(false); return; }
+      toast.success(inviteWelcomeMessage(invitation));
+      router.push('/tenant/dashboard');
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to accept invitation');
+      setAccepting(false);
     }
-
-    // Accept invitation
-    const res = await fetch('/api/auth/accept-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Failed'); setAccepting(false); return; }
-    toast.success(inviteWelcomeMessage(invitation));
-    router.push('/tenant/dashboard');
-    router.refresh();
   };
 
   if (view.state === 'loading') return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-600" /></div>;
