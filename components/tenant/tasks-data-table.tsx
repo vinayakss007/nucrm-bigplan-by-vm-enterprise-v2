@@ -81,13 +81,15 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
 
-  const loadData = useCallback(async (page = 0) => {
+  const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
+    const size = pageSizeOverride ?? pagination.pageSize
+    const q = filterOverride !== undefined ? filterOverride : globalFilter
     const params = new URLSearchParams({
-      limit: String(pagination.pageSize),
-      offset: String(page * pagination.pageSize),
+      limit: String(size),
+      offset: String(page * size),
     })
-    if (globalFilter) params.set('q', globalFilter)
+    if (q) params.set('q', q)
     // #3408: a failed refresh must not render "No tasks yet" over an outage.
     const result = await fetchJsonSafe<{ data?: typeof tasks; total?: number }>(`/api/tenant/tasks?${params}`)
     if (result.status === 'ok') { setTasks(result.data.data ?? []); setTotal(result.data.total ?? 0); setLoadError(null); }
@@ -102,13 +104,11 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     loadData(page)
   }, [loadData])
 
-  const handlePageSizeChange = useCallback((size: number) => {
-    setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 }))
-  }, [])
+  const handlePageSizeChange = useCallback((size: number) => { setPagination(prev => ({ ...prev, pageSize: size, pageIndex: 0 })); loadData(0, undefined, size) }, [loadData])
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0)
+    loadData(0, filter)
   }, [loadData])
 
   const toggleTaskComplete = async (taskId: string, completed: boolean) => {

@@ -10,7 +10,8 @@ import { createTaskSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenants, plans, activities } from '@/drizzle/schema';
-import { eq, and, or, sql, desc, asc, gte, lte, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, gte, lte, isNull, ilike } from 'drizzle-orm';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -31,11 +32,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
     const dueStart = searchParams.get('due_start');
     const dueEnd = searchParams.get('due_end');
+    const q = searchParams.get('q')?.trim();
 
     const filters = [
       eq(tasks.tenantId, ctx.tenantId),
       isNull(tasks.deletedAt)
     ];
+    // #3752: the table's search box sends q; filter in SQL so search covers
+    // the whole tenant, not only the rows already loaded on this page.
+    if (q) filters.push(or(ilike(tasks.title, `%${escapeLike(q)}%`), ilike(tasks.description, `%${escapeLike(q)}%`))!);
 
     if (!can(ctx, 'tasks.view_all')) {
       const ownerScope = or(eq(tasks.assignedTo, ctx.userId), eq(tasks.createdBy, ctx.userId))!;
