@@ -18,11 +18,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
-import { eq, and, asc, isNull, inArray } from 'drizzle-orm';
+import { eq, and, asc, isNull } from 'drizzle-orm';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata, allowedFromStatus } from '@/lib/offers';
+import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata } from '@/lib/offers';
 
 /**
  * Statuses this page renders. The buyer's own link stays readable after they
@@ -100,16 +102,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
         && new Date(offer.expiresAt).getTime() < Date.now()
         && canTransition(status, 'expired')
       ) {
-        const [expired] = await tx
-          .update(quotes)
-          .set({ status: 'expired', updatedAt: new Date() })
-          .where(and(
-            eq(quotes.id, offer.id),
-            eq(quotes.tenantId, offer.tenantId),
-            inArray(quotes.status, allowedFromStatus('expired')),
-          ))
-          .returning({ id: quotes.id });
-        if (expired) return { kind: 'expired' };
+        // #3407 PR-4A: the status claim belongs to the shared helper and the
+        // quotes registry, with the tenant + tombstone gate it adds.
+        const expired = await transitionStatus(tx, {
+          table: quotes,
+          id: offer.id,
+          tenantId: offer.tenantId,
+          from: transitionFrom('quotes', 'expired'),
+          to: 'expired',
+          patch: { updatedAt: new Date() },
+        });
+        if (expired.ok) return { kind: 'expired' };
         status = await committedStatus();
         if (!PUBLICLY_VISIBLE.includes(status)) return { kind: 'gone' };
       }
@@ -118,16 +121,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
       // in one tx so the offer is never marked 'viewed' without its viewed_at/
       // viewed_count metadata (H7). patchOfferMetadata takes the tx.
       if (status === 'sent') {
-        const [viewed] = await tx
-          .update(quotes)
-          .set({ status: 'viewed', updatedAt: new Date() })
-          .where(and(
-            eq(quotes.id, offer.id),
-            eq(quotes.tenantId, offer.tenantId),
-            inArray(quotes.status, allowedFromStatus('viewed')),
-          ))
-          .returning({ id: quotes.id });
-        if (viewed) {
+        const viewed = await transitionStatus(tx, {
+          table: quotes,
+          id: offer.id,
+          tenantId: offer.tenantId,
+          from: transitionFrom('quotes', 'viewed'),
+          to: 'viewed',
+          patch: { updatedAt: new Date() },
+        });
+        if (viewed.ok) {
           // This handler just wrote it, so the page reports what it wrote.
           status = 'viewed';
           // #2344: viewed_count is incremented by Postgres inside jsonb_set, not
