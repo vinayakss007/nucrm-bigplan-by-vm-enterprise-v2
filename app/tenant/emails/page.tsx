@@ -20,8 +20,8 @@ interface EmailRecord {
   status?: string;
   opened_at?: string;
   clicked_at?: string;
-  sent_at?: string;
-  created_at: string;
+  sentAt?: string;
+  createdAt: string;
 }
 
 // API list responses vary ({data} | {emails} | []); normalize.
@@ -136,7 +136,7 @@ export default function EmailsPage() {
                       {e.opened_at ? 'Opened' : e.status || 'Sent'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(e.sent_at || e.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(e.sentAt || e.createdAt).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
