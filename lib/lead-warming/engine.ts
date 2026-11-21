@@ -19,7 +19,7 @@
  */
 
 import { db } from '@/drizzle/db';
-import { contacts } from '@/drizzle/schema';
+import { contacts, companies } from '@/drizzle/schema';
 import {
   leadWarmingEvents,
   leadWarmingCampaigns,
@@ -137,8 +137,6 @@ export interface ContactToWarm {
   phone: string | null;
   companyName: string | null;
   leadStatus: string | null;
- 
- 
   tags: string[] | null;
   birthday: Date | null;
   assignedTo: string | null;
@@ -202,8 +200,6 @@ export async function processLeadWarming(): Promise<WarmingResult> {
       try {
         await processCampaign(campaign, allTodayEvents, result);
         result.campaignsProcessed++;
- 
- 
       } catch (err) {
         result.errors.push(`Campaign ${campaign.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -212,8 +208,6 @@ export async function processLeadWarming(): Promise<WarmingResult> {
     // 5. Also process birthdays
     await processBirthdayCampaigns(result, todayMonth, todayDay);
 
- 
- 
   } catch (err) {
     result.errors.push(`Global error: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -225,8 +219,6 @@ export async function processLeadWarming(): Promise<WarmingResult> {
  * Process a single campaign for today's events
  */
 async function processCampaign(
- 
- 
   campaign: WarmingCampaign,
   todayEvents: WarmingEventRow[],
   result: WarmingResult,
@@ -247,8 +239,6 @@ async function processCampaign(
     for (const event of relevantEvents) {
       try {
         await sendWarmingMessage(campaign, contact, event, result);
- 
- 
       } catch (err) {
         result.errors.push(`Contact ${contact.id} / Event ${event.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -280,7 +270,8 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
     lastName: contacts.lastName,
     email: contacts.email,
     phone: contacts.phone,
-    companyName: contacts.companyId,
+    // #3732: the NAME, not the UUID contacts.companyId holds — see the join.
+    companyName: companies.name,
     leadStatus: contacts.leadStatus,
     tags: contacts.tags,
     birthday: contacts.birthday,
@@ -288,6 +279,7 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
     doNotContact: contacts.doNotContact,
   })
   .from(contacts)
+  .leftJoin(companies, eq(companies.id, contacts.companyId))
   .where(and(...conditions))
   .limit(500); // Process max 500 contacts per campaign per run
 
@@ -305,8 +297,12 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
 
   const optedOutIds = new Set(optedOut.map(o => o.contactId));
 
-  // Filter out contacts on cooldown
-  const onCooldown = await db.select({ contactId: leadWarmingSchedule.contactId })
+  // Filter out contacts on cooldown, reading messagesThisMonth in the SAME
+  // statement — a second bare db.select here would be a new unbound RLS read.
+  const onCooldown = await db.select({
+    contactId: leadWarmingSchedule.contactId,
+    messagesThisMonth: leadWarmingSchedule.messagesThisMonth,
+  })
     .from(leadWarmingSchedule)
     .where(and(
       eq(leadWarmingSchedule.campaignId, campaign.id),
@@ -315,10 +311,18 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
     ));
 
   const cooldownIds = new Set(onCooldown.map(c => c.contactId));
+  // #3732: the cap was stored/counted but never compared — "max 1/month"
+  // still sent daily. A schedule row always has a future nextEligibleAt, so
+  // cap-reached contacts are in this set; compare the counter here.
+  const monthlyCap = campaign.maxMessagesPerContactPerMonth ?? 4;
+  const atMonthlyCapIds = new Set(
+    onCooldown.filter(c => (c.messagesThisMonth ?? 0) >= monthlyCap).map(c => c.contactId)
+  );
 
   return allContacts.filter(c =>
     !optedOutIds.has(c.id) &&
     !cooldownIds.has(c.id) &&
+    !atMonthlyCapIds.has(c.id) &&
     (c.email || c.phone) // Must have at least one contact method
   ) as ContactToWarm[];
 }
@@ -327,12 +331,8 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
  * Send a warming message to a single contact for a specific event
  */
 async function sendWarmingMessage(
- 
- 
   campaign: WarmingCampaign,
   contact: ContactToWarm,
- 
- 
   event: WarmingEventInput,
   result: WarmingResult,
 ): Promise<void> {
@@ -346,8 +346,17 @@ async function sendWarmingMessage(
     return;
   }
 
+  // #3732: SMS is offered in the builder but has no delivery branch/worker —
+  // it used to fall through both branches and report false success.
+  const deliverable = channels.filter(c => c === 'email' || c === 'whatsapp');
+  if (deliverable.length === 0) {
+    result.skippedContacts++;
+    result.errors.push(`SMS delivery not implemented for contact ${contact.id} (campaign ${campaign.id})`);
+    return;
+  }
+
   // Pick the best channel (email preferred, then WhatsApp)
-  const channel = channels[0]!;
+  const channel = deliverable[0]!;
 
   // Generate personalized message
   const message = campaign.aiGenerateMessages
@@ -480,7 +489,8 @@ async function processBirthdayCampaigns(
         lastName: contacts.lastName,
         email: contacts.email,
         phone: contacts.phone,
-        companyName: contacts.companyId,
+        // #3732: the NAME, not the UUID contacts.companyId holds — see the join.
+    companyName: companies.name,
         leadStatus: contacts.leadStatus,
         tags: contacts.tags,
         birthday: contacts.birthday,
@@ -488,6 +498,7 @@ async function processBirthdayCampaigns(
         doNotContact: contacts.doNotContact,
       })
       .from(contacts)
+      .leftJoin(companies, eq(companies.id, contacts.companyId))
       .where(and(
         // #3224 — a birthday greeting is mailed straight from this row; a deleted contact is not
         // an audience. Same rule as `getEligibleContacts`, which is above this one in the file.
@@ -510,14 +521,10 @@ async function processBirthdayCampaigns(
       for (const contact of birthdayContacts) {
         try {
           await sendWarmingMessage(campaign, contact as ContactToWarm, birthdayEvent, result);
- 
- 
         } catch (err) {
           result.errors.push(`Birthday for ${contact.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
- 
- 
     } catch (err) {
       result.errors.push(`Birthday campaign ${campaign.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -533,12 +540,8 @@ interface GeneratedMessage {
 }
 
 async function generateAIMessage(
- 
- 
   campaign: WarmingCampaign,
   contact: ContactToWarm,
- 
- 
   event: WarmingEventInput,
 ): Promise<GeneratedMessage> {
   const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'there';
@@ -593,8 +596,6 @@ Rules:
       body: parsed.body || getDefaultMessage(contact, event).body,
       model: response.model,
     };
- 
- 
   } catch (err) {
     console.warn('[lead-warming] AI message generation failed, using default:', err instanceof Error ? err.message : String(err));
     return getDefaultMessage(contact, event);
@@ -615,8 +616,6 @@ function parseMessageResponse(raw: string): { subject: string; body: string } {
   }
 }
 
- 
- 
 function getDefaultMessage(contact: ContactToWarm, event: WarmingEventInput): GeneratedMessage {
   const name = contact.firstName || 'there';
   const templates: Record<string, string> = {
@@ -684,8 +683,6 @@ export async function seedSystemEvents(): Promise<number> {
         })
         .onConflictDoNothing();
       inserted++;
- 
- 
     } catch (err) {
       // Skip duplicates
       logger.error('[lead-warming] Seed skipped', { festival: festival.name, error: err instanceof Error ? err.message : String(err) });
