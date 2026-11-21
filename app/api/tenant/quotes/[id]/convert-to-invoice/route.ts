@@ -14,12 +14,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, invoices, invoiceLineItems, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
 import { ConcurrencyError } from '@/lib/concurrency';
-import { allowedFromStatus, canTransition } from '@/lib/offers';
+import { canTransition } from '@/lib/offers';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { money, round2 } from '@/lib/money';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -192,18 +194,23 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           // instead of a resurrection. `accepted` stays in the set so the
           // already-accepted idempotent path still writes nothing away, and
           // COALESCE keeps the original acceptance timestamp.
-          const [claimed] = await tx.update(quotes).set({
-            status: 'accepted',
-            acceptedAt: sql`COALESCE(${quotes.acceptedAt}, ${new Date()})`,
-            updatedAt: new Date(),
-            updatedBy: ctx.userId,
-          }).where(and(
-            eq(quotes.id, id),
-            eq(quotes.tenantId, ctx.tenantId),
-            inArray(quotes.status, [...allowedFromStatus('accepted'), 'accepted']),
-          )).returning({ id: quotes.id });
+          // #3407 PR-4A: the claim belongs to the shared helper and the quotes
+          // registry. 'accepted' is kept in the from-set for the idempotent
+          // re-convert path, and COALESCE keeps the original acceptance stamp.
+          const claimed = await transitionStatus(tx, {
+            table: quotes,
+            id,
+            tenantId: ctx.tenantId,
+            from: [...transitionFrom('quotes', 'accepted'), 'accepted'],
+            to: 'accepted',
+            patch: {
+              acceptedAt: sql`COALESCE(${quotes.acceptedAt}, ${new Date()})`,
+              updatedAt: new Date(),
+              updatedBy: ctx.userId,
+            },
+          });
 
-          if (!claimed) throw new ConcurrencyError('Quote');
+          if (!claimed.ok) throw new ConcurrencyError('Quote');
 
           return inv;
         });
