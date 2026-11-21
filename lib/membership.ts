@@ -11,8 +11,10 @@
  * their own WHERE; this module is the one list both halves read. The SQL claim
  * (via transitionStatus) and any request-side vet share `allowedMemberFromStatus`.
  *
- * Self-transitions are legal: a repeated SCIM provision of an already-active
- * member is a no-op, not a 409, and the from-state claim simply matches no row.
+ * No self-transitions: deactivating an already-inactive member must fail the
+ * claim (the old `ne(status,'inactive')` wrote only from active), and a repeated
+ * SCIM provision of an already-active member loses the reactivation claim —
+ * which provisioning treats as an idempotent no-op, not an error.
  */
 export const TENANT_MEMBER_STATUSES = ['active', 'inactive'] as const;
 export type TenantMemberStatus = (typeof TENANT_MEMBER_STATUSES)[number];
@@ -20,8 +22,8 @@ export type TenantMemberStatus = (typeof TENANT_MEMBER_STATUSES)[number];
 export const TENANT_MEMBER_TRANSITIONS: Readonly<
   Record<TenantMemberStatus, readonly TenantMemberStatus[]>
 > = {
-  active: ['active', 'inactive'],
-  inactive: ['active', 'inactive'],
+  active: ['inactive'],
+  inactive: ['active'],
 };
 
 /** The from-states a guarded write may claim `to` from. Fail closed on garbage. */

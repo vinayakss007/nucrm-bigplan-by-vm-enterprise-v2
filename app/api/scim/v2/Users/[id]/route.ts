@@ -27,6 +27,8 @@ import {
   type SCIMUser,
 } from '@/lib/scim';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { isEntityId } from '@/lib/id';
 import {
   inScimTransaction,
@@ -433,15 +435,20 @@ export async function DELETE(
         // and a live from-state in the write, and use RETURNING so a row that
         // moved or was already deactivated in the gap is not reported as a
         // fresh deprovision.
-        const deactivated = await tx.update(tenantMembers)
-          .set({ status: 'inactive', updatedAt: new Date() })
-          .where(and(
-            eq(tenantMembers.id, existingUser.memberId),
-            eq(tenantMembers.tenantId, tenantId),
-            ne(tenantMembers.status, 'inactive')
-          ))
-          .returning({ id: tenantMembers.id });
-        if (!deactivated.length) throw NextResponse.json(
+        // #3407 PR-4A: the from-state claim belongs to the shared helper and
+        // the tenant_members registry. The registry's `inactive` from-set is
+        // active-only, preserving the old `ne(status,'inactive')` refusal to
+        // re-deactivate; the helper adds the tombstone gate. A lost claim still
+        // answers 409 before any session revocation.
+        const deactivated = await transitionStatus(tx, {
+          table: tenantMembers,
+          id: existingUser.memberId,
+          tenantId,
+          from: transitionFrom('tenantMembers', 'inactive'),
+          to: 'inactive',
+          patch: { updatedAt: new Date() },
+        });
+        if (!deactivated.ok) throw NextResponse.json(
           generateSCIMError('Stale data — record was modified. Please refresh.', 409),
           { status: 409, headers: { 'Content-Type': 'application/scim+json' } },
         );
