@@ -7,6 +7,7 @@
 import type { WidgetProps } from '@/types/dashboard';
 import { Receipt, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { formatCurrency } from '@/lib/utils';
 
 export default function InvoicesWidget({ data }: WidgetProps) {
   const d = data ?? {};
@@ -25,7 +26,7 @@ export default function InvoicesWidget({ data }: WidgetProps) {
       </div>
       <div className="flex items-center gap-3 mb-3">
         <span className="text-2xl font-black tabular-nums">
-          {d.totalOutstanding ?? 0}
+          {formatCurrency(Number(d.totalOutstanding ?? 0))}
         </span>
         <span className="text-xs font-semibold text-muted-foreground/70">outstanding</span>
       </div>

@@ -26,7 +26,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           (SELECT COUNT(*)::int FROM ${invoices} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status = 'sent') AS sent,
           (SELECT COUNT(*)::int FROM ${invoices} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status = 'overdue') AS overdue,
           (SELECT COUNT(*)::int FROM ${invoices} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status = 'paid') AS paid,
-          (SELECT COUNT(*)::int FROM ${invoices} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status IN ('sent', 'overdue')) AS total_outstanding
+          -- #3728: "outstanding" is a MONEY amount everywhere else (invoices
+          -- page sums balance_due); a COUNT here showed a number of invoices
+          -- under the same label. COALESCE keeps the empty case at 0.
+          (SELECT COALESCE(SUM(balance_due), 0)::numeric FROM ${invoices} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status IN ('sent', 'overdue')) AS total_outstanding
       `);
       const row = result.rows?.[0] || {};
       return NextResponse.json({
