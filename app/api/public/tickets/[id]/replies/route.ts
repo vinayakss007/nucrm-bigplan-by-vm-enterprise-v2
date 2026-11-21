@@ -6,12 +6,14 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { transitionStatus } from '@/lib/state/transition';
+import { allowedFromStatus } from '@/lib/state/transitions';
 
 const replySchema = z.object({
   body: z.string().min(1, 'Reply cannot be empty').max(10000),
@@ -173,20 +175,24 @@ async function writeReply(
     // contact clauses the read carried (#3194: writes never lean on RLS).
     // A missed claim aborts the transaction: the reply must not commit
     // against a state this handler never saw.
-    const [reopened] = await tx.update(supportTickets)
-      .set({ status: 'open', updatedAt: new Date() })
-      .where(and(
-        eq(supportTickets.id, ticket.id),
-        eq(supportTickets.tenantId, ticket.tenantId),
-        // The read pinned `contact_id = contact.id`, so this ticket's contact
-        // is non-null by construction; the sql form keeps that guarantee in
-        // the claim instead of re-narrowing what the select already proved.
-        sql`${supportTickets.contactId} = ${ticket.contactId}`,
-        eq(supportTickets.status, 'resolved'),
-        isNull(supportTickets.deletedAt),
-      ))
-      .returning({ id: supportTickets.id });
-    if (!reopened) throw new TicketReopenLostError();
+    // #3407 PR-4A: the status claim belongs to the shared helper and the
+    // transition registry, not to this route. The contact clause from the
+    // portal read stays as an extra predicate, so the reopen still cannot
+    // touch a ticket this caller was never allowed to see.
+    const reopened = await transitionStatus(tx, {
+      table: supportTickets,
+      id: ticket.id,
+      tenantId: ticket.tenantId,
+      from: allowedFromStatus('supportTickets', 'open'),
+      to: 'open',
+      patch: { updatedAt: new Date() },
+      // The read pinned `contact_id = contact.id`, so this ticket's contact
+      // is non-null by construction; keep that guarantee in the claim.
+      // The read above filtered `contact_id = contact.id`, so a row here has a
+      // non-null contact even though the column itself is nullable.
+      extraWhere: eq(supportTickets.contactId, ticket.contactId!),
+    });
+    if (!reopened.ok) throw new TicketReopenLostError();
   }
 
   return { kind: 'inserted', reply };
