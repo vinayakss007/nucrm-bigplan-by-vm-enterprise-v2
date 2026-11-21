@@ -498,7 +498,15 @@ d('public bearer-token routes establish a tenant context from the credential (#2
     expect(countOf(await asRole('SELECT count(*)::int AS n FROM quotes', { 'app.current_tenant': TENANT_A }))).toBe(2);
     expect(countOf(await asRole('SELECT count(*)::int AS n FROM csat_surveys', { 'app.current_tenant': TENANT_A }))).toBe(1);
     expect(countOf(await asRole('SELECT count(*)::int AS n FROM signing_requests', { 'app.current_tenant': TENANT_A }))).toBe(3);
-    expect(countOf(await asRole('SELECT count(*)::int AS n FROM documents', { 'app.current_tenant': TENANT_A }))).toBe(2);
+    // #2537: 0146 now arms the tombstone predicate on tenant-scoped SELECT
+    // policies, so the soft-deleted `docAWithdrawn` is hidden by default (only
+    // docA is visible). The opt-in GUC must bring it back — that proves the 1 is
+    // RLS, not a missing row or privilege.
+    expect(countOf(await asRole('SELECT count(*)::int AS n FROM documents', { 'app.current_tenant': TENANT_A }))).toBe(1);
+    expect(countOf(await asRole('SELECT count(*)::int AS n FROM documents', {
+      'app.current_tenant': TENANT_A,
+      'app.include_deleted': 'true',
+    }))).toBe(2);
     // The planted line item is the one row in tenant A's quote that tenant B must
     // never contribute, and it is invisible from either side's context.
     expect(countOf(await asRole(
