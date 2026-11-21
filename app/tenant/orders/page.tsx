@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
+import { contactOptionsFromEnvelope } from '@/lib/contacts/list-options';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -83,11 +84,11 @@ function OrdersPageInner() {
   const stale = Boolean(ordersError) && Boolean(ordersData);
   const reason = ordersError?.message || 'no response from the server';
 
-  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ data?: Array<{ id: string; first_name?: string | null; last_name?: string | null; email?: string | null }> }>(
     ORDER_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
-  const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
+  const contacts: Contact[] = useMemo(() => contactOptionsFromEnvelope(contactsData), [contactsData]);
   useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
 
   // The contacts read is the secondary one, which guard:panel-error-state cannot see at all:
