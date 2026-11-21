@@ -73,8 +73,8 @@ const NOW = '2026-03-04T10:00:00.000Z';
  *  toggle a stale read is supposed to leave clickable. */
 const ROWS = {
   data: [
-    { id: 'i1', name: 'Ops webhook', type: 'webhook', is_active: true, created_at: NOW },
-    { id: 'i2', name: 'Billing alerts', type: 'slack', is_active: false, created_at: NOW },
+    { id: 'i1', name: 'Ops webhook', type: 'webhook', isActive: true, createdAt: NOW },
+    { id: 'i2', name: 'Billing alerts', type: 'slack', isActive: false, createdAt: NOW },
   ],
 };
 /** The last read said there were none, and this refresh was refused. */
