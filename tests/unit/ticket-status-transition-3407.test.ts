@@ -197,7 +197,9 @@ describe('#3407 ticket PATCH — status claim', () => {
     expect(res.status).toBe(200);
     expect(H.updates).toHaveLength(1);
     expect(H.updates[0].set.status).toBe('in_progress');
-    expect(H.updates[0].sql).toContain('"support_tickets"."status" =');
+    // PR-4A: the claim now goes through the shared helper, so the from-state
+    // is an `in (...)` over the registry's allowed set rather than an `=`.
+    expect(H.updates[0].sql).toContain('"support_tickets"."status" in (');
     expect(H.updates[0].params).toContain('open');
     expect(H.updates[0].sql).toContain('"support_tickets"."deleted_at" is null');
   });
