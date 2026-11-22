@@ -922,6 +922,52 @@ jobs:
   # Inserted below `ci.yml:447` (a cited coordinate) and above the last job, which is the
   # placement discipline #3283 and #3281 follow: an insert above any cited line moves the
   # register pointers out from under `npm run guard:coords`.
+  # #2537 — prove the migration backlog can actually be applied. CI provisions
+  # with db:sync (which never runs the journal), so a broken pending migration
+  # was invisible until the owner tried the live apply. This job builds the
+  # "database behind the journal" state on throwaway databases using the same
+  # replay engine db:migrate uses, runs the REAL apply command, and measures
+  # the ledger and catalog afterwards. Inserted before destructive-gate/constraint-vocab so those two keep
+  # their pinned last-two positions (six tests pin that invariant).
+  migration-backlog-simulation:
+    name: Migration Backlog Simulation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_sim
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - name: Apply the measured 27-entry backlog and verify the ledger
+        run: npm run db:simulate-backlog -- --applied 126
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_sim
+          DATABASE_SSL: "false"
+      - name: Apply a deeper 54-entry backlog on a fresh database
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE nucrm_sim_deep'
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nucrm_sim_deep" \
+            npm run db:simulate-backlog -- --applied 99
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_sim
+          DATABASE_SSL: "false"
+
   destructive-gate:
     name: Destructive scripts name their own opt-in (#3282)
     if: vars.DESTRUCTIVE_GATE_GUARD_ENABLED != 'false'

@@ -63,7 +63,10 @@ describe('0118 builds its indexes online (#3301)', () => {
     // Only invalid, only non-constraint, only this file's own naming scheme,
     // only the schema it builds in — never a live index.
     expect(prelude).toContain('indisvalid');
-    expect(prelude).toContain('indisconstraint');
+    // pg_index has no `indisconstraint` column (#2537 simulation): the only
+    // correct test for a constraint-backed index is pg_constraint.conindid.
+    expect(prelude).toContain('conindid');
+    expect(prelude).not.toContain('indisconstraint');
     expect(prelude).toContain("'i'");
     expect(prelude).toContain("n.nspname = 'public'");
     expect(prelude).toMatch(/relname LIKE '%\\_fk\\_idx'/);

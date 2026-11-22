@@ -55,7 +55,7 @@ BEGIN
       JOIN pg_index i ON i.indexrelid = c.oid
      WHERE c.relkind = 'i'
        AND NOT i.indisvalid
-       AND NOT i.indisconstraint
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = c.oid)
        AND n.nspname = 'public'
        AND c.relname LIKE '%\_fk\_idx'
   LOOP
@@ -279,7 +279,7 @@ BEGIN
     JOIN pg_index i ON i.indexrelid = c.oid
    WHERE c.relkind = 'i'
      AND NOT i.indisvalid
-     AND NOT i.indisconstraint
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = c.oid)
      AND pgn.nspname = 'public'
      AND c.relname LIKE '%\_fk\_idx';
   IF n > 0 THEN

@@ -230,6 +230,43 @@ bash deploy/scripts/backup.sh --restore /var/backups/nucrm/<file>.dump
 
 ---
 
+## 7a. #2537 — Apply the migration backlog (owner action)
+
+The live database is behind the journal; the only automated migrate step lives
+in the Deploy workflow, which has never succeeded (#2299). **Fix #2299 first.**
+This is a maintenance-window operation, not a merge — several pending entries
+rewrite RLS policies and enforce `NOT NULL` on populated tables.
+
+Full procedure, safety gates, simulation and troubleshooting:
+[`docs/runbooks/migration-backlog-apply.md`](./migration-backlog-apply.md).
+
+```bash
+export DATABASE_URL=<live app url>
+export BACKUP_DATABASE_URL=<bypass role url>   # PP-014: FORCE RLS
+export BACKUP_LOCAL_DIR=/var/backups/nucrm    # durable, never /tmp
+
+npm run db:status                             # re-measure; never trust an old count
+npm run db:apply-backlog -- --dry-run         # read-only: measure + classify
+bash deploy/scripts/backup.sh && npm run backup:verify   # prove the restore point
+npm run db:apply-backlog -- --yes             # dump → apply → re-measure → record
+npm run db:status                             # must say Pending: 0
+```
+
+Do not use `npm run db:verify-chain` for this apply, and do not hand-edit the
+ledger. If a migration aborts, keep the printed restore point, capture the
+failing statement and open a register entry.
+
+### Apply record (fill in after the real run)
+
+| Date                              | Starting pending | Journal entries | Restore point | Result | Operator |
+| --------------------------------- | ---------------- | --------------- | ------------- | ------ | -------- |
+| _not yet applied — pending #2299_ |                  |                 |               |        |          |
+
+Paste the `db:apply-backlog` record line here and re-run the six PP-061 paths
+from `docs/infra/PREPROD-ISSUE-REGISTER.md` before calling the host fixed.
+
+---
+
 ## 8. #1475 — Branch protection on `main` (REPO OWNER, one-time)
 
 Not on the VM — done in GitHub settings by the repo owner. Follow

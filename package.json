@@ -117,6 +117,8 @@
     "db:rollback": "npx tsx scripts/rollback-migration.ts",
     "db:rollback:coverage": "npx tsx scripts/rollback-migration.ts --coverage",
     "db:status": "npx tsx scripts/migration-status.ts",
+    "db:simulate-backlog": "npx tsx scripts/simulate-migration-backlog.mts",
+    "db:apply-backlog": "npx tsx scripts/apply-migration-backlog.mts",
     "db:auto": "npx tsx scripts/migrate.ts",
     "db:sync": "if [ \"$CI\" != \"true\" ]; then echo '⚠️  db:sync is dangerous — use db:migrate instead'; exit 1; fi && node scripts/db-extensions-ci.mjs && npx drizzle-kit push --config=./drizzle.config.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
