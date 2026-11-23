@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plane, Save, Loader2, Calendar, User, MessageSquare, AlertCircle, CheckCircle2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
@@ -88,14 +89,12 @@ export default function OutOfOfficePage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/user/out-of-office', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      return fetchJsonOrThrow<{ reassigned?: Record<string, unknown> }>('/api/user/out-of-office', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ out_of_office: ooo }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
-      return d as { reassigned?: Record<string, unknown> };
     },
     onSuccess: (d) => {
       const total = ooo.auto_reassign && d.reassigned
