@@ -7,11 +7,11 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
-import { clientLogError } from '@/lib/client-logger';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Search, Book, Copy, Check } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 interface ErrorData {
@@ -92,11 +92,11 @@ export default function ErrorsPage() {
 
   const resolveMutation = useMutation({
     mutationFn: async ({ id, resolveAll, lvl }: { id?: string; resolveAll?: boolean; lvl?: string }) => {
-      const res = await fetch('/api/superadmin/errors', {
+      // #3408: canonical client throws on a refused resolve with the server's message.
+      await fetchJsonOrThrow('/api/superadmin/errors', {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id, resolveAll, level: lvl }),
       });
-      if (!res.ok) throw new Error((await res.json().catch((err) => { clientLogError('errors:parse-resolve', err); return {}; })).error || 'Resolve failed');
       return !!resolveAll;
     },
     onSuccess: (wasResolveAll) => {

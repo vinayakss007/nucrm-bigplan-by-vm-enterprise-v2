@@ -12,6 +12,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface RateLimitEndpoint {
   key: string;
@@ -132,14 +133,12 @@ export default function SuperAdminRateLimitsPage() {
   //   renders none of it. On `stale` it flips the value the last read showed — that
   //   is what the banner is for.
   const putRateLimits = async (body: Record<string, unknown>) => {
-    const res = await fetch('/api/superadmin/rate-limits', {
+    // #3408: canonical client throws on a refused save with the server's message.
+    return fetchJsonOrThrow('/api/superadmin/rate-limits', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(d.error || 'Request failed');
-    return d;
   };
 
   const saveGlobalMutation = useMutation({
