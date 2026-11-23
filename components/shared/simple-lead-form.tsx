@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { CheckCircle, AlertCircle, Loader2, Building2, Mail, Phone, User } from 'lucide-react';
 import { simpleLeadFormSchema, validateForm } from '@/lib/validation/forms';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 export default function LeadCaptureForm() {
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,8 @@ export default function LeadCaptureForm() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/leads/public', {
+      // #3408: canonical client throws on a refused submit with the server's message.
+      await fetchJsonOrThrow('/api/leads/public', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,12 +49,6 @@ export default function LeadCaptureForm() {
           source: 'Website Form',
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit');
-      }
 
       setSuccess(true);
       setFormData({

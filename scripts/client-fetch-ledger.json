@@ -1,5 +1,4 @@
 {
-  "app/forms/public/[id]/public-form-client.tsx": 1,
   "app/p/offers/[publicToken]/page.tsx": 3,
   "app/p/sign/[token]/page.tsx": 2,
   "app/portal/(protected)/quotes/page.tsx": 2,
@@ -95,7 +94,6 @@
   "components/marketing/contact-form.tsx": 1,
   "components/shared/bug-report-button.tsx": 1,
   "components/shared/lead-capture-form.tsx": 1,
-  "components/shared/simple-lead-form.tsx": 1,
   "components/shared/user-preferences-applier.tsx": 1,
   "components/superadmin/audit-log-client.tsx": 2,
   "components/superadmin/backups-data-table.tsx": 2,

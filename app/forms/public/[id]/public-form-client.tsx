@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { buildPublicFormSchema, validateForm, type PublicFormFieldDef } from '@/lib/validation/forms';
 import { getFieldIdentity } from '@/lib/forms/field-shape';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface FormSettings {
   success_message?: string;
@@ -87,7 +88,8 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/forms/submit', {
+      // #3408: canonical client throws on a refused submit with the server's message.
+      await fetchJsonOrThrow('/api/forms/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,9 +97,6 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
           data: formData,
         }),
       });
-
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to submit');
 
       setSuccess(true);
       
