@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -53,13 +54,12 @@ export default function PublicFormPage() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/forms/submit', {
+      // #3408: canonical client throws on a refused submit with the server's message.
+      await fetchJsonOrThrow('/api/forms/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ form_id: formId, values }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error);
     },
     onSuccess: () => { setSubmitted(true); toast.success('Form submitted successfully!'); },
     onError: (err: Error) => toast.error(err.message || 'Failed to submit form'),
