@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
@@ -62,15 +63,12 @@ export default function SegmentsPage() {
 
   const createSegment = useMutation({
     mutationFn: async (filters: Record<string, unknown>) => {
-      const res = await fetch('/api/tenant/segments', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/segments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: form.name, entity_type: form.entity_type, filters }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Create failed');
-      }
     },
     onSuccess: () => {
       toast.success('Segment created');
@@ -83,8 +81,8 @@ export default function SegmentsPage() {
 
   const deleteSegment = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/segments/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
+      // #3408: canonical client throws on a refused delete with the server's message.
+      await fetchJsonOrThrow(`/api/tenant/segments/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Segment deleted'); reload(); },
     onError: () => toast.error('Delete failed'),
