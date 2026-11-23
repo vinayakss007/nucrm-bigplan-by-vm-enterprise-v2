@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { logError } from '@/lib/errors-client';
 
@@ -97,7 +98,8 @@ export default function AISummarizePage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/ai/summarize', {
+      // #3408: canonical client throws on a refused summary with the server's message.
+      return fetchJsonOrThrow<SummarizeResp>('/api/tenant/ai/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,9 +108,6 @@ export default function AISummarizePage() {
           custom_instructions: customInstructions || undefined,
         }),
       });
-      const data: SummarizeResp & { error?: string } = await r.json();
-      if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
-      return data as SummarizeResp;
     },
     onMutate: () => { setError(null); setResult(null); },
     onSuccess: (data) => setResult(data),
