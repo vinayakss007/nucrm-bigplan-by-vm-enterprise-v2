@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -15,12 +16,14 @@ export default function ForgotPasswordPage() {
   // #1328: submit via useMutation (was raw fetch + useState flags). The
   // request never reveals whether the email exists — errors are swallowed
   // and the success panel shows once the mutation settles.
+  // #3408: the canonical client parses the response centrally; the result is
+  // deliberately ignored here so this endpoint still leaks nothing.
   const submitMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/auth/forgot-password', {
+      await fetchJsonSafe('/api/auth/forgot-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      }).catch(() => undefined);
+      });
       return true; // Always show success — don't reveal if email exists
     },
   });
