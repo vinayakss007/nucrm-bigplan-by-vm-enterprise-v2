@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import InlineErrorState from '@/components/shared/inline-error-state';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import SubscriptionPlanComparison, { type SubscriptionPlan } from '@/components/tenant/billing/subscription-plan-comparison';
 import SubscriptionCancelDialog from '@/components/tenant/billing/subscription-cancel-dialog';
 
@@ -125,17 +126,17 @@ export default function SubscriptionPage() {
     actionMutation.mutate({
       token: `upgrade-${planId}`,
       run: async () => {
-        const res = await fetch('/api/tenant/billing/subscription/upgrade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ planId, interval: 'month' }),
-        });
-        const data = await res.json();
-        if (res.ok) {
+        try {
+          // #3408: a refused upgrade can no longer reload as if it landed.
+          const data = await fetchJsonOrThrow<{ data: { message: string } }>('/api/tenant/billing/subscription/upgrade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ planId, interval: 'month' }),
+          });
           toast.success(data.data.message);
           window.location.reload();
-        } else {
-          toast.error(data.error || 'Failed to upgrade');
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to upgrade');
         }
       },
     });
@@ -145,18 +146,18 @@ export default function SubscriptionPage() {
     actionMutation.mutate({
       token: `downgrade-${planId}`,
       run: async () => {
-        const res = await fetch('/api/tenant/billing/subscription/downgrade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ planId }),
-        });
-        const data = await res.json();
-        if (res.ok) {
+        try {
+          // #3408: the comparison dialog only closes on a landed downgrade.
+          const data = await fetchJsonOrThrow<{ data: { message: string } }>('/api/tenant/billing/subscription/downgrade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ planId }),
+          });
           toast.success(data.data.message);
           setShowPlanComparison(false);
           window.location.reload();
-        } else {
-          toast.error(data.error || 'Failed to schedule downgrade');
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to schedule downgrade');
         }
       },
     });
@@ -166,22 +167,22 @@ export default function SubscriptionPage() {
     actionMutation.mutate({
       token: 'cancel',
       run: async () => {
-        const res = await fetch('/api/tenant/billing/subscription/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reason: cancelReason,
-            feedback: cancelFeedback || undefined,
-            cancelAtPeriodEnd: true,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
+        try {
+          // #3408: a refused cancellation keeps the dialog open and the plan live.
+          const data = await fetchJsonOrThrow<{ data: { message: string } }>('/api/tenant/billing/subscription/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reason: cancelReason,
+              feedback: cancelFeedback || undefined,
+              cancelAtPeriodEnd: true,
+            }),
+          });
           toast.success(data.data.message);
           setShowCancelModal(false);
           window.location.reload();
-        } else {
-          toast.error(data.error || 'Failed to cancel');
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to cancel');
         }
       },
     });
@@ -371,10 +372,13 @@ export default function SubscriptionPage() {
               onClick={() => actionMutation.mutate({
                 token: 'portal',
                 run: async () => {
-                  const res = await fetch('/api/tenant/billing/portal', { method: 'POST' });
-                  const data = await res.json();
-                  if (res.ok && data.url) window.open(data.url, '_blank');
-                  else toast.error(data.error || 'Could not open billing portal');
+                  // #3408: a refused portal request can no longer open a blank tab.
+                  try {
+                    const data = await fetchJsonOrThrow<{ url: string }>('/api/tenant/billing/portal', { method: 'POST' });
+                    window.open(data.url, '_blank');
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Could not open billing portal');
+                  }
                 },
               })}
               disabled={actionLoading === 'portal'}
@@ -412,15 +416,13 @@ export default function SubscriptionPage() {
               onClick={() => actionMutation.mutate({
                 token: 'resume',
                 run: async () => {
-                  const res = await fetch('/api/tenant/billing/subscription/resume', {
-                    method: 'POST',
-                  });
-                  const data = await res.json();
-                  if (res.ok) {
+                  try {
+                    // #3408: a refused resume must not reload as if it worked.
+                    await fetchJsonOrThrow('/api/tenant/billing/subscription/resume', { method: 'POST' });
                     toast.success('Subscription resumed');
                     window.location.reload();
-                  } else {
-                    toast.error(data.error || 'Failed to resume');
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Failed to resume');
                   }
                 },
               })}
