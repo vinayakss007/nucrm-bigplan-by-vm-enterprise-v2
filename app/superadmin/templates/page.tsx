@@ -9,6 +9,7 @@ import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Package, Plus, Users, FileText, Edit, Copy, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -50,7 +51,8 @@ export default function SuperAdminTemplatesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/templates', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/superadmin/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,8 +66,6 @@ export default function SuperAdminTemplatesPage() {
           status: 'draft',
         }),
       });
-      if (!res.ok) throw new Error('Create failed');
-      await res.json();
     },
     onSuccess: () => { toast.success('Template created'); queryClient.invalidateQueries({ queryKey }); },
     onError: () => toast.error('Failed to create template'),
