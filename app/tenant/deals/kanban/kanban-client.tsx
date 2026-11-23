@@ -18,6 +18,7 @@ import {
   User, Clock, TrendingUp
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { normalizeDealRow } from '@/lib/deals/normalize-api-row';
 import { isWonStageName } from '@/lib/deals/won-stage';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -261,24 +262,18 @@ export default function DealsKanbanPage() {
     setDeals(prev => prev.map(d => d.id === activeDeal.id ? { ...d, stageId: newStageId } : d));
 
     try {
-      const res = await fetch(`/api/tenant/deals/${activeDeal.id}`, {
+      // #3408: canonical client throws on a refused move with the server's message.
+      await fetchJsonOrThrow(`/api/tenant/deals/${activeDeal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage_id: newStageId }),
       });
-      
-      if (res.ok) {
-        toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
-        mutate();
-      } else {
-        // Revert on failure
-        setDeals(prevDeals);
-        toast.error('Failed to move deal');
-      }
-    } catch {
-      // Revert on error
+      toast.success(`Deal moved to ${stages.find(s => s.id === newStageId)?.name}`);
+      mutate();
+    } catch (err) {
+      // Revert the optimistic update on any refusal or network error.
       setDeals(prevDeals);
-      toast.error('Failed to move deal');
+      toast.error(err instanceof Error ? err.message : 'Failed to move deal');
     }
   };
 
