@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Lock, ShieldCheck, Clock, Globe, KeyRound, AlertTriangle,
   Plus, X, Save, Loader2, ShieldX,
@@ -126,13 +127,13 @@ export default function LoginPolicyPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/admin/login-policy', {
+      // #3408: a refused save throws with the server's message, so the
+      // onError toast reports the real failure instead of a generic string.
+      await fetchJsonOrThrow('/api/tenant/admin/login-policy', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login_policy: pol }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
     },
     onSuccess: () => { toast.success('Security policy saved'); setOriginal(pol); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),

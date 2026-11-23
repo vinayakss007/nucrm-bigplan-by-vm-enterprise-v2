@@ -9,12 +9,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { LogIn, Loader2, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface PortalSession {
   email: string;
   name: string;
   permissions: { quotes: boolean; invoices: boolean; cases: boolean };
 }
+
+type PortalLoginResponse = {
+  client: { email: string; name: string };
+  permissions: PortalSession['permissions'];
+};
 
 function getStoredSession(): PortalSession | null {
   if (typeof window === 'undefined') return null;
@@ -49,19 +55,19 @@ function LoginInner() {
   // #1328: login via useMutation (was raw fetch + useState loading/error).
   const loginMutation = useMutation({
     mutationFn: async (creds: { email: string; token: string; tenantId: string }) => {
-      let res: Response;
-      try {
-        res = await fetch('/api/tenant/portal/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: creds.email, token: creds.token, tenant_id: creds.tenantId }),
-        });
-      } catch {
-        throw new Error('Connection failed. Please try again.');
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Login failed');
-      return data;
+      // #3408: the canonical client throws with the server's reason on a
+      // refused login, so a 401 can never be read as a successful sign-in.
+      // Network failures keep the wording users already recognise.
+      return fetchJsonOrThrow<PortalLoginResponse>('/api/tenant/portal/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: creds.email, token: creds.token, tenant_id: creds.tenantId }),
+      }).catch((err: unknown) => {
+        if (err instanceof Error && /Network error/.test(err.message)) {
+          throw new Error('Connection failed. Please try again.');
+        }
+        throw err instanceof Error ? err : new Error('Login failed');
+      });
     },
     onSuccess: (data) => {
       const session: PortalSession = {
