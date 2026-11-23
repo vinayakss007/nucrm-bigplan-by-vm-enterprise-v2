@@ -12,6 +12,7 @@ import {
   Clock, Sparkles, ThumbsUp, ThumbsDown, Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Row = {
@@ -118,12 +119,12 @@ export default function AIActivityPage() {
 
   const rateMutation = useMutation({
     mutationFn: async ({ id, accepted }: { id: string; accepted: boolean }) => {
-      const r = await fetch('/api/tenant/ai/activity', {
+      // #3408: canonical client throws on a refused rating with the server's message.
+      await fetchJsonOrThrow('/api/tenant/ai/activity', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, accepted }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Failed');
     },
     onSuccess: (_data, { id, accepted }) => {
       // Optimistically patch the cached page in place.

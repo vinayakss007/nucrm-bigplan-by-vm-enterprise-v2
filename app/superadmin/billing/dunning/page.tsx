@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 interface DunningAttempt {
@@ -57,14 +58,13 @@ export default function DunningDashboard() {
 
   const retryMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
-      const res = await fetch('/api/tenant/billing/dunning/retry', {
+      // #3408: canonical client throws on a refused retry with the server's message.
+      const d = await fetchJsonOrThrow<{ data: { message: string } }>('/api/tenant/billing/dunning/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscriptionId }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to retry payment');
-      return d.data.message as string;
+      return d.data.message;
     },
     onSuccess: (message) => { toast.success(message); queryClient.invalidateQueries({ queryKey }); },
     onError: (e: Error) => toast.error(e.message || 'An error occurred'),
