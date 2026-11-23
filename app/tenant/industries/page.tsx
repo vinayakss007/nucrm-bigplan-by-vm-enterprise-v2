@@ -7,6 +7,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Loader2, Sparkles, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -52,14 +53,12 @@ export default function IndustriesPage() {
   // a per-row spinner without extra state.
   const applyTemplate = useMutation({
     mutationFn: async (templateId: string) => {
-      const res = await fetch('/api/tenant/industry-templates', {
+      // #3408: canonical client throws on a refused apply with the server's message.
+      return fetchJsonOrThrow<{ message?: string }>('/api/tenant/industry-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Failed to apply template');
-      return body as { message?: string };
     },
     onSuccess: (body) => {
       toast.success(body.message || 'Template applied successfully!');
