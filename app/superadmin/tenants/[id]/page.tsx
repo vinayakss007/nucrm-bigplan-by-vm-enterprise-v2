@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Mail, Users, Calendar, Shield, Edit, Save, Loader2, ExternalLink } from 'lucide-react';
@@ -94,13 +95,12 @@ export default function TenantDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/tenants', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/superadmin/tenants', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: tenantId, ...form }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
     },
     onSuccess: () => {
       toast.success('Tenant updated');

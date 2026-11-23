@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -155,13 +156,15 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
     if (form.body.trim().length < 10) { toast.error('Please describe your issue in at least 10 characters'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/public/tickets', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/public/tickets', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Ticket created'); onCreated(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      toast.success('Ticket created'); onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    }
     setSaving(false);
   };
 
