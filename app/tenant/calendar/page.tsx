@@ -15,6 +15,7 @@ import {
   Users, TrendingUp, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, getDay, startOfWeek, endOfWeek, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -479,11 +480,10 @@ function MeetingForm({ contacts, editEvent, onSaved, onClose }: {
     mutationFn: async () => {
       const url = editEvent ? `/api/tenant/meetings/${editEvent.id}` : '/api/tenant/meetings';
       const method = editEvent ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, contact_id: form.contact_id || null, end_time: form.end_time || new Date(new Date(form.start_time).getTime() + 3600000).toISOString() }),
       });
-      if (!res.ok) throw new Error('Failed to save meeting');
     },
     onSuccess: () => { toast.success(editEvent ? 'Meeting updated' : 'Meeting scheduled'); onSaved(); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
