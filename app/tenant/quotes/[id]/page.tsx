@@ -15,6 +15,7 @@ import { PromptDialog } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface Quote {
   id: string;
@@ -85,12 +86,11 @@ export default function QuoteDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Quote>) => {
-      const res = await fetch(`/api/tenant/quotes/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/quotes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to update');
     },
     onSuccess: () => {
       setEditing(false);
@@ -102,12 +102,12 @@ export default function QuoteDetailPage() {
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const res = await fetch(`/api/tenant/quotes/${id}`, {
+      // #3408: a refused status change can no longer update the local badge.
+      await fetchJsonOrThrow(`/api/tenant/quotes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => {
@@ -119,8 +119,7 @@ export default function QuoteDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       toast.success('Quote deleted');
@@ -275,16 +274,12 @@ export default function QuoteDetailPage() {
             <button
               onClick={() => confirmThen('Convert this quote to an invoice?', async () => {
                 try {
-                  const res = await fetch(`/api/tenant/quotes/${id}/convert-to-invoice`, { method: 'POST' });
-                  const data = await res.json();
-                  if (res.ok) {
-                    toast.success(`Invoice ${data.invoiceNumber} created`);
-                    router.push(`/tenant/invoices/${data.invoiceId}`);
-                  } else {
-                    toast.error(data.error || 'Failed to convert');
-                  }
-                } catch {
-                  toast.error('Failed to convert quote');
+                  // #3408: a refused conversion can no longer navigate as if it landed.
+                  const data = await fetchJsonOrThrow<{ invoiceNumber: string; invoiceId: string }>(`/api/tenant/quotes/${id}/convert-to-invoice`, { method: 'POST' });
+                  toast.success(`Invoice ${data.invoiceNumber} created`);
+                  router.push(`/tenant/invoices/${data.invoiceId}`);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to convert quote');
                 }
               }, 'always', 'Convert')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
@@ -464,20 +459,16 @@ export default function QuoteDetailPage() {
         invalidMessage="Please enter a valid email address"
         onConfirm={async (email) => {
           try {
-            const res = await fetch(`/api/tenant/offers/${id}/send`, {
+            // #3408: a refused send can no longer flash a success toast.
+            await fetchJsonOrThrow(`/api/tenant/offers/${id}/send`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email }),
             });
-            if (res.ok) {
-              toast.success(`Quote sent to ${email}`);
-              invalidate();
-            } else {
-              const data = await res.json();
-              toast.error(data.error || 'Failed to send');
-            }
-          } catch {
-            toast.error('Failed to send email');
+            toast.success(`Quote sent to ${email}`);
+            invalidate();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to send email');
           }
         }}
       />

@@ -520,7 +520,10 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     // success path of that POST — never off a read flag.
     const src = readFileSync(join(ROOT, QUOTE_FILE), 'utf8');
     expect(src.match(/router\.push/g)).toHaveLength(2);
-    expect(src).toMatch(/if \(res\.ok\) \{[\s\S]{0,160}router\.push\(`\/tenant\/invoices/);
+    // #3408: the conversion goes through the canonical client, and the only
+    // navigation is after its success toast — no `if (res.ok)` read flag.
+    expect(src).toContain('fetchJsonOrThrow<{ invoiceNumber: string; invoiceId: string }>');
+    expect(src).toMatch(/toast\.success\(`Invoice \$\{data\.invoiceNumber\} created`\);\s*router\.push\(`\/tenant\/invoices/);
   });
 
   it('leaves each page with one read, so its caveat has no sibling to mis-wire', () => {
