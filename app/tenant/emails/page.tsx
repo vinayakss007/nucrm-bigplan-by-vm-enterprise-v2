@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
@@ -58,15 +59,12 @@ export default function EmailsPage() {
 
   const sendEmail = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/email/test-send', {
+      // #3408: canonical client throws on a refused send with the server's message.
+      await fetchJsonOrThrow('/api/tenant/email/test-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: form.to, subject: form.subject, body: form.body }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Send failed');
-      }
     },
     onSuccess: () => {
       toast.success('Email sent');
