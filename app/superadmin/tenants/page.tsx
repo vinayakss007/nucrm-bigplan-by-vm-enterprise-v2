@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { confirmThen, ConfirmDialog, ConfirmWithInput } from '@/components/ui/confirm-dialog';
 import { PromptDialog } from '@/components/ui/prompt-dialog';
 import TenantFeaturesPanel from '@/components/superadmin/tenant-features-panel';
+import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
 
 const STATUS_COLORS: Record<string,string> = {
   active:       'bg-emerald-500/15 text-emerald-400',
@@ -72,18 +73,18 @@ function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: ()
   const [showLimits, setShowLimits] = useState(false);
 
   const loadLimits = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/limits`);
-      const d = await res.json();
-      if (res.ok && d.data) {
-        setLimits(d.data);
-        const init: Record<string, string> = {};
-        for (const [k, v] of Object.entries(d.data) as [string, LimitEntry][]) {
-          init[k] = v.override != null ? String(v.override) : '';
-        }
-        setOverrides(init);
+    // #3408: a refused read is not "no overrides" — report it, don't load empty.
+    const result = await fetchJsonSafe<{ data: Record<string, LimitEntry> }>(`/api/superadmin/tenants/${tenant.id}/limits`);
+    if (result.status === 'ok' && result.data.data) {
+      setLimits(result.data.data);
+      const init: Record<string, string> = {};
+      for (const [k, v] of Object.entries(result.data.data) as [string, LimitEntry][]) {
+        init[k] = v.override != null ? String(v.override) : '';
       }
-    } catch { /* ignore */ }
+      setOverrides(init);
+    } else if (result.status === 'error') {
+      toast.error(result.message);
+    }
     setLimitsLoaded(true);
   }, [tenant.id]);
 
@@ -96,21 +97,28 @@ function EditModal({ tenant, onSave, onClose }: { tenant: TenantInfo; onSave: ()
       if (v === '' || v === undefined) body[k] = 'null';
       else body[k] = v;
     }
-    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/limits`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) { toast.success('Limits updated'); loadLimits(); }
-    else { const d = await res.json(); toast.error(d.error); }
-    setLimitsSaving(false);
+    try {
+      // #3408: a refused PATCH can no longer toast success.
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenant.id}/limits`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      toast.success('Limits updated');
+      loadLimits();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save limits');
+    } finally { setLimitsSaving(false); }
   };
 
   const save = async () => {
     setSaving(true);
-    const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:tenant.id,...f})});
-    const d = await res.json();
-    if(res.ok){toast.success('Updated');onSave();}else toast.error(d.error);
-    setSaving(false);
+    try {
+      await fetchJsonOrThrow('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:tenant.id,...f})});
+      toast.success('Updated');
+      onSave();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update tenant');
+    } finally { setSaving(false); }
   };
 
   return (
@@ -286,10 +294,8 @@ export default function SuperAdminTenantsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/tenants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      return d;
+      // #3408: a refused create throws with the server's message to onError.
+      return fetchJsonOrThrow<{ data?: { owner?: { temp_password?: string } } }>('/api/superadmin/tenants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
     },
     onSuccess: (d) => {
       toast.success(`"${form.name}" created`);
@@ -309,19 +315,15 @@ export default function SuperAdminTenantsPage() {
   // Shared PATCH/DELETE mutation for the tenant row actions.
   const patchMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
-      const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      return d;
+      // #3408: a refused row update no longer reports a landed change.
+      return fetchJsonOrThrow('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     },
     onSuccess: () => invalidateTenants(),
   });
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,hard_delete:true})});
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      return d;
+      // #3408: a refused delete no longer invalidates the list as if it landed.
+      return fetchJsonOrThrow('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,hard_delete:true})});
     },
     onSuccess: () => invalidateTenants(),
   });
@@ -382,16 +384,17 @@ export default function SuperAdminTenantsPage() {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
       setImpersonating(tenantId);
       // Use server API which sets HTTP-only session cookie server-side
-      const res = await fetch('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
-      const d = await res.json();
-      if(res.ok) {
+      try {
+        // #3408: a refused impersonation must not store a session marker.
+        const d = await fetchJsonOrThrow<{ sessionId?: string }>('/api/superadmin/impersonate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId})});
         sessionStorage.setItem('isImpersonating', 'true');
         sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
         // #1267: intentional full reload — impersonation swaps the session
         // context; reload to re-run middleware and rebuild server components.
         window.location.href = `/tenant/dashboard`;
-      } else toast.error(d.error);
-      setImpersonating(null);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to impersonate');
+      } finally { setImpersonating(null); }
     });
   };
   const copyEmail = (email: string | undefined) => { if (email) { navigator.clipboard.writeText(email); toast.success('Copied!'); } };
@@ -677,12 +680,11 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
   const toggleModuleMutation = useMutation({
     mutationFn: async (mod: { id: string; status: string; planAllowed: boolean }) => {
       const action = mod.status === 'active' ? 'disable' : 'install';
-      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
+      // #3408: a refused toggle no longer toasts the opposite outcome.
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenant.id}/modules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
       return action;
     },
     onSuccess: (action) => {
@@ -698,13 +700,11 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
 
   const toggleFeatureMutation = useMutation({
     mutationFn: async ({ mod, newFeatures }: { mod: TenantModule; newFeatures: string[] }) => {
-      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
+      // #3408: a refused feature update reaches onError with the server's reason.
+      return fetchJsonOrThrow(`/api/superadmin/tenants/${tenant.id}/modules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ module_id: mod.id, action: 'update_features', features: newFeatures }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to update features');
-      return d;
     },
     onError: (e: Error) => {
       toast.error(e.message || 'Failed to update features');
