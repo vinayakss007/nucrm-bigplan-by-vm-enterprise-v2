@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { BrainCircuit, Loader2, ThumbsUp, ThumbsDown, Minus, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 type SentimentResult = {
   score: number;
@@ -23,14 +24,13 @@ export default function SentimentPage() {
   // state (were three useState flags + raw fetch).
   const analyzeMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/ai/sentiment', {
+      // #3408: canonical client throws on a refused analysis with the server's message.
+      const data = await fetchJsonOrThrow<{ data: SentimentResult }>('/api/tenant/ai/sentiment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || 'Analysis failed');
-      return data.data as SentimentResult;
+      return data.data;
     },
   });
   const loading = analyzeMutation.isPending;
