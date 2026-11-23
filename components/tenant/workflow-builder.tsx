@@ -330,7 +330,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       onNodesChange(changes);
       // Push to history on structural changes (add/remove)
       setTimeout(() => {
-        const hasStructural = changes.some(c => c.type === 'add' || c.type === 'remove');
+        const hasStructural = changes.getByType('add').length > 0 || changes.getByType('remove').length > 0;
         if (hasStructural) pushState(nodes, edges);
       }, 0);
     },
@@ -341,7 +341,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
     (changes) => {
       onEdgesChange(changes);
       setTimeout(() => {
-        const hasStructural = changes.some(c => c.type === 'remove');
+        const hasStructural = changes.getByType('remove').length > 0;
         if (hasStructural) pushState(nodes, edges);
       }, 0);
     },
