@@ -14,6 +14,7 @@ import {
   Loader2, FileText, Users, Building2, TrendingUp, CheckSquare, LifeBuoy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 type Row = {
   id: string;
@@ -126,13 +127,12 @@ export default function ApprovalsPage() {
     // `note`, not `reason`: the read's `reason` above is the failure the banner names, and
     // shadowing it inside the mutation would make the two failure kinds easy to confuse.
     mutationFn: async ({ row, action, reason: note }: { row: Row; action: 'approve' | 'reject'; reason?: string }) => {
-      const res = await fetch(`/api/tenant/approvals/${row.id}`, {
+      // #3408: canonical client throws on a refused decision with the server's message.
+      await fetchJsonOrThrow(`/api/tenant/approvals/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, reason: note }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
     },
     onMutate: () => setMutationError(null),
     onSuccess: () => {

@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   Bot, Loader2, CheckCircle2, Info,
@@ -42,15 +43,12 @@ export default function AIAutoFollowupPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/admin/ai-auto-followup', {
+      // #3408: canonical client throws on a refused toggle with the server's message.
+      await fetchJsonOrThrow('/api/tenant/admin/ai-auto-followup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoAiEnabled: !autoAiEnabled }),
       });
-      if (!r.ok) {
-        const info = await r.json().catch(() => ({}));
-        throw new Error(info.error ?? `HTTP ${r.status}`);
-      }
     },
     onMutate: () => setSaved(false),
     onSuccess: () => {

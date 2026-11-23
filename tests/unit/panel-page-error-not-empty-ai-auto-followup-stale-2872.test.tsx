@@ -222,7 +222,10 @@ describe('the write keeps its own channel and its own words', () => {
     registry.byUrl = { [SETTINGS]: ok({ autoAiEnabled: false }) };
     wrapped(<AIAutoFollowupPage />);
     await act(async () => { fireEvent.click(toggleSwitch()!); });
-    await settledWith(/Failed to save the AI auto follow-up setting: no response from the server/);
+    // #3408: the canonical client turns an empty error body into a status
+    // message instead of an empty string — the write channel stays distinct
+    // and still never renders `undefined`.
+    await settledWith(/Failed to save the AI auto follow-up setting: Request failed with status 500/);
     expect(alerts()).not.toMatch(/undefined/);
   });
 });
