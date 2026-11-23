@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { sanitizeHTML } from '@/lib/sanitize-dompurify';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface PendingDeletion { contacts?: number; companies?: number; deals?: number; tasks?: number; leads?: number; total?: number }
 
@@ -23,6 +24,12 @@ interface TrashSettingsResponse { data?: { retention_days?: number } }
 // `{ data }` is why the banner below never rendered.
 interface AutoCleanupResponse { pending_deletion?: PendingDeletion | null; retention_days?: number; cutoff_date?: string | null }
 interface IpWhitelistResponse { data?: { ips?: string[]; enabled?: boolean } }
+type CleanupResult = { cleaned_up: { contacts: number; companies: number; deals: number; tasks: number; leads: number } }; type BackupCodesResult = { backup_codes: string[] };
+/** #3408: a refused write toasts the server's reason, never a generic string. */
+async function toasted<T>(url: string, init: RequestInit, fallback: string): Promise<T | undefined> {
+  try { return await fetchJsonOrThrow<T>(url, init); }
+  catch (err) { toast.error(err instanceof Error && err.message ? err.message : fallback); return undefined; }
+}
 
 const ME_QUERY = ['tenant', 'me'] as const;
 const TRASH_SETTINGS_QUERY = ['tenant', 'trash', 'settings'] as const;
@@ -119,14 +126,14 @@ export default function SecuritySettingsPage() {
     }
   }, [ipData, ipSeeded]);
 
+  // #3408: writes below use the canonical client; a refused write toasts the server's reason.
   const retentionMutation = useMutation({
     mutationFn: async (days: number) => {
-      const res = await fetch('/api/tenant/trash/settings', {
+      await fetchJsonOrThrow('/api/tenant/trash/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ retention_days: days })
       });
-      if (!res.ok) throw new Error('Failed to save');
       return days;
     },
     onSuccess: (days) => {
@@ -141,12 +148,11 @@ export default function SecuritySettingsPage() {
 
   const ipMutation = useMutation({
     mutationFn: async (vars: { ips: string[]; enabled: boolean }) => {
-      const res = await fetch('/api/tenant/security/ip-whitelist', {
+      await fetchJsonOrThrow('/api/tenant/security/ip-whitelist', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vars)
       });
-      if (!res.ok) throw new Error('Failed to save');
       return vars;
     },
     onSuccess: ({ ips, enabled }) => {
@@ -162,10 +168,7 @@ export default function SecuritySettingsPage() {
 
   const cleanupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/trash/auto-cleanup', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to run cleanup');
-      return data;
+      return fetchJsonOrThrow<CleanupResult>('/api/tenant/trash/auto-cleanup', { method: 'POST' });
     },
     onSuccess: (data) => {
       toast.success(`Cleaned up ${data.cleaned_up.contacts + data.cleaned_up.companies + data.cleaned_up.deals + data.cleaned_up.tasks + data.cleaned_up.leads} items`);
@@ -195,9 +198,8 @@ export default function SecuritySettingsPage() {
 
   // ── Enable 2FA ──────────────────────────────────────────────
   const startTotpSetup = async () => {
-    const res = await fetch('/api/tenant/2fa/setup', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); return; }
+    const data = await toasted<{ secret: string; qr_code: string; backup_codes?: string[] }>('/api/tenant/2fa/setup', { method: 'POST' }, 'Failed to start 2FA setup');
+    if (!data) return;
     setTotpSecret(data.secret);
     setTotpQrCode(data.qr_code);
     setBackupCodes(data.backup_codes || []);
@@ -209,13 +211,12 @@ export default function SecuritySettingsPage() {
       toast.error('Enter a valid 6-digit code');
       return;
     }
-    const res = await fetch('/api/tenant/2fa/verify', {
+    const ok = await toasted('/api/tenant/2fa/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ totp_code: totpCode, backup_codes: backupCodes }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); return; }
+    }, 'Failed to verify 2FA code');
+    if (!ok) return;
     setTotpEnabled(true);
     setShowTotpSetup(false);
     toast.success('2FA enabled successfully!');
@@ -232,22 +233,22 @@ export default function SecuritySettingsPage() {
       return;
     }
     setDisabling(true);
-    const res = await fetch('/api/tenant/2fa/disable', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        password: disablePassword,
-        totp_code: totpEnabled ? disableCode : undefined
-      }),
-    });
-    const data = await res.json();
-    setDisabling(false);
-    if (!res.ok) { toast.error(data.error); return; }
-    setTotpEnabled(false);
-    setShowDisable2FA(false);
-    setDisablePassword('');
-    setDisableCode('');
-    toast.success('2FA disabled');
+    try {
+      const ok = await toasted('/api/tenant/2fa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: disablePassword,
+          totp_code: totpEnabled ? disableCode : undefined
+        }),
+      }, 'Failed to disable 2FA');
+      if (!ok) return;
+      setTotpEnabled(false);
+      setShowDisable2FA(false);
+      setDisablePassword('');
+      setDisableCode('');
+      toast.success('2FA disabled');
+    } finally { setDisabling(false); }
   };
 
   // ── Change Password ──────────────────────────────────────────
@@ -274,27 +275,26 @@ export default function SecuritySettingsPage() {
       return;
     }
     setSavingPassword(true);
-    const res = await fetch('/api/user/password', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        current_password: passwords.current,
-        new_password: passwords.new,
-      }),
-    });
-    const data = await res.json();
-    setSavingPassword(false);
-    if (!res.ok) { toast.error(data.error); return; }
-    setPasswords({ current: '', new: '', confirm: '' });
-    setShowPasswordForm(false);
-    toast.success('Password changed successfully');
+    try {
+      const ok = await toasted('/api/user/password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_password: passwords.current,
+          new_password: passwords.new,
+        }),
+      }, 'Failed to change password');
+      if (!ok) return;
+      setPasswords({ current: '', new: '', confirm: '' });
+      setShowPasswordForm(false);
+      toast.success('Password changed successfully');
+    } finally { setSavingPassword(false); }
   };
 
   // ── Regenerate Backup Codes ──────────────────────────────────
   const regenerateBackupCodes = async () => {
-    const res = await fetch('/api/tenant/2fa/backup-codes', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); return; }
+    const data = await toasted<BackupCodesResult>('/api/tenant/2fa/backup-codes', { method: 'POST' }, 'Failed to regenerate backup codes');
+    if (!data) return;
     setBackupCodes(data.backup_codes);
     toast.success('Backup codes regenerated. Old codes are now invalid.');
   };

@@ -101,7 +101,6 @@
   "app/tenant/settings/preferences/page.tsx": 3,
   "app/tenant/settings/profile/page.tsx": 2,
   "app/tenant/settings/roles/page.tsx": 2,
-  "app/tenant/settings/security/page.tsx": 8,
   "app/tenant/settings/sessions/page.tsx": 2,
   "app/tenant/settings/sla/page.tsx": 3,
   "app/tenant/settings/sso/page.tsx": 1,
