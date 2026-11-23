@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -125,13 +126,12 @@ export default function LocalizationPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/admin/localization', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/tenant/admin/localization', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ localization: loc }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
     },
     onSuccess: () => { toast.success('Localization saved'); setOriginal(loc); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),
