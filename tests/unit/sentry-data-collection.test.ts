@@ -19,17 +19,20 @@ import { DATA_COLLECTION } from '@/sentry-data-collection';
  * collector — our object would then be incomplete, and these tests fail.
  */
 // The resolver is internal (package `exports` exposes only `.`, `./server`,
-// `./browser`), so it is required by absolute path from the installed package.
+// `./browser`), so it is imported by absolute path from the installed package.
+// Sentry 11.15 dropped the CJS build of its internal utils; the ESM file exists
+// in both the old and new versions, so importing it works across the bump.
 const require_ = createRequire(import.meta.url);
 const resolverPath = join(
   dirname(require_.resolve('@sentry/core/package.json')),
-  'build/cjs/utils/data-collection/resolveDataCollectionOptions.js',
+  'build/esm/utils/data-collection/resolveDataCollectionOptions.js',
 );
 
 type Resolve = (options: { dataCollection?: unknown }) => Record<string, unknown>;
 
-const resolveDataCollection = ((require_(resolverPath) as { resolveDataCollectionOptions: unknown })
-  .resolveDataCollectionOptions) as Resolve;
+const { resolveDataCollectionOptions: resolveDataCollection } = (await import(
+  resolverPath
+)) as { resolveDataCollectionOptions: Resolve };
 
 /** Every path in a resolved options object that would cause data to be sent. */
 function collectingPaths(value: unknown, prefix = ''): string[] {
