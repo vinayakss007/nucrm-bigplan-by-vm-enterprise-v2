@@ -12,6 +12,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import { CONTRACT_TYPES, CONTRACT_TYPE_LABELS } from '@/lib/api/schemas/billing';
 
@@ -89,7 +90,8 @@ function ContractsPageInner() {
 
   const createContract = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/contracts', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/contracts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // createContractSchema is snake_case like every other collection route,
         // while `form` is camelCase — posting the form directly sent nothing but
@@ -105,12 +107,6 @@ function ContractsPageInner() {
           description: form.notes || undefined,
         }),
       });
-      if (!res.ok) {
-        const detail: unknown = await res.json().catch(() => null);
-        const msg = typeof (detail as { error?: unknown })?.error === 'string'
-          ? (detail as { error: string }).error : 'Failed';
-        throw new Error(msg);
-      }
     },
     onSuccess: () => {
       toast.success('Contract created');
