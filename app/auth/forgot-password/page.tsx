@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Zap, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -17,10 +18,17 @@ export default function ForgotPasswordPage() {
   // and the success panel shows once the mutation settles.
   const submitMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/auth/forgot-password', {
+      // #3408: the canonical client separates a refused request from a success
+      // instead of swallowing it. The outcome is consumed (logged, never
+      // discarded) but the panel stays identical for every case so this
+      // endpoint still cannot be used to enumerate accounts (#1328).
+      const result = await fetchJsonSafe('/api/auth/forgot-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      }).catch(() => undefined);
+      });
+      if (result.status === 'error') {
+        console.error('[forgot-password] reset request failed', result.statusCode, result.message);
+      }
       return true; // Always show success — don't reveal if email exists
     },
   });

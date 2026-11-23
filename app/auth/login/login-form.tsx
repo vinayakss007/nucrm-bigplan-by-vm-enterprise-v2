@@ -14,6 +14,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
 import { track } from '@/lib/analytics/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 const validationRules = {
   email: {
@@ -60,35 +61,34 @@ export default function LoginForm() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      // #3408: the canonical client throws with the server's message on a
+      // refused login, so a 401 can never be read as a successful sign-in.
+      await fetchJsonOrThrow('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email, password, remember_me: rememberMe }),
       });
-
-      const data = await res.json();
-      if (res.ok) {
-        if (rememberMe) {
-          localStorage.setItem('nucrm_remember', JSON.stringify({ email }));
-        } else {
-          localStorage.removeItem('nucrm_remember');
-        }
-        track('login', { method: 'password' });
-        toast.success('Welcome back!');
-        setLoading(false);
-        setTimeout(() => {
-          // #1267: intentional full reload after login — the session cookie was
-          // just set, so we need middleware + all server components to re-run
-          // under the authenticated session (client-side navigation would not).
-          window.location.href = '/tenant/dashboard';
-        }, 800);
+      if (rememberMe) {
+        localStorage.setItem('nucrm_remember', JSON.stringify({ email }));
       } else {
-        setError(data.error || 'Invalid email or password');
-        setLoading(false);
+        localStorage.removeItem('nucrm_remember');
       }
-    } catch {
-      setError('Connection error. Please try again.');
+      track('login', { method: 'password' });
+      toast.success('Welcome back!');
+      setLoading(false);
+      setTimeout(() => {
+        // #1267: intentional full reload after login — the session cookie was
+        // just set, so we need middleware + all server components to re-run
+        // under the authenticated session (client-side navigation would not).
+        window.location.href = '/tenant/dashboard';
+      }, 800);
+    } catch (err) {
+      // #3408: surface the server's reason instead of a generic failure; a
+      // network error keeps the wording users already recognise.
+      setError(err instanceof Error && /Network error/.test(err.message)
+        ? 'Connection error. Please try again.'
+        : err instanceof Error ? err.message : 'Connection error. Please try again.');
       setLoading(false);
     }
   }
