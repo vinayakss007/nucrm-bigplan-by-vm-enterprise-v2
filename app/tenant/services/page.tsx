@@ -12,6 +12,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface Service {
   id: string;
@@ -107,7 +108,8 @@ export default function ServicesPage() {
         ? `/api/tenant/services/${editingService.id}`
         : '/api/tenant/services';
       const method = editingService ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      // #3408: a refused save throws with the server's message to onError.
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,10 +118,6 @@ export default function ServicesPage() {
           companyId: form.companyId || null,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save service');
-      }
     },
     onSuccess: () => {
       toast.success(editingService ? 'Service updated successfully' : 'Service created successfully');
@@ -137,7 +135,8 @@ export default function ServicesPage() {
 
   const createContact = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/contacts', {
+      // #3408: a refused create can no longer be read as a successful link.
+      const contactData = await fetchJsonOrThrow<{ contact?: { id?: string; data?: { id?: string } } }>('/api/tenant/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,14 +144,10 @@ export default function ServicesPage() {
           jobTitle: contactForm.jobTitle || null,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create contact');
-      }
-      const contactData = await res.json();
       const newContactId = contactData.contact?.id || contactData.contact?.data?.id;
       if (newContactId && selectedServiceId) {
-        await fetch(`/api/tenant/services/${selectedServiceId}`, {
+        // #3408: a refused link throws, so onSuccess cannot claim it worked.
+        await fetchJsonOrThrow(`/api/tenant/services/${selectedServiceId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contactId: newContactId }),
@@ -177,7 +172,8 @@ export default function ServicesPage() {
 
   const setServiceContact = useMutation({
     mutationFn: async ({ serviceId, contactId }: { serviceId: string; contactId: string | null }) => {
-      await fetch(`/api/tenant/services/${serviceId}`, {
+      // #3408: a refused assignment can no longer invalidate as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/services/${serviceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contactId }),
@@ -240,12 +236,12 @@ export default function ServicesPage() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async (service: Service) => {
-      const res = await fetch(`/api/tenant/services/${service.id}`, {
+      // #3408: a refused toggle can no longer flip the local active badge.
+      await fetchJsonOrThrow(`/api/tenant/services/${service.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !service.isActive }),
       });
-      if (!res.ok) throw new Error('Failed to update');
       return service;
     },
     onSuccess: (service) => {
@@ -259,8 +255,8 @@ export default function ServicesPage() {
 
   const removeService = useMutation({
     mutationFn: async (service: Service) => {
-      const res = await fetch(`/api/tenant/services/${service.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      // #3408: a refused delete can no longer toast success.
+      await fetchJsonOrThrow(`/api/tenant/services/${service.id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Service deleted'); reloadServices(); },
     onError: () => toast.error('Failed to delete service'),
