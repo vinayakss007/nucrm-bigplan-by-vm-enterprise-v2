@@ -14,6 +14,7 @@ import { Loader2, Eye, EyeOff, Mail, Lock, Shield, BarChart3,
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
 import { track } from '@/lib/analytics/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 const validationRules = {
   email: {
@@ -59,36 +60,35 @@ export default function LoginForm() {
     setLoading(true);
     setError('');
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password, remember_me: rememberMe }),
-      });
+    // #3408: the canonical client distinguishes a refused login (server's
+    // message) from a network failure, so neither is reported as a success.
+    const result = await fetchJsonSafe<{ error?: string }>('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password, remember_me: rememberMe }),
+    });
 
-      const data = await res.json();
-      if (res.ok) {
-        if (rememberMe) {
-          localStorage.setItem('nucrm_remember', JSON.stringify({ email }));
-        } else {
-          localStorage.removeItem('nucrm_remember');
-        }
-        track('login', { method: 'password' });
-        toast.success('Welcome back!');
-        setLoading(false);
-        setTimeout(() => {
-          // #1267: intentional full reload after login — the session cookie was
-          // just set, so we need middleware + all server components to re-run
-          // under the authenticated session (client-side navigation would not).
-          window.location.href = '/tenant/dashboard';
-        }, 800);
+    if (result.status === 'ok') {
+      if (rememberMe) {
+        localStorage.setItem('nucrm_remember', JSON.stringify({ email }));
       } else {
-        setError(data.error || 'Invalid email or password');
-        setLoading(false);
+        localStorage.removeItem('nucrm_remember');
       }
-    } catch {
-      setError('Connection error. Please try again.');
+      track('login', { method: 'password' });
+      toast.success('Welcome back!');
+      setTimeout(() => {
+        // #1267: intentional full reload after login — the session cookie was
+        // just set, so we need middleware + all server components to re-run
+        // under the authenticated session (client-side navigation would not).
+        window.location.href = '/tenant/dashboard';
+      }, 800);
+    } else {
+      setError(
+        result.status === 'aborted'
+          ? 'Connection error. Please try again.'
+          : result.message || 'Invalid email or password',
+      );
       setLoading(false);
     }
   }
