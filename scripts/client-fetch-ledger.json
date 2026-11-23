@@ -6,7 +6,6 @@
   "app/portal/(protected)/tickets/[id]/page.tsx": 1,
   "app/portal/(protected)/tickets/page.tsx": 1,
   "app/public/csat/[token]/page.tsx": 1,
-  "app/setup/SetupClient.tsx": 1,
   "app/superadmin/announcements/page.tsx": 3,
   "app/superadmin/backups/page.tsx": 3,
   "app/superadmin/billing/dunning/page.tsx": 1,
