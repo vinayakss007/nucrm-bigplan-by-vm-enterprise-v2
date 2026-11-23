@@ -11,6 +11,7 @@ import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucid
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_COLORS: Record<string, string> = {
@@ -128,18 +129,15 @@ export default function SuperAdminModulesPage() {
 
     let hasError = false;
     try {
-      const res = await fetch('/api/superadmin/modules/bulk', {
+      // #3408: canonical client throws on a refused update with the server's message.
+      await fetchJsonOrThrow('/api/superadmin/modules/bulk', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates }),
       });
-      if (!res.ok) {
-        hasError = true;
-        toast.error('Failed to update modules');
-      }
     } catch (_err) {
       hasError = true;
-      clientLogError('superadmin/modules:fetch-stages', _err);
-      toast.error('Error updating modules');
+      clientLogError('superadmin/modules:bulk-update', _err);
+      toast.error(_err instanceof Error ? _err.message : 'Error updating modules');
     }
 
     if (!hasError) {
