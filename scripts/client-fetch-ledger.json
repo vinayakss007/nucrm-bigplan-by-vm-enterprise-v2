@@ -65,7 +65,6 @@
   "app/tenant/reports/custom/page.tsx": 3,
   "app/tenant/reports/saved/page.tsx": 2,
   "app/tenant/reports/scheduled/page.tsx": 3,
-  "app/tenant/services/page.tsx": 6,
   "app/tenant/settings/ai-providers/page.tsx": 2,
   "app/tenant/settings/ai-templates/page.tsx": 3,
   "app/tenant/settings/assignment-rules/page.tsx": 2,
