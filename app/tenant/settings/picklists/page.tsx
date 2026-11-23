@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 type Entry = { value: string; label: string; color?: string };
@@ -125,13 +126,12 @@ export default function PicklistsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (cleaned: Record<Category, Entry[]>) => {
-      const res = await fetch('/api/tenant/admin/picklists', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/tenant/admin/picklists', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ picklists: cleaned }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
       return cleaned;
     },
     onSuccess: (cleaned) => {

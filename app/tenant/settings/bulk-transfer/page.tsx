@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
@@ -108,7 +109,8 @@ export default function BulkTransferPage() {
 
   const executeMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/admin/bulk-transfer', {
+      // #3408: canonical client throws on a refused transfer with the server's message.
+      const d = await fetchJsonOrThrow<{ total?: number }>('/api/tenant/admin/bulk-transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -119,8 +121,6 @@ export default function BulkTransferPage() {
           only_open: onlyOpen,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? 'Failed to transfer');
       return d.total ?? 0;
     },
     onSuccess: (total) => {
