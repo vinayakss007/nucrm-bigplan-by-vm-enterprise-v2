@@ -12,6 +12,7 @@ import { AI_CAPABILITIES } from '@/components/tenant/ai/ai-config';
 import { useEffect, useState } from 'react';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 /**
  * AI Hub shell — sub-rail on lg+, horizontal scroll pills below lg.
@@ -24,8 +25,9 @@ export default function AILayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/tenant/me', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : Promise.reject())
+    // #3408: canonical client unwraps the envelope centrally; the signal still
+    // aborts on unmount. A refused read cannot be mistaken for "not admin".
+    fetchJsonOrThrow<{ is_admin?: boolean }>('/api/tenant/me', { signal: controller.signal })
       .then(d => setIsAdmin(d.is_admin ?? false))
       .catch((err) => clientLogError('ai:fetch-me', err));
     return () => controller.abort();
