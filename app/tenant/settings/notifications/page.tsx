@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -155,14 +156,13 @@ export default function NotificationsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/notifications/matrix', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      const d = await fetchJsonOrThrow<{ count?: number }>('/api/tenant/notifications/matrix', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrix }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
-      return d.count as number | undefined;
+      return d.count;
     },
     onSuccess: (count) => { toast.success(`Saved ${count ?? 0} notification rules`); setOriginal(matrix); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),
