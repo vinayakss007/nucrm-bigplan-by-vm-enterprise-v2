@@ -12,7 +12,7 @@ import { Swipeable } from '@/components/ui/swipeable';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
 import { showUndoToast } from '@/lib/undo';
 import { EmptyState } from '@/components/shared/empty-state';
 
@@ -82,10 +82,15 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
 
   const toggleTask = async (id: string, completed: boolean) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, completed } : t));
-    const res = await fetch(`/api/tenant/tasks/${id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed }),
-    });
-    if (!res.ok) { setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !completed } : t)); toast.error('Failed to update'); }
+    try {
+      // #3408: a refused toggle reverts the optimistic row and says why.
+      await fetchJsonOrThrow(`/api/tenant/tasks/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed }),
+      });
+    } catch (err) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !completed } : t));
+      toast.error(err instanceof Error ? err.message : 'Failed to update');
+    }
   };
 
   const deleteTask = async (id: string) => {
@@ -97,23 +102,34 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
     const ids = [...selected];
     await confirmThen(`Mark ${ids.length} task(s) complete?`, async () => {
       setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: true } : t));
-      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
-      setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+      try {
+        // #3408: a refused bulk write cannot leave the rows shown as done.
+        await Promise.all(ids.map(id => fetchJsonOrThrow(`/api/tenant/tasks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed:true }) })));
+        setSelected(new Set()); toast.success(`${ids.length} tasks completed`);
+      } catch (err) {
+        setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, completed: false } : t));
+        toast.error(err instanceof Error ? err.message : 'Failed to update tasks');
+      }
     }, 'always');
   };
 
   const bulkDelete = async () => {
     const ids = [...selected];
     await confirmThen(`Delete ${ids.length} task(s)?`, async () => {
-      await Promise.all(ids.map(id => fetch(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
-      setSelected(new Set()); 
+      // #3408: a refused delete can no longer show an undo toast for a no-op.
+      await Promise.all(ids.map(id => fetchJsonOrThrow(`/api/tenant/tasks/${id}`, { method:'DELETE' })));
+      setSelected(new Set());
       showUndoToast(`${ids.length} tasks deleted`, async () => {
-        await Promise.all(ids.map(id => fetch('/api/tenant/trash', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, resource_type: 'task' }),
-        })));
-        toast.success('Restored');
-        refreshTasks();
+        try {
+          await Promise.all(ids.map(id => fetchJsonOrThrow('/api/tenant/trash', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, resource_type: 'task' }),
+          })));
+          toast.success('Restored');
+          refreshTasks();
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to restore tasks');
+        }
       });
       refreshTasks();
     });
@@ -121,13 +137,18 @@ export default function TenantTasksClient({ initialTasks, contacts, _deals, team
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/tasks', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...form, contact_id:form.contact_id||null, deal_id:form.deal_id||null, assigned_to:form.assigned_to||null }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); setSaving(false); return; }
-    setTasks(prev => [data.data, ...prev]);
+    try {
+      // #3408: a refused create can no longer prepend a phantom row.
+      const data = await fetchJsonOrThrow<{ data: TaskRow }>('/api/tenant/tasks', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ...form, contact_id:form.contact_id||null, deal_id:form.deal_id||null, assigned_to:form.assigned_to||null }),
+      });
+      setTasks(prev => [data.data, ...prev]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create task');
+      setSaving(false);
+      return;
+    }
     setForm({ title:'', priority:'medium', due_date:'', contact_id:'', deal_id:'', assigned_to:'', description:'' });
     setShowAdd(false); setSaving(false); toast.success('Task created');
   };
