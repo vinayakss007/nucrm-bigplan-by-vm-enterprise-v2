@@ -10,6 +10,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { brandingFormSchema, validateForm } from '@/lib/validation/forms';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface BrandingFormData {
   logoUrl: string;
@@ -105,15 +106,12 @@ export default function BrandingSettingsPage() {
       if (!form.customDomain) payload['customDomain'] = null;
       if (!form.customCss) payload['customCss'] = null;
 
-      const res = await fetch('/api/tenant/branding', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/tenant/branding', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save branding');
-      }
     },
     onSuccess: () => setMessage({ type: 'success', text: 'Branding saved successfully!' }),
     onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error. Please try again.' }),

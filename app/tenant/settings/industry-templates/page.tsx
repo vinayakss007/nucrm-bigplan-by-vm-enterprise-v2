@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -52,14 +53,12 @@ export default function IndustryTemplatesPage() {
   // #1328: apply via useMutation (was raw fetch + useState applying flag).
   const applyMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/industry-templates', {
+      // #3408: canonical client throws on a refused apply with the server's message.
+      return fetchJsonOrThrow('/api/tenant/industry-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId: selectedId }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to apply template');
-      return data;
     },
     onSuccess: () => {
       toast.success('Template applied successfully!');
