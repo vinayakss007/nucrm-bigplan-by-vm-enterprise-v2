@@ -409,7 +409,11 @@ describe('the CSAT page — the source stays in this shape', () => {
   });
 
   it('the write channel stays the write channel', () => {
-    expect(src).toMatch(/setError\(d\.error \|\| 'Failed to submit'\)/);
+    // #3408: the canonical client rejects with an Error, so the write path
+    // renders that message and keeps a literal fallback — it no longer reads
+    // the old `d.error` envelope field.
+    expect(src).toMatch(/setError\(err instanceof Error \? err\.message : 'Failed to submit'\)/);
+    expect(src).not.toMatch(/setError\(d\.error/);
     expect(src).toMatch(/\{error\}/);
   });
 
