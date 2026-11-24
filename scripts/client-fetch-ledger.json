@@ -17,7 +17,6 @@
   "app/tenant/ai/draft/page.tsx": 2,
   "app/tenant/ai/lead-scoring/page.tsx": 2,
   "app/tenant/ai/summarize/page.tsx": 1,
-  "app/tenant/automation/page.tsx": 4,
   "app/tenant/automation/sequences/page.tsx": 2,
   "app/tenant/calls/page.tsx": 3,
   "app/tenant/chat/page.tsx": 3,

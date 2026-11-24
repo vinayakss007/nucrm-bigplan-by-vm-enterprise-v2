@@ -14,6 +14,7 @@ import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 const TRIGGER_LABELS: Record<string,string> = {
   'contact.created':'Contact Created', 'contact.updated':'Contact Updated',
@@ -110,15 +111,12 @@ export default function AutomationPage() {
 
   const togglePrebuiltMutation = useMutation({
     mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
-      const res = await fetch('/api/tenant/automation/workflows', {
+      // #3408: the canonical client throws with the server's reason, so a
+      // refused toggle can no longer flash the success toast.
+      await fetchJsonOrThrow('/api/tenant/automation/workflows', {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ workflow_id: id, enabled: !current }),
       });
-      // #3408: a refused toggle used to still flash the success toast.
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || `Failed to update automation (${res.status})`);
-      }
       return current;
     },
     onSuccess: (current) => {
@@ -130,14 +128,11 @@ export default function AutomationPage() {
 
   const toggleCustomMutation = useMutation({
     mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
-      const res = await fetch(`/api/tenant/automations/${id}`, {
+      // #3408: a refused toggle reaches onError with the server's reason.
+      await fetchJsonOrThrow(`/api/tenant/automations/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ is_active: !current }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || `Failed to update automation (${res.status})`);
-      }
       return current;
     },
     onSuccess: (current) => {
@@ -149,11 +144,8 @@ export default function AutomationPage() {
 
   const deleteCustomMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || `Failed to delete automation (${res.status})`);
-      }
+      // #3408: a refused delete can no longer toast success.
+      await fetchJsonOrThrow(`/api/tenant/automations/${id}`, { method:'DELETE' });
     },
     onSuccess: () => {
       toast.success('Deleted');
@@ -164,12 +156,11 @@ export default function AutomationPage() {
 
   const createCustomMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/automations', {
+      // #3408: a refused create can no longer close the dialog as success.
+      await fetchJsonOrThrow('/api/tenant/automations', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(form),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
     },
     onSuccess: () => {
       toast.success('Automation created');
