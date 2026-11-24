@@ -12,6 +12,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Package, X, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { orderPayload } from '@/lib/billing/create-payloads';
 import toast from 'react-hot-toast';
 
@@ -101,12 +102,12 @@ function OrdersPageInner() {
 
   const createOrder = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/orders', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload(form)),
       });
-      if (!res.ok) throw new Error('Failed to create order');
     },
     onSuccess: () => {
       toast.success('Order created successfully');

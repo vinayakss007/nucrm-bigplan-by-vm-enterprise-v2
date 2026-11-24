@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Button } from '@/components/ui/button';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
@@ -59,7 +60,8 @@ export default function MeetingsPage() {
 
   const createMeeting = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/meetings', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,10 +76,6 @@ export default function MeetingsPage() {
           status: form.status,
         }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Create failed');
-      }
     },
     onSuccess: () => {
       toast.success('Meeting created');
