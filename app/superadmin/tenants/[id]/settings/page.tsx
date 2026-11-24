@@ -13,6 +13,7 @@ import {
   Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, Eye, Save, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -112,14 +113,12 @@ export default function TenantSettingsAuditPage() {
   // settings it is about to replace.
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/tenant-settings', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      return fetchJsonOrThrow('/api/superadmin/tenant-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenant_id: tenantId, settings: editedSettings }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save settings');
-      return d;
     },
     onSuccess: () => {
       toast.success('Settings saved successfully');
