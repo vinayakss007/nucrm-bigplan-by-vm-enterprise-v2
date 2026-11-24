@@ -11,6 +11,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { Webhook, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Clock, Loader2, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface WebhookLog {
   id: string;
@@ -73,14 +74,12 @@ export default function WebhookLogsPage() {
   const queryClient = useQueryClient();
   const retry = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/webhooks/retry', {
+      // #3408: canonical client throws on a refused retry with the server's message.
+      return fetchJsonOrThrow<{ data?: { status?: string } }>('/api/tenant/webhooks/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delivery_id: id }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof d?.error === 'string' ? d.error : `Retry failed (${res.status})`);
-      return d as { data?: { status?: string } };
     },
     onSuccess: (d) => {
       toast.success(d.data?.status === 'delivered' ? 'Delivered' : `Retry ${d.data?.status ?? 'failed'}`);
