@@ -409,7 +409,10 @@ describe('the CSAT page — the source stays in this shape', () => {
   });
 
   it('the write channel stays the write channel', () => {
-    expect(src).toMatch(/setError\(d\.error \|\| 'Failed to submit'\)/);
+    // #3408: the submit goes through the canonical client — a refused write
+    // throws with the server's reason instead of resolving a body to misread.
+    expect(src).toMatch(/await fetchJsonOrThrow\(/);
+    expect(src).toMatch(/setError\(err instanceof Error \? err\.message : 'Failed to submit'\)/);
     expect(src).toMatch(/\{error\}/);
   });
 
