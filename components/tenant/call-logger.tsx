@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { PhoneCall, PhoneIncoming, Clock, User, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -50,7 +51,8 @@ export function CallLogger({ contactId, companyId, teamMembers, onLogged }: {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/calls', {
+      // #3408: canonical client throws on a refused log with the server's message.
+      await fetchJsonOrThrow('/api/tenant/calls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,17 +65,12 @@ export function CallLogger({ contactId, companyId, teamMembers, onLogged }: {
           assigned_to: form.assigned_to || null,
         }),
       });
-      if (res.ok) {
-        toast.success('Call logged');
-        setForm({ direction: 'outbound', duration: '', notes: '', phone_number: '', assigned_to: '' });
-        setShowForm(false);
-        onLogged?.();
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to log call');
-      }
-    } catch {
-      toast.error('Failed to log call');
+      toast.success('Call logged');
+      setForm({ direction: 'outbound', duration: '', notes: '', phone_number: '', assigned_to: '' });
+      setShowForm(false);
+      onLogged?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to log call');
     }
     setSaving(false);
   };

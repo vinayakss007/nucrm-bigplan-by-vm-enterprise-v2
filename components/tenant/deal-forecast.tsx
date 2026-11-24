@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Calendar, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 // #2757 — the keys GET /api/tenant/deals/[id]/forecast actually answers: it is a raw
@@ -69,7 +69,8 @@ export default function DealForecast({ dealId }: { dealId: string }) {
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`/api/tenant/deals/${dealId}/forecast`, {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow(`/api/tenant/deals/${dealId}/forecast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,12 +80,11 @@ export default function DealForecast({ dealId }: { dealId: string }) {
           confidence_level: form.confidence_level,
         }),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Failed to save forecast'); return; }
       toast.success('Forecast updated');
       setEditing(false);
       fetchForecast();
-    } catch {
-      toast.error('Failed to save forecast');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save forecast');
     }
   };
 
