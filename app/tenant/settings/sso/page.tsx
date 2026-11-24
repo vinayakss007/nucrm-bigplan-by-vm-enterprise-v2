@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface SSOProvider {
@@ -135,16 +136,12 @@ export default function SSOSettingsPage() {
       const method = isUpdate ? 'PUT' : 'POST';
       const body = isUpdate ? { ...payload, id: providers[0]!.id } : payload;
 
-      const res = await fetch('/api/tenant/sso', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/tenant/sso', {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(typeof err.error === 'string' ? err.error : 'Failed to save SSO config');
-      }
     },
     onSuccess: () => {
       setMessage({ type: 'success', text: 'SSO configuration saved successfully.' });
