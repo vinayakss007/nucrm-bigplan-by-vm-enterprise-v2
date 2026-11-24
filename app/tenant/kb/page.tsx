@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
@@ -242,12 +243,14 @@ function CreateArticleModal({
     if (!form.content.trim()) { toast.error('Content is required'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/kb/articles', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/kb/articles', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Article created'); onCreated(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      toast.success('Article created'); onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    }
     setSaving(false);
   };
 
