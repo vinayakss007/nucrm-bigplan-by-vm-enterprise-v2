@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
@@ -119,6 +120,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
+    // #3408: kept raw — an abortable read with three legacy body shapes; pinned
+    // in scripts/client-fetch-ledger.json until a signal-aware helper covers it.
     fetch('/api/tenant/pipelines', { signal })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -162,6 +165,7 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
     const { signal } = controller;
     async function loadStages() {
       try {
+        // #3408: kept raw for the same abort/legacy-shape reason as the read above.
         const res = await fetch('/api/tenant/pipelines', { signal });
         if (!res.ok) return;
         const data = await res.json();
@@ -204,7 +208,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/tenant/deals/${deal.id}`, {
+      // #3408: a refused edit throws with the server's reason and keeps the dialog open.
+      await fetchJsonOrThrow(`/api/tenant/deals/${deal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -213,11 +218,6 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           probability: Number(editForm.probability) || 10,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to update');
-        return;
-      }
       toast.success('Deal updated');
       setShowEdit(false);
       router.refresh();
@@ -230,11 +230,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/tenant/deals/${deal.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        toast.error('Failed to delete deal');
-        return;
-      }
+      // #3408: a refused delete can no longer navigate as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/deals/${deal.id}`, { method: 'DELETE' });
       toast.success('Deal deleted');
       router.push('/tenant/deals');
     } catch {
@@ -244,7 +241,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
 
   const toggleTaskComplete = async (taskId: string, completed: boolean) => {
     try {
-      await fetch(`/api/tenant/tasks/${taskId}`, {
+      // #3408: a refused toggle can no longer refresh as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),
@@ -259,7 +257,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
     if (!noteText.trim()) return;
     setNoteSaving(true);
     try {
-      const res = await fetch('/api/tenant/activities', {
+      // #3408: a refused note write keeps the text on screen and says why.
+      await fetchJsonOrThrow('/api/tenant/activities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,11 +267,6 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           deal_id: deal.id,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || 'Failed to add note');
-        return;
-      }
       toast.success('Note added');
       setNoteText('');
       setShowAddNote(false);
@@ -291,7 +285,8 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
     }
     setCallSaving(true);
     try {
-      const res = await fetch('/api/tenant/calls', {
+      // #3408: a refused call write can no longer clear the form as success.
+      await fetchJsonOrThrow('/api/tenant/calls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -302,11 +297,6 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
           notes: [callForm.subject, callForm.notes].filter(Boolean).join(' - '),
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || 'Failed to log call');
-        return;
-      }
       toast.success('Call logged');
       setCallForm({ subject: '', notes: '' });
       setShowLogCall(false);

@@ -97,7 +97,7 @@
   "components/tenant/contact-detail-panel-loader.ts": 1,
   "components/tenant/contacts-client.tsx": 6,
   "components/tenant/contacts-data-table.tsx": 13,
-  "components/tenant/deal-detail-client.tsx": 7,
+  "components/tenant/deal-detail-client.tsx": 2,
   "components/tenant/deal-forecast.tsx": 1,
   "components/tenant/deals-client.tsx": 2,
   "components/tenant/deals-data-table.tsx": 4,
