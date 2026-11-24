@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { DollarSign, Loader2, Check, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
@@ -107,22 +108,20 @@ export default function CurrencySettingsPage() {
     if (code === activeDefault) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/currency', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/tenant/currency', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currency: code }),
       });
-      if (res.ok) {
-        // Optimistically update the cached default, then revalidate.
-        queryClient.setQueryData<{ data?: CurrencyData }>(CURRENCY_QUERY, (prev) =>
-          prev?.data ? { data: { ...prev.data, defaultCurrency: code } } : prev,
-        );
-        queryClient.invalidateQueries({ queryKey: CURRENCY_QUERY });
-        toast.success(`Default currency set to ${code}`);
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to update currency');
-      }
+      // Optimistically update the cached default, then revalidate.
+      queryClient.setQueryData<{ data?: CurrencyData }>(CURRENCY_QUERY, (prev) =>
+        prev?.data ? { data: { ...prev.data, defaultCurrency: code } } : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: CURRENCY_QUERY });
+      toast.success(`Default currency set to ${code}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update currency');
     } finally {
       setSaving(false);
     }
