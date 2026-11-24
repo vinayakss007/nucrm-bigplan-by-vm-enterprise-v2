@@ -12,6 +12,7 @@ import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, Fil
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { smsComposeSchema, validateForm } from '@/lib/validation/forms';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface SmsMessage {
   id: string;
@@ -117,13 +118,12 @@ export default function SmsPage() {
       } else {
         payload.body = form.body;
       }
-      const res = await fetch('/api/tenant/sms', {
+      // #3408: canonical client throws on a refused send with the server's message.
+      await fetchJsonOrThrow('/api/tenant/sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to send SMS');
     },
     onSuccess: () => {
       toast.success('SMS sent successfully');

@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Search, RefreshCw, X, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { subscriptionPayload } from '@/lib/billing/create-payloads';
 import toast from 'react-hot-toast';
 
@@ -66,11 +67,11 @@ export default function SubscriptionsPage() {
 
   const createSubscription = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/subscriptions', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/subscriptions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscriptionPayload(form)),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: () => {
       toast.success('Subscription created');
