@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Check, MessageSquare } from 'lucide-react';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 export default function CSATResponsePage() {
@@ -49,14 +50,15 @@ export default function CSATResponsePage() {
     if (!score) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/public/csat/${token}`, {
+      // #3408: canonical client throws on a refused submission with the server's message.
+      await fetchJsonOrThrow(`/api/public/csat/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ score, comment: comment || undefined }),
       });
-      const d = await res.json();
-      if (res.ok) setSubmitted(true);
-      else setError(d.error || 'Failed to submit');
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit');
     } finally {
       setSubmitting(false);
     }
