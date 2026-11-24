@@ -25,7 +25,6 @@
   "app/tenant/follow-ups/page.tsx": 3,
   "app/tenant/forms/page.tsx": 3,
   "app/tenant/integrations/page.tsx": 3,
-  "app/tenant/invoices/[id]/page.tsx": 5,
   "app/tenant/invoices/page.tsx": 2,
   "app/tenant/kb/[id]/kb-article-client.tsx": 3,
   "app/tenant/kb/categories/page.tsx": 2,

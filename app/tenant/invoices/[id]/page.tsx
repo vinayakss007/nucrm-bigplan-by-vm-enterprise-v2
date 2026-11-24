@@ -14,6 +14,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { PromptDialog } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface Invoice {
   id: string;
@@ -86,12 +87,12 @@ export default function InvoiceDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Invoice>) => {
-      const res = await fetch(`/api/tenant/invoices/${id}`, {
+      // #3408: a refused update reaches onError with the server's reason.
+      await fetchJsonOrThrow(`/api/tenant/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to update');
     },
     onSuccess: () => {
       setEditing(false);
@@ -111,23 +112,20 @@ export default function InvoiceDetailPage() {
           parseFloat(invoice?.balanceDue ?? '') || parseFloat(invoice?.totalAmount ?? '') || 0,
         );
         if (outstanding <= 0) throw new Error('Nothing outstanding — this invoice is already settled');
-        const res = await fetch(`/api/tenant/invoices/${id}/payments`, {
+        // #3408: a refused payment cannot mark the invoice paid locally.
+        await fetchJsonOrThrow(`/api/tenant/invoices/${id}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ amount: outstanding, payment_date: new Date().toISOString().slice(0, 10) }),
         });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed');
-        }
         return newStatus;
       }
-      const res = await fetch(`/api/tenant/invoices/${id}`, {
+      // #3408: a refused status change cannot toast success.
+      await fetchJsonOrThrow(`/api/tenant/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => {
@@ -139,8 +137,8 @@ export default function InvoiceDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/invoices/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      // #3408: a refused delete can no longer navigate as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/invoices/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       toast.success('Invoice deleted');
@@ -478,18 +476,14 @@ export default function InvoiceDetailPage() {
         invalidMessage="Please enter a valid email address"
         onConfirm={async (email) => {
           try {
-            const res = await fetch(`/api/tenant/invoices/${id}/send`, {
+            // #3408: a refused send can no longer toast success.
+            await fetchJsonOrThrow(`/api/tenant/invoices/${id}/send`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ to_email: email }),
             });
-            if (res.ok) {
-              toast.success(`Invoice sent to ${email}`);
-              invalidate();
-            } else {
-              const data = await res.json();
-              toast.error(data.error || 'Failed to send');
-            }
+            toast.success(`Invoice sent to ${email}`);
+            invalidate();
           } catch {
             toast.error('Failed to send email');
           }
