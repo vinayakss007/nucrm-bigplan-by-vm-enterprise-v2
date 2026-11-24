@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import PlanOfferingsPanel from '@/components/superadmin/plan-offerings-panel';
@@ -66,10 +67,13 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
     e.preventDefault(); setSaving(true);
     const method = plan ? 'PATCH' : 'POST';
     const body = plan ? { ...f, id: plan.id } : f;
-    const res = await fetch('/api/superadmin/plans', { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const d = await res.json();
-    if (res.ok) { toast.success(plan ? 'Plan updated' : 'Plan created'); onSave(); onClose(); }
-    else toast.error(d.error || 'Failed');
+    // #3408: canonical client throws on a refused save with the server's message.
+    try {
+      await fetchJsonOrThrow('/api/superadmin/plans', { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast.success(plan ? 'Plan updated' : 'Plan created'); onSave(); onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    }
     setSaving(false);
   };
 
