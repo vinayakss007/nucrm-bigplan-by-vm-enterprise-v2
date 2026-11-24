@@ -109,7 +109,6 @@
   "components/tenant/layout/sidebar.tsx": 2,
   "components/tenant/lead-detail-client.tsx": 1,
   "components/tenant/lead-import-modal.tsx": 1,
-  "components/tenant/leads-client-new.tsx": 6,
   "components/tenant/leads-client.tsx": 14,
   "components/tenant/product-entry-client.tsx": 1,
   "components/tenant/project-detail-client.tsx": 7,
