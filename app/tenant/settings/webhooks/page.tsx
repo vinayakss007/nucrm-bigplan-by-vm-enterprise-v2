@@ -15,6 +15,8 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { webhookFormSchema, validateForm } from '@/lib/validation/forms';
+import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
+type TestDelivery = { status: string; statusCode: number | null; duration: number; errorMessage?: string | null };
 
 const WEBHOOK_EVENT_GROUPS = [
   { label: 'Contacts', events: ['contact.created','contact.updated','contact.deleted','contact.restored'] },
@@ -79,11 +81,11 @@ export default function WebhooksPage() {
 
   const loadDeliveries = async (id: string) => {
     if (deliveries[id]) return;
-    const res = await fetch(`/api/tenant/webhooks/${id}/deliveries`);
-    if (res.ok) { const d = await res.json(); setDeliveries(p => ({...p, [id]:d.data??[]})); }
-    // #2829: the `if (res.ok)` used to be the whole story — a refused read left
-    // deliveries[id] undefined, so the per-webhook panel sat on its spinner forever.
-    else { const d = await res.json().catch(() => null); setDeliveryErrors(p => ({ ...p, [id]: d?.error ?? `HTTP ${res.status}` })); }
+    // #3408: the canonical client reports a refused read instead of leaving
+    // deliveries[id] undefined and the panel on its spinner forever (#2829).
+    const result = await fetchJsonSafe<{ data?: Delivery[] }>(`/api/tenant/webhooks/${id}/deliveries`);
+    if (result.status === 'ok') { setDeliveries(p => ({...p, [id]:result.data.data??[]})); }
+    else if (result.status === 'error') { setDeliveryErrors(p => ({ ...p, [id]: result.statusCode ? `HTTP ${result.statusCode}: ${result.message}` : result.message })); }
   };
 
   const retryDeliveries = (id: string) => {
@@ -99,19 +101,16 @@ export default function WebhooksPage() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; url: string; events: string[] }) => {
-      const res = await fetch('/api/tenant/webhooks', {
+      // #3408: a refused create throws with the server's reason to onError.
+      return fetchJsonOrThrow<{ data: { id: string; signing_secret?: string } }>('/api/tenant/webhooks', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(payload),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
-      return d;
     },
     onSuccess: (d) => {
       toast.success('Webhook created');
-      if (d.data?.signing_secret) {
-        setSecretVisible(p => ({...p, [d.data.id]: d.data.signing_secret}));
-      }
+      const secret = d.data.signing_secret;
+      if (secret) setSecretVisible(p => ({...p, [d.data.id]: secret}));
       setShowCreate(false); setForm({ name:'', url:'', events:[] });
       invalidate();
     },
@@ -120,12 +119,11 @@ export default function WebhooksPage() {
 
   const editMutation = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: { name: string; url: string; events: string[] } }) => {
-      const res = await fetch(`/api/tenant/webhooks/${id}`, {
+      // #3408: a refused edit can no longer close the dialog as success.
+      await fetchJsonOrThrow(`/api/tenant/webhooks/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(payload),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
     },
     onSuccess: () => {
       toast.success('Webhook updated');
@@ -137,23 +135,24 @@ export default function WebhooksPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
-      await fetch(`/api/tenant/webhooks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !current }) });
+      // #3408: a refused toggle can no longer invalidate as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/webhooks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !current }) });
     },
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
+      // #3408: a refused delete can no longer toast success.
+      await fetchJsonOrThrow(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); invalidate(); },
   });
 
   const testMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/webhooks/${id}/test`, { method: 'POST' });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
+      // #3408: a refused test reports the server's reason instead of a fake result.
+      const d = await fetchJsonOrThrow<{ data: TestDelivery }>(`/api/tenant/webhooks/${id}/test`, { method: 'POST' });
       return { id, data: d.data };
     },
     onSuccess: ({ id, data: d }) => {
