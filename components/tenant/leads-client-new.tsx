@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { clientLogWarn } from '@/lib/client-logger';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
 import {
   Target, Plus, Filter, Upload, Search, MoreHorizontal, Trash2,
   Phone, Mail, Building2, TrendingUp, User, Star, Archive, RotateCcw,
@@ -126,14 +126,12 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
   // Load product & service catalogues for the "What They Want" picker
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/products?limit=200', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads', 'Failed to load products', err); });
-    fetch('/api/tenant/services?limit=200', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { services: [] })
-      .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads', 'Failed to load services', err); });
+    // #3408: a refused catalogue read is not an empty picker — log it instead
+    // of rendering a false "no products/services" state.
+    fetchJsonSafe<{ data?: ProductOpt[] }>('/api/tenant/products?limit=200', { signal: abort.signal })
+      .then(r => { if (abort.signal.aborted) return; if (r.status === 'ok') setProducts(r.data.data ?? []); else if (r.status === 'error') clientLogWarn('leads', 'Failed to load products', r.message); });
+    fetchJsonSafe<{ data?: ServiceOpt[]; services?: ServiceOpt[] }>('/api/tenant/services?limit=200', { signal: abort.signal })
+      .then(r => { if (abort.signal.aborted) return; if (r.status === 'ok') setServices(r.data.data ?? r.data.services ?? []); else if (r.status === 'error') clientLogWarn('leads', 'Failed to load services', r.message); });
     return () => abort.abort();
   }, []);
 
@@ -178,9 +176,8 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
     if (data.requested_service_id) body.requested_service_id = data.requested_service_id;
     if (data.notes) body.notes = data.notes;
     if (data.expected_value) body.value = data.expected_value;
-    const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const json=await res.json().catch(() => ({}) as {error?:string});
-    if(!res.ok) throw new Error(json.error||'Failed to create lead');
+    // #3408: the canonical client throws with the server's reason on refusal.
+    await fetchJsonOrThrow('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     toast.success('Lead created!');onSuccess();onClose();
   });
   const handle=(e:React.FormEvent)=>{e.preventDefault();void submitLead();};
@@ -486,9 +483,11 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
   };
 
   const updateLeadStatus=async(id:string,status:string)=>{
-    try{const res=await fetch(`/api/tenant/leads/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead_status:status})});
-    if(res.ok){toast.success('Status updated');load(offset,activeStatus,debouncedSearch);}else{const j=await res.json().catch(() => ({}) as {error?:string});toast.error(j.error||'Failed to update status');}
-    }catch(err){clientLogWarn('leads-client-new','Failed to update lead status',err);toast.error('Failed to update status');}
+    try{
+      // #3408: a refused status change can no longer toast success.
+      await fetchJsonOrThrow(`/api/tenant/leads/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead_status:status})});
+      toast.success('Status updated');load(offset,activeStatus,debouncedSearch);
+    }catch(err){clientLogWarn('leads-client-new','Failed to update lead status',err);toast.error(err instanceof Error&&err.message?err.message:'Failed to update status');}
   };
 
   const deleteLead=async(id:string,name:string)=>{
@@ -600,15 +599,15 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
             <div className="h-4 w-px bg-violet-200 dark:bg-violet-800 mx-1 shrink-0"/>
             <button onClick={async()=>{
               await confirmThen(`Delete ${selectedLeads.size} lead(s)?`, async () => {
-                const res=await fetch('/api/tenant/leads/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',lead_ids:Array.from(selectedLeads)})});
-                if(res.ok){toast.success(`${selectedLeads.size} leads deleted`);setSelectedLeads(new Set());load();}
-                else toast.error('Bulk delete failed');
+                // #3408: a refused bulk delete can no longer toast success.
+                await fetchJsonOrThrow('/api/tenant/leads/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',lead_ids:Array.from(selectedLeads)})});
+                toast.success(`${selectedLeads.size} leads deleted`);setSelectedLeads(new Set());load();
               });
             }} className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 shrink-0">Delete</button>
             <button onClick={async()=>{
-              const res=await fetch('/api/tenant/leads/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'status',lead_ids:Array.from(selectedLeads),payload:{lead_status:'qualified'}})});
-              if(res.ok){toast.success(`${selectedLeads.size} leads qualified`);setSelectedLeads(new Set());load();}
-              else toast.error('Bulk status failed');
+              // #3408: a refused bulk status change can no longer toast success.
+              await fetchJsonOrThrow('/api/tenant/leads/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'status',lead_ids:Array.from(selectedLeads),payload:{lead_status:'qualified'}})});
+              toast.success(`${selectedLeads.size} leads qualified`);setSelectedLeads(new Set());load();
             }} className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 shrink-0">Qualify</button>
             <button onClick={()=>setSelectedLeads(new Set())} className="ml-auto shrink-0"><X className="w-3.5 h-3.5"/></button>
           </div>
