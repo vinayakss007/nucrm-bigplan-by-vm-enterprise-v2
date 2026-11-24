@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Save, Loader2, Check, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 interface PlanOffering {
@@ -70,7 +70,8 @@ export default function PlanOfferingsPanel({ planId, planName, onClose }: PlanOf
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/superadmin/plans/${planId}/offerings`, {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow(`/api/superadmin/plans/${planId}/offerings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -81,11 +82,10 @@ export default function PlanOfferingsPanel({ planId, planName, onClose }: PlanOf
           })),
         }),
       });
-      if (!res.ok) throw new Error('Failed to save');
       toast.success('Plan offerings updated');
       onClose();
-    } catch {
-      toast.error('Failed to save offerings');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save offerings');
     } finally {
       setSaving(false);
     }

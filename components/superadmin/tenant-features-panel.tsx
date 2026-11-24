@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Save, Loader2, Shield, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface ModuleFeature {
   id: string;
@@ -77,7 +77,8 @@ export default function TenantFeaturesPanel({ tenantId, tenantName, plan, onClos
   const saveModule = async (moduleId: string) => {
     setSaving(moduleId);
     try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenantId}/modules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,10 +87,9 @@ export default function TenantFeaturesPanel({ tenantId, tenantName, plan, onClos
           features: overrides[moduleId] || [],
         }),
       });
-      if (!res.ok) throw new Error('Failed to save');
       toast.success('Features updated');
-    } catch {
-      toast.error('Failed to update features');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update features');
     } finally {
       setSaving(null);
     }
