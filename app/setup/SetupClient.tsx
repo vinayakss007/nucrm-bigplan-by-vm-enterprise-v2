@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Eye, EyeOff, Loader2, CheckCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 export default function SetupClient() {
   const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', workspace_name: '', setup_key: '' });
@@ -26,31 +27,36 @@ export default function SetupClient() {
     if (!/[0-9]/.test(form.password)) { toast.error('Password must contain at least one number'); return; }
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(form.password)) { toast.error('Password must contain at least one special character'); return; }
     setLoading(true);
-    const res = await fetch('/api/setup/create-admin', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // In production the route authenticates first-run setup with the
-        // `x-setup-key` HEADER (see app/api/setup/create-admin/route.ts:53-59,
-        // and app/api/test-email/route.ts for the same convention). The value
-        // used to be sent only inside the JSON body, where the route never
-        // reads it — so on any NODE_ENV=production install the form always
-        // failed with 403 "Valid x-setup-key header required" even with a
-        // correct key, leaving the first-run admin impossible to create from
-        // the UI. Send it in both places; the body field stays for backwards
-        // compatibility, and omitting it in dev still works (dev is open).
-        ...(form.setup_key ? { 'x-setup-key': form.setup_key } : {}),
-      },
-      body: JSON.stringify({
-        full_name: form.full_name,
-        email: form.email,
-        password: form.password,
-        workspace_name: form.workspace_name,
-        setup_key: form.setup_key,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Setup failed'); setLoading(false); return; }
+    // #3408: canonical client throws on a refused setup with the server's message.
+    try {
+      await fetchJsonOrThrow('/api/setup/create-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // In production the route authenticates first-run setup with the
+          // `x-setup-key` HEADER (see app/api/setup/create-admin/route.ts:53-59,
+          // and app/api/test-email/route.ts for the same convention). The value
+          // used to be sent only inside the JSON body, where the route never
+          // reads it — so on any NODE_ENV=production install the form always
+          // failed with 403 "Valid x-setup-key header required" even with a
+          // correct key, leaving the first-run admin impossible to create from
+          // the UI. Send it in both places; the body field stays for backwards
+          // compatibility, and omitting it in dev still works (dev is open).
+          ...(form.setup_key ? { 'x-setup-key': form.setup_key } : {}),
+        },
+        body: JSON.stringify({
+          full_name: form.full_name,
+          email: form.email,
+          password: form.password,
+          workspace_name: form.workspace_name,
+          setup_key: form.setup_key,
+        }),
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Setup failed');
+      setLoading(false);
+      return;
+    }
     setDone(true);
     setTimeout(() => router.push('/tenant/dashboard'), 2000);
   };
