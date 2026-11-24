@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/sanitize';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -106,7 +106,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const saveBant = async () => {
     setBantSaving(true);
     try {
-      const res = await fetch(`/api/tenant/leads/${lead.id}`, {
+      // #3408: a refused PATCH can no longer close the editor as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/leads/${lead.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,12 +119,11 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           timeline_target_date: bantDraft.timeline_target_date || null,
         }),
       });
-      if (!res.ok) throw new Error();
       toast.success('Discovery updated');
       setEditingBant(false);
       router.refresh();
-    } catch {
-      toast.error('Failed to update');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Failed to update');
     }
     setBantSaving(false);
   };
@@ -149,6 +149,9 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
   const submitConvert = async () => {
     setConverting(true);
     try {
+      // #3408: kept raw deliberately — the 409 "already converted" body carries
+      // contact_id, which the canonical helpers discard on a failed response.
+      // It is pinned in scripts/client-fetch-ledger.json until that helper exists.
       const res = await fetch(`/api/tenant/leads/${lead.id}/convert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -191,16 +194,12 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
     }
     setHandoffSaving(true);
     try {
-      const res = await fetch(`/api/tenant/leads/${lead.id}/assign`, {
+      // #3408: a refused handoff throws with the server's reason.
+      const data = await fetchJsonOrThrow<{ no_op?: boolean }>(`/api/tenant/leads/${lead.id}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(handoffDraft),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error || 'Handoff failed');
-        return;
-      }
       if (data.no_op) {
         toast('Already assigned to that user', { icon: 'ℹ️' });
       } else {
@@ -209,8 +208,8 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
       setShowHandoff(false);
       setHandoffDraft({ assigned_to: '', reason: '' });
       router.refresh();
-    } catch {
-      toast.error('Handoff failed');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Handoff failed');
     } finally {
       setHandoffSaving(false);
     }
@@ -222,23 +221,23 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
 
   const updateLeadStatus = async (newStatus: string) => {
     try {
-      const res = await fetch(`/api/tenant/leads/${lead.id}`, {
+      // #3408: a refused status change cannot toast success.
+      await fetchJsonOrThrow(`/api/tenant/leads/${lead.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lead_status: newStatus }),
       });
-      if (!res.ok) throw new Error();
       toast.success('Status updated');
       router.refresh();
-    } catch {
-      toast.error('Failed to update status');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Failed to update status');
     }
   };
 
   const deleteLead = async () => {
     await confirmThen(`Delete lead "${lead.first_name} ${lead.last_name}"?`, async () => {
-      const res = await fetch(`/api/tenant/leads/${lead.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
+      // #3408: a refused delete can no longer navigate as if it landed.
+      await fetchJsonOrThrow(`/api/tenant/leads/${lead.id}`, { method: 'DELETE' });
       toast.success('Lead deleted');
       router.push('/tenant/leads');
     });
