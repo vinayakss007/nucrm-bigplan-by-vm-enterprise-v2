@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Send, Bell, BellOff, TestTube, Shield, Lock, KeyRound, LogIn, UserPlus, Eye, EyeOff, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface TelegramSettings {
@@ -80,13 +81,12 @@ export default function TelegramSettingsPage() {
       // checked-to-remove → explicit null, otherwise omitted → keep stored.
       if (tokenDraft.trim()) payload.telegram_bot_token = tokenDraft.trim();
       else if (clearToken) payload.telegram_bot_token = null;
-      const res = await fetch('/api/user/telegram', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      await fetchJsonOrThrow('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!d.ok) throw new Error(d.error || 'Failed to save');
       return {
         typed: Boolean(tokenDraft.trim()),
         cleared: Boolean(clearToken) && !tokenDraft.trim(),
@@ -116,13 +116,12 @@ export default function TelegramSettingsPage() {
         telegram_chat_id: settings.telegram_chat_id,
       };
       if (tokenDraft.trim()) payload.telegram_bot_token = tokenDraft.trim();
-      const res = await fetch('/api/user/telegram', {
+      // #3408: canonical client throws on a refused test with the server's message.
+      await fetchJsonOrThrow('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!d.ok) throw new Error(d.error || 'Test failed');
     },
     onSuccess: () => toast.success('Test message sent! Check Telegram'),
     onError: (e: Error) => toast.error(e.message || 'Test failed'),

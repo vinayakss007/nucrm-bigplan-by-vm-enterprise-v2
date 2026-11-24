@@ -80,7 +80,6 @@
   "app/tenant/settings/sso/page.tsx": 1,
   "app/tenant/settings/tags-manager/page.tsx": 3,
   "app/tenant/settings/tax/page.tsx": 2,
-  "app/tenant/settings/telegram/page.tsx": 2,
   "app/tenant/settings/territories/page.tsx": 2,
   "app/tenant/settings/user-defaults/page.tsx": 2,
   "app/tenant/settings/webhooks/logs/page.tsx": 1,
