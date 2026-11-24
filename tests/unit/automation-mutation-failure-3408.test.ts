@@ -7,8 +7,9 @@
  * #3408 — the automation page's three mutations (prebuilt toggle, custom
  * toggle, custom delete) used to `await fetch(...)` with the response discarded,
  * so a refused request still flashed "Automation enabled" / "Deleted".
- * This screen pins that each mutation checks `res.ok` before celebrating, so a
- * future edit that drops the check turns CI red.
+ * They now go through `fetchJsonOrThrow`, which throws with the server's reason
+ * so onError fires and onSuccess cannot celebrate a refused write. This screen
+ * pins that contract so a future edit back to a silent fetch turns CI red.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -31,8 +32,8 @@ describe('automation mutations surface failures instead of false success (#3408)
     it(`${name} checks the response before onSuccess`, () => {
       const block = mutationFn(name);
       expect(block, `${name} not found`).not.toBe('');
-      expect(block, `${name} discards the fetch response`).toMatch(/const res = await fetch\(/);
-      expect(block, `${name} never checks res.ok`).toMatch(/if \(!res\.ok\)/);
+      expect(block, `${name} is not on the canonical client`).toMatch(/await fetchJsonOrThrow\(/);
+      expect(block, `${name} still hand-checks res.ok`).not.toMatch(/res\.ok/);
       expect(block, `${name} has no error toast`).toMatch(/onError:/);
     });
   }
