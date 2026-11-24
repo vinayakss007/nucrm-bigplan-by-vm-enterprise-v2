@@ -85,7 +85,7 @@ export default function WebhooksPage() {
     // deliveries[id] undefined and the panel on its spinner forever (#2829).
     const result = await fetchJsonSafe<{ data?: Delivery[] }>(`/api/tenant/webhooks/${id}/deliveries`);
     if (result.status === 'ok') { setDeliveries(p => ({...p, [id]:result.data.data??[]})); }
-    else if (result.status === 'error') { setDeliveryErrors(p => ({ ...p, [id]: result.message })); }
+    else if (result.status === 'error') { setDeliveryErrors(p => ({ ...p, [id]: result.statusCode ? `HTTP ${result.statusCode}: ${result.message}` : result.message })); }
   };
 
   const retryDeliveries = (id: string) => {
