@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Mail, Loader2, CheckCircle, AlertTriangle, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 export default function EmailSettingsPage() {
   const [testEmail, setTestEmail] = useState('');
@@ -17,10 +18,11 @@ export default function EmailSettingsPage() {
   // A 200 with {ok:false} is thrown so the error branch owns the 'fail' state.
   const testMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/email/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to:testEmail }) });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) throw new Error(d.error || 'Failed');
-      return d;
+      // #3408: canonical client throws on the API's 500 with the server's message.
+      return fetchJsonOrThrow('/api/tenant/email/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmail }),
+      });
     },
     onSuccess: () => toast.success('Test email sent!'),
     onError: (e: Error) => toast.error(e.message),
