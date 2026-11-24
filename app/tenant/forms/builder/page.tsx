@@ -13,6 +13,7 @@ import {
   Calendar, CheckSquare, List
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import Link from 'next/link';
@@ -91,7 +92,8 @@ function FormBuilderInner() {
   // #1328: save via useMutation (was raw fetch + useState saving flag).
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/forms', {
+      // #3408: canonical client throws on a refused save with the server's message.
+      return fetchJsonOrThrow('/api/tenant/forms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,9 +102,6 @@ function FormBuilderInner() {
           settings,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
-      return d;
     },
     onSuccess: () => { toast.success('Form saved successfully!'); router.push('/tenant/forms'); },
     onError: (e: Error) => toast.error(e.message || 'Network error'),

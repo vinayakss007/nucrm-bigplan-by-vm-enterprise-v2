@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { FileSignature, Plus, X, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -79,7 +80,8 @@ export default function EsignaturePage() {
 
   const createRequest = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/esignature', {
+      // #3408: canonical client throws on a refused create with the server's message.
+      await fetchJsonOrThrow('/api/tenant/esignature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,8 +90,6 @@ export default function EsignaturePage() {
           signers: form.signers,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to create signing request');
     },
     onSuccess: () => {
       toast.success('Signing request created');
