@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Clock, Plus, Play, Pause, Trash2, Mail, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
@@ -70,16 +71,15 @@ export default function ScheduledReportsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, newStatus }: { id: string; newStatus: string }) => {
-      const res = await fetch('/api/tenant/reports/scheduled', {
+      await fetchJsonOrThrow('/api/tenant/reports/scheduled', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => { toast.success(newStatus === 'active' ? 'Report activated' : 'Report paused'); load(); },
-    onError: () => toast.error('Failed'),
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
   });
   const toggleStatus = (id: string, current: string) => {
     toggleMutation.mutate({ id, newStatus: current === 'active' ? 'paused' : 'active' });
@@ -87,15 +87,14 @@ export default function ScheduledReportsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/reports/scheduled', {
+      await fetchJsonOrThrow('/api/tenant/reports/scheduled', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: () => { toast.success('Deleted'); load(); },
-    onError: () => toast.error('Failed'),
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
   });
   const deleteReport = async (id: string) => {
     const report = reports.find(r => r.id === id);
@@ -194,7 +193,7 @@ function CreateScheduledReport({ onClose, onCreated }: { onClose: () => void; on
     if (!form.name.trim()) { toast.error('Name required'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/reports/scheduled', {
+      await fetchJsonOrThrow('/api/tenant/reports/scheduled', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -202,9 +201,8 @@ function CreateScheduledReport({ onClose, onCreated }: { onClose: () => void; on
           recipients: form.recipients.split(',').map(s => s.trim()).filter(Boolean),
         }),
       });
-      if (res.ok) { toast.success('Schedule created'); onCreated(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      toast.success('Schedule created'); onCreated();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); }
     setSaving(false);
   };
 
