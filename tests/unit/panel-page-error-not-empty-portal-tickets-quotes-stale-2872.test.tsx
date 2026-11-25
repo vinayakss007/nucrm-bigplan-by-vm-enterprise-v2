@@ -626,7 +626,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(readFileSync(join(ROOT, LIST), 'utf8')).toMatch(/toast\.success\('Ticket created'\)/);
     const quotes = readFileSync(join(ROOT, QUOTES_FILE), 'utf8');
     expect(quotes).toMatch(/onError: \(err\) => \{\s*\r?\n\s*toast\.error\(err\.message \|\| 'Failed to accept quote'\);/);
-    expect(readFileSync(join(ROOT, DETAIL), 'utf8')).toMatch(/toast\.error\(d\.error \|\| 'Failed to send'\)/);
+    expect(readFileSync(join(ROOT, DETAIL), 'utf8')).toMatch(/catch \(e\) \{ toast\.error\(e instanceof Error \? e\.message : 'Failed to send reply'\); \}/);
   });
 
   it('names the reason the way the read can produce it, not the way a page guesses at it', () => {
