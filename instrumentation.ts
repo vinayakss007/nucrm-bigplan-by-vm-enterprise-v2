@@ -101,6 +101,7 @@ export async function register() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: webhookUrl }),
+        signal: AbortSignal.timeout(5000),
       }).then(r => r.json()).then(d => {
         if (d.ok) console.log('[telegram] Webhook registered:', webhookUrl);
         else console.warn('[telegram] Webhook registration failed:', d.description);
