@@ -196,6 +196,7 @@ export default function PortalQuotesPage() {
               <div key={quote.id} className="bg-card border border-border rounded-2xl overflow-hidden transition-all hover:border-violet-200 dark:hover:border-violet-800">
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : quote.id)}
+                  aria-expanded={isExpanded}
                   className="w-full p-4 text-left flex items-start justify-between gap-3"
                 >
                   <div className="flex-1 min-w-0">

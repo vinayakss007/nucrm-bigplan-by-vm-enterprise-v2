@@ -128,7 +128,7 @@ export default function TicketsPage() {
           const isOpen = expanded===t.id;
           return (
             <div key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-              <div className="flex items-start gap-3 px-5 py-4 cursor-pointer" onClick={()=>setExpanded(isOpen?null:t.id)}>
+              <div role="button" tabIndex={0} aria-expanded={isOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isOpen?null:t.id); } }} className="flex items-start gap-3 px-5 py-4 cursor-pointer" onClick={()=>setExpanded(isOpen?null:t.id)}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {t.priority && <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize',PRI_CFG[t.priority]||PRI_CFG['normal'])}>{t.priority}</span>}
