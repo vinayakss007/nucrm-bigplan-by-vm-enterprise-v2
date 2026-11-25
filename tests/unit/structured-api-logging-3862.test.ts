@@ -28,9 +28,9 @@ describe('server API routes log through logError (#3862)', () => {
   it('routes the Resend warnings and the v1 deprecation notice to logError', () => {
     const resend = readFileSync(join(process.cwd(), 'app/api/webhooks/resend/route.ts'), 'utf8');
     const v1 = readFileSync(join(process.cwd(), 'app/api/v1/auth/route.ts'), 'utf8');
-    expect(resend).toContain("context: 'webhooks/resend'");
-    expect(resend).toContain("context: 'webhooks/resend attribution'");
-    expect(resend).toContain("level: 'warning', captureToSentry: false");
+    expect(resend).toContain("logger.warn('[resend-webhook] RESEND_WEBHOOK_SECRET is not set");
+    expect(resend).not.toContain('DROPPED ${event.type}');
     expect(v1).toContain("context: 'v1/auth login'");
+    expect(v1).toContain("level: 'warning', captureToSentry: false");
   });
 });
