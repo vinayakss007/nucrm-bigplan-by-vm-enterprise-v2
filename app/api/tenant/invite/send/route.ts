@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,6 +26,8 @@ const inviteSendSchema = z.object({
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitMutating(request, 'portalClients', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'team.invite') && !ctx.isAdmin) {

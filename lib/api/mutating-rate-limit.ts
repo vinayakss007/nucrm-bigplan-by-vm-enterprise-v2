@@ -88,6 +88,9 @@ const MUTATING_LIMITS: Record<string, LimitSet> = {
   impersonate: { post: 5, patch: 5, delete: 5 },
   joinTenant: { post: 5, patch: 5, delete: 5 },
   selectiveRestore: { post: 3, patch: 3, delete: 3 },
+  twoFactor: { post: 5, patch: 5, delete: 5 },
+  chat: { post: 10, patch: 20, delete: 10 },
+  compliance: { post: 3, patch: 5, delete: 3 },
 };
 
 const DEFAULT_LIMITS: LimitSet = { post: 15, patch: 30, delete: 10 };

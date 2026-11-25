@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { forms, formSubmissions } from '@/drizzle/schema';
@@ -153,6 +154,8 @@ export const GET = withApiRoute(async (req: NextRequest,
 export const POST = withApiRoute(async (req: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const limited = await rateLimitMutating(req, 'forms', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;

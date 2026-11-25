@@ -12,6 +12,7 @@
  *
  * Response: { url: string }
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -27,6 +28,8 @@ import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitMutating(request, 'billing', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const permErr = requirePerm(ctx, 'billing.manage');

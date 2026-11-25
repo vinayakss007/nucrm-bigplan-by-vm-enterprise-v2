@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -16,6 +17,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitMutating(request, 'twoFactor', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

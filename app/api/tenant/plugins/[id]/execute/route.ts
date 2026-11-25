@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, notFound, badRequest } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -20,6 +21,8 @@ interface RouteContext {
 
 export const POST = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
+    const limited = await rateLimitMutating(request, 'plugins', 'post');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     // #2999: execute runs arbitrary configured actions against external systems
