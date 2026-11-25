@@ -10,6 +10,7 @@ import { ArrowLeft, Send, Loader2, User, Bot } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
@@ -87,22 +88,16 @@ export default function PortalTicketDetailPage() {
     if (!replyText.trim() || !session) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/public/tickets/${ticketId}/replies`, {
+      const d = await fetchJsonOrThrow<{ data: Reply }>(`/api/public/tickets/${ticketId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // #1982: ownership is verified from the session cookie server-side.
         body: JSON.stringify({ body: replyText.trim() }),
       });
-      if (res.ok) {
-        const d = await res.json();
-        setReplies(prev => [...prev, d.data]);
-        setReplyText('');
-        if (ticket?.status === 'resolved') setTicket(prev => prev ? { ...prev, status: 'open' } : prev);
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to send');
-      }
-    } catch { toast.error('Failed to send reply'); }
+      setReplies(prev => [...prev, d.data]);
+      setReplyText('');
+      if (ticket?.status === 'resolved') setTicket(prev => prev ? { ...prev, status: 'open' } : prev);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to send reply'); }
     setSending(false);
   };
 

@@ -32,7 +32,7 @@ vi.mock('@/lib/notifications', () => ({
   createNotification: (opts: unknown) => mockCreateNotification(opts),
 }));
 
-const mockSendEmail = vi.fn(async () => true);
+const mockSendEmail = vi.fn(async () => ({ success: true, provider: 'resend', messageId: 'msg-1' }));
 vi.mock('@/lib/email/service', () => ({
   sendEmail: (opts: unknown) => mockSendEmail(opts),
 }));
@@ -173,6 +173,7 @@ describe('POST /api/cron/task-reminders', () => {
     // Deliberate failures in one test must not leak into the next.
     mockCreateNotification.mockResolvedValue(true);
     mockSendEmail.mockClear();
+    mockSendEmail.mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-1' });
   });
 
   it('runs the due/overdue work inside a per-tenant sweep and reports the counters', async () => {
@@ -193,6 +194,7 @@ describe('POST /api/cron/task-reminders', () => {
       overdue: 1,
       notified: 2,
       notify_failed: 0,
+      email_failed: 0,
       already_reminded: 0,
     });
   });
@@ -278,14 +280,24 @@ describe('POST /api/cron/task-reminders', () => {
     expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 1 });
   });
 
-  it('#2224 sends no email when the overdue notification insert fails (no marker written)', async () => {
+  it('#3848 withholds the marker when the email provider rejects the send', async () => {
+    mockSendEmail.mockResolvedValue({ success: false, error: 'provider down' });
+    dueTodayRows = [];
+    overdueRows = [makeRow({ id: 'over-1', dueDate: new Date(Date.now() - 1.5 * 86400000) })];
+    remindedRows = [];
+    const res = await runCron();
+
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({ ok: false, notified: 0, notify_failed: 0, email_failed: 1, already_reminded: 0 });
+  });
+
+  it('#2224 writes no marker when the notification insert fails', async () => {
     mockCreateNotification.mockResolvedValue(false);
     overdueRows = [makeRow({ id: 'over-1', dueDate: new Date(Date.now() - 1.5 * 86400000) })];
     const res = await runCron();
 
-    // The failed insert writes no marker, so the next hourly run retries —
-    // but this run must not email, or a persisting failure would re-email 24×.
-    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockCreateNotification).toHaveBeenCalledTimes(2);
     expect(res.body).toMatchObject({ ok: false, notified: 0, notify_failed: 2, already_reminded: 0 });
   });
 
@@ -347,6 +359,7 @@ describe('POST /api/cron/task-reminders', () => {
       overdue: 0,
       notified: 0,
       notify_failed: 0,
+      email_failed: 0,
       already_reminded: 0,
     });
   });

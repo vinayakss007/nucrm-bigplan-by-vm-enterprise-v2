@@ -13,6 +13,7 @@ import { OptimizedImage } from '@/components/ui/optimized-image';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { useQuery } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface OfferData {
   offer: {
@@ -93,17 +94,15 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
     setBusy('accept');
     setActionError(null);
     try {
-      const res = await fetch(`/api/public/offers/${publicToken}/accept`, {
+      await fetchJsonOrThrow(`/api/public/offers/${publicToken}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(acceptForm),
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setSubmittedStatus('accepted');
       setShowAccept(false);
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(e instanceof Error ? e.message : 'Failed to accept the offer');
     } finally {
       setBusy(null);
     }
@@ -113,17 +112,15 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
     setBusy('decline');
     setActionError(null);
     try {
-      const res = await fetch(`/api/public/offers/${publicToken}/decline`, {
+      await fetchJsonOrThrow(`/api/public/offers/${publicToken}/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(declineForm),
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setSubmittedStatus('declined');
       setShowDecline(false);
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(e instanceof Error ? e.message : 'Failed to decline the offer');
     } finally {
       setBusy(null);
     }

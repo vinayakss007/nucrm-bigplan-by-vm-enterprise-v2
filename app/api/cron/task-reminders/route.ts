@@ -31,6 +31,7 @@ async function cronRouteHandler(request: NextRequest) {
     let overdueCount = 0;
     let notified = 0;
     let notifyFailed = 0;
+    let emailFailed = 0;
     // #2224: this job fires hourly, so without an already-notified marker every
     // due/overdue task got a fresh notification (and the 1-day-overdue email)
     // up to 24x per day. The marker is the day's own notification row —
@@ -147,28 +148,27 @@ async function cronRouteHandler(request: NextRequest) {
         const marker = `${task.userId}|task_overdue|${task.id}`;
         if (remindedKeys.has(marker)) { alreadyReminded++; continue; }
         const daysOverdue = Math.floor((Date.now() - new Date(task.dueDate).getTime()) / 86400000);
-        const overdueDelivered = await createNotification({
-          userId: task.userId, tenantId: task.tenantId, type: 'task_overdue',
-          title: `Overdue task (${daysOverdue}d): ${task.title}`,
-          entity_type: 'task', entity_id: task.id,
-        });
 
-        // Email for tasks overdue exactly 1 day (not every day — avoid spam).
-        // #2224: gated on the reminder marker too — the notification row IS the
-        // once-per-day marker, so the email rides its success: a run that finds
-        // the marker (or fails to insert) never re-emails for the same day.
-        if (daysOverdue === 1 && task.email && overdueDelivered) {
+        if (daysOverdue === 1 && task.email) {
           const dueStr = new Date(task.dueDate).toISOString().split('T')[0];
-          // #3045: sendEmail resolves {success:false} — the .catch() could
-          // never fire, so provider rejections were fully silent.
           const emailResult = await sendEmail({
             to: task.email,
             subject: `Overdue task: ${task.title}`,
             html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px"><h3 style="color:#dc2626">Task overdue: ${task.title}</h3><p style="color:#6b7280">This task was due ${dueStr} and is now overdue.</p><a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Tasks →</a></div>`,
             text: `Task overdue: ${task.title} (due ${dueStr}). View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks`,
           });
-          if (!emailResult.success) void logError({ error: new Error(`Task-reminders email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/task-reminders overdue email' });
+          if (!emailResult.success) {
+            emailFailed++;
+            void logError({ error: new Error(`Task-reminders email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/task-reminders overdue email' });
+            continue;
+          }
         }
+
+        const overdueDelivered = await createNotification({
+          userId: task.userId, tenantId: task.tenantId, type: 'task_overdue',
+          title: `Overdue task (${daysOverdue}d): ${task.title}`,
+          entity_type: 'task', entity_id: task.id,
+        });
         if (overdueDelivered) { notified++; remindedKeys.add(marker); } else notifyFailed++;
       }
     });
@@ -177,7 +177,7 @@ async function cronRouteHandler(request: NextRequest) {
       // Notifying IS this job's purpose, so an undeliverable notification is a
       // failed run — reporting ok:true there is how a green cron that reached
       // nobody kept hiding (#51, #58).
-      ok: sweep.failed.length === 0 && notifyFailed === 0,
+      ok: sweep.failed.length === 0 && notifyFailed === 0 && emailFailed === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
@@ -185,6 +185,7 @@ async function cronRouteHandler(request: NextRequest) {
       overdue: overdueCount,
       notified,
       notify_failed: notifyFailed,
+      email_failed: emailFailed,
       // #2224: how many task/day reminder pairs the dedupe marker suppressed on
       // this run — the hourly no-op path. Healthy value on repeat runs is
       // due_today + overdue here and notified: 0.

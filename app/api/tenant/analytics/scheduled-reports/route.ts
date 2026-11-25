@@ -13,6 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
+import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
 // #1838: wrapped in withApiRoute so requireAuth()'s setTenantContext() and
 // the tenant queries below share one pinned connection (RLS isolation).
@@ -77,8 +78,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   }
 });
 
-function calculateNextRun(frequency: string): Date {
-  const now = new Date();
+export function calculateNextRun(frequency: string, now: Date = new Date()): Date {
   switch (frequency) {
     case 'hourly':
       return new Date(now.getTime() + 60 * 60 * 1000);
@@ -87,7 +87,7 @@ function calculateNextRun(frequency: string): Date {
     case 'weekly':
       return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     case 'monthly':
-      return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      return addMonthsClamped(now, 1);
     default:
       return new Date(now.getTime() + 24 * 60 * 60 * 1000);
   }

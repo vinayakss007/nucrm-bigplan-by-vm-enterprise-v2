@@ -140,7 +140,7 @@ function buildCsp(nonce: string): string {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ws: wss:${sentryOrigin}`,
+    `connect-src 'self'${sentryOrigin}`,
     "frame-ancestors 'none'",
     "frame-src 'self'",
     "form-action 'self'",
