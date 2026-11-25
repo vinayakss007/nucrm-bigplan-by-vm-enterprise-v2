@@ -106,12 +106,17 @@ variable "ssh_port" {
 
 variable "admin_cidrs" {
   description = <<-EOT
-    CIDR blocks allowed to reach SSH. Default is open (0.0.0.0/0) for
-    convenience, but you SHOULD restrict this to your office/VPN ranges.
-    HTTP/HTTPS (80/443) are always open to the world for the public app.
+    CIDR blocks allowed to reach SSH. Required — there is deliberately no
+    open default. HTTP/HTTPS (80/443) are always open to the world for the
+    public app.
   EOT
   type        = list(string)
-  default     = ["0.0.0.0/0", "::/0"]
+  validation {
+    condition = length(var.admin_cidrs) > 0 && !anytrue([
+      for cidr in var.admin_cidrs : cidr == "0.0.0.0/0" || cidr == "::/0" || can(regex("/0$", cidr))
+    ])
+    error_message = "admin_cidrs must be a non-empty list of specific ranges; any /0 network is not allowed for SSH."
+  }
 }
 
 variable "domain" {
