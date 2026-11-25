@@ -40,7 +40,7 @@ async function cronRouteHandler(req: NextRequest) {
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      ok: sweep.failed.length === 0 && totals.errors.length === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

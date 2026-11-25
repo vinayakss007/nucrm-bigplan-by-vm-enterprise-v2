@@ -265,7 +265,7 @@ describe('cron/process-sequences outbox (#2223)', () => {
     const res = await POST(cronRequest());
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ ok: true, processed: 0 });
+    expect(body).toMatchObject({ ok: false, emails_rejected: 1, processed: 0 });
 
     // Send attempted once, strictly after the claim tx committed.
     expect(events.filter((e) => e === 'sendEmail')).toHaveLength(1);
