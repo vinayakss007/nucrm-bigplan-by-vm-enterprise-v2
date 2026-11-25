@@ -181,7 +181,7 @@ describe('rule 2: a refused re-read keeps the transcript and names the loss (#28
     mockFetch.mockRejectedValueOnce(new Error('Failed to fetch'));
     clickSession(/Kestrel Vane/);
     await waitFor(() => expect(alerts()).toMatch(/last read/));
-    expect(alerts()).toContain('Failed to fetch');
+    expect(alerts()).toMatch(/Network error|could not be completed/);
     expect(screen.getByText('Is the forklift order shipped?')).toBeTruthy();
   });
 
@@ -297,8 +297,8 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     const src = readFileSync(join(ROOT, FILE), 'utf8');
     const hooks = [...src.matchAll(/const\s*(?:\{[^}]*\}|\w+)\s*=\s*(?:useApiQuery|useQuery)\b/g)];
     expect(hooks, 'chat grew a second hook read — this screen now sees the thread too').toHaveLength(1);
-    expect(src, 'the transcript read is no longer a plain fetch — this screen needs revisiting')
-      .toMatch(/const loadMessages[\s\S]*?await fetch\(/);
+    expect(src, 'the transcript read left the canonical client and needs revisiting')
+      .toMatch(/const loadMessages[\s\S]*?await fetchJsonSafe</);
     expect(EMPTY_SENTENCE.test('No messages yet')).toBe(true);
     expect(EMPTY_TEST.test('messages.length === 0')).toBe(true);
     expect(inspect(FILE, src).offends).toBe(false);

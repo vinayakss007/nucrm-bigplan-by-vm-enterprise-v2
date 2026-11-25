@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, FileText, User } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -79,48 +80,45 @@ export default function ContractDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Contract>) => {
-      const res = await fetch(`/api/tenant/contracts/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/contracts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to update');
     },
     onSuccess: () => {
       setEditing(false);
       toast.success('Contract updated');
       invalidate();
     },
-    onError: () => toast.error('Failed to update contract'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update contract'),
   });
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const res = await fetch(`/api/tenant/contracts/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/contracts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => {
       toast.success(`Status changed to ${newStatus}`);
       invalidate();
     },
-    onError: () => toast.error('Failed to change status'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to change status'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/contracts/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/contracts/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       toast.success('Contract deleted');
       router.push('/tenant/contracts');
     },
-    onError: () => toast.error('Failed to delete contract'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete contract'),
   });
 
   const handleEdit = () => {
