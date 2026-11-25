@@ -101,8 +101,7 @@ async function cronRouteHandler(request: NextRequest) {
           sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${tid} AND status = 'active') tm`,
           sql`tm.user_id = ${users.id}`
         )
-        .where(eq(users.isSuperAdmin, false))
-        .limit(5);
+        .where(eq(users.isSuperAdmin, false));
         membersByTenant.set(tid, members);
       }));
       let recipientWarningLogged = false;
