@@ -24,6 +24,7 @@
 #  daily at 02:00. THIS script is the full-cluster pg_dump for manual/DR use.
 ###############################################################################
 set -euo pipefail
+umask 077
 cd "$(dirname "$0")/.."
 
 # Load env (DATABASE_URL, AWS_*, BACKUP_BUCKET, PG image, etc.)
@@ -46,6 +47,8 @@ BACKUP_FILE="nucrm_backup_${TIMESTAMP}.dump"
 KEEP_LOCAL="${BACKUP_KEEP_LOCAL:-7}"
 PG_IMAGE="${PG_IMAGE:-postgres:18-alpine}"
 COMPOSE_NETWORK="${BACKUP_DOCKER_NETWORK:-deploy_nucrm-net}"
+ROOT_DIR="$(cd .. && pwd)"
+ENCRYPTED_FILE=""
 
 log()  { echo "[BACKUP $(date +%H:%M:%S)] $*"; }
 err()  { echo "[BACKUP ERROR] $*" >&2; exit 1; }
@@ -136,25 +139,40 @@ backup_local() {
       err "pg_dump failed — check DATABASE_URL, connectivity, and the role's RLS rights."
     }
 
+  chmod 600 "${BACKUP_DIR}/${BACKUP_FILE}"
+
   local size
   size=$(du -h "${BACKUP_DIR}/${BACKUP_FILE}" | cut -f1)
   [[ -s "${BACKUP_DIR}/${BACKUP_FILE}" ]] || err "Backup file is empty — aborting."
   log "Backup created: ${BACKUP_DIR}/${BACKUP_FILE} (${size})"
 }
 
+encrypt_for_upload() {
+  [[ -n "${BACKUP_ENCRYPTION_KEY:-}" ]] || err "BACKUP_ENCRYPTION_KEY is required for offsite backups — refusing to upload a plaintext dump. Generate one with 'openssl rand -hex 32' and add it to the deployment env."
+  [[ "$BACKUP_ENCRYPTION_KEY" != "<<<REQUIRED>>>" ]] || err "BACKUP_ENCRYPTION_KEY is still the deployment template placeholder — refusing to upload a backup sealed with a public key."
+  log "Encrypting dump before offsite upload..."
+  (cd "$ROOT_DIR" && BACKUP_ENCRYPTION_KEY="$BACKUP_ENCRYPTION_KEY" \
+    npx --no-install tsx scripts/backup/encrypt-file.mts "${BACKUP_DIR}/${BACKUP_FILE}" >/dev/null) \
+    || err "Backup encryption failed — refusing to upload a plaintext dump."
+  ENCRYPTED_FILE="${BACKUP_FILE}.enc"
+  chmod 600 "${BACKUP_DIR}/${ENCRYPTED_FILE}"
+}
+
 upload_s3() {
+  local upload_file="${ENCRYPTED_FILE:-$BACKUP_FILE}"
   log "Uploading to S3/MinIO bucket '${BACKUP_BUCKET:-nucrm-backups}'..."
   # The MinIO container exists in production. Copy the dump in and push it with mc.
   if docker ps --format '{{.Names}}' | grep -q '^nucrm-minio$'; then
     docker exec nucrm-minio mc alias set local http://localhost:9000 \
       "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" >/dev/null 2>&1 \
       || err "Could not configure mc alias inside nucrm-minio."
-    docker cp "${BACKUP_DIR}/${BACKUP_FILE}" nucrm-minio:/tmp/
-    docker exec nucrm-minio mc cp "/tmp/${BACKUP_FILE}" \
-      "local/${BACKUP_BUCKET:-nucrm-backups}/db/${BACKUP_FILE}" \
+    docker cp "${BACKUP_DIR}/${upload_file}" nucrm-minio:/tmp/
+    docker exec nucrm-minio mc cp "/tmp/${upload_file}" \
+      "local/${BACKUP_BUCKET:-nucrm-backups}/db/${upload_file}" \
       || err "Upload to MinIO failed."
-    docker exec nucrm-minio rm -f "/tmp/${BACKUP_FILE}" 2>/dev/null || true
-    log "Uploaded to s3://${BACKUP_BUCKET:-nucrm-backups}/db/${BACKUP_FILE}"
+    docker exec nucrm-minio rm -f "/tmp/${upload_file}" 2>/dev/null || true
+    [[ -n "$ENCRYPTED_FILE" ]] && rm -f "${BACKUP_DIR}/${ENCRYPTED_FILE}"
+    log "Uploaded to s3://${BACKUP_BUCKET:-nucrm-backups}/db/${upload_file}"
   else
     log "nucrm-minio container not found — skipping S3 upload (local copy kept)."
     log "For offsite storage, sync ${BACKUP_DIR} to external object storage."
@@ -187,5 +205,5 @@ restore() {
 case "${1:-}" in
   --local)   backup_local; cleanup_old ;;
   --restore) restore "${2:-}" ;;
-  *)         backup_local; upload_s3; cleanup_old; log "Backup complete!" ;;
+  *)         backup_local; encrypt_for_upload; upload_s3; cleanup_old; log "Backup complete!" ;;
 esac

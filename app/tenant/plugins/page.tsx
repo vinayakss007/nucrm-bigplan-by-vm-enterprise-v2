@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Puzzle, Plus, Trash2, X, Loader2, ToggleLeft, ToggleRight, Zap, TestTube, Copy, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -88,10 +88,9 @@ export default function PluginsPage() {
 
   // Per-plugin execution logs are loaded on demand (on expand) into a local map.
   const loadLogs = async (pluginId: string) => {
-    const res = await fetch(`/api/tenant/plugins/${pluginId}/logs?limit=50`);
-    if (res.ok) {
-      const d = await res.json() as { data: LogEntry[] };
-      setLogs((prev) => ({ ...prev, [pluginId]: d.data ?? [] }));
+    const res = await fetchJsonSafe<{ data: LogEntry[] }>(`/api/tenant/plugins/${pluginId}/logs?limit=50`);
+    if (res.status === 'ok') {
+      setLogs((prev) => ({ ...prev, [pluginId]: res.data.data ?? [] }));
     }
   };
 
@@ -131,19 +130,17 @@ export default function PluginsPage() {
   };
 
   const testAction = async (pluginId: string, actionName: string) => {
-    const res = await fetch(`/api/tenant/plugins/${pluginId}/execute`, {
+    const d = await fetchJsonOrThrow<{ success: boolean; error?: string }>(`/api/tenant/plugins/${pluginId}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: actionName, params: {} }),
     });
-    const d = await res.json() as { success: boolean; error?: string };
     if (d.success) toast.success('Action executed successfully');
     else toast.error(d.error ?? 'Action failed');
   };
 
   const testConnection = async (pluginId: string) => {
-    const res = await fetch(`/api/tenant/plugins/${pluginId}/test`, { method: 'POST' });
-    const d = await res.json() as { success: boolean; message: string };
+    const d = await fetchJsonOrThrow<{ success: boolean; message: string }>(`/api/tenant/plugins/${pluginId}/test`, { method: 'POST' });
     if (d.success) toast.success(d.message);
     else toast.error(d.message);
   };
@@ -387,7 +384,7 @@ function CreatePluginForm({ onCreated, initialTemplate }: { onCreated: () => voi
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/plugins', {
+      await fetchJsonOrThrow('/api/tenant/plugins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -400,13 +397,10 @@ function CreatePluginForm({ onCreated, initialTemplate }: { onCreated: () => voi
           webhookSecret: form.webhookSecret || null,
         }),
       });
-      if (res.ok) {
-        toast.success('Plugin created!');
-        onCreated();
-      } else {
-        const d = await res.json() as { error?: string };
-        toast.error(d.error ?? 'Failed to create plugin');
-      }
+      toast.success('Plugin created!');
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create plugin');
     } finally {
       setSaving(false);
     }

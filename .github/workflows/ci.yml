@@ -196,9 +196,9 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: addnab/docker-run-action@v3
+        uses: addnab/docker-run-action@4f65fabd2431ebc8d299f8e5a018d79a769ae185
         with:
-          image: zricethezav/gitleaks:latest
+          image: zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           options: -v ${{ github.workspace }}:/repo
           run: gitleaks detect --source=/repo --verbose --redact
 
@@ -224,9 +224,9 @@ jobs:
         run: npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs
 
       - name: Run gitleaks (path scan)
-        uses: addnab/docker-run-action@v3
+        uses: addnab/docker-run-action@4f65fabd2431ebc8d299f8e5a018d79a769ae185
         with:
-          image: zricethezav/gitleaks:latest
+          image: zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           options: -v ${{ github.workspace }}:/repo
           run: gitleaks detect --source=/repo --no-git --verbose
 
@@ -273,7 +273,7 @@ jobs:
           fi
 
       - name: Upload SAST results
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934
         if: always() && steps.sarif.outputs.exists == 'true'
         with:
           sarif_file: semgrep.sarif
@@ -826,7 +826,7 @@ jobs:
           cat > "$TMP/docker-compose.yml" <<'POOLFIXTURE'
           services:
             pgbouncer:
-              image: edoburu/pgbouncer:v1.23.1-p3
+              image: edoburu/pgbouncer@sha256:377dec3c0e4a66a1077ec043e16a26ed5702a6d954011a7983a1457c2e070b1d
               environment:
                 - POOL_MODE=transaction
                 - MAX_CLIENT_CONN=100

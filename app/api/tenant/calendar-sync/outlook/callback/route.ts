@@ -7,9 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { createOutlookCalendarProvider } from '@/lib/calendar-sync/outlook';
 import { saveIntegrationConfig } from '@/lib/calendar-sync/service';
-import { verifyOAuthState } from '@/lib/calendar-sync/state';
+import { parseVerifiedOAuthState } from '@/lib/calendar-sync/state';
+import { withApiRoute } from '@/lib/api/with-api-route';
+import { withUserContext } from '@/lib/db/rls';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
@@ -24,8 +26,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=missing_code', request.url));
     }
 
-    // #1175: verify the HMAC signature before comparing — rejects forged/unsigned state
-    if (!verifyOAuthState(state)) {
+    const statePayload = parseVerifiedOAuthState(state);
+    if (!statePayload) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=bad_state', request.url));
     }
 
@@ -50,16 +52,22 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = session.id;
+    if (statePayload.userId !== userId) {
+      return NextResponse.redirect(new URL('/tenant/calendar?error=bad_state', request.url));
+    }
 
-    // Resolve the user's active tenant membership (JWT only carries userId)
-    const { db } = await import('@/drizzle/db');
     const { tenantMembers } = await import('@/drizzle/schema');
-    const { eq } = await import('drizzle-orm');
-    const [membership] = await db
+    const { and, eq } = await import('drizzle-orm');
+    const membership = await withUserContext(userId, (tx) => tx
       .select({ tenantId: tenantMembers.tenantId })
       .from(tenantMembers)
-      .where(eq(tenantMembers.userId, userId))
-      .limit(1);
+      .where(and(
+        eq(tenantMembers.userId, userId),
+        eq(tenantMembers.tenantId, statePayload.tenantId),
+        eq(tenantMembers.status, 'active'),
+      ))
+      .limit(1)
+      .then((rows) => rows[0]));
     if (!membership) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=no_tenant', request.url));
     }
@@ -79,4 +87,4 @@ export async function GET(request: NextRequest) {
     void logError({ error: err, context: 'tenant/calendar-sync/outlook/callback' });
     return NextResponse.redirect(new URL('/tenant/calendar?error=callback_failed', request.url));
   }
-}
+});

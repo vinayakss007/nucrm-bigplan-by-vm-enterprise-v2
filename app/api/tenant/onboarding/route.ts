@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { onboardingStepSchema } from '@/lib/api/schemas';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { onboardingProgress, pipelines, dealStages, deals } from '@/drizzle/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -54,8 +54,14 @@ const provisionSchema = z.object({
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitMutating(request, 'settings', 'post');
+    if (limited) return limited;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(provisionSchema, rawBody);

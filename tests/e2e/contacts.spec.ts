@@ -39,38 +39,36 @@ test.describe('Contacts', () => {
   test('search contacts', async ({ page }) => {
     await page.goto('/tenant/contacts');
     const searchInput = page.locator('input[placeholder*="Search"]').first();
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('test');
-      await page.waitForTimeout(500);
-    }
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('test');
+    await expect(searchInput).toHaveValue('test');
   });
 
   test('create new contact', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
     const addButton = page.locator('button:has-text("Add Contact")').first();
-    if (await addButton.isVisible()) {
-      await addButton.click();
-      
-      await page.locator('form input').first().fill('Test');
-      await page.locator('form input').nth(1).fill('User');
-      await page.locator('form input').nth(2).fill('testuser@example.com');
-      
-      const submitBtn = page.getByRole('dialog').getByRole('button', { name: 'Add Contact' });
-      if (await submitBtn.isVisible()) {
-        await submitBtn.click();
-        await page.waitForTimeout(2000);
-      }
-    }
+    await expect(addButton).toBeVisible();
+    await addButton.click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('input').nth(0).fill('Test');
+    await dialog.locator('input').nth(1).fill('User');
+    await dialog.locator('input').nth(2).fill('testuser@example.com');
+
+    const submitBtn = dialog.getByRole('button', { name: 'Add Contact' });
+    await expect(submitBtn).toBeVisible();
+    await submitBtn.click();
+    await expect(dialog).toBeHidden();
   });
 
   test('contact detail page loads', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
     const firstContact = page.locator('a[href*="/tenant/contacts/"]').first();
-    if (await firstContact.isVisible()) {
-      await firstContact.click();
-      await expect(page.getByRole('heading', { name: 'Contact Details' })).toBeVisible({ timeout: 5000 });
-    }
+    await expect(firstContact).toBeVisible();
+    await firstContact.click();
+    await expect(page.getByRole('heading', { name: 'Contact Details' })).toBeVisible({ timeout: 5000 });
   });
 });

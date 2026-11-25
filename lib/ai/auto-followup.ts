@@ -32,8 +32,24 @@ export type AutoFollowupInput = {
 export type AutoFollowupResult = {
   followUpId: string;
   drafted: boolean;
+  deterministic?: boolean;
   error?: string;
 };
+
+export function buildDeterministicDraft(input: AutoFollowupInput): string {
+  const subject = input.dealTitle ? `${input.followUpTitle} (${input.dealTitle})` : input.followUpTitle;
+  const org = input.companyName ? ` at ${input.companyName}` : '';
+  const dayLabel = input.missedDays === 1 ? '1 day' : `${input.missedDays} days`;
+  return [
+    `Hi ${input.contactName || 'there'},`,
+    ``,
+    `I'm following up on ${subject}, which is now ${dayLabel} overdue${org}.`,
+    ``,
+    `Could you let me know if there is anything you need from me to move this forward?`,
+    ``,
+    `Best regards`,
+  ].join('\n');
+}
 
 /** Build a prompt for the AI to draft a follow-up message. */
 export function buildAutoFollowupPrompt(input: AutoFollowupInput): string {
@@ -153,16 +169,32 @@ export async function processAutoFollowups(
         companyName,
       });
 
-      const aiResult = await chat({
-        tenantId,
-        userId: fu.assignedTo ?? null,
-        action: 'auto_followup',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300,
-        temperature: 0.7,
-        entityType: 'follow_up',
-        entityId: fu.id,
-      });
+      let draftText: string;
+      let deterministic = false;
+      try {
+        const aiResult = await chat({
+          tenantId,
+          userId: fu.assignedTo ?? null,
+          action: 'auto_followup',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 300,
+          temperature: 0.7,
+          entityType: 'follow_up',
+          entityId: fu.id,
+        });
+        draftText = aiResult.text;
+      } catch (err: unknown) {
+        deterministic = true;
+        logger.warn(`[ai-auto-followup] AI unavailable for ${fu.id}, using deterministic draft: ${err instanceof Error ? err.message : String(err)}`);
+        draftText = buildDeterministicDraft({
+          followUpTitle: fu.title,
+          contactName,
+          dealTitle,
+          missedDays: fu.missedDays ?? 1,
+          contactEmail,
+          companyName,
+        });
+      }
 
       // Notify the assigned rep
       if (fu.assignedTo) {
@@ -170,8 +202,8 @@ export async function processAutoFollowups(
           userId: fu.assignedTo,
           tenantId,
           type: 'ai_followup_sent',
-          title: `AI drafted follow-up: ${fu.title}`,
-          body: aiResult.text.slice(0, 500),
+          title: `${deterministic ? 'Follow-up draft' : 'AI drafted follow-up'}: ${fu.title}`,
+          body: draftText.slice(0, 500),
           link: `/tenant/follow-ups`,
           // Only label the reference as a deal when there genuinely is a deal.
           // This used to fall back to `fu.id` (a follow-up id) while still
@@ -182,7 +214,7 @@ export async function processAutoFollowups(
         });
       }
 
-      results.push({ followUpId: fu.id, drafted: true });
+      results.push({ followUpId: fu.id, drafted: true, ...(deterministic ? { deterministic: true } : {}) });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       logger.error(`[ai-auto-followup] Failed for follow-up ${fu.id}: ${msg}`);
