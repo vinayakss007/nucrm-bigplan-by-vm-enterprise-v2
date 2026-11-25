@@ -104,8 +104,7 @@ async function cronRouteHandler(request: NextRequest) {
           .innerJoin(
             sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${sub.tenantId} AND status = 'active') tm`,
             sql`tm.user_id = ${users.id}`
-          )
-          .limit(5);
+          );
 
           // #3315: nobody in this tenant to tell. Send nothing, write no dedup
           // marker (the next run has to retry once a member exists again), count

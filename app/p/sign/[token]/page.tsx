@@ -12,6 +12,7 @@ import { OptimizedImage } from '@/components/ui/optimized-image';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { useQuery } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface SignData {
   signer: { name: string; email: string };
@@ -57,16 +58,14 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
     setBusy(action);
     setActionError(null);
     try {
-      const res = await fetch(`/api/public/sign/${token}`, {
+      await fetchJsonOrThrow(`/api/public/sign/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setSubmitted(action === 'sign' ? 'signed' : 'declined');
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(e instanceof Error ? e.message : 'Failed to record your response');
     } finally {
       setBusy(null);
     }

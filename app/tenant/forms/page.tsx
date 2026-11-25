@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -103,12 +104,10 @@ export default function FormsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/forms', {
+      await fetchJsonOrThrow('/api/tenant/forms', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(form),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? 'Failed');
     },
     onSuccess: () => { toast.success('Form created'); setShowCreate(false); reload(); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
@@ -118,12 +117,13 @@ export default function FormsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async (f: { id: string; is_active?: boolean }) => {
-      await fetch(`/api/tenant/forms/${f.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/forms/${f.id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ is_active: !f.is_active }),
       });
     },
     onSuccess: () => reload(),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update form'),
   });
   const toggle = async (f: { id: string; is_active?: boolean }) => {
     const becomingActive = !f.is_active;
@@ -138,9 +138,10 @@ export default function FormsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/forms/${id}`, { method:'DELETE' });
+      await fetchJsonOrThrow(`/api/tenant/forms/${id}`, { method:'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete form'),
   });
   const del = async (id: string) => {
     const f = forms.find(x => x.id === id);

@@ -54,3 +54,27 @@ export function verifyOAuthState(signed: string): boolean {
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+export interface OAuthStatePayload {
+  tenantId: string;
+  userId: string;
+  issuedAt: number;
+}
+
+export function parseVerifiedOAuthState(signed: string): OAuthStatePayload | null {
+  if (!verifyOAuthState(signed)) return null;
+  const dot = signed.lastIndexOf('.');
+  if (dot <= 0) return null;
+  let payload: string;
+  try {
+    payload = Buffer.from(signed.slice(0, dot), 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const [tenantId, userId, issuedAtRaw] = payload.split(':');
+  if (!tenantId || !userId) return null;
+  const issuedAt = Number(issuedAtRaw);
+  if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+  if (Date.now() - issuedAt > 15 * 60 * 1000) return null;
+  return { tenantId, userId, issuedAt };
+}

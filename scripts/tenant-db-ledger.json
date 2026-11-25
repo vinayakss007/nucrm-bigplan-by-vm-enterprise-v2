@@ -1,8 +1,14 @@
 {
-  "_comment": "Exact-set ledger for scripts/check-tenant-db-context.mjs (#3405). Every file here imports the raw DB client outside lib/db, the choke point that owns the pool and the tenant GUCs. The list may only shrink: migrate a file through lib/db and delete its entry, or the guard fails on the stale entry. Do not add a file to make CI green — a statement that runs on the pool without app.current_tenant returns zero rows silently, which is the failure #3405 was filed for. Regenerate with `node scripts/check-tenant-db-context.mjs --update`. Entries may reach the client through a static import or a dynamic `import()` / `require()` (the latter used to break module cycles); the scanner sees all three, and a `typeof import(...)` type query is erased and does not count.",
+  "_comment": "Exact-set ledger for scripts/check-tenant-db-context.mjs (#3405). Every file here imports the raw DB client outside lib/db, the choke point that owns the pool and the tenant GUCs. The list may only shrink: migrate a file through lib/db and delete its entry, or the guard fails on the stale entry. Do not add a file to make CI green \u2014 a statement that runs on the pool without app.current_tenant returns zero rows silently, which is the failure #3405 was filed for. Regenerate with `node scripts/check-tenant-db-context.mjs --update`. Entries may reach the client through a static import or a dynamic `import()` / `require()` (the latter used to break module cycles); the scanner sees all three, and a `typeof import(...)` type query is erased and does not count.",
   "issue": 3405,
-  "roots": ["app", "lib", "worker.ts"],
-  "chokePoint": ["lib/db/"],
+  "roots": [
+    "app",
+    "lib",
+    "worker.ts"
+  ],
+  "chokePoint": [
+    "lib/db/"
+  ],
   "groups": {
     "app/api/admin": {
       "reason": "Platform-level admin actions (tenant restore, 2FA reset for another user) that run under the super-admin GUC, never a tenant one.",
@@ -53,32 +59,44 @@
     "app/api/dev": {
       "reason": "Local-only dashboard endpoint guarded by a dev check; it never serves a tenant request in production.",
       "filedAs": "#3405",
-      "files": ["app/api/dev/dashboard/route.ts"]
+      "files": [
+        "app/api/dev/dashboard/route.ts"
+      ]
     },
     "app/api/health": {
       "reason": "Liveness probe: reads instance metadata and a `SELECT 1`-class check, no tenant-keyed table.",
       "filedAs": "#3405",
-      "files": ["app/api/health/route.ts"]
+      "files": [
+        "app/api/health/route.ts"
+      ]
     },
     "app/api/keepalive": {
       "reason": "Host keepalive ping that touches the pool, not tenant data.",
       "filedAs": "#3405",
-      "files": ["app/api/keepalive/route.ts"]
+      "files": [
+        "app/api/keepalive/route.ts"
+      ]
     },
     "app/api/leads": {
       "reason": "The public lead-capture endpoint binds the form lookup arm (form_lookup_id) before it inserts, because the caller has no session.",
       "filedAs": "#3405",
-      "files": ["app/api/leads/public/route.ts"]
+      "files": [
+        "app/api/leads/public/route.ts"
+      ]
     },
     "app/api/metrics": {
       "reason": "Prometheus scrape endpoint reading platform counters under the super-admin GUC; no per-tenant projection is returned.",
       "filedAs": "#3405",
-      "files": ["app/api/metrics/route.ts"]
+      "files": [
+        "app/api/metrics/route.ts"
+      ]
     },
     "app/api/scim": {
       "reason": "SCIM provisioning derives its tenant from the bearer token row and binds it before touching users.",
       "filedAs": "#3405",
-      "files": ["app/api/scim/v2/Users/[id]/route.ts"]
+      "files": [
+        "app/api/scim/v2/Users/[id]/route.ts"
+      ]
     },
     "app/api/super-admin": {
       "reason": "Legacy super-admin handlers (audit logs, tenant list) that run in super-admin context because the whole point is cross-tenant visibility.",
@@ -441,9 +459,7 @@
         "app/api/tenant/workflows/[id]/test/route.ts",
         "app/api/tenant/workflows/route.ts",
         "app/api/tenant/workspace/route.ts",
-        "app/api/tenant/calendar-sync/route.ts",
-        "app/api/tenant/calendar-sync/google/callback/route.ts",
-        "app/api/tenant/calendar-sync/outlook/callback/route.ts"
+        "app/api/tenant/calendar-sync/route.ts"
       ]
     },
     "app/api/user": {
@@ -484,12 +500,16 @@
     "app/forms": {
       "reason": "Public form renderer; the lookup goes through the form_lookup_id arm because the visitor is anonymous.",
       "filedAs": "#3405",
-      "files": ["app/forms/public/[id]/page.tsx"]
+      "files": [
+        "app/forms/public/[id]/page.tsx"
+      ]
     },
     "app/setup": {
       "reason": "First-run setup page, present only while the install has no tenant.",
       "filedAs": "#3405",
-      "files": ["app/setup/page.tsx"]
+      "files": [
+        "app/setup/page.tsx"
+      ]
     },
     "app/tenant": {
       "reason": "Tenant pages that query on the server (server components / route-level loaders). They read through lib/db helpers after the layout binds the session tenant.",
@@ -564,17 +584,24 @@
     "lib/analytics": {
       "reason": "Analytics readers aggregate tenant rows under a caller-bound tenant context.",
       "filedAs": "#3405",
-      "files": ["lib/analytics/store.ts"]
+      "files": [
+        "lib/analytics/store.ts"
+      ]
     },
     "lib/api": {
       "reason": "Shared API helpers that resolve the tenant from the request/session before they hand a bound client to the handler.",
       "filedAs": "#3405",
-      "files": ["lib/api/gateway.ts", "lib/api/with-transaction.ts"]
+      "files": [
+        "lib/api/gateway.ts",
+        "lib/api/with-transaction.ts"
+      ]
     },
     "lib/audit": {
       "reason": "Audit writer: rows carry tenantId explicitly and are written in the caller transaction.",
       "filedAs": "#3405",
-      "files": ["lib/audit/super-admin.ts"]
+      "files": [
+        "lib/audit/super-admin.ts"
+      ]
     },
     "lib/auth": {
       "reason": "Session/permission resolution. It must read user+membership rows before a tenant is known, so it binds auth_lookup or a specific token arm per path.",
@@ -618,12 +645,20 @@
     "lib/cron": {
       "reason": "Cron infrastructure (lock, health, job registry) in system context; jobs bind their own tenant per unit of work.",
       "filedAs": "#3405",
-      "files": ["lib/cron/cron-lock.ts", "lib/cron/sequence-steps.ts", "lib/cron/tenant-scope.ts"]
+      "files": [
+        "lib/cron/cron-lock.ts",
+        "lib/cron/sequence-steps.ts",
+        "lib/cron/tenant-scope.ts"
+      ]
     },
     "lib/email": {
       "reason": "Email service writes log/queue rows for the tenant the caller bound; the send path itself needs no tenant row.",
       "filedAs": "#3405",
-      "files": ["lib/email/service.ts", "lib/email/tracking.ts", "lib/email/warmup.ts"]
+      "files": [
+        "lib/email/service.ts",
+        "lib/email/tracking.ts",
+        "lib/email/warmup.ts"
+      ]
     },
     "lib/lead-warming": {
       "reason": "Lead-warming campaigns are per tenant; the campaign row fixes the tenant before any contact read.",
@@ -646,7 +681,9 @@
     "lib/onboarding": {
       "reason": "Onboarding state is keyed by tenant and read after the session binds it.",
       "filedAs": "#3405",
-      "files": ["lib/onboarding/check.ts"]
+      "files": [
+        "lib/onboarding/check.ts"
+      ]
     },
     "lib/rbac": {
       "reason": "RBAC config readers/writers are scoped to one tenant and run inside the caller transaction.",
@@ -660,27 +697,37 @@
     "lib/restore": {
       "reason": "Selective restore works across tenants by design and runs under the super-admin arm.",
       "filedAs": "#3405",
-      "files": ["lib/restore/restore-executor.ts"]
+      "files": [
+        "lib/restore/restore-executor.ts"
+      ]
     },
     "lib/templates": {
       "reason": "Industry template seeding writes rows for the tenant the setup flow just created.",
       "filedAs": "#3405",
-      "files": ["lib/templates/resolve.ts"]
+      "files": [
+        "lib/templates/resolve.ts"
+      ]
     },
     "lib/tenant": {
       "reason": "Tenant-scoped helper library that binds app.current_tenant itself around the work it does.",
       "filedAs": "#3405",
-      "files": ["lib/tenant/context.ts"]
+      "files": [
+        "lib/tenant/context.ts"
+      ]
     },
     "lib/tenants": {
       "reason": "Tenant administration helpers (create/update organization) that run before or above a tenant context.",
       "filedAs": "#3405",
-      "files": ["lib/tenants/provision.ts"]
+      "files": [
+        "lib/tenants/provision.ts"
+      ]
     },
     "lib/webhooks": {
       "reason": "Outbound webhook dispatch reads delivery config for one tenant and binds it before signing the payload.",
       "filedAs": "#3405",
-      "files": ["lib/webhooks/inbound-auth.ts"]
+      "files": [
+        "lib/webhooks/inbound-auth.ts"
+      ]
     }
   }
 }

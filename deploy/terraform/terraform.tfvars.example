@@ -25,8 +25,9 @@ ssh_public_keys = [
   "ssh-ed25519 AAAA... you@example.com",
 ]
 
-# Lock SSH down to your ranges (recommended). 80/443 stay open to the world.
-# admin_cidrs = ["203.0.113.10/32"]
+# Lock SSH down to your ranges. Required — there is no open default.
+# 80/443 stay open to the world; any /0 SSH range is rejected by validation.
+admin_cidrs = ["203.0.113.10/32"]
 
 # ssh_port    = 22
 # deploy_user = "deploy"

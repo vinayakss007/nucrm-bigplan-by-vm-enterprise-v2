@@ -110,8 +110,6 @@ describe('what counts as reaching the raw client (#3405)', () => {
     const listed = new Set(Object.values(ledger.groups).flatMap((g: { files: string[] }) => g.files));
     for (const file of [
       'app/api/tenant/calendar-sync/route.ts',
-      'app/api/tenant/calendar-sync/google/callback/route.ts',
-      'app/api/tenant/calendar-sync/outlook/callback/route.ts',
       'lib/automation/workflows.ts',
       'lib/cron/cron-lock.ts',
       'lib/email/service.ts',
