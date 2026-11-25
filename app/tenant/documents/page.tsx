@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -84,7 +85,11 @@ export default function DocumentsPage() {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]!;
-        const res = await fetch('/api/tenant/documents', {
+        // #3408: a refused metadata create or a failed presigned PUT used to
+        // fall through to the unconditional "uploaded successfully" below. The
+        // canonical client throws with the server's message so the operator is
+        // told the bytes did not land.
+        const { data } = await fetchJsonOrThrow<{ data: { uploadUrl?: string; document?: { id: string } } }>('/api/tenant/documents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -94,15 +99,6 @@ export default function DocumentsPage() {
             folderId: currentFolder,
           }),
         });
-
-        // #3408: a refused metadata create or a failed presigned PUT used to
-        // fall through to the unconditional "uploaded successfully" below —
-        // the response was consumed as if any status meant success. Fail loudly
-        // so the operator is told the bytes did not land.
-        if (!res.ok) {
-          throw new Error(`Could not register ${file.name} (${res.status})`);
-        }
-        const { data } = await res.json();
         // Upload file to presigned URL
         if (data.uploadUrl) {
           const put = await fetch(data.uploadUrl, {
@@ -121,8 +117,8 @@ export default function DocumentsPage() {
       }
       setMessage({ type: 'success', text: `${files.length} file(s) uploaded successfully` });
       await loadDocuments();
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to upload files' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to upload files' });
     } finally {
       setUploading(false);
     }
@@ -131,31 +127,27 @@ export default function DocumentsPage() {
   async function createFolder() {
     if (!newFolderName.trim()) return;
     try {
-      const res = await fetch('/api/tenant/documents', {
+      await fetchJsonOrThrow('/api/tenant/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName.trim(), folderId: currentFolder, createFolder: true }),
       });
-      if (res.ok) {
-        setNewFolderName('');
-        setShowNewFolder(false);
-        await loadDocuments();
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to create folder' });
+      setNewFolderName('');
+      setShowNewFolder(false);
+      await loadDocuments();
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to create folder' });
     }
   }
 
   async function deleteDocument(id: string) {
     await confirmThen('Delete this document?', async () => {
       try {
-        const res = await fetch(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          await loadDocuments();
-          setMessage({ type: 'success', text: 'Document deleted' });
-        }
-      } catch {
-        setMessage({ type: 'error', text: 'Failed to delete document' });
+        await fetchJsonOrThrow(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
+        await loadDocuments();
+        setMessage({ type: 'success', text: 'Document deleted' });
+      } catch (err) {
+        setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to delete document' });
       }
     });
   }
