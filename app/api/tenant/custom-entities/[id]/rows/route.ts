@@ -3,6 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -72,9 +74,16 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
       return NextResponse.json({ error: 'Request body must contain data fields' }, { status: 400 });
     }
 
+    const shape: Record<string, z.ZodTypeAny> = Object.fromEntries(
+      dataSchema.map((field) => [field.name, z.any().optional()])
+    );
+    const parsed = validateBody(z.object(shape), rawBody);
+    if (parsed instanceof NextResponse) return parsed;
+    const cleanData = parsed.data;
+
     const errors: string[] = [];
     for (const field of dataSchema) {
-      const value = rawBody[field.name];
+      const value = cleanData[field.name];
       if (field.required && (value === undefined || value === null || value === '')) {
         errors.push(`Field "${field.label || field.name}" is required`);
         continue;
@@ -105,7 +114,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     const [row] = await db.insert(customEntityData).values({
       tenantId: ctx.tenantId,
       entityId,
-      data: rawBody,
+      data: cleanData,
     }).returning();
 
     return NextResponse.json({ data: row }, { status: 201 });
