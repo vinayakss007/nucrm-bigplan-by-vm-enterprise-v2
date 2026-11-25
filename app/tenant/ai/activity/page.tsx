@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -61,8 +62,9 @@ function fmtCost(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function fmtRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
+function fmtRelative(iso: string, now: number | null): string {
+  if (now === null) return '—';
+  const ms = now - new Date(iso).getTime();
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
@@ -84,6 +86,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AIActivityPage() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ action: '', provider: '', status: '' });
@@ -255,7 +258,7 @@ export default function AIActivityPage() {
                 <tr key={row.id} className="border-t border-border/50 hover:bg-accent/30 transition-colors">
                   <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                     <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-                    {fmtRelative(row.created_at)}
+                    {fmtRelative(row.created_at, now)}
                   </td>
                   <td className="px-3 py-2 font-medium">{row.action}</td>
                   <td className="px-3 py-2">
