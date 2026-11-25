@@ -229,7 +229,7 @@ function buildAuditRow(entry: AuditLogEntry, previousHash: string | null): Signa
  * buys the guarantee that the write was attempted before the request's pinned
  * connection was handed back.
  */
-export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
+export async function logSuperAdminAction(entry: AuditLogEntry): Promise<boolean> {
   try {
     // `db.transaction` runs on the request's pinned client, so it must not be
     // nested in a transaction that client already holds — every call site is
@@ -268,6 +268,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
         )
       `);
     });
+    return true;
   } catch (err) {
     // drizzle wraps every driver failure in a "Failed query: <sql> params: <all
     // of them>" Error and moves the actual Postgres error to `cause`. Logging
@@ -276,9 +277,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
     // why (42501 RLS, 22019, 23502 — all look identical through that wrapper).
     // It also dumps every parameter, i.e. old_data/new_data business content,
     // into the application log.
-    const cause = err instanceof Error
-      ? (err.cause as (Error & { code?: string; detail?: string; constraint?: string; context?: string }) | undefined)
-      : undefined;
+    const cause = err instanceof Error ? err.cause as (Error & { code?: string; detail?: string; constraint?: string; context?: string }) | undefined : undefined;
     logger.error('[super-admin-audit] Failed to log action', {
       action: entry.action,
       adminId: entry.adminId,
@@ -289,6 +288,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
       // and `constraint`; without them a 42501 only says "some policy".
       policy: cause?.context ?? cause?.constraint,
     });
+    return false;
   }
 }
 
