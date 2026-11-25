@@ -274,8 +274,8 @@ describe('the guard as CI runs it', () => {
 describe('the real public tree', () => {
   it('is fully covered, so CI has something to hold the line on', async () => {
     const result = await run('.');
-    expect(result.files).toBe(14);
-    expect(result.handlers).toBe(17);
+    expect(result.files).toBe(15);
+    expect(result.handlers).toBe(18);
     expect(result.problems).toEqual([]);
     expect(result.stale).toEqual([]);
     expect(result.unused).toEqual([]);
