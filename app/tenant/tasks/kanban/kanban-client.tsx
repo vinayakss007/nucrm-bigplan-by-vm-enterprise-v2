@@ -16,6 +16,7 @@ import {
   GripVertical, ArrowLeft, CheckSquare, User, Calendar, LinkIcon
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -204,23 +205,17 @@ export default function TasksKanbanPage() {
     setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, status: newStatus } : t));
 
     try {
-      const res = await fetch(`/api/tenant/tasks/${activeTask.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/tasks/${activeTask.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (res.ok) {
-        toast.success(`Task moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
-        mutate();
-      } else {
-        // Revert
-        setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, status: activeTask.status } : t));
-        toast.error('Failed to update task');
-      }
-    } catch {
+      toast.success(`Task moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
+      mutate();
+    } catch (err) {
       setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, status: activeTask.status } : t));
-      toast.error('Failed to update task');
+      toast.error(err instanceof Error ? err.message : 'Failed to update task');
     }
   };
 
