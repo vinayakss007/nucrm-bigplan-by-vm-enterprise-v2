@@ -105,7 +105,7 @@ async function handleResend(req: NextRequest) {
       if (process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 403 });
       }
-      console.warn('[resend-webhook] RESEND_WEBHOOK_SECRET is not set — skipping verification (dev only)');
+      void logError({ error: new Error('RESEND_WEBHOOK_SECRET is not set — skipping verification (dev only)'), context: 'webhooks/resend', level: 'warning', captureToSentry: false });
     } else {
       const verified = verifySvixSignature(req, body, signingSecret);
       if (!verified) {
@@ -160,7 +160,7 @@ async function handleResend(req: NextRequest) {
           },
           captureToSentry: false,
         });
-        console.warn(`[resend-webhook] DROPPED ${event.type} (${scope.reason}) — ${email.split('@')[1] ?? 'no-domain'}`);
+        void logError({ error: new Error(`DROPPED ${event.type} (${scope.reason})`), context: 'webhooks/resend attribution', level: 'warning', metadata: { eventType: event.type, reason: scope.reason }, captureToSentry: false });
         return NextResponse.json({ received: true, attributed: false });
       }
       attributed = scope;
