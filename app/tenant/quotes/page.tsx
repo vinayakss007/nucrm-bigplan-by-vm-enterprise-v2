@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { contactOptionsFromEnvelope } from '@/lib/contacts/list-options';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
@@ -98,11 +99,10 @@ function QuotesPageInner() {
 
   const createQuote = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/quotes', {
+      await fetchJsonOrThrow('/api/tenant/quotes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(quotePayload(form)),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: () => {
       toast.success('Quote created');
@@ -110,7 +110,7 @@ function QuotesPageInner() {
       setForm({ title: '', contactId: '', dealId: '', expiresAt: '', notes: '', terms: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discount: '0', tax: '0' });
       queryClient.invalidateQueries({ queryKey: QUOTES_QUERY });
     },
-    onError: () => toast.error('Failed to create quote'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to create quote'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -290,7 +290,7 @@ function QuotesPageInner() {
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         <button onClick={() => router.push(`/tenant/quotes/${quote.id}`)} className="p-1.5 hover:bg-accent rounded transition-colors" title="View" aria-label="View quote"><FileText className="w-3.5 h-3.5" /></button>
-                        <button onClick={async () => { try { const r = await fetch(`/api/tenant/offers/${quote.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Failed to send quote'); toast.success('Quote sent'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to send quote'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send" aria-label="Send quote"><Send className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { try { await fetchJsonOrThrow(`/api/tenant/offers/${quote.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); toast.success('Quote sent'); } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to send quote'); } }} className="p-1.5 hover:bg-accent rounded transition-colors" title="Send" aria-label="Send quote"><Send className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>

@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Trash2, X, Loader2, ChevronDown, ChevronRight, GitBranch, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -82,7 +83,7 @@ export default function PipelinesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/pipelines', {
+      await fetchJsonOrThrow('/api/tenant/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,8 +93,6 @@ export default function PipelinesPage() {
           is_active: createForm.is_active,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create pipeline');
     },
     onSuccess: () => {
       toast.success('Pipeline created');
@@ -113,9 +112,7 @@ export default function PipelinesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/pipelines/${id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to delete pipeline');
+      await fetchJsonOrThrow(`/api/tenant/pipelines/${id}`, { method: 'DELETE' });
       return id;
     },
     onSuccess: () => {
@@ -143,13 +140,11 @@ export default function PipelinesPage() {
       const existingStages = pipeline.stages.map(s => ({ name: s.name, order: s.order }));
       const newStages = [...existingStages, { name: stageForm.name.trim(), order: stageForm.order }];
 
-      const res = await fetch(`/api/tenant/pipelines/${pipelineId}`, {
+      await fetchJsonOrThrow(`/api/tenant/pipelines/${pipelineId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stages: newStages }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to add stage');
     },
     onSuccess: () => {
       toast.success('Stage added');
