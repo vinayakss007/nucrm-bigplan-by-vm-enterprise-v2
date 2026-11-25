@@ -32,6 +32,7 @@ export async function GET(
       if (!contact) return null;
 
       const [invoice] = await tx.select({
+        contactId: invoices.contactId,
         invoiceNumber: invoices.invoiceNumber,
         title: invoices.title,
         status: invoices.status,
