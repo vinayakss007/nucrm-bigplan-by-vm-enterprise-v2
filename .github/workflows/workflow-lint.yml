@@ -47,7 +47,7 @@ jobs:
       # validated with locally (1.7.12) so a new actionlint release can't turn
       # this job red on an unrelated main commit.
       - name: Lint .github/workflows with actionlint
-        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.12 -no-color
+        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -no-color
 
       # Semantic validation actionlint cannot do (it never cross-checks a
       # workflow_run filter against the workflow names that actually exist).
