@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { apiFail } from '@/lib/api/api-envelope';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updatePipelineSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -23,6 +24,12 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 class StageInUseError extends Error {
   constructor(public readonly stageNames: string[]) {
     super('stages still hold deals');
+  }
+}
+
+class PipelineLockError extends Error {
+  constructor() {
+    super('could not lock pipeline for update');
   }
 }
 
@@ -50,7 +57,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       try {
         await tx.execute(sql`SELECT 1 FROM pipelines WHERE id = ${id} FOR UPDATE`);
       } catch {
-        // Lock acquisition failed (e.g., row doesn't exist yet) - proceed with optimistic concurrency
+        throw new PipelineLockError();
       }
 
       // 1. Update pipeline basic info
@@ -161,6 +168,12 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
  
  
   } catch (err) {
+    if (err instanceof PipelineLockError) {
+      return NextResponse.json(
+        apiFail('PIPELINE_LOCKED', 'The pipeline is being updated by another request. Retry shortly.', { retryable: true }),
+        { status: 503, headers: { 'Retry-After': '1' } },
+      );
+    }
     if (err instanceof StageInUseError) {
       // 409, not 500: the request is understood and the data is intact, the
       // caller just has to move the deals first.
