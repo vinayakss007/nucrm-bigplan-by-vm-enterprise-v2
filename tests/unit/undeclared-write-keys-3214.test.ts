@@ -288,6 +288,15 @@ describe('#3214 — the guard that was removed could never have fired', () => {
   function countingDb(rows: unknown[]): { db: Record<string, unknown>; selects: () => number } {
     let selects = 0;
     const stub: Record<string, unknown> = {
+      // #3849: the guard claims with a conditional UPDATE; a stale precondition
+      // matches no rows, after which the single read distinguishes 409 from 404.
+      update: () => {
+        const node: Record<string, unknown> = {};
+        node['set'] = () => node;
+        node['where'] = () => node;
+        node['returning'] = () => Promise.resolve([]);
+        return node;
+      },
       select: () => {
         selects += 1;
         const builder: Record<string, unknown> = {};
