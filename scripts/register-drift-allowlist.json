@@ -2,6 +2,21 @@
   "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences — the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
   "entries": [
     {
+      "cite": "scripts/verify-migration-chain.ts:80",
+      "regLines": [1834],
+      "reason": "Waiting on the re-pin carried by PR #3900: #3824 replaced the raw statement loop with the shared replay engine, so the missing-file console.error this sentence quoted no longer exists. #3900 re-pins the citation to :65 with a dated correction comment; this entry silences the drift on trees where that PR has not merged yet and goes stale automatically once it has."
+    },
+    {
+      "cite": "app/api/cron/subscription-renewal-check/route.ts:165",
+      "regLines": [2573],
+      "reason": "Waiting on the re-pin carried by PR #3900: #3847 inserted an emailsRejected counter above the dedup insert, so :165 now lands on a comment. #3900 re-pins the citation with a dated correction comment; this entry goes stale once that PR merges."
+    },
+    {
+      "cite": "contract-renewal-check/route.ts:181",
+      "regLines": [2573],
+      "reason": "Waiting on the re-pin carried by PR #3900: same #3847 counter insertion shifted the dedup insert below :181. #3900 re-pins the citation with a dated correction comment; this entry goes stale once that PR merges."
+    },
+    {
       "cite": "app/api/cron/auto-backup/route.ts:55",
       "regLines": [2912],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
