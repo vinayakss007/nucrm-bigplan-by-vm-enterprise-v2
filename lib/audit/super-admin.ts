@@ -229,7 +229,7 @@ function buildAuditRow(entry: AuditLogEntry, previousHash: string | null): Signa
  * buys the guarantee that the write was attempted before the request's pinned
  * connection was handed back.
  */
-export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
+export async function logSuperAdminAction(entry: AuditLogEntry): Promise<boolean> {
   try {
     // `db.transaction` runs on the request's pinned client, so it must not be
     // nested in a transaction that client already holds — every call site is
@@ -268,6 +268,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
         )
       `);
     });
+    return true;
   } catch (err) {
     // drizzle wraps every driver failure in a "Failed query: <sql> params: <all
     // of them>" Error and moves the actual Postgres error to `cause`. Logging
@@ -289,6 +290,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<void> {
       // and `constraint`; without them a 42501 only says "some policy".
       policy: cause?.context ?? cause?.constraint,
     });
+    return false;
   }
 }
 
