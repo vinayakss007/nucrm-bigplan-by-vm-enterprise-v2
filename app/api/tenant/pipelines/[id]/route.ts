@@ -26,6 +26,12 @@ class StageInUseError extends Error {
   }
 }
 
+class PipelineLockError extends Error {
+  constructor() {
+    super('could not lock pipeline for update');
+  }
+}
+
 export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'patch');
@@ -50,7 +56,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       try {
         await tx.execute(sql`SELECT 1 FROM pipelines WHERE id = ${id} FOR UPDATE`);
       } catch {
-        // Lock acquisition failed (e.g., row doesn't exist yet) - proceed with optimistic concurrency
+        throw new PipelineLockError();
       }
 
       // 1. Update pipeline basic info
@@ -161,6 +167,12 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
  
  
   } catch (err) {
+    if (err instanceof PipelineLockError) {
+      return NextResponse.json(
+        { error: 'The pipeline is being updated by another request. Retry shortly.', retryable: true },
+        { status: 503, headers: { 'Retry-After': '1' } },
+      );
+    }
     if (err instanceof StageInUseError) {
       // 409, not 500: the request is understood and the data is intact, the
       // caller just has to move the deals first.
