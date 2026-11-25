@@ -9,6 +9,7 @@ import { CheckCircle, XCircle, AlertTriangle, HelpCircle, RefreshCw, Activity, D
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors-client';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
@@ -259,9 +260,9 @@ export default function HealthPage() {
         <p className="text-sm font-semibold text-white mb-3">Manual Operations</p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label:'Run Cleanup', action:async()=>{ try { const r=await fetch('/api/cron/cleanup',{method:'POST'}); if(r.status===423){ toast('Cleanup is already running — this request was skipped'); return; } if(!r.ok) throw new Error(); toast.success('Cleanup triggered'); } catch(err){ logError({ error: err, context: 'health:cleanup' }); toast.error('Cleanup failed'); } } },
-            { label:'Check Backup Health', action:async()=>{ try { const r=await fetch('/api/cron/backup-health',{method:'POST'}); if(r.status===423){ toast('Backup health check is already running — this request was skipped'); return; } const d=await r.json(); if(!r.ok) throw new Error(); toast.success(`Backup health: ${d.status ?? 'ok'}`); } catch(err){ logError({ error: err, context: 'health:backup-health' }); toast.error('Backup health check failed'); } } },
-            { label:'Take Usage Snapshot', action:async()=>{ try { const r=await fetch('/api/cron/usage-snapshot',{method:'POST'}); if(r.status===423){ toast('A usage snapshot is already being taken — this request was skipped'); return; } if(!r.ok) throw new Error(); toast.success('Snapshot taken'); } catch(err){ logError({ error: err, context: 'health:usage-snapshot' }); toast.error('Snapshot failed'); } } },
+            { label:'Run Cleanup', action:async()=>{ try { const r=await fetchJsonSafe('/api/cron/cleanup',{method:'POST'}); if(r.status==='error'&&r.statusCode===423){ toast('Cleanup is already running — this request was skipped'); return; } if(r.status!=='ok') throw new Error(r.status==='error'?r.message:'Request aborted'); toast.success('Cleanup triggered'); } catch(err){ logError({ error: err, context: 'health:cleanup' }); toast.error('Cleanup failed'); } } },
+            { label:'Check Backup Health', action:async()=>{ try { const r=await fetchJsonSafe<{status?:string}>('/api/cron/backup-health',{method:'POST'}); if(r.status==='error'&&r.statusCode===423){ toast('Backup health check is already running — this request was skipped'); return; } if(r.status!=='ok') throw new Error(r.status==='error'?r.message:'Request aborted'); toast.success(`Backup health: ${r.data.status ?? 'ok'}`); } catch(err){ logError({ error: err, context: 'health:backup-health' }); toast.error('Backup health check failed'); } } },
+            { label:'Take Usage Snapshot', action:async()=>{ try { const r=await fetchJsonSafe('/api/cron/usage-snapshot',{method:'POST'}); if(r.status==='error'&&r.statusCode===423){ toast('A usage snapshot is already being taken — this request was skipped'); return; } if(r.status!=='ok') throw new Error(r.status==='error'?r.message:'Request aborted'); toast.success('Snapshot taken'); } catch(err){ logError({ error: err, context: 'health:usage-snapshot' }); toast.error('Snapshot failed'); } } },
           ].map(a => (
             <button key={a.label} onClick={a.action}
               className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:text-white hover:border-white/20 transition-colors">

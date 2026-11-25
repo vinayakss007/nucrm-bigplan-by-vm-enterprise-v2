@@ -13,6 +13,7 @@ import { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { fetchRestoreJson } from '@/lib/api/selective-restore-client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Database,
   Upload,
@@ -372,8 +373,7 @@ export default function SelectiveRestorePage() {
 
   const deleteBackupMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      await fetchJsonOrThrow(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY }); },
     onError: (err) => clientLogError('selective-restore:delete', err),
