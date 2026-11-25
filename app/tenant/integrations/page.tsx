@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   Plug, Plus, Trash2, CheckCircle, XCircle, ExternalLink,
@@ -65,11 +66,10 @@ export default function IntegrationsPage() {
 
   const removeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/plugin-engine?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to remove');
+      await fetchJsonOrThrow(`/api/tenant/plugin-engine?id=${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Integration removed'); load(); },
-    onError: () => toast.error('Failed to remove'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to remove'),
   });
   const removeIntegration = async (id: string) => {
     await confirmThen('Remove this integration?', async () => { removeMutation.mutate(id); });
@@ -77,15 +77,14 @@ export default function IntegrationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async (inst: IntegrationInstance) => {
-      const res = await fetch('/api/tenant/plugin-engine', {
+      await fetchJsonOrThrow('/api/tenant/plugin-engine', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: inst.id, enabled: !inst.enabled }),
       });
-      if (!res.ok) throw new Error('Failed');
       return inst;
     },
     onSuccess: (inst) => { toast.success(inst.enabled ? 'Disabled' : 'Enabled'); load(); },
-    onError: () => toast.error('Failed'),
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
   });
   const toggleIntegration = (inst: IntegrationInstance) => toggleMutation.mutate(inst);
 
@@ -283,13 +282,12 @@ function AddIntegrationModal({ provider, onClose, onInstalled }: { provider: Pro
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/plugin-engine', {
+      await fetchJsonOrThrow('/api/tenant/plugin-engine', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider_id: provider.id, name: label, config, test_only: false }),
       });
-      if (res.ok) { toast.success(`${provider.name} connected!`); onInstalled(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed to connect'); }
+      toast.success(`${provider.name} connected!`); onInstalled();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to connect'); }
     setSaving(false);
   };
 
