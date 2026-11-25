@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { apiFail } from '@/lib/api/api-envelope';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updatePipelineSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -169,7 +170,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
   } catch (err) {
     if (err instanceof PipelineLockError) {
       return NextResponse.json(
-        { error: 'The pipeline is being updated by another request. Retry shortly.', retryable: true },
+        apiFail('PIPELINE_LOCKED', 'The pipeline is being updated by another request. Retry shortly.', { retryable: true }),
         { status: 503, headers: { 'Retry-After': '1' } },
       );
     }

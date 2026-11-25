@@ -16,6 +16,7 @@ describe('pipeline lock failure is surfaced, not swallowed (#3867)', () => {
   it('answers 503 with Retry-After instead of proceeding unguarded', () => {
     expect(patch).toContain('if (err instanceof PipelineLockError)');
     expect(patch).toContain('{ status: 503, headers: { \'Retry-After\': \'1\' } }');
+    expect(patch).toContain("apiFail('PIPELINE_LOCKED'");
     expect(patch).toContain('retryable: true');
   });
 
