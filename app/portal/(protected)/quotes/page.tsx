@@ -11,6 +11,7 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession {
@@ -108,15 +109,11 @@ export default function PortalQuotesPage() {
 
   const acceptMutation = useMutation<void, Error, string>({
     mutationFn: async (quoteId: string) => {
-      const res = await fetch(`/api/public/quotes/${quoteId}/accept`, {
+      await fetchJsonOrThrow(`/api/public/quotes/${quoteId}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: session?.email }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to accept');
-      }
     },
     onSuccess: (_data, quoteId) => {
       toast.success('Quote accepted!');
@@ -131,15 +128,11 @@ export default function PortalQuotesPage() {
 
   const declineMutation = useMutation<void, Error, string>({
     mutationFn: async (quoteId: string) => {
-      const res = await fetch(`/api/public/quotes/${quoteId}/decline`, {
+      await fetchJsonOrThrow(`/api/public/quotes/${quoteId}/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: session?.email }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed');
-      }
     },
     onSuccess: (_data, quoteId) => {
       toast.success('Quote declined');
