@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -67,12 +68,10 @@ export default function TagsManagerPage() {
 
   const renameMutation = useMutation({
     mutationFn: async ({ tag, new_tag }: { tag: string; new_tag: string }) => {
-      const res = await fetch('/api/tenant/admin/tags', {
+      const d = await fetchJsonOrThrow<{ total?: number }>('/api/tenant/admin/tags', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rename', tag, new_tag }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? 'Failed');
       return d.total as number;
     },
     onSuccess: (total) => {
@@ -92,12 +91,10 @@ export default function TagsManagerPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (tag: string) => {
-      const res = await fetch('/api/tenant/admin/tags', {
+      const d = await fetchJsonOrThrow<{ total?: number }>('/api/tenant/admin/tags', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', tag }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? 'Failed');
       return d.total as number;
     },
     onSuccess: (total) => {
@@ -115,12 +112,10 @@ export default function TagsManagerPage() {
 
   const mergeMutation = useMutation({
     mutationFn: async ({ tags: toMerge, new_tag }: { tags: string[]; new_tag: string }) => {
-      const res = await fetch('/api/tenant/admin/tags', {
+      const d = await fetchJsonOrThrow<{ total?: number }>('/api/tenant/admin/tags', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'merge', tags: toMerge, new_tag }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error ?? 'Failed');
       return { total: d.total as number, count: toMerge.length, target: new_tag };
     },
     onSuccess: ({ total, count, target }) => {

@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   AlertTriangle, Plus, Save, Loader2, Trash2, Edit2, 
   Clock, Zap, MessageSquare, Info
@@ -76,7 +77,7 @@ export default function AtRiskRulesPage() {
         ? `/api/tenant/admin/at-risk/${r.id}`
         : '/api/tenant/admin/at-risk';
       const method = r.id ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,8 +89,6 @@ export default function AtRiskRulesPage() {
           active: r.active
         }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
     },
     onMutate: () => setError(null),
     onSuccess: () => { setEditing(null); load(); },
@@ -99,8 +98,7 @@ export default function AtRiskRulesPage() {
 
   const removeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      await fetchJsonOrThrow(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => load(),
     onError: (e: Error) => setError(e.message),
