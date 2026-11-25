@@ -122,7 +122,7 @@ async function concurrencyGuardAsync(
   const deletedCol = cols.deletedAt;
   const updatedAtCol = cols.updatedAt;
   const updatedAtKey = Object.keys(table).find(
-    (key) => (table as Record<string, unknown>)[key] === updatedAtCol,
+    (key) => (table as unknown as Record<string, unknown>)[key] === updatedAtCol,
   );
 
   if (!idCol || !updatedAtCol || !updatedAtKey) return null;
