@@ -541,8 +541,8 @@ describe('the ratchet this slice is measured by (#2872)', () => {
   });
 
   it('keeps the mutation toasts the actions still need', () => {
-    expect(readFileSync(join(ROOT, ORDER_FILE), 'utf8')).toMatch(/onError: \(\) => toast\.error\('Failed to update order'\)/);
-    expect(readFileSync(join(ROOT, ORDER_FILE), 'utf8')).toMatch(/onError: \(\) => toast\.error\('Failed to change status'\)/);
+    expect(readFileSync(join(ROOT, ORDER_FILE), 'utf8')).toMatch(/onError: \(e: Error\) => toast\.error\(e\.message \|\| 'Failed to update order'\)/);
+    expect(readFileSync(join(ROOT, ORDER_FILE), 'utf8')).toMatch(/onError: \(e: Error\) => toast\.error\(e\.message \|\| 'Failed to change status'\)/);
     expect(readFileSync(join(ROOT, QUOTE_FILE), 'utf8')).toMatch(/onError: \(\) => toast\.error\('Failed to update quote'\)/);
     expect(readFileSync(join(ROOT, QUOTE_FILE), 'utf8')).toMatch(/onError: \(\) => toast\.error\('Failed to change status'\)/);
   });
