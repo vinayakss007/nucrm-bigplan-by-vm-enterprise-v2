@@ -40,6 +40,7 @@ async function cronRouteHandler(request: NextRequest) {
     // #3315: contracts that were in a reminder window but had no active member
     // to receive it. Reported rather than folded into `remindersSent`.
     let remindersWithoutRecipient = 0;
+    let emailsRejected = 0;
 
     // #2997: UTC calendar windows. The old form mixed local midnight with
     // `toISOString()` (one day early east of Greenwich) and then recomputed
@@ -172,6 +173,7 @@ async function cronRouteHandler(request: NextRequest) {
             });
             if (!emailResult.success) {
               emailRejected = true;
+              emailsRejected++;
               void logError({ error: new Error(`Contract reminder email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/contract-renewal-check email' });
             }
           }
@@ -216,7 +218,7 @@ async function cronRouteHandler(request: NextRequest) {
       // #3315: an empty recipient read is a failed run, not a clean one. A green
       // scheduler response while contracts run out unannounced is what the
       // per-tenant sweep was written to prevent, one level further down.
-      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0,
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
