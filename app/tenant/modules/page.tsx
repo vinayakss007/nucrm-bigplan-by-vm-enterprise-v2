@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Check, Download, Settings, ChevronRight, Loader2, X, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -106,12 +107,10 @@ export default function ModulesPage() {
   // inside the modal where the map actually goes out.
   const installMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
-      const res = await fetch('/api/tenant/modules', {
+      await fetchJsonOrThrow('/api/tenant/modules', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ module_id: mod.id, settings: settingsForm }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error);
       return mod;
     },
     onSuccess: (mod) => { toast.success(`${mod.name} installed`); load(); setSelected(null); },
@@ -122,14 +121,14 @@ export default function ModulesPage() {
 
   const disableMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
-      const res = await fetch('/api/tenant/modules', {
+      await fetchJsonOrThrow('/api/tenant/modules', {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ module_id: mod.id, action: 'disable' }),
       });
-      if (!res.ok) throw new Error('Failed');
       return mod;
     },
     onSuccess: (mod) => { toast.success(`${mod.name} disabled`); load(); setSelected(null); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to disable module'),
   });
   const disable = async (mod: ModuleData) => {
     await confirmThen(`Disable "${mod.name}"? Related data may be affected.`, async () => {
@@ -139,14 +138,13 @@ export default function ModulesPage() {
 
   const saveSettingsMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
-      const res = await fetch('/api/tenant/modules', {
+      await fetchJsonOrThrow('/api/tenant/modules', {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ module_id: mod.id, action: 'update_settings', settings: settingsForm }),
       });
-      if (!res.ok) throw new Error('Failed to save');
     },
     onSuccess: () => { toast.success('Settings saved'); load(); setSelected(null); },
-    onError: () => toast.error('Failed to save'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
   const saving = saveSettingsMutation.isPending;
   const saveSettings = (mod: ModuleData) => saveSettingsMutation.mutate(mod);
