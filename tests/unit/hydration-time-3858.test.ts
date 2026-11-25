@@ -38,7 +38,8 @@ describe('time-dependent UI waits for hydration (#3858)', () => {
   it('the hook returns null until the effect runs', () => {
     const src = readFileSync(join(process.cwd(), 'hooks/use-hydrated-now.ts'), 'utf8');
     expect(src).toContain("useState<number | null>(null)");
-    expect(src).toContain('useEffect(() => {\n    setNow(Date.now());\n  }, [])');
+    expect(src).toContain('setInterval(() => setNow(Date.now()), 1000)');
+    expect(src).toContain('return () => clearInterval(timer);');
     expect(src).toContain('return now;');
   });
 });

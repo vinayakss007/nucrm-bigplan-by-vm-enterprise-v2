@@ -7,6 +7,8 @@ export function useHydratedNow(): number | null {
 
   useEffect(() => {
     setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   return now;
