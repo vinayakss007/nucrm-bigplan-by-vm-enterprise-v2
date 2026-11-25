@@ -9,6 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { resolvePortalContact, resolvePortalIdentity } from '@/lib/portal-auth';
 import { NO_USER_SENTINEL, withTenantContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
+import { apiFail } from '@/lib/api/api-envelope';
 import { renderInvoicePdf } from '@/lib/pdf/render';
 import { mapInvoiceToPdfData, type InvoiceRow, type LineItemRow } from '@/lib/pdf/mappers';
 import { contacts, invoiceLineItems, invoices, tenants } from '@/drizzle/schema';
@@ -24,7 +25,7 @@ export async function GET(
     if (limited) return limited;
 
     const identity = await resolvePortalIdentity(request);
-    if (!identity) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    if (!identity) return NextResponse.json(apiFail('AUTH_REQUIRED', 'Authentication required'), { status: 401 });
 
     const invoiceId = (await params).id;
     const result = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, async (tx) => {
@@ -89,7 +90,7 @@ export async function GET(
       return { invoice, items, contactName, tenantName: tenant?.name };
     });
 
-    if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!result) return NextResponse.json(apiFail('INVOICE_NOT_FOUND', 'Not found'), { status: 404 });
 
     const pdf = await renderInvoicePdf(mapInvoiceToPdfData(
       result.invoice as unknown as InvoiceRow,
@@ -106,6 +107,6 @@ export async function GET(
     });
   } catch (err) {
     await logError({ error: err, context: 'public/invoices/[id]/pdf GET', requestMethod: 'GET' });
-    return NextResponse.json({ error: 'Failed to generate invoice PDF' }, { status: 500 });
+    return NextResponse.json(apiFail('PDF_GENERATION_FAILED', 'Failed to generate invoice PDF'), { status: 500 });
   }
 }
