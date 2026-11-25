@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -56,21 +57,19 @@ export default function TicketsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
-      const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
-      if (!res.ok) throw new Error('Update failed');
+      await fetchJsonOrThrow('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
     },
     onSuccess: () => { toast.success('Updated'); queryClient.invalidateQueries({ queryKey }); },
-    onError: () => toast.error('Update failed'),
+    onError: (e: Error) => toast.error(e.message || 'Update failed'),
   });
   const update = (id: string, updates: Record<string, unknown>) => updateMutation.mutate({ id, updates });
 
   const replyMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:'in_progress',admin_reply:reply}) });
-      if (!res.ok) throw new Error('Failed to send reply');
+      await fetchJsonOrThrow('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:'in_progress',admin_reply:reply}) });
     },
     onSuccess: () => { toast.success('Reply sent'); setReply(''); queryClient.invalidateQueries({ queryKey }); },
-    onError: () => toast.error('Failed to send reply'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to send reply'),
   });
   const replying = replyMutation.isPending ? (replyMutation.variables ?? null) : null;
 

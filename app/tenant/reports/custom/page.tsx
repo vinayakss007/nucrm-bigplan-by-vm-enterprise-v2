@@ -11,6 +11,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
@@ -122,7 +123,7 @@ export default function CustomReportBuilder() {
 
   const runMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/reports/run', {
+      const d = await fetchJsonOrThrow<{ data?: ReportRow[] }>('/api/tenant/reports/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,8 +135,6 @@ export default function CustomReportBuilder() {
           limit: 500,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
       return (d.data || []).map((row: ReportRow) => {
         const filtered: ReportRow = {};
         selectedColumns.forEach(col => { filtered[col] = row[col]; });
@@ -157,7 +156,7 @@ export default function CustomReportBuilder() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/reports/custom', {
+      await fetchJsonOrThrow('/api/tenant/reports/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -169,10 +168,6 @@ export default function CustomReportBuilder() {
           filters: toStoredFilters(filters),
         }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed');
-      }
     },
     onSuccess: () => { toast.success('Report saved'); loadSaved(); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
@@ -193,11 +188,10 @@ export default function CustomReportBuilder() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     },
     onSuccess: () => { toast.success('Deleted'); loadSaved(); },
-    onError: () => toast.error('Failed'),
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
   });
 
   const deleteSaved = async (id: string) => {

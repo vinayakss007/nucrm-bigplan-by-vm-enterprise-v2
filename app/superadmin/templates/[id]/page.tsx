@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Save, ArrowLeft, Plus, Trash2, GripVertical, Zap, Users, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -91,7 +92,7 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!template) throw new Error('No template');
-      const res = await fetch(`/api/superadmin/templates/${id}`, {
+      await fetchJsonOrThrow(`/api/superadmin/templates/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -105,10 +106,9 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
           automations: template.automations,
         }),
       });
-      if (!res.ok) throw new Error('Save failed');
     },
     onSuccess: () => toast.success('Template saved'),
-    onError: () => toast.error('Failed to save template'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save template'),
   });
   const saving = saveMutation.isPending;
 
@@ -119,19 +119,18 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
 
   const assignMutation = useMutation({
     mutationFn: async (tenant_id: string) => {
-      const res = await fetch(`/api/superadmin/templates/${id}/assign`, {
+      await fetchJsonOrThrow(`/api/superadmin/templates/${id}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenant_id }),
       });
-      if (!res.ok) throw new Error('Assign failed');
     },
     onSuccess: () => {
       toast.success('Template assigned to tenant');
       setAssignTenantId('');
       setShowAssign(false);
     },
-    onError: () => toast.error('Failed to assign template'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to assign template'),
   });
 
   const assignToTenant = async () => {

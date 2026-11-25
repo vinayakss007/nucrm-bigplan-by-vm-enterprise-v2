@@ -11,6 +11,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { FileText, Play, Trash2, Clock, BarChart3, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
@@ -75,11 +76,7 @@ export default function SavedReportsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/reports/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to delete');
-      }
+      await fetchJsonOrThrow(`/api/tenant/reports/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Report deleted'); reload(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
@@ -94,15 +91,14 @@ export default function SavedReportsPage() {
 
   const runMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/reports/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/reports/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'manual' }),
       });
-      if (!res.ok) throw new Error('Failed to run report');
     },
     onSuccess: () => { toast.success('Report executed'); reload(); },
-    onError: () => toast.error('Failed to run report'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to run report'),
   });
 
   const handleRun = (id: string) => runMutation.mutate(id);

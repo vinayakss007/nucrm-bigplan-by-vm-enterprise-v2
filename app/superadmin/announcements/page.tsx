@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -63,9 +64,7 @@ export default function AnnouncementsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/announcements',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed');
+      await fetchJsonOrThrow('/api/superadmin/announcements',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
     },
     onSuccess: () => {
       toast.success('Announcement created');
@@ -84,17 +83,19 @@ export default function AnnouncementsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      await fetch('/api/superadmin/announcements',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,is_active}) });
+      await fetchJsonOrThrow('/api/superadmin/announcements',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,is_active}) });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update announcement'),
   });
   const toggle = (id: string, is_active: boolean) => toggleMutation.mutate({ id, is_active });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch('/api/superadmin/announcements',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
+      await fetchJsonOrThrow('/api/superadmin/announcements',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
     },
     onSuccess: () => { toast.success('Deleted'); queryClient.invalidateQueries({ queryKey }); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete announcement'),
   });
 
   const del = async (id: string) => {
