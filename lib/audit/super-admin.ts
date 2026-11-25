@@ -277,9 +277,7 @@ export async function logSuperAdminAction(entry: AuditLogEntry): Promise<boolean
     // why (42501 RLS, 22019, 23502 — all look identical through that wrapper).
     // It also dumps every parameter, i.e. old_data/new_data business content,
     // into the application log.
-    const cause = err instanceof Error
-      ? (err.cause as (Error & { code?: string; detail?: string; constraint?: string; context?: string }) | undefined)
-      : undefined;
+    const cause = err instanceof Error ? err.cause as (Error & { code?: string; detail?: string; constraint?: string; context?: string }) | undefined : undefined;
     logger.error('[super-admin-audit] Failed to log action', {
       action: entry.action,
       adminId: entry.adminId,
