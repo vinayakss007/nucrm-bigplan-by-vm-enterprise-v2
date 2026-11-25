@@ -360,23 +360,27 @@ async function purgeExpiredCriticalBackups() {
 
 // ── Calculate Next Run Time ──────────────────────────────────────────────────
 
-function calculateNextRun(scheduleType: string): Date {
-  const now = new Date();
+export function calculateNextRun(scheduleType: string, base: Date = new Date()): Date {
+  const year = base.getUTCFullYear();
+  const month = base.getUTCMonth();
+  const day = base.getUTCDate();
   switch (scheduleType) {
     case 'daily':
-      now.setDate(now.getDate() + 1);
-      now.setHours(2, 0, 0, 0); // 2 AM
-      break;
+      return new Date(Date.UTC(year, month, day + 1, 2, 0, 0, 0));
     case 'weekly':
-      now.setDate(now.getDate() + 7);
-      now.setHours(3, 0, 0, 0); // 3 AM Sunday
-      break;
+      return new Date(Date.UTC(year, month, day + 7, 3, 0, 0, 0));
     case 'monthly':
-    default:
-      now.setMonth(now.getMonth() + 1);
-      now.setDate(1);
-      now.setHours(4, 0, 0, 0); // 4 AM 1st of month
-      break;
+    default: {
+      const nextMonth = month + 1;
+      return new Date(Date.UTC(
+        year + Math.floor(nextMonth / 12),
+        nextMonth % 12,
+        1,
+        4,
+        0,
+        0,
+        0,
+      ));
+    }
   }
-  return now;
 }
