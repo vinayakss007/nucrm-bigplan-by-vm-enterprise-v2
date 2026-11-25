@@ -7,6 +7,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   FileEdit, Wand2, AlertCircle, Loader2, Check, Settings as SettingsIcon,
   Copy, Sparkles, ExternalLink,
@@ -158,14 +159,11 @@ export default function AIDraftPage() {
         entity_id: selectedEntity!.id,
         custom_instructions: customInstructions || undefined,
       };
-      const r = await fetch('/api/tenant/ai/draft', {
+      return await fetchJsonOrThrow<DraftResp>('/api/tenant/ai/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data: DraftResp & { error?: string } = await r.json();
-      if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
-      return data as DraftResp;
     },
     onMutate: () => setError(null),
     onSuccess: (data) => {
@@ -201,7 +199,7 @@ export default function AIDraftPage() {
 
   async function rate(accepted: boolean) {
     if (!draft?.activity_id) return;
-    fetch('/api/tenant/ai/activity', {
+    fetchJsonOrThrow('/api/tenant/ai/activity', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: draft.activity_id, accepted }),
