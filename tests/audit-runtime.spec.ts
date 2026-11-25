@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { chromium } from 'playwright';
 
 const BASE = 'http://localhost:3000';
@@ -75,4 +75,5 @@ test('runtime audit', async () => {
     console.log(`  [${e.type}] ${e.url} — ${e.text || e.status || ''}`);
   }
   console.log('\nError breakdown:', byType);
+  expect(errors, `runtime audit found ${errors.length} error(s)`).toEqual([]);
 });
