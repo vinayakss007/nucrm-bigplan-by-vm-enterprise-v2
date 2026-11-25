@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
@@ -82,14 +83,11 @@ export default function TenantRolesPage() {
 
   const saveRoleMutation = useMutation({
     mutationFn: async ({ roleId, permissions }: { roleId: string; permissions: Record<string, boolean> }) => {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to save');
-      return data;
     },
     onSuccess: () => { toast.success('Permissions updated'); invalidateRoles(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),
@@ -105,14 +103,11 @@ export default function TenantRolesPage() {
       description: string;
       permissions: Record<string, boolean>;
     }) => {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles`, {
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenantId}/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description, permissions }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to create');
-      return data;
     },
     onSuccess: () => { toast.success('Role created'); invalidateRoles(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to create'),
@@ -120,12 +115,9 @@ export default function TenantRolesPage() {
 
   const deleteRoleMutation = useMutation({
     mutationFn: async (roleId: string) => {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
         method: 'DELETE',
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to delete');
-      return data;
     },
     onSuccess: () => { toast.success('Role deleted'); invalidateRoles(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
