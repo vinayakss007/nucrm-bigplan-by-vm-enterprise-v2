@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { FolderPlus, Settings, X, GripVertical, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -49,9 +50,12 @@ export default function KBCategoriesPage() {
 
   const deleteCategory = async (id: string) => {
     await confirmThen('Delete this category? Articles will be uncategorized.', async () => {
-      const res = await fetch(`/api/tenant/kb/categories/${id}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Deleted'); reload(); }
-      else toast.error('Failed');
+      try {
+        await fetchJsonOrThrow(`/api/tenant/kb/categories/${id}`, { method: 'DELETE' });
+        toast.success('Deleted'); reload();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed');
+      }
     });
   };
 
@@ -129,12 +133,11 @@ function CreateCategoryModal({ onClose, onCreated }: { onClose: () => void; onCr
     if (!form.name.trim()) { toast.error('Name is required'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/kb/categories', {
+      await fetchJsonOrThrow('/api/tenant/kb/categories', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Category created'); onCreated(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      toast.success('Category created'); onCreated();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); }
     setSaving(false);
   };
 

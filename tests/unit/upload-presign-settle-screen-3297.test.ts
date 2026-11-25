@@ -95,7 +95,7 @@ describe('every presigned uploader settles its row (#3297)', () => {
     expect(panel).toMatch(/if\s*\(!putRes\.ok\)/);
 
     const page = read('app/tenant/documents/page.tsx');
-    expect(page).toMatch(/if\s*\(!res\.ok\)/);
+    expect(page, 'a refused metadata create must still fail the upload').toMatch(/fetchJsonOrThrow<\{ data:/);
     expect(page, 'the presigned PUT response is discarded — a failed store write still looks like success').toMatch(/if\s*\(!put\.ok\)/);
   });
 
