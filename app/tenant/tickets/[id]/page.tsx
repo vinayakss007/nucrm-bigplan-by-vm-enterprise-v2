@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send,
   Building2, Briefcase, Receipt, Mail, ExternalLink
@@ -96,38 +97,35 @@ export default function TicketDetailPage() {
 
   const replyMutation = useMutation({
     mutationFn: async (body: string) => {
-      const res = await fetch(`/api/tenant/tickets/${ticketId}/replies`, {
+      await fetchJsonOrThrow(`/api/tenant/tickets/${ticketId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       });
-      if (!res.ok) throw new Error('Failed to send');
     },
     onSuccess: () => { toast.success('Reply sent'); setReplyText(''); invalidate(); },
-    onError: () => toast.error('Failed to send'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to send'),
   });
 
   const statusMutation = useMutation({
     mutationFn: async (status: string) => {
-      const res = await fetch(`/api/tenant/tickets/${ticketId}`, {
+      await fetchJsonOrThrow(`/api/tenant/tickets/${ticketId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error('Failed to update');
       return status;
     },
     onSuccess: (status) => { toast.success(`Status: ${status}`); invalidate(); },
-    onError: () => toast.error('Failed to update'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/tickets/${ticketId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/tickets/${ticketId}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); router.push('/tenant/tickets'); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const sending = replyMutation.isPending;
