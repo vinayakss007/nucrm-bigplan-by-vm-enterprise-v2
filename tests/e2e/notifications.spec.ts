@@ -28,9 +28,7 @@ test.describe('Notification System', () => {
       
       // The Toaster renders in the layout; it may or may not have visible content
       // but should exist as a DOM element since it's in the root layout
-      const _count = await toastContainer.count();
-      // Toaster exists as part of the layout rendering
-      expect(true).toBeTruthy();
+      await expect(toastContainer).toHaveCount(1);
     });
 
     test('landing/login/signup pages are accessible', async ({ page, context }) => {
@@ -50,11 +48,10 @@ test.describe('Notification System', () => {
   });
 
   test.describe('Notification Bell', () => {
-    test('notification bell SVG icon exists on auth pages', async ({ page }) => {
-      // The Toaster component renders in root layout
-      // Check that the layout renders without error
+    test('login page renders its sign-in form', async ({ page }) => {
       await page.goto('/auth/login');
-      await expect(page.locator('body')).toBeVisible();
+      await expect(page.locator('form')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
     });
   });
 });

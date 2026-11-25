@@ -41,18 +41,18 @@ test.describe('Deals', () => {
     await page.goto('/tenant/deals');
     
     const addButton = page.locator('button:has-text("Add Deal")').first();
-    if (await addButton.isVisible()) {
-      await addButton.click();
-      
-      await page.getByPlaceholder(/Enterprise Deal/i).fill('Test Deal');
-      await page.locator('input[type="number"]').first().fill('10000');
-      
-      const createButton = page.locator('button:has-text("Create Deal")').first();
-      if (await createButton.isVisible()) {
-        await createButton.click();
-        await page.waitForTimeout(2000);
-      }
-    }
+    await expect(addButton).toBeVisible();
+    await addButton.click();
+
+    const titleInput = page.getByPlaceholder(/Enterprise Deal/i);
+    await expect(titleInput).toBeVisible();
+    await titleInput.fill('Test Deal');
+    await page.locator('input[type="number"]').first().fill('10000');
+
+    const createButton = page.locator('button:has-text("Create Deal")').first();
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await expect(page.getByText('Test Deal').first()).toBeVisible();
   });
 
   test('deal pipeline stages are visible', async ({ page }) => {
