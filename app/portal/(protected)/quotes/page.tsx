@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 
 interface PortalSession {
   email: string;
@@ -61,6 +62,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function PortalQuotesPage() {
+  const now = useHydratedNow();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [session, setSession] = useState<PortalSession | null>(null);
@@ -211,7 +213,7 @@ export default function PortalQuotesPage() {
                     <h3 className="font-semibold">{quote.title}</h3>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(quote.created_at)}</span>
-                      {quote.expires_at && new Date(quote.expires_at).getTime() > Date.now() && (
+                      {now !== null && quote.expires_at && new Date(quote.expires_at).getTime() > now && (
                         <span>Expires {formatDate(quote.expires_at)}</span>
                       )}
                     </div>

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -16,7 +17,6 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { backupConfigSchema, validateForm } from '@/lib/validation/forms';
 import InlineErrorState from '@/components/shared/inline-error-state';
-
 // ── Types ──────────────────────────────────────────────────────
 interface BackupConfig {
   id?: string;
@@ -57,9 +57,9 @@ function formatBytes(b: number | null): string {
   return `${Math.round(b / 1024)} KB`;
 }
 
-function formatRelativeTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
+function formatRelativeTime(iso: string | null | undefined, now: number | null): string {
+  if (!iso || now === null) return '—';
+  const diff = now - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -83,6 +83,7 @@ const BACKUPS_QUERY = ['tenant', 'backup', 'history'] as const;
 
 // ── Page ───────────────────────────────────────────────────────
 export default function TenantBackupSettingsPage() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [config, setConfig] = useState<BackupConfig>({
     tenant_id: '',
@@ -539,7 +540,7 @@ export default function TenantBackupSettingsPage() {
                     {b.duration_ms && (
                       <p className="text-[10px] text-muted-foreground">{(b.duration_ms / 1000).toFixed(1)}s</p>
                     )}
-                    <p className="text-[10px] text-muted-foreground">{formatRelativeTime(b.created_at)}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatRelativeTime(b.created_at, now)}</p>
                   </div>
                 </div>
               );
