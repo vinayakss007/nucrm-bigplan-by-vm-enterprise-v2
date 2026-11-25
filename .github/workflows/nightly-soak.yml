@@ -376,12 +376,18 @@ jobs:
             --env BASE_URL --env SESSIONS_FILE --env QUICK --env VUS --env QUICK_DURATION \
             --summary-export=/tmp/write-heavy.json
 
+      - name: Remove sessions before artifact upload
+        if: always()
+        run: rm -f /tmp/sessions.json
+
       - name: Upload summaries
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: load-soak-${{ github.run_number }}
-          path: /tmp/*.json
+          path: |
+            /tmp/baseline.json
+            /tmp/write-heavy.json
           if-no-files-found: ignore
 
   # ── #3265: Postgres authentication becomes a property of the deployment ──────────
