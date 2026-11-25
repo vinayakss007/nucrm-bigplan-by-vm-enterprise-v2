@@ -170,7 +170,8 @@ describe('nonce-based CSP (#1070)', () => {
     expect(csp).not.toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain("img-src 'self' data: blob:");
     expect(csp).toContain("font-src 'self' data:");
-    expect(csp).toContain("connect-src 'self' ws: wss:");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).not.toMatch(/\b(ws|wss):/);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("frame-src 'self'");
     expect(csp).toContain("form-action 'self'");
