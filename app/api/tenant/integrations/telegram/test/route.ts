@@ -4,11 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 /**
-import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
  * POST /api/tenant/integrations/telegram/test
  * Send a test Telegram message to verify bot token and chat ID
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
