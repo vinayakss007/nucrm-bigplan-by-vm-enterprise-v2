@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Target, RefreshCw, Sparkles, Loader2, TrendingUp,
   History, Play, TrendingDown, Minus,
@@ -67,27 +68,25 @@ export default function AILeadScoringPage() {
 
   const runScoringMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/ai/score', {
+      await fetchJsonOrThrow('/api/tenant/ai/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bulk: true, limit: 5 }),
       });
-      if (!r.ok) throw new Error('Scoring run failed');
     },
     onMutate: () => setError(null),
     onSuccess: () => load(),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(e.message || 'no response from the server'),
   });
   const running = runScoringMutation.isPending;
   const runScoring = () => runScoringMutation.mutate();
 
   const recomputeMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      await fetchJsonOrThrow('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
     },
     onSuccess: () => load(),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(e.message || 'no response from the server'),
   });
   const busy: string | null = recomputeMutation.isPending ? 'recompute' : null;
   const recomputeAll = () => recomputeMutation.mutate();

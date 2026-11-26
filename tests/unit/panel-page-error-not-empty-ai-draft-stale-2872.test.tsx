@@ -410,7 +410,7 @@ describe('the draft this page writes, printed beside the reads it is holding (#2
     wrapped(<AIDraftPage />);
     fireEvent.click(screen.getByRole('button', { name: /Ada Oper/i }));
     fireEvent.click(screen.getByRole('button', { name: /generate draft/i }));
-    await waitFor(() => expect(screen.getByText('no response from the server')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Network error|could not be completed/)).toBeTruthy());
     // the validation sentence is a different problem, and must not be what this failure says
     expect(screen.queryByText('Pick a contact, deal or company first')).toBeNull();
     expect(alerts()).toBe('');
