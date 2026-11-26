@@ -62,10 +62,7 @@ vi.mock('@/drizzle/db', () => ({
       from: () => ({
         // #2597: the producer's rule lookup ends in `.limit(100)`; callers
         // elsewhere still await `.where()` directly, so keep both shapes.
-        where: () => {
-          const q = Object.assign(Promise.resolve([]), { limit: async () => [] });
-          return Object.assign(q, { orderBy: () => q });
-        },
+        where: () => Object.assign(Promise.resolve([]), { limit: async () => [], orderBy: async () => [] }),
       }),
     }),
   },
