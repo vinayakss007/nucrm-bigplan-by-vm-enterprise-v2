@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Tab = 'retention' | 'gdpr' | 'soc2';
@@ -89,12 +90,11 @@ export default function ComplianceSettingsPage() {
 
   const retentionMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/compliance/retention', {
+      await fetchJsonOrThrow('/api/tenant/compliance/retention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPolicy),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to create policy');
     },
     onSuccess: () => { setMessage({ type: 'success', text: 'Retention policy created.' }); invalidate('retention'); },
     onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
@@ -102,12 +102,11 @@ export default function ComplianceSettingsPage() {
 
   const gdprMutation = useMutation({
     mutationFn: async (type: 'export' | 'delete') => {
-      const res = await fetch('/api/tenant/compliance/gdpr', {
+      await fetchJsonOrThrow('/api/tenant/compliance/gdpr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
       return type;
     },
     onSuccess: (type) => { setMessage({ type: 'success', text: type === 'export' ? 'Data export initiated.' : 'Deletion request submitted.' }); invalidate('gdpr'); },
@@ -116,12 +115,11 @@ export default function ComplianceSettingsPage() {
 
   const soc2Mutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/compliance/soc2', {
+      await fetchJsonOrThrow('/api/tenant/compliance/soc2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ periodDays: 90 }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Report generation failed');
     },
     onSuccess: () => { setMessage({ type: 'success', text: 'SOC 2 report generated successfully.' }); invalidate('soc2'); },
     onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),

@@ -8,6 +8,7 @@ import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Mail, TrendingUp, Users, Clock, Pause, Play, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -73,18 +74,18 @@ export default function WarmupDashboardPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
-      const res = await fetch('/api/tenant/email-warmup', {
+      await fetchJsonOrThrow('/api/tenant/email-warmup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: nextActive }),
       });
-      if (!res.ok) throw new Error('Failed to toggle warmup');
       return nextActive;
     },
     onSuccess: (nextActive) => {
       toast.success(nextActive ? 'Warmup resumed' : 'Warmup paused');
       queryClient.invalidateQueries({ queryKey: WARMUP_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message || 'Failed to toggle warmup'),
   });
   const toggling = toggleMutation.isPending;
 
@@ -95,15 +96,11 @@ export default function WarmupDashboardPage() {
 
   const setupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/email-warmup', {
+      await fetchJsonOrThrow('/api/tenant/email-warmup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to configure');
-      }
     },
     onSuccess: () => {
       toast.success('Warmup configured');
