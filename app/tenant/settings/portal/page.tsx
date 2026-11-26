@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Globe, Save, Loader2, Plus, Trash2, CheckCircle, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -82,32 +83,29 @@ export default function PortalSettingsPage() {
 
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/portal/config', {
+      await fetchJsonOrThrow('/api/tenant/portal/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
-      if (!res.ok) throw new Error('Failed to save');
     },
     onSuccess: () => {
       toast.success('Settings saved');
       queryClient.invalidateQueries({ queryKey: ['tenant', 'portal', 'config'] });
     },
-    onError: () => toast.error('Failed to save'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
   const saving = saveConfigMutation.isPending;
   const saveConfig = () => saveConfigMutation.mutate();
 
   const createClientMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/portal/clients', {
+      const d = await fetchJsonOrThrow<{ data: PortalClient & { login_url?: string } }>('/api/tenant/portal/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newClient),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to create client');
-      return data.data as PortalClient & { login_url?: string };
+      return d.data;
     },
     onSuccess: async (created) => {
       toast.success('Client created');
@@ -133,12 +131,11 @@ export default function PortalSettingsPage() {
 
   const deleteClientMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/portal/clients', {
+      await fetchJsonOrThrow('/api/tenant/portal/clients', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      if (!res.ok) throw new Error('Failed to remove client');
     },
     onSuccess: () => {
       toast.success('Client removed');
