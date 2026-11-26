@@ -13,19 +13,10 @@ import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { GatewayError } from '@/lib/ai/gateway';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
-import { summarizeEntity, type SummarizeEntityType } from '@/lib/ai/summarize';
-import { readJsonBody } from '@/lib/api/validate';
+import { summarizeEntity } from '@/lib/ai/summarize';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
-
-interface PostBody {
-  entity_type?: string;
-  entity_id?: string;
-  custom_instructions?: string;
-}
-
-function isSummarizeEntityType(s: unknown): s is SummarizeEntityType {
-  return s === 'contact' || s === 'deal' || s === 'company';
-}
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
@@ -54,24 +45,22 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       }, { status: 403 });
     }
 
-    let body: PostBody;
-    try { body = await readJsonBody(req) as PostBody; } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-
-    if (!isSummarizeEntityType(body.entity_type)) {
-      return NextResponse.json({ error: 'entity_type must be contact, deal or company' }, { status: 400 });
-    }
-    if (typeof body.entity_id !== 'string' || body.entity_id.length < 8) {
-      return NextResponse.json({ error: 'entity_id required' }, { status: 400 });
-    }
+    const parsed = validateBody(z.object({
+      entity_type: z.enum(['contact', 'deal', 'company']),
+      entity_id: z.string().min(8),
+      custom_instructions: z.string().max(2000).optional(),
+    }), await readJsonBody(req));
+    if (parsed instanceof NextResponse) return parsed;
+    const { entity_type, entity_id, custom_instructions } = parsed.data;
 
     let result;
     try {
       result = await summarizeEntity(
         ctx.tenantId,
         ctx.userId,
-        body.entity_type,
-        body.entity_id,
-        body.custom_instructions,
+        entity_type,
+        entity_id,
+        custom_instructions,
       );
     } catch (err) {
       if (err instanceof GatewayError) {
