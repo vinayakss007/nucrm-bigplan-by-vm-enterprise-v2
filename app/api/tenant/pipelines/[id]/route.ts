@@ -97,6 +97,9 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
           label?: string;
           order?: number;
         }>;
+        if (incoming.length > 100) {
+          return NextResponse.json(apiFail('BATCH_TOO_LARGE', 'At most 100 stages per request'), { status: 400 });
+        }
 
         const existing = await tx
           .select({ id: dealStages.id, name: dealStages.name })
