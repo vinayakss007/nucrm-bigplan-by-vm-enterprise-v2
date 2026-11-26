@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { Plus, MoreHorizontal, Edit, Trash2, FolderKanban } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { DataTable, ColumnDef } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -165,7 +165,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
     const method = isEdit ? 'PATCH' : 'POST'
 
     try {
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,21 +177,16 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
           owner_id: form.owner_id || undefined,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to save project')
-        setSaving(false)
-        return
-      }
       toast.success(isEdit ? 'Project updated' : 'Project created')
       setShowCreate(false)
       setEditProject(null)
       setForm(emptyForm)
       loadData(pagination.pageIndex)
-    } catch {
-      toast.error('Failed to save project')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save project')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleDelete = useCallback(async (project: Project) => {

@@ -9,7 +9,7 @@ import { Plus, Search, Building2, Globe, Users, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface Company { id: string; name: string; industry?: string; size?: string; website?: string; phone?: string; address?: string; notes?: string; contact_count?: number }
 
@@ -105,15 +105,19 @@ function CompanyFormModal({ company, _tenantId: _tenantId, _userId: _userId, onS
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch(`/api/tenant/companies${company ? '/' + company.id : ''}`, {
-      method: company ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Failed'); setSaving(false); return; }
-    toast.success(company ? 'Updated' : 'Company created');
-    onSaved();
+    try {
+      await fetchJsonOrThrow(`/api/tenant/companies${company ? '/' + company.id : ''}`, {
+        method: company ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      toast.success(company ? 'Updated' : 'Company created');
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -157,10 +157,11 @@ export default function AuditLogClient() {
     if (search) params.set('search', search);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo + 'T23:59:59Z');
-    const res = await fetch(`/api/tenant/audit?${params}`);
-    if (res.ok) {
-      const data: AuditLogResponse = await res.json();
-      downloadCSV(data.logs);
+    const result = await fetchJsonSafe<AuditLogResponse>(`/api/tenant/audit?${params}`);
+    if (result.status === 'ok') {
+      downloadCSV(result.data.logs);
+    } else if (result.status === 'error') {
+      toast.error(result.message);
     }
   }, [logs, total, actionF, resourceF, search, dateFrom, dateTo]);
 
