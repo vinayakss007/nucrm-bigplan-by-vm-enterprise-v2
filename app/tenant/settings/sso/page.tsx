@@ -170,13 +170,13 @@ export default function SSOSettingsPage() {
   return (
     <div className="max-w-2xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Single Sign-On (SSO)</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-foreground">Single Sign-On (SSO)</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Configure SSO to allow team members to sign in with your identity provider.
         </p>
         {/* #2872: whether this form updates or creates is derived from the read, so the page
             says which one it is — and dashes it when nothing ever answered. */}
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           {failed
             ? 'Provider on file: — (this page could not read it)'
             : providers.length === 0
@@ -208,7 +208,7 @@ export default function SSOSettingsPage() {
       <form onSubmit={handleSave} className="space-y-6">
         {/* Provider Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Provider Type</label>
+          <label className="block text-sm font-medium text-muted-foreground">Provider Type</label>
           <select
             value={providerType}
             onChange={e => setProviderType(e.target.value as 'saml' | 'oidc')}
@@ -221,7 +221,7 @@ export default function SSOSettingsPage() {
 
         {/* Display Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Display Name</label>
+          <label className="block text-sm font-medium text-muted-foreground">Display Name</label>
           <input
             type="text"
             value={form.name}
@@ -235,7 +235,7 @@ export default function SSOSettingsPage() {
         {providerType === 'saml' && (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Entity ID</label>
+              <label className="block text-sm font-medium text-muted-foreground">Entity ID</label>
               <input
                 type="text"
                 value={form.entityId}
@@ -245,7 +245,7 @@ export default function SSOSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">SSO URL</label>
+              <label className="block text-sm font-medium text-muted-foreground">SSO URL</label>
               <input
                 type="url"
                 value={form.ssoUrl}
@@ -255,7 +255,7 @@ export default function SSOSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">X.509 Certificate</label>
+              <label className="block text-sm font-medium text-muted-foreground">X.509 Certificate</label>
               <textarea
                 value={form.certificate}
                 onChange={e => setForm(f => ({ ...f, certificate: e.target.value }))}
@@ -272,7 +272,7 @@ export default function SSOSettingsPage() {
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Client ID</label>
+                <label className="block text-sm font-medium text-muted-foreground">Client ID</label>
                 <input
                   type="text"
                   value={form.clientId}
@@ -281,7 +281,7 @@ export default function SSOSettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Client Secret</label>
+                <label className="block text-sm font-medium text-muted-foreground">Client Secret</label>
                 <input
                   type="password"
                   value={form.clientSecret}
@@ -289,14 +289,14 @@ export default function SSOSettingsPage() {
                   placeholder="Leave blank to keep the current secret"
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Stored secrets are never returned to the browser, so this box starts empty.
                   Type a new value only to replace it.
                 </p>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Issuer URL</label>
+              <label className="block text-sm font-medium text-muted-foreground">Issuer URL</label>
               <input
                 type="url"
                 value={form.issuer}
@@ -306,7 +306,7 @@ export default function SSOSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Authorization Endpoint</label>
+              <label className="block text-sm font-medium text-muted-foreground">Authorization Endpoint</label>
               <input
                 type="url"
                 value={form.authorizationEndpoint}
@@ -315,7 +315,7 @@ export default function SSOSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Token Endpoint</label>
+              <label className="block text-sm font-medium text-muted-foreground">Token Endpoint</label>
               <input
                 type="url"
                 value={form.tokenEndpoint}
@@ -324,7 +324,7 @@ export default function SSOSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Redirect URI</label>
+              <label className="block text-sm font-medium text-muted-foreground">Redirect URI</label>
               <input
                 type="url"
                 value={form.redirectUri}
