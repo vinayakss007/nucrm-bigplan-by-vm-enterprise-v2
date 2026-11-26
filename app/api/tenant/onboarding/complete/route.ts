@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { markOnboardingComplete, recordOnboardingStep } from '@/lib/onboarding/check';
 import { ModuleRegistry } from '@/lib/modules/registry';
-import { readJsonBody } from '@/lib/api/validate';
+import { z } from 'zod';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -34,8 +35,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await readJsonBody(request);
-    const { product_id, modules = [], company_name, pipeline_name } = body;
+    const validated = validateBody(z.object({
+      product_id: z.string().optional(),
+      modules: z.array(z.string()).max(50).refine((ids) => new Set(ids).size === ids.length, 'modules must be unique').default([]),
+      company_name: z.string().optional(),
+      pipeline_name: z.string().optional(),
+    }), await readJsonBody(request));
+    if (validated instanceof NextResponse) return validated;
+    const { product_id, modules, company_name, pipeline_name } = validated.data;
 
     // Install selected modules FIRST, best-effort. Each install runs in its own
     // transaction (see ModuleRegistry.install) and returns { ok, error } rather
