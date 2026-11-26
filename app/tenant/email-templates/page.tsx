@@ -81,7 +81,7 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="text-lg font-bold">{template?.id ? 'Edit Template' : 'New Template'}</h2>
-          <button onClick={onCancel} className="p-2 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+          <button onClick={onCancel} aria-label="Close template editor" className="p-2 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="p-6 space-y-4">

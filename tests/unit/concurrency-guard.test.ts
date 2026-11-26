@@ -112,3 +112,62 @@ describe('concurrencyGuard (sql-fragment overload)', () => {
     );
   });
 });
+
+describe('concurrencyGuard (db overload) is an atomic claim (#3849)', () => {
+  const dialect = new PgDialect();
+  const expected = new Date('2026-09-29T06:24:35.239Z');
+  const id = '00000000-0000-4000-8000-000000000001';
+
+  function fakeDb(claimed: unknown[], existing: unknown[] = []) {
+    const whereArgs: unknown[] = [];
+    const set = vi.fn((_value: unknown) => ({
+      where: (...args: unknown[]) => {
+        whereArgs.push(...args);
+        return { returning: async () => claimed };
+      },
+    }));
+    const update = vi.fn(() => ({ set }));
+    const select = vi.fn(() => ({
+      from: () => ({ where: () => ({ limit: async () => existing }) }),
+    }));
+    return { db: { update, select } as never, whereArgs, set, update, select };
+  }
+
+  function call(db: never, value: Date | string | null = expected) {
+    return concurrencyGuard(db, tenants, id, id, value);
+  }
+
+  it('claims the row with one conditional UPDATE and does not read it first', async () => {
+    const { db, whereArgs, set, select } = fakeDb([{ id }]);
+    await expect(call(db)).resolves.toBeNull();
+    expect(set).toHaveBeenCalledWith({ updatedAt: expect.any(Date) });
+    expect(select).not.toHaveBeenCalled();
+    const where = dialect.sqlToQuery(whereArgs[0] as Parameters<PgDialect['sqlToQuery']>[0]);
+    expect(where.sql).toContain("date_trunc('millisecond'");
+  });
+
+  it('answers 409 when the conditional UPDATE matched no row but the row exists', async () => {
+    const { db } = fakeDb([], [{ id }]);
+    const res = await call(db);
+    expect(res?.status).toBe(409);
+  });
+
+  it('answers 404 when the row is gone', async () => {
+    const { db } = fakeDb([]);
+    const res = await call(db);
+    expect(res?.status).toBe(404);
+  });
+
+  it('refuses an unparseable timestamp without touching the database', async () => {
+    const { db, update } = fakeDb([]);
+    const res = await call(db, 'not-a-date');
+    expect(res?.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('opts out when no timestamp was supplied', async () => {
+    const { db, update } = fakeDb([]);
+    await expect(call(db, null)).resolves.toBeNull();
+    expect(update).not.toHaveBeenCalled();
+  });
+});

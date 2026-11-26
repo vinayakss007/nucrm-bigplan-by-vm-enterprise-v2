@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Target, Plus, Save, X, Loader2, Trash2, Edit2, RefreshCw, Play,
   CheckCircle2, HelpCircle, Sparkles
@@ -62,13 +63,11 @@ export default function LeadScoringRulesPage() {
         ? `/api/tenant/admin/lead-scoring/${r.id}`
         : '/api/tenant/admin/lead-scoring';
       const method = r.id ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(r),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
     },
     onMutate: () => setError(null),
     onSuccess: () => { setEditing(null); load(); },
@@ -78,8 +77,7 @@ export default function LeadScoringRulesPage() {
 
   const removeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      await fetchJsonOrThrow(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => load(),
     onError: (e: Error) => setError(e.message),
@@ -94,7 +92,7 @@ export default function LeadScoringRulesPage() {
     mutationFn: async () => {
       await Promise.all(
         STARTER_RULES.map((s) =>
-          fetch('/api/tenant/admin/lead-scoring', {
+          fetchJsonOrThrow('/api/tenant/admin/lead-scoring', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(s),
@@ -109,10 +107,7 @@ export default function LeadScoringRulesPage() {
 
   const recomputeMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
-      return body as { count: number };
+      return await fetchJsonOrThrow<{ count: number }>('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
     },
     onMutate: () => { setError(null); setRecomputeResult(null); },
     onSuccess: (body) => { setRecomputeResult(body); setTimeout(() => setRecomputeResult(null), 5000); },

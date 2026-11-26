@@ -135,8 +135,9 @@ function LoginInner() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email</label>
+              <label htmlFor="portal-email" className="block text-xs font-medium text-muted-foreground mb-1.5">Email</label>
               <input
+                id="portal-email"
                 type="email"
                 required
                 value={form.email}
@@ -147,8 +148,9 @@ function LoginInner() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Access Token</label>
+              <label htmlFor="portal-token" className="block text-xs font-medium text-muted-foreground mb-1.5">Access Token</label>
               <input
+                id="portal-token"
                 type="text"
                 required
                 minLength={16}
@@ -160,8 +162,9 @@ function LoginInner() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Workspace ID</label>
+              <label htmlFor="portal-tenant" className="block text-xs font-medium text-muted-foreground mb-1.5">Workspace ID</label>
               <input
+                id="portal-tenant"
                 type="text"
                 required
                 value={form.tenant_id}

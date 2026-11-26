@@ -23,6 +23,7 @@
  *   DATABASE_URL=postgres://.../scratch npm run db:verify-chain
  */
 import { Pool } from 'pg';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pgSslConfig } from '../lib/db/ssl-config';
@@ -106,6 +107,26 @@ function statMtimeOrNull(tag: string): number | null {
   return existsSync(file) ? statSync(file).mtimeMs : null;
 }
 
+export function driftCheckInvocation(root: string = process.cwd()): { command: string; args: string[] } {
+  return {
+    command: path.join(root, 'node_modules', '.bin', 'tsx'),
+    args: [path.join(root, 'scripts', 'drift-check.ts')],
+  };
+}
+
+export function driftCheckFailure(result: { status: number | null; error?: Error }): string | null {
+  if (result.error) return `could not start the schema-equality screen: ${result.error.message}`;
+  if (result.status === 0) return null;
+  return `schema-equality screen failed (exit ${result.status ?? 'signal'}) — the chain-built schema does not match drizzle/schema (#2508)`;
+}
+
+function runDriftCheck(log: (line: string) => void): void {
+  log('[verify-chain] running column-level schema-equality screen (db:drift-check)');
+  const { command, args } = driftCheckInvocation();
+  const failure = driftCheckFailure(spawnSync(command, args, { cwd: process.cwd(), env: process.env, stdio: 'inherit' }));
+  if (failure) throw new Error(failure);
+}
+
 export async function verifyChain(databaseUrl: string, log: (line: string) => void = console.log): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl, ssl: pgSslConfig() });
   try {
@@ -122,6 +143,7 @@ export async function verifyChain(databaseUrl: string, log: (line: string) => vo
 
     if (plan.every((p) => p.action === 'skip-stamped')) {
       log(`[verify-chain] ${entries.length} journal entries already stamped — nothing to replay (no-op)`);
+      runDriftCheck(log);
       return;
     }
 
@@ -196,6 +218,7 @@ export async function verifyChain(databaseUrl: string, log: (line: string) => vo
     if (shape.tables < 200) shortfalls.push(`tables: ${shape.tables}, expected at least 200`);
     if (shortfalls.length > 0) throw new Error(`chain built an incomplete schema — ${shortfalls.join('; ')}`);
 
+    runDriftCheck(log);
     log(
       `[verify-chain] PASS — ${stats.applied} statements applied, ${stats.stampedTags.length} files stamped, ` +
         `${backfilled} duplicate-content row(s) backfilled, ${shape.tables} tables, ${shape.policies} RLS policies`,

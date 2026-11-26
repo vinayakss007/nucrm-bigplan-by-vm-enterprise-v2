@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Shield, X, Loader2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -96,13 +97,11 @@ export default function SlaPage() {
         resolutionTimeMinutes: form.resolutionTimeMinutes,
         escalationRules,
       };
-      const res = await fetch('/api/tenant/sla', {
+      await fetchJsonOrThrow('/api/tenant/sla', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
       return Boolean(editing);
     },
     onSuccess: (wasEditing) => {
@@ -143,28 +142,28 @@ export default function SlaPage() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async (p: SlaPolicy) => {
-      const res = await fetch('/api/tenant/sla', {
+      await fetchJsonOrThrow('/api/tenant/sla', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: p.id, isActive: !p.isActive }),
       });
-      if (!res.ok) throw new Error('Failed to update');
       return p;
     },
     onSuccess: (p) => { toast.success(p.isActive ? 'Policy deactivated' : 'Policy activated'); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to update policy'),
   });
   const toggleActive = (p: SlaPolicy) => toggleActiveMutation.mutate(p);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/sla', {
+      await fetchJsonOrThrow('/api/tenant/sla', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, isActive: false }),
       });
-      if (!res.ok) throw new Error('Failed to remove');
     },
     onSuccess: () => { toast.success('Policy removed'); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to remove policy'),
   });
   const del = async (id: string) => {
     deleteMutation.mutate(id);

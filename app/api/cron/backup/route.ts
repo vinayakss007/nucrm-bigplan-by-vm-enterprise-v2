@@ -269,7 +269,7 @@ async function cronRouteHandler(request: NextRequest) {
       `${durationMs}ms, storage=${storageType}, offsite=${!offsiteError})`
     );
     return NextResponse.json({
-      ok: true,
+      ok: !offsiteError,
       filename,
       size_bytes: sizeBytes,
       duration_ms: durationMs,

@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { logError } from '@/lib/errors-client';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface KBArticle { id: string; title?: string; content?: string; excerpt?: string; categoryId?: string; status?: string; helpful?: number; notHelpful?: number; categoryName?: string; createdAt?: string; views?: number }
 
@@ -53,24 +53,24 @@ export default function KBArticlePage() {
   const vote = async (action: 'helpful' | 'not_helpful') => {
     if (voted) return;
     try {
-      const res = await fetch(`/api/tenant/kb/articles/${params.id}`, {
+      const d = await fetchJsonOrThrow<{ data: { helpful: number; notHelpful: number } }>(`/api/tenant/kb/articles/${params.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      if (res.ok) {
-        setVoted(action);
-        const d = await res.json();
-        setArticle((prev) => prev ? { ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful } : prev);
-      }
+      setVoted(action);
+      setArticle((prev) => prev ? { ...prev, helpful: d.data.helpful, notHelpful: d.data.notHelpful } : prev);
     } catch (err) { logError({ error: err, context: "catch:[context]" }); }
   };
 
   const deleteArticle = async () => {
     await confirmThen('Delete this article?', async () => {
-      const res = await fetch(`/api/tenant/kb/articles/${params.id}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Deleted'); router.push('/tenant/kb'); }
-      else toast.error('Failed');
+      try {
+        await fetchJsonOrThrow(`/api/tenant/kb/articles/${params.id}`, { method: 'DELETE' });
+        toast.success('Deleted'); router.push('/tenant/kb');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed');
+      }
     });
   };
 
@@ -163,12 +163,11 @@ function EditArticleModal({ article, onClose, onSaved }: { article: KBArticle; o
     if (!form.content.trim()) { toast.error('Content is required'); return; }
     setSaving(true);
     try {
-      const res = await fetch(`/api/tenant/kb/articles/${article.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/kb/articles/${article.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Article updated'); onSaved(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      toast.success('Article updated'); onSaved();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); }
     setSaving(false);
   };
 

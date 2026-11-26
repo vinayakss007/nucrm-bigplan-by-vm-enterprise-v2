@@ -16,6 +16,7 @@ import {
   GripVertical, ArrowLeft, LifeBuoy, User, Clock, AlertCircle
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { canTransitionTicket } from '@/lib/tickets';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
@@ -203,23 +204,17 @@ export default function TicketsKanbanPage() {
     setTickets(prev => prev.map(t => t.id === activeTicket.id ? { ...t, status: newStatus as Ticket['status'] } : t));
 
     try {
-      const res = await fetch(`/api/tenant/tickets/${activeTicket.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/tickets/${activeTicket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (res.ok) {
-        toast.success(`Ticket moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
-        mutate();
-      } else {
-        // Revert
-        setTickets(prev => prev.map(t => t.id === activeTicket.id ? { ...t, status: activeTicket.status } : t));
-        toast.error('Failed to update ticket');
-      }
-    } catch {
+      toast.success(`Ticket moved to ${COLUMNS.find(c => c.id === newStatus)?.name}`);
+      mutate();
+    } catch (err) {
       setTickets(prev => prev.map(t => t.id === activeTicket.id ? { ...t, status: activeTicket.status } : t));
-      toast.error('Failed to update ticket');
+      toast.error(err instanceof Error ? err.message : 'Failed to update ticket');
     }
   };
 

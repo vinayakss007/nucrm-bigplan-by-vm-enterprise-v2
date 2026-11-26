@@ -255,6 +255,10 @@ describe('views PATCH re-asserts tenant, tombstone, and owner (#3342)', () => {
     const said = await res.text();
     expect(res.status, said).toBe(409);
     expect(JSON.parse(said).error).toContain('Stale data');
-    expect(state.updates, 'the guarded write ran anyway').toEqual([]);
+    // #3849: the only statement is the conditional claim, which matched zero
+    // rows; the caller's business UPDATE never ran.
+    expect(state.updates, 'the guarded write ran anyway').toHaveLength(1);
+    expect(state.updates[0].sql).toContain("date_trunc('millisecond'");
+    expect(Object.keys(state.updates[0].set)).toEqual(['updatedAt']);
   });
 });

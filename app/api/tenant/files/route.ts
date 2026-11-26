@@ -11,7 +11,7 @@
  * DELETE /api/tenant/files?id=... — delete from S3 + DB
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { fileAttachments, tenants, plans, users } from '@/drizzle/schema';
@@ -166,6 +166,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const denied = requirePerm(ctx, 'documents.manage');
+    if (denied) return denied;
 
     if (!isS3Configured()) {
       return NextResponse.json({ error: 'S3 storage not configured' }, { status: 503 });
@@ -273,6 +275,8 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const denied = requirePerm(ctx, 'documents.manage');
+    if (denied) return denied;
     const id = new URL(req.url).searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
     if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id format' }, { status: 400 });

@@ -13,6 +13,7 @@ import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { isEntityId } from '@/lib/id';
 import { getFieldIdentity } from '@/lib/forms/field-shape';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 interface FormField {
   // #2287: fields are persisted either with `key` (legacy/builder) or `id`
@@ -155,6 +156,8 @@ export const POST = withApiRoute(async (req: NextRequest,
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(req, 'forms', 'post');
+    if (limited) return limited;
     const { id } = await params;
     // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
     if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });

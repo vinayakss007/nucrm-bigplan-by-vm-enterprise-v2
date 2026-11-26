@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -63,9 +64,9 @@ const ENTITY_HREFS: Record<string, (id: string) => string> = {
   offer:   id => `/tenant/offers/${id}`,
 };
 
-function fmtRelative(iso: string | null): string {
-  if (!iso) return '—';
-  const ms = Date.now() - new Date(iso).getTime();
+function fmtRelative(iso: string | null, now: number | null): string {
+  if (!iso || now === null) return '—';
+  const ms = now - new Date(iso).getTime();
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
@@ -80,6 +81,7 @@ const FILTERS: { id: 'pending' | 'approved' | 'rejected' | 'all'; label: string 
 ];
 
 export default function ApprovalsPage() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   // The strip that used to carry both now carries only a refused decision. A read failure
@@ -278,13 +280,13 @@ export default function ApprovalsPage() {
                 <p className="text-sm">
                   Requested by <span className="font-semibold">{row.requested_by_name ?? row.requested_by_email ?? 'unknown'}</span>
                   {' · '}
-                  <span className="text-muted-foreground">{fmtRelative(row.requested_at)}</span>
+                  <span className="text-muted-foreground">{fmtRelative(row.requested_at, now)}</span>
                 </p>
                 {row.status !== 'pending' && (
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {row.status === 'approved' ? 'Approved' : 'Rejected'} by{' '}
                     <span className="font-medium">{row.decided_by_name ?? '—'}</span>{' '}
-                    {fmtRelative(row.decided_at)}
+                    {fmtRelative(row.decided_at, now)}
                     {row.reason && <> · {row.reason}</>}
                   </p>
                 )}

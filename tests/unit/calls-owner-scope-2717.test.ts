@@ -69,6 +69,12 @@ function rowSatisfies(p: { sql: string; params: unknown[] } | undefined): boolea
   if (/"call_logs"\."tenant_id"/.test(p.sql) && !p.params.includes(row.tenantId)) return false;
   if (/"call_logs"\."user_id"/.test(p.sql) && !p.params.includes(row.userId)) return false;
   if (/"call_logs"\."deleted_at" IS NULL/i.test(p.sql) && row.deletedAt !== null) return false;
+  // #3849: the guard's claim is conditional on the client's millisecond
+  // timestamp, so a stale precondition must not return a row from the mock.
+  if (/date_trunc\('millisecond'/.test(p.sql)) {
+    const expected = p.params.find((v) => v instanceof Date);
+    if (expected && new Date(row.updatedAt).getTime() !== (expected as Date).getTime()) return false;
+  }
   return true;
 }
 

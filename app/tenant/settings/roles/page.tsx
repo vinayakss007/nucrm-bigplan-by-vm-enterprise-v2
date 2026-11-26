@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -42,11 +43,15 @@ function RoleEditor({ role, onSave, onClose }: {
     if (!name.trim()) { toast.error('Name required'); return; }
     setSaving(true);
     const url = role?.id ? `/api/tenant/roles/${role.id}` : '/api/tenant/roles';
-    const res = await fetch(url, { method: role?.id ? 'PATCH' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, description, permissions }) });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error||'Failed'); setSaving(false); return; }
-    toast.success(role?.id ? 'Role updated' : 'Role created');
-    onSave(data.data);
+    try {
+      const data = await fetchJsonOrThrow<{ data: Role }>(url, { method: role?.id ? 'PATCH' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, description, permissions }) });
+      toast.success(role?.id ? 'Role updated' : 'Role created');
+      onSave(data.data);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -133,11 +138,10 @@ export default function RolesPermissionsPage() {
 
   const deleteRole = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/roles/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/roles/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); load(); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const del = async (id: string) => {

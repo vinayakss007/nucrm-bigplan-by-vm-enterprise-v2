@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customEntities, customEntityData } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -36,6 +36,8 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
 
     const { id, rowId } = await params;
 
@@ -110,6 +112,8 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
 
     const { id, rowId } = await params;
     const [row] = await db

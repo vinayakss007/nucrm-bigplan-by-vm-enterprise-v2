@@ -5,9 +5,11 @@
  */
 'use client';
 
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { clientLogError } from '@/lib/client-logger';
 import {
@@ -83,6 +85,7 @@ interface CriticalStats {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SuperAdminBackups() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'schedules' | 'history' | 'deleted'>('schedules');
   const [_showScheduleModal, setShowScheduleModal] = useState(false);
@@ -118,21 +121,15 @@ export default function SuperAdminBackups() {
 
   const manualBackupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/backups', {
+      // #1090: do not console.log the backup result — it leaks backup metadata
+      // into the browser console in production. Surface a status instead. The
+      // canonical client throws with the server's message, so a deployment-level
+      // refusal (no BYPASSRLS dump role, off-site storage rejected) stays actionable.
+      await fetchJsonOrThrow('/api/superadmin/backups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_type: 'full' }),
       });
-      // #1090: do not console.log the backup result — it leaks backup metadata
-      // into the browser console in production. Surface a status instead.
-      if (!res.ok) {
-        // The most common failure is a deployment-level refusal (no BYPASSRLS
-        // dump role, off-site storage rejected), and the API already explains
-        // it. Swallowing that into "check server logs" made an actionable
-        // message reachable only through Sentry.
-        const detail = await res.json().catch(() => ({} as { error?: string }));
-        throw new Error(detail.error || 'Manual backup failed. Check server logs.');
-      }
     },
     onSuccess: () => { setBackupError(null); loadBackups(); },
     onError: (e: Error) => { setBackupError(e.message || 'Manual backup failed. Check your connection and try again.'); },
@@ -142,7 +139,7 @@ export default function SuperAdminBackups() {
 
   const toggleScheduleMutation = useMutation({
     mutationFn: async ({ scheduleId, enabled }: { scheduleId: string; enabled: boolean }) => {
-      await fetch('/api/superadmin/backups', {
+      await fetchJsonOrThrow('/api/superadmin/backups', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduleId, enabled }),
@@ -157,12 +154,11 @@ export default function SuperAdminBackups() {
 
   const restoreMutation = useMutation({
     mutationFn: async (backupId: string) => {
-      const res = await fetch('/api/superadmin/backups', {
+      const data = await fetchJsonOrThrow<{ success?: boolean }>('/api/superadmin/backups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'restore', backupId }),
       });
-      const data = await res.json().catch(() => ({}));
       if (!data.success) throw new Error('Restore failed');
       return data;
     },
@@ -182,8 +178,8 @@ export default function SuperAdminBackups() {
   };
 
   const timeAgo = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '—';
-    const diff = Date.now() - new Date(dateStr).getTime();
+    if (!dateStr || now === null) return '—';
+    const diff = now - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;
@@ -195,8 +191,8 @@ export default function SuperAdminBackups() {
   };
 
   const daysUntilExpiry = (dateStr: string | null | undefined) => {
-    if (!dateStr) return 999;
-    const diff = new Date(dateStr).getTime() - Date.now();
+    if (!dateStr || now === null) return 999;
+    const diff = new Date(dateStr).getTime() - now;
     return Math.ceil(diff / 86400000);
   };
 

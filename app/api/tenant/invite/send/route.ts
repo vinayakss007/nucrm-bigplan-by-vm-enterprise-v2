@@ -17,6 +17,7 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 const inviteSendSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -27,6 +28,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'invites', 'post');
+    if (limited) return limited;
+
     if (!can(ctx, 'team.invite') && !ctx.isAdmin) {
       return NextResponse.json({ error: 'Permission denied: team.invite required' }, { status: 403 });
     }

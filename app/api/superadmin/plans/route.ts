@@ -15,6 +15,7 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuard, concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { apiFail } from '@/lib/api/api-envelope';
 
 // Postgres driver errors carry a SQLSTATE `code` alongside Error.message.
 function isUniqueViolation(err: unknown): boolean {
@@ -77,15 +78,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .returning();
 
-    await logSuperAdminAction({
+    if (!row) {
+      await logError({ error: new Error('Plan insert returned no row'), context: 'superadmin/plans POST' });
+      return NextResponse.json(apiFail('PLAN_CREATE_FAILED', 'Failed to create plan'), { status: 500 });
+    }
+
+    const auditLogged = await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'subscription.plan_changed',
       targetType: 'plan',
-      targetId: row?.id,
+      targetId: row.id,
       targetName: v.name || slug,
       metadata: { slug, price_monthly: v.price_monthly },
     });
+    if (!auditLogged) {
+      await db.delete(plans).where(eq(plans.id, row.id));
+      await logError({ error: new Error('Plan creation rolled back: audit log insert failed'), context: 'superadmin/plans POST' });
+      return NextResponse.json(apiFail('AUDIT_WRITE_FAILED', 'Plan creation rolled back because the audit log could not be written'), { status: 500 });
+    }
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err) {
