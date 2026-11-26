@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
   Palette, Calendar, Zap, Mail, Lock,
   type LucideIcon,
@@ -83,13 +84,11 @@ export default function UserDefaultsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/admin/user-defaults', {
+      await fetchJsonOrThrow('/api/tenant/admin/user-defaults', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_defaults: defaults }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
     },
     onSuccess: () => { toast.success(`Saved ${Object.keys(defaults).length} default(s)`); setOriginal(defaults); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
@@ -97,11 +96,10 @@ export default function UserDefaultsPage() {
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/admin/user-defaults', { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow('/api/tenant/admin/user-defaults', { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Workspace defaults cleared'); setDefaults({}); setOriginal({}); },
-    onError: () => toast.error('Failed'),
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
   });
 
   const saving = saveMutation.isPending || clearMutation.isPending;

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Receipt, X, Loader2, Trash2, Pencil, Star } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -91,13 +92,11 @@ export default function TaxSettingsPage() {
         ...(form.country ? { country: form.country } : {}),
         ...(form.state ? { state: form.state } : {}),
       };
-      const res = await fetch('/api/tenant/tax', {
+      await fetchJsonOrThrow('/api/tenant/tax', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
       return Boolean(editing);
     },
     onSuccess: (wasEditing) => {
@@ -126,11 +125,10 @@ export default function TaxSettingsPage() {
 
   const deleteRate = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Tax rate deleted'); reload(); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const del = async (id: string) => {
