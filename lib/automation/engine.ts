@@ -17,6 +17,7 @@
  *   ticket.created
  *   invoice.created | invoice.paid
  */
+
 import { logError } from '@/lib/errors-server';
 import { safeFetch } from '@/lib/security/ssrf';
 import { db } from '@/drizzle/db';
@@ -122,7 +123,6 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
     captureError(err, 'automation:evaluate');
   }
 }
-
 function meetsConditions(conditions: AutomationCondition[], data: Record<string, unknown>): boolean {
   if (!Array.isArray(conditions) || conditions.length === 0) return true;
 
