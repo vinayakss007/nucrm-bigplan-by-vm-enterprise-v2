@@ -180,17 +180,17 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
         </div>
         <form onSubmit={create} className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Email *</label>
-            <input required type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inp} placeholder="your@email.com" />
+            <label htmlFor="ticket-email" className="block text-xs font-medium text-muted-foreground mb-1">Email *</label>
+            <input id="ticket-email" required type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inp} placeholder="your@email.com" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Subject *</label>
-            <input required value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} className={inp} placeholder="How can we help?" />
+            <label htmlFor="ticket-subject" className="block text-xs font-medium text-muted-foreground mb-1">Subject *</label>
+            <input id="ticket-subject" required value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} className={inp} placeholder="How can we help?" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
-              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className={inp}>
+              <label htmlFor="ticket-category" className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
+              <select id="ticket-category" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className={inp}>
                 <option value="bug">Bug Report</option>
                 <option value="feature">Feature Request</option>
                 <option value="billing">Billing</option>
@@ -199,8 +199,8 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
-            <textarea rows={4} required minLength={10} value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} className={inp} />
+            <label htmlFor="ticket-description" className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
+            <textarea id="ticket-description" rows={4} required minLength={10} value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} className={inp} />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>

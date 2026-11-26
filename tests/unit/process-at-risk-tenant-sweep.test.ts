@@ -188,6 +188,20 @@ describe('process-at-risk cron — per-tenant sweep', () => {
     });
   });
 
+  it('reports ok:false when the provider rejects the digest (#3847)', async () => {
+    mockGetAtRiskDeals.mockImplementation(async (tenantId: string) =>
+      tenantId === TENANT_A ? [deal('d1', USER_1, 'rep-a@example.com', 'Rep A')] : [],
+    );
+    mockSendEmail.mockResolvedValue({ success: false, error: '403 forbidden' });
+
+    const { POST } = await import('@/app/api/cron/process-at-risk/route');
+    const body = await (await POST(makeRequest())).json();
+
+    expect(body.ok).toBe(false);
+    expect(body.emails_rejected).toBe(1);
+    expect(body.emails_sent).toBe(0);
+  });
+
   it('keeps the unscoped eligibility query on the tenants table unchanged', async () => {
     const { POST } = await import('@/app/api/cron/process-at-risk/route');
     await POST(makeRequest());
@@ -221,7 +235,8 @@ describe('process-at-risk cron — per-tenant sweep', () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.ok).toBe(true);
+    expect(body.ok).toBe(false);
+    expect(body.emails_rejected).toBe(1);
     expect(body.emails_sent).toBe(0);
     expect(logError).toHaveBeenCalledWith(expect.objectContaining({ context: 'cron/process-at-risk email' }));
   });

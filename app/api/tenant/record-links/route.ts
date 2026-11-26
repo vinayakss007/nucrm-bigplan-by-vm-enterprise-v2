@@ -3,6 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
@@ -61,21 +63,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    let body: Record<string, unknown>;
-    try {
-      body = await readJsonBody(request);
-    } catch {
-      return badRequest('Invalid JSON');
-    }
-
-    const { fromType, fromId, toType, toId, relation, note } = body as {
-      fromType?: string; fromId?: string; toType?: string; toId?: string;
-      relation?: string; note?: string;
-    };
-
-    if (!fromType || !fromId || !toType || !toId) {
-      return badRequest('fromType, fromId, toType and toId are required');
-    }
+    const validated = validateBody(z.object({
+      fromType: z.string().min(1),
+      fromId: z.string().min(1),
+      toType: z.string().min(1),
+      toId: z.string().min(1),
+      relation: z.string().max(100).optional(),
+      note: z.string().max(2000).optional(),
+    }), await readJsonBody(request));
+    if (validated instanceof NextResponse) return validated;
+    const { fromType, fromId, toType, toId, relation, note } = validated.data;
 
     const link = await linkRecords({
       tenantId: ctx.tenantId,

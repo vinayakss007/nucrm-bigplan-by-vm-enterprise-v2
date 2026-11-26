@@ -7,6 +7,7 @@
 import { cn } from '@/lib/utils';
 import { AppErrorBoundary as ErrorBoundary } from '@/components/shared/error-boundary';
 import { useWidgetData } from '@/hooks/use-widget-data';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import type { WidgetConfig, WidgetProps } from '@/types/dashboard';
 import { AlertCircle, AlertTriangle, Inbox } from 'lucide-react';
 
@@ -118,6 +119,7 @@ export function WidgetShell({
   onRefresh: () => void
   children: (props: WidgetProps) => React.ReactNode
 }) {
+  const now = useHydratedNow();
   // #2872 — the three-state split this repo's pages already use, one level up. Up to
   // 15 tiles render through this one shell, so what was a silent refusal on a page was
   // a silent refusal across the most-used screen in the product:
@@ -148,7 +150,7 @@ export function WidgetShell({
         {stale && (
           <WidgetStaleCaveat
             reason={reason}
-            age={formatPayloadAge(lastUpdatedAt ?? null, Date.now())}
+            age={now === null ? null : formatPayloadAge(lastUpdatedAt ?? null, now)}
             onRetry={onRefresh}
           />
         )}

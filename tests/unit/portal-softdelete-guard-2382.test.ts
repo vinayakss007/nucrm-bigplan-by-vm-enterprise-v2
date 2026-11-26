@@ -246,7 +246,7 @@ describe('the guard as CI runs it', () => {
 
   it('the committed baseline is honest: app/api/public is clean and every entry is used', async () => {
     const res = await run(['app/api/public'], ROOT);
-    expect(res.files).toBe(14);
+    expect(res.files).toBe(15);
     expect(res.violations).toEqual([]);
     expect(res.unused).toEqual([]);
     expect(res.softCount).toBeGreaterThan(150);

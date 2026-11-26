@@ -8,13 +8,12 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { assignContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, tenantMembers, users } from '@/drizzle/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { contacts, tenantMembers, users, leadAssignments } from '@/drizzle/schema';
+import { eq, and, inArray, isNull, sql } from 'drizzle-orm';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
-import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
@@ -107,33 +106,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const rowCount = result.rowCount ?? 0;
 
-    // Log assignment history
-    // Note: the Drizzle schema uses leadId for leadAssignments. 
-    // If these are contacts, we use sql to keep contact_id if the underlying table supports it, 
-    // or map to leadId if they are used interchangeably in the new schema.
-    // Based on the legacy code, we'll use sql to ensure we hit the right column.
-    // #2696 — only the ids that were actually written: an assignment trail for a
-    // contact this caller does not own would claim a handoff that never happened.
+    let historyWritten = 0;
     if (validIds.length > 0) {
-      const CHUNK_SIZE = 1000;
-      for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
-        const chunk = validIds.slice(i, i + CHUNK_SIZE);
-        const values = chunk.map(cid => sql`(${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})`);
-
-        await db.execute(sql`
-          INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
-          VALUES ${sql.join(values, sql`, `)}
-        `).catch(async (batchErr: unknown) => {
-          void logError({ error: batchErr, context: 'tenant/leads/assign batch-fallback', level: 'warning', tenantId: ctx.tenantId });
-          // Fallback to sequential inserts for this chunk if batch fails
-          for (const cid of chunk) {
-            await db.execute(sql`
-              INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
-              VALUES (${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})
-            `).catch((err) => { void logError({ error: err, context: 'tenant/leads/assign history log' }); });
-          }
-        });
-      }
+      const written = await db.insert(leadAssignments)
+        .values(validIds.map((cid) => ({
+          tenantId: ctx.tenantId,
+          contactId: cid,
+          userId: assign_to,
+          reason: reason || null,
+        })))
+        .onConflictDoNothing()
+        .returning({ id: leadAssignments.id });
+      historyWritten = written.length;
     }
 
     // Notify assignee
@@ -153,7 +137,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       newData:{ count:rowCount, assigned_to:assign_to } 
     });
 
-    return NextResponse.json({ ok:true, assigned: rowCount });
+    return NextResponse.json({ ok:true, assigned: rowCount, history_written: historyWritten });
  
  
   } catch (err) { 
@@ -202,12 +186,13 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     // Mark previous assignments as ended.
     // #1057: scope by tenant_id — without it, a user with contacts.assign in
     // one tenant could end assignment records in ANY tenant.
-    await db.execute(sql`
-      UPDATE public.lead_assignments SET unassigned_at=now()
-      WHERE contact_id = ANY(${validIds}::uuid[])
-        AND tenant_id = ${ctx.tenantId}
-        AND unassigned_at IS NULL
-    `);
+    await db.update(leadAssignments)
+      .set({ deletedAt: new Date() })
+      .where(and(
+        inArray(leadAssignments.contactId, validIds),
+        eq(leadAssignments.tenantId, ctx.tenantId),
+        isNull(leadAssignments.deletedAt),
+      ));
 
     // Unassign — set to null (unowned)
     const result = await db

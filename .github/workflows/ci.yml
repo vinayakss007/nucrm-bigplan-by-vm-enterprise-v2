@@ -968,6 +968,49 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_sim
           DATABASE_SSL: "false"
 
+  # #3827: the verifier now runs the drift-check screen itself (#3826), so this
+  # job is the one gate that proves the journal builds the declared schema.
+  chain-verification:
+    name: Migration chain + schema equality (#2538)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_chain_verify
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build the chain and screen the declared schema
+        run: |
+          set -euo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_chain_verify
+          npm run db:verify-chain
+
+      - name: Negative control — a planted column defect MUST turn the gate red
+        run: |
+          set -euo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_chain_verify
+          ./node_modules/.bin/tsx scripts/schema-gate-negative-control.ts
+
   destructive-gate:
     name: Destructive scripts name their own opt-in (#3282)
     if: vars.DESTRUCTIVE_GATE_GUARD_ENABLED != 'false'

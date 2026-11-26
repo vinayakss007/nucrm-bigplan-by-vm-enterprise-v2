@@ -48,7 +48,7 @@ export function BulkActionBar({ selectedCount, onClear, actions }: BulkActionBar
           </button>
         ))}
         <div className="w-px h-6 bg-background/20" />
-        <button onClick={onClear} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-background/10 transition-colors">
+        <button onClick={onClear} aria-label="Clear selection" className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs hover:bg-background/10 transition-colors">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>

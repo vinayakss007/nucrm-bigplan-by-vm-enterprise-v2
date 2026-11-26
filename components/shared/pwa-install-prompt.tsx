@@ -48,7 +48,7 @@ export default function PWAInstallPrompt() {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-slide-up">
       <div className="bg-card border border-border rounded-2xl shadow-2xl p-4 w-[340px]">
-        <button onClick={dismiss} className="absolute top-3 right-3 w-6 h-6 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground">
+        <button onClick={dismiss} aria-label="Dismiss install prompt" className="absolute top-3 right-3 w-6 h-6 rounded-md hover:bg-accent flex items-center justify-center text-muted-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
         <div className="flex items-start gap-3">

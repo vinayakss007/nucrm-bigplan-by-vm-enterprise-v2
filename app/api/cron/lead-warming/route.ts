@@ -87,7 +87,7 @@ async function cronRouteHandler(req: NextRequest) {
     console.log('[cron/lead-warming] Completed:', JSON.stringify(results));
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      ok: sweep.failed.length === 0 && warmingTotals.errors.length === 0 && replyTotals.errors === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

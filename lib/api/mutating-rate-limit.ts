@@ -83,6 +83,8 @@ const MUTATING_LIMITS: Record<string, LimitSet> = {
   pipelines: { post: 10, patch: 10, delete: 5 },
   activities: { post: 30, patch: 30, delete: 10 },
   apiKeys: { post: 5, patch: 5, delete: 5 },
+  twoFactor: { post: 10, patch: 10, delete: 5 },
+  invites: { post: 10, patch: 10, delete: 5 },
   bulkTransfer: { post: 3, patch: 3, delete: 3 },
   // Superadmin sensitive operations — strict limits (session minting, cross-tenant restore)
   impersonate: { post: 5, patch: 5, delete: 5 },

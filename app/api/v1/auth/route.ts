@@ -19,6 +19,7 @@
  * `/api/auth/logout` and `/api/auth/signup` are the live ones.
  */
 
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody } from '@/lib/api/validate';
 import { users, sessions } from '@/drizzle/schema';
@@ -43,7 +44,7 @@ const V1_SESSION_EXPIRES_DAYS = 30;
  */
 export async function POST(request: NextRequest) {
   // Log deprecation warning
-  console.warn('DEPRECATED: /api/v1/auth/login called - use /api/auth/login instead');
+  void logError({ error: new Error('DEPRECATED: /api/v1/auth/login called - use /api/auth/login instead'), context: 'v1/auth login', level: 'warning', captureToSentry: false });
   
   try {
     // Rate limiting for auth endpoints.
