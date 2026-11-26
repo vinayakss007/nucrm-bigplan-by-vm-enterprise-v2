@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Edit2, Trash2, X, Loader2, MessageSquare, Search } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -70,13 +71,11 @@ export default function CannedResponsesPage() {
     mutationFn: async () => {
       const url = editing ? `/api/tenant/canned-responses/${editing.id}` : '/api/tenant/canned-responses';
       const method = editing ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Validation error');
       return Boolean(editing);
     },
     onSuccess: (wasEditing) => {
@@ -96,11 +95,10 @@ export default function CannedResponsesPage() {
 
   const deleteResponse = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/canned-responses/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/canned-responses/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); reload(); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const del = async (id: string) => {
