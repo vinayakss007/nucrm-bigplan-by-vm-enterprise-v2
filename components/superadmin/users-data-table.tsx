@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { Crown, XCircle, CheckCircle, Plus, Mail, Loader2 } from 'lucide-react'
 import { formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -80,19 +80,18 @@ export default function UsersDataTable({ initialUsers }: Props) {
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    const res = await fetch('/api/superadmin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, is_super_admin: false }),
-    })
-    const data = await res.json()
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/superadmin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, is_super_admin: false }),
+      })
       toast.success('User created')
       setShowCreate(false)
       setForm({ email: '', full_name: '', password: '' })
       loadData(0)
-    } else {
-      toast.error(data.error)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create user')
     }
     setSaving(false)
   }
