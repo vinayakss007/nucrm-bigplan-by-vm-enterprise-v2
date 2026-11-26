@@ -343,40 +343,35 @@ export async function notifyTenantMembers(opts: {
 
 // Parse @mentions from text and notify mentioned users
 export async function processMentions(text: string, tenantId: string, authorId: string, link?: string) {
-  const mentions = text.match(/@(\w+)/g);
-  if (!mentions) return;
+  const usernames = [...new Set((text.match(/@(\w+)/g) ?? []).map((m) => m.slice(1)))].slice(0, 20);
+  if (usernames.length === 0) return;
 
-  for (const mention of mentions) {
-    const username = mention.slice(1);
+  const matches = usernames.flatMap((username) => [
+    ilike(users.fullName, `%${escapeLike(username)}%`),
+    ilike(users.email, `${escapeLike(username)}@%`),
+    sql`split_part(${users.email}, '@', 1) = ${username}`,
+  ]);
+  const matched = await db.select({ id: users.id })
+    .from(users)
+    .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+    .where(and(
+      eq(tenantMembers.tenantId, tenantId),
+      eq(tenantMembers.status, 'active'),
+      ne(users.id, authorId),
+      or(...matches),
+    ))
+    .limit(20);
+
+  for (const user of matched) {
     try {
-      const [user] = await db.select({ id: users.id })
-        .from(users)
-        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-        .where(and(
-          eq(tenantMembers.tenantId, tenantId),
-          eq(tenantMembers.status, 'active'),
-          ne(users.id, authorId),
-          or(
-            ilike(users.fullName, `%${escapeLike(username)}%`),
-            ilike(users.email, `${escapeLike(username)}@%`),
-            sql`split_part(${users.email}, '@', 1) = ${username}`
-          )
-        ))
-        .limit(1);
-
-      if (user) {
-        await createNotification({
-          userId: user.id, tenantId, type: 'mention',
-          title: `You were mentioned`,
-          body: text.slice(0, 150),
-          link,
-        });
-      }
-    } catch (err) {
-      logger.error('[notifications] Failed to process mention', {
-        mention: username,
-        error: err instanceof Error ? err.message : String(err),
+      await createNotification({
+        userId: user.id, tenantId, type: 'mention',
+        title: `You were mentioned`,
+        body: text.slice(0, 150),
+        link,
       });
+    } catch (err) {
+      logger.error('[mentions] Failed to notify', { error: err instanceof Error ? err.message : String(err), tenantId });
     }
   }
 }
