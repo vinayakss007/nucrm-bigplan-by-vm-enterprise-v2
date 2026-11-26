@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { contactOptionsFromEnvelope } from '@/lib/contacts/list-options';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
@@ -98,7 +99,7 @@ function InvoicesPageInner() {
 
   const createInvoice = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/invoices', {
+      await fetchJsonOrThrow('/api/tenant/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // #2888: the modal keeps camelCase and `createInvoiceSchema` reads snake_case, so
@@ -107,8 +108,6 @@ function InvoicesPageInner() {
         // failed its `min(1)`, so this create has 400'd on every install.
         body: JSON.stringify(invoicePayload(form)),
       });
-      const data = await res.json().catch(() => ({}) as { error?: string });
-      if (!res.ok) throw new Error(data.error || 'Failed to create invoice');
     },
     onSuccess: () => {
       toast.success('Invoice created successfully');

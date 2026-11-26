@@ -145,8 +145,8 @@ export default function BrandingSettingsPage() {
   return (
     <div className="max-w-2xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Branding</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-foreground">Branding</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Customize the look and feel of your workspace. These settings apply to your branded portal and external-facing pages.
         </p>
       </div>
@@ -175,7 +175,7 @@ export default function BrandingSettingsPage() {
         {/* Logo and Favicon */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Logo URL</label>
+            <label className="block text-sm font-medium text-muted-foreground">Logo URL</label>
             <input
               type="url"
               value={form.logoUrl}
@@ -185,7 +185,7 @@ export default function BrandingSettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Favicon URL</label>
+            <label className="block text-sm font-medium text-muted-foreground">Favicon URL</label>
             <input
               type="url"
               value={form.faviconUrl}
@@ -199,13 +199,13 @@ export default function BrandingSettingsPage() {
         {/* Colors */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Primary Color</label>
+            <label className="block text-sm font-medium text-muted-foreground">Primary Color</label>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={form.primaryColor}
                 onChange={e => setForm(f => ({ ...f, primaryColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+                className="h-9 w-9 cursor-pointer rounded border border-border"
               />
               <input
                 type="text"
@@ -217,13 +217,13 @@ export default function BrandingSettingsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Secondary Color</label>
+            <label className="block text-sm font-medium text-muted-foreground">Secondary Color</label>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={form.secondaryColor}
                 onChange={e => setForm(f => ({ ...f, secondaryColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+                className="h-9 w-9 cursor-pointer rounded border border-border"
               />
               <input
                 type="text"
@@ -235,13 +235,13 @@ export default function BrandingSettingsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Accent Color</label>
+            <label className="block text-sm font-medium text-muted-foreground">Accent Color</label>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={form.accentColor}
                 onChange={e => setForm(f => ({ ...f, accentColor: e.target.value }))}
-                className="h-9 w-9 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+                className="h-9 w-9 cursor-pointer rounded border border-border"
               />
               <input
                 type="text"
@@ -256,7 +256,7 @@ export default function BrandingSettingsPage() {
 
         {/* Company Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
+          <label className="block text-sm font-medium text-muted-foreground">Company Name</label>
           <input
             type="text"
             value={form.companyName}
@@ -268,7 +268,7 @@ export default function BrandingSettingsPage() {
 
         {/* Custom Domain */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custom Domain</label>
+          <label className="block text-sm font-medium text-muted-foreground">Custom Domain</label>
           <input
             type="text"
             value={form.customDomain}
@@ -276,12 +276,12 @@ export default function BrandingSettingsPage() {
             placeholder="crm.yourdomain.com"
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Point a CNAME record to app.nucrm.io to use a custom domain.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Point a CNAME record to app.nucrm.io to use a custom domain.</p>
         </div>
 
         {/* Header Layout */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Header Layout</label>
+          <label className="block text-sm font-medium text-muted-foreground">Header Layout</label>
           <select
             value={form.headerLayout}
             onChange={e => setForm(f => ({ ...f, headerLayout: e.target.value as BrandingFormData['headerLayout'] }))}
@@ -300,18 +300,18 @@ export default function BrandingSettingsPage() {
             role="switch"
             aria-checked={form.hidePoweredBy}
             onClick={() => setForm(f => ({ ...f, hidePoweredBy: !f.hidePoweredBy }))}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${form.hidePoweredBy ? 'bg-violet-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${form.hidePoweredBy ? 'bg-violet-600' : 'bg-muted'}`}
           >
             <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${form.hidePoweredBy ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="text-sm font-medium text-muted-foreground">
             Hide &quot;Powered by NuCRM&quot; badge
           </label>
         </div>
 
         {/* Custom CSS */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custom CSS</label>
+          <label className="block text-sm font-medium text-muted-foreground">Custom CSS</label>
           <textarea
             value={form.customCss}
             onChange={e => setForm(f => ({ ...f, customCss: e.target.value }))}

@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2, Search } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -107,11 +108,10 @@ export default function CallsPage() {
 
   const deleteCall = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/calls/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/calls/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Call deleted'); reloadCalls(); },
-    onError: () => toast.error('Failed to delete call'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete call'),
   });
 
   async function handleDelete(id: string) {
@@ -279,7 +279,7 @@ function EditCallModal({ call, onSaved, onClose }: { call: CallLog; onSaved: (c:
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`/api/tenant/calls/${call.id}`, {
+      const { data } = await fetchJsonOrThrow<{ data: CallLog }>(`/api/tenant/calls/${call.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -289,16 +289,10 @@ function EditCallModal({ call, onSaved, onClose }: { call: CallLog; onSaved: (c:
           phone_number: form.phone_number || null,
         }),
       });
-      if (res.ok) {
-        const { data } = await res.json();
-        toast.success('Call updated');
-        onSaved(data);
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update call');
-      }
-    } catch {
-      toast.error('Failed to update call');
+      toast.success('Call updated');
+      onSaved(data);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update call');
     }
     setSaving(false);
   };
@@ -365,20 +359,14 @@ function LogCallModal({ contacts, contactsFailed, contactsStale, contactsReason,
     if (!form.contact_id) { toast.error('Contact is required'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/calls', {
+      const { data } = await fetchJsonOrThrow<{ data: CallLog }>('/api/tenant/calls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        const { data } = await res.json();
-        toast.success('Call logged');
-        onSaved(data);
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to log call');
-      }
-    } catch { toast.error('Failed to log call'); }
+      toast.success('Call logged');
+      onSaved(data);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to log call'); }
     setSaving(false);
   };
 
