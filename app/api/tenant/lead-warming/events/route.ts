@@ -7,6 +7,7 @@
  * GET  /api/tenant/lead-warming/events — List available events (system + tenant custom)
  * POST /api/tenant/lead-warming/events — Create a custom event
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
@@ -51,6 +52,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'leadwarming', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

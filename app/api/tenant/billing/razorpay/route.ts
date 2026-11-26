@@ -13,6 +13,7 @@
  * Body: { plan: 'starter'|'growth'|'scale', interval: 'month'|'year' }
  * Response: { orderId, amount, currency, key }
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
@@ -36,6 +37,8 @@ const razorpayOrderSchema = z.object({
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(request, 'billing', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const permErr = requirePerm(ctx, 'billing.manage');

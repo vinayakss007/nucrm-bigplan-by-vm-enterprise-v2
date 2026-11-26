@@ -7,6 +7,7 @@
  * POST /api/tenant/whatsapp/send
  * Send WhatsApp messages (template or free-form) via Meta Cloud API
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { sendWhatsAppSchema } from '@/lib/api/schemas';
@@ -20,6 +21,8 @@ import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'whatsapp', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

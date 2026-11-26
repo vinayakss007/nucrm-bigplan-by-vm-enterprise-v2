@@ -11,6 +11,7 @@
  * Sets status to 'cancelled' and clears the public_token so the buyer link
  * stops working. Cannot cancel an already-accepted/declined offer.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -25,6 +26,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'offers', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

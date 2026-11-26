@@ -7,6 +7,7 @@
  * GET  /api/tenant/whatsapp/templates - List templates from Meta
  * POST /api/tenant/whatsapp/templates - Sync templates from Meta
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
@@ -79,6 +80,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'whatsapp', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

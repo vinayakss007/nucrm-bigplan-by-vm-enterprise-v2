@@ -17,6 +17,7 @@
  * does — so a failed/aborted upload leaves no orphan rows. Orphan S3
  * objects are cheap and can be swept later if the prefix grows.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
@@ -68,7 +69,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   if (denied) return denied;
 
   let raw;
-  try { raw = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  try {
+    const rateLimited = await rateLimitMutating(request, 'documents', 'post');
+    if (rateLimited) return rateLimited; raw = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const parsed = validateBody(uploadUrlSchema, raw);
   if (parsed instanceof NextResponse) return parsed;
   const { name: nameRaw, mime_type: mimeType, size_bytes: sizeBytes } = parsed.data;
