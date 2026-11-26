@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { clientLogWarn, clientLogError } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
@@ -151,7 +151,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   // #2230 — in-flight lock + error toast; a throwing fetch used to leave
   // `saving` stuck true and wedge the dialog at "Creating…".
   const { isPending: saving, run: submitDeal } = useSubmitLock(async () => {
-    const res = await fetch('/api/tenant/deals', {
+    await fetchJsonOrThrow('/api/tenant/deals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -162,8 +162,6 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         assigned_to: form.assigned_to || null,
       }),
     })
-    const data = await res.json().catch(() => ({}) as { error?: string })
-    if (!res.ok) throw new Error(data.error || 'Failed to create deal')
     track('feature_used', { feature: 'deal.create' })
     toast.success('Deal created')
     setShowAdd(false)
@@ -299,13 +297,11 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     const body = isSelectAll
       ? { action, selectAll: true, filters: globalFilter ? { q: globalFilter } : {}, ...(Object.keys(payload).length ? { payload } : {}) }
       : { action, deal_ids: ids, ...(Object.keys(payload).length ? { payload } : {}) };
-    const res = await fetch('/api/tenant/deals/bulk', {
+    const data = await fetchJsonOrThrow<{ affected?: number }>('/api/tenant/deals/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const data = await res.json().catch(() => ({}) as { affected?: number; error?: string })
-    if (!res.ok) throw new Error(data.error || `Failed to ${action} deals`)
     toast.success(`${action}: ${data.affected} deal(s)`)
     loadData(pagination.pageIndex)
   })

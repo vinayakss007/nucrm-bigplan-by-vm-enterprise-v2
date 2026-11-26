@@ -11,7 +11,7 @@ import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Tra
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { normalizeDealRow } from '@/lib/deals/normalize-api-row'
 import { confirmThen } from '@/components/ui/confirm-dialog'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -125,7 +125,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch('/api/tenant/deals', {
+      await fetchJsonOrThrow('/api/tenant/deals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,12 +138,6 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
           close_date: form.close_date || null,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error)
-        setSaving(false)
-        return
-      }
       toast.success('Deal created')
       setShowAdd(false)
       setForm({ title: '', amount: '', stage: stages[0]?.name?.toLowerCase() || 'lead', contact_id: '', company_id: '', assigned_to: '', close_date: '', description: '' })
@@ -152,8 +146,8 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
       if (refresh.status === 'aborted') return
       if (refresh.status === 'ok') { setDeals((refresh.data.data ?? []).map((d) => normalizeDealRow(d as never) as unknown as Deal)); setLoadError(false) }
       else { setLoadError(true); toast.error(refresh.message || 'Failed to refresh deals') }
-    } catch {
-      toast.error('Failed to create deal')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create deal')
     }
     setSaving(false)
   }
@@ -179,36 +173,26 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
     try {
       // Send the resolved stage_id directly instead of round-tripping by name,
       // which was fragile when two stages share a name or span pipelines. (#1457)
-      const res = await fetch(`/api/tenant/deals/${dealId}`, {
+      await fetchJsonOrThrow(`/api/tenant/deals/${dealId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage_id: newStageId }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        if (prevStage) rollback(prevStage)
-        toast.error(data.error || 'Failed to update deal stage')
-        return
-      }
       toast.success(`Deal moved to ${newStage.name}`)
-    } catch {
+    } catch (err) {
       if (prevStage) rollback(prevStage)
-      toast.error('Failed to update deal stage')
+      toast.error(err instanceof Error ? err.message : 'Failed to update deal stage')
     }
   }, [stages])
 
   const deleteDeal = useCallback(async (dealId: string, title: string) => {
     await confirmThen(`Delete "${title}"?`, async () => {
       try {
-        const res = await fetch(`/api/tenant/deals/${dealId}`, { method: 'DELETE' })
-        if (res.ok) {
-          toast.success('Deal deleted')
-          setDeals((prev) => prev.filter((d) => d.id !== dealId))
-        } else {
-          toast.error('Failed to delete')
-        }
-      } catch {
-        toast.error('Failed to delete deal')
+        await fetchJsonOrThrow(`/api/tenant/deals/${dealId}`, { method: 'DELETE' })
+        toast.success('Deal deleted')
+        setDeals((prev) => prev.filter((d) => d.id !== dealId))
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete deal')
       }
     })
   }, [])
