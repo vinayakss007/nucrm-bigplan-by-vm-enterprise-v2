@@ -3,5 +3,6 @@
   "app/api/superadmin/impersonate/stop/route.ts": 1,
   "app/api/tenant/members/route.ts": 3,
   "app/api/webhooks/payu/route.ts": 1,
-  "lib/auth/impersonation-reconcile.ts": 1
+  "lib/auth/impersonation-reconcile.ts": 1,
+  "app/api/tenant/offers/[quoteId]/send/route.ts": 1
 }

@@ -24,10 +24,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, contacts, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { transitionStatus } from '@/lib/state/transition';
 import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
 import { apiError } from '@/lib/api-error';
+import { apiFail } from '@/lib/api/api-envelope';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
@@ -125,6 +126,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // either committed its token or is waiting for us, so re-reading the committed
     // metadata keeps one URL per offer.
     let committedToken = publicToken;
+    const sendId = generatePublicToken();
     const sent = await db.transaction(async (tx) => {
       // #3407 PR-4A: the status claim belongs to the shared helper and the
       // quotes registry; the tenant scope and from-state it adds are the same
@@ -170,6 +172,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             quote_number: quote.quoteNumber,
             total_amount: quote.totalAmount,
             to_email: toEmail,
+            send_id: sendId,
           },
         });
       }
@@ -204,6 +207,30 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     } catch (err) {
       void logError({ error: err, context: 'offers/send email', tenantId: ctx.tenantId, level: 'warning' });
       emailResult = { success: false, error: err instanceof Error ? err.message : 'Email send failed' };
+    }
+
+    if (!emailResult.success) {
+      await db.transaction(async (tx) => {
+        await tx.update(quotes)
+          .set({ status: quote.status, sentAt: quote.sentAt ?? null, updatedAt: new Date() })
+          .where(and(
+            eq(quotes.id, quoteId),
+            eq(quotes.tenantId, ctx.tenantId),
+            eq(quotes.status, 'sent'),
+          ));
+        await tx.delete(activities).where(and(
+          eq(activities.tenantId, ctx.tenantId),
+          eq(activities.entityType, 'quote'),
+          eq(activities.entityId, quoteId),
+          eq(activities.eventType, 'offer_sent'),
+          sql`${activities.metadata}->>'send_id' = ${sendId}`,
+        ));
+      });
+      void logError({ error: new Error(`Offer email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'offers/send delivery', tenantId: ctx.tenantId });
+      return NextResponse.json(
+        apiFail('OFFER_EMAIL_FAILED', 'The offer email was rejected; the quote was NOT marked as sent. Retry the send.', { public_url: link, email: emailResult }),
+        { status: 502 },
+      );
     }
 
     await logAudit({
