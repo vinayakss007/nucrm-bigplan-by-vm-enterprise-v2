@@ -9,7 +9,8 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { calculateTax, calculateCompoundTax, applyTaxToLineItems } from '@/lib/tax';
-import { readJsonBody } from '@/lib/api/validate';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,8 +30,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 
-    const body = await readJsonBody(req);
-    const { amount, taxRateIds, items } = body;
+    const parsed = validateBody(z.object({
+      amount: z.coerce.number().finite().optional(),
+      taxRateIds: z.array(z.string()).optional(),
+      items: z.array(z.record(z.string(), z.unknown())).optional(),
+    }), await readJsonBody(req));
+    if (parsed instanceof NextResponse) return parsed;
+    const { amount, taxRateIds, items } = parsed.data;
 
     if (taxRateIds && Array.isArray(taxRateIds)) {
       const invalid = taxRateIds.filter((id: string) => !UUID_RE.test(id));
@@ -51,7 +57,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         );
       }
 
-      const result = await applyTaxToLineItems(items, {
+      const result = await applyTaxToLineItems(items as unknown as Parameters<typeof applyTaxToLineItems>[0], {
         taxRateIds,
         tenantId: ctx.tenantId,
       });
@@ -77,7 +83,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // Use compound tax for multiple rates, single tax for one rate
     let result;
     if (taxRateIds.length === 1) {
-      result = await calculateTax(amount, taxRateIds[0], ctx.tenantId);
+      result = await calculateTax(amount, taxRateIds[0]!, ctx.tenantId);
     } else {
       result = await calculateCompoundTax(amount, taxRateIds, ctx.tenantId);
     }
