@@ -16,7 +16,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Link2, Plus, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 
 interface RelatedRecord {
   linkId: string;
@@ -75,13 +75,11 @@ export default function ProjectRelatedPanel({ projectId }: { projectId: string }
     if (!entityId.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/tenant/projects/${projectId}/related`, {
+      await fetchJsonOrThrow(`/api/tenant/projects/${projectId}/related`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entityType, entityId: entityId.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to link');
       toast.success('Linked');
       setEntityId('');
       setAdding(false);
@@ -94,9 +92,12 @@ export default function ProjectRelatedPanel({ projectId }: { projectId: string }
   }
 
   async function removeLink(linkId: string) {
-    const res = await fetch(`/api/tenant/projects/${projectId}/related?linkId=${encodeURIComponent(linkId)}`, { method: 'DELETE' });
-    if (!res.ok) { toast.error('Failed to unlink'); return; }
-    setRecords((prev) => prev.filter((r) => r.linkId !== linkId));
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${projectId}/related?linkId=${encodeURIComponent(linkId)}`, { method: 'DELETE' });
+      setRecords((prev) => prev.filter((r) => r.linkId !== linkId));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink');
+    }
   }
 
   const grouped = LINKABLE.map((l) => ({

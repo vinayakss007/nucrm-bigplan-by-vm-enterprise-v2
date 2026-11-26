@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   ArrowLeft, Calendar, User, Plus, Trash2, Link2, Unlink,
   CheckCircle2, Circle, Target,
@@ -118,32 +119,32 @@ export default function ProjectDetailClient({
 
   // ---- Status change ----
   const changeStatus = async (newStatus: string) => {
-    const res = await fetch(`/api/tenant/projects/${project.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
       toast.success('Status updated');
       router.refresh();
-    } else {
-      toast.error('Failed to update status');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status');
     }
   };
 
   // ---- Description ----
   const saveDescription = async () => {
     setSavingDesc(true);
-    const res = await fetch(`/api/tenant/projects/${project.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description }),
+      });
       toast.success('Description saved');
       setEditingDesc(false);
-    } else {
-      toast.error('Failed to save');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
     }
     setSavingDesc(false);
   };
@@ -153,29 +154,28 @@ export default function ProjectDetailClient({
     e.preventDefault();
     if (!milestoneTitle.trim()) return;
     setSavingMilestone(true);
-    const res = await fetch(`/api/tenant/projects/${project.id}/milestones`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: milestoneTitle.trim(),
-        due_date: milestoneDueDate || undefined,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
+    try {
+      const data = await fetchJsonOrThrow<{ data: { id: string; title: string; dueDate?: string | null; completed?: boolean; completedAt?: string | null } }>(`/api/tenant/projects/${project.id}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: milestoneTitle.trim(),
+          due_date: milestoneDueDate || undefined,
+        }),
+      });
       setMilestones(prev => [...prev, {
         id: data.data.id,
         title: data.data.title,
-        due_date: data.data.dueDate,
+        due_date: data.data.dueDate ?? null,
         completed: data.data.completed ?? false,
-        completed_at: data.data.completedAt,
+        completed_at: data.data.completedAt ?? null,
       }]);
       setMilestoneTitle('');
       setMilestoneDueDate('');
       setShowMilestoneForm(false);
       toast.success('Milestone added');
-    } else {
-      toast.error(data.error || 'Failed to add milestone');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add milestone');
     }
     setSavingMilestone(false);
   };
@@ -185,31 +185,32 @@ export default function ProjectDetailClient({
     setMilestones(prev => prev.map(m =>
       m.id === milestone.id ? { ...m, completed: newCompleted } : m
     ));
-    const res = await fetch(`/api/tenant/projects/${project.id}/milestones`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ milestone_id: milestone.id, completed: newCompleted }),
-    });
-    if (!res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${project.id}/milestones`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestone_id: milestone.id, completed: newCompleted }),
+      });
+    } catch (err) {
       setMilestones(prev => prev.map(m =>
         m.id === milestone.id ? { ...m, completed: !newCompleted } : m
       ));
-      toast.error('Failed to update milestone');
+      toast.error(err instanceof Error ? err.message : 'Failed to update milestone');
     }
   };
 
   const deleteMilestone = async (milestone: Milestone) => {
     await confirmThen(`Delete milestone "${milestone.title}"?`, async () => {
-      const res = await fetch(`/api/tenant/projects/${project.id}/milestones`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ milestone_id: milestone.id }),
-      });
-      if (res.ok) {
+      try {
+        await fetchJsonOrThrow(`/api/tenant/projects/${project.id}/milestones`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ milestone_id: milestone.id }),
+        });
         setMilestones(prev => prev.filter(m => m.id !== milestone.id));
         toast.success('Milestone removed');
-      } else {
-        toast.error('Failed to delete milestone');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
       }
     });
   };
@@ -217,12 +218,12 @@ export default function ProjectDetailClient({
   // ---- Link/unlink tasks ----
   const linkTask = async (taskId: string) => {
     setLinkingTask(true);
-    const res = await fetch(`/api/tenant/projects/${project.id}/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId }),
+      });
       const task = allTasks.find(t => t.id === taskId);
       if (task) {
         setLinkedTasks(prev => [...prev, {
@@ -237,22 +238,19 @@ export default function ProjectDetailClient({
       toast.success('Task linked');
       setShowLinkTask(false);
       setTaskSearch('');
-    } else {
-      const data = await res.json();
-      toast.error(data.error || 'Failed to link task');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to link task');
     }
     setLinkingTask(false);
   };
 
   const unlinkTask = async (taskId: string) => {
-    const res = await fetch(`/api/tenant/projects/${project.id}/tasks?task_id=${taskId}`, {
-      method: 'DELETE',
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/projects/${project.id}/tasks?task_id=${taskId}`, { method: 'DELETE' });
       setLinkedTasks(prev => prev.filter(t => t.id !== taskId));
       toast.success('Task unlinked');
-    } else {
-      toast.error('Failed to unlink task');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink task');
     }
   };
 
