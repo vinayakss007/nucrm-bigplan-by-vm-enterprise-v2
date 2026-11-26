@@ -25,4 +25,9 @@ describe('offer send does not claim delivery that failed (#3919)', () => {
     expect(src).toContain('{ status: 502 }');
     expect(src).toContain('public_url: link');
   });
+
+  it('pins the compensating status write in the status-owner ledger', () => {
+    const ledger = JSON.parse(readFileSync(join(process.cwd(), 'scripts/status-owner-ledger.json'), 'utf8'));
+    expect(ledger['app/api/tenant/offers/[quoteId]/send/route.ts']).toBe(1);
+  });
 });
