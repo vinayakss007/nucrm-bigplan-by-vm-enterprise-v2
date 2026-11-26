@@ -97,7 +97,8 @@ export async function createFieldSnapshot(
 export async function getEntitySnapshots(
   tenantId: string,
   entityType: EntityType,
-  entityId: string
+  entityId: string,
+  limit = 200
 ) {
   const { fieldSnapshots } = await import('@/drizzle/schema/history');
   const { eq, and, desc } = await import('drizzle-orm');
@@ -110,5 +111,6 @@ export async function getEntitySnapshots(
       eq(fieldSnapshots.entityType, entityType),
       eq(fieldSnapshots.entityId, entityId)
     ))
-    .orderBy(desc(fieldSnapshots.createdAt));
+    .orderBy(desc(fieldSnapshots.createdAt))
+    .limit(limit);
 }
