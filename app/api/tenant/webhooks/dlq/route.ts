@@ -9,6 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import * as dlq from '@/lib/webhooks/dlq';
 import { readJsonBody } from '@/lib/api/validate';
+import { apiFail } from '@/lib/api/api-envelope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
@@ -65,13 +66,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
           return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
         }
+        if (ids.length > 50) {
+          return NextResponse.json(apiFail('BATCH_TOO_LARGE', 'At most 50 ids per request'), { status: 400 });
+        }
         // Tenant-scoped: entries belonging to other tenants are skipped
         const { succeeded, failed } = await dlq.bulkRetryDLQ(ids, ctx.tenantId);
         return NextResponse.json({ succeeded, failed });
       }
 
       case 'retry_all': {
-        const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 1000, offset: 0, status: 'pending' });
+        const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 50, offset: 0, status: 'pending' });
  
  
         const entryIds = entries.map((e) => e.id);
@@ -85,6 +89,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       case 'purge': {
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
           return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
+        }
+        if (ids.length > 50) {
+          return NextResponse.json(apiFail('BATCH_TOO_LARGE', 'At most 50 ids per request'), { status: 400 });
         }
         let purged = 0;
         for (const id of ids) {
