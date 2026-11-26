@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Clock, Trash2, Loader2, X } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -113,12 +114,10 @@ export default function SequencesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/sequences', {
+      await fetchJsonOrThrow('/api/tenant/sequences', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ ...form, steps: form.steps.map(toWireStep) }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? 'Failed');
     },
     onSuccess: () => {
       toast.success('Sequence created');
@@ -131,12 +130,13 @@ export default function SequencesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/tenant/sequences/${id}`, { method:'DELETE' });
+      await fetchJsonOrThrow(`/api/tenant/sequences/${id}`, { method:'DELETE' });
     },
     onSuccess: () => {
       toast.success('Deleted');
       queryClient.invalidateQueries({ queryKey: SEQUENCES_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete sequence'),
   });
 
   const create = (e: React.FormEvent) => {

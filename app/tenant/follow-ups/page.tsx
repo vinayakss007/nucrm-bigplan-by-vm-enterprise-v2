@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { ListChecks, Calendar, AlertCircle, Plus, CheckCircle, Trash2 } from 'lucide-react';
@@ -77,7 +78,7 @@ export default function FollowUpsPage() {
 
   const createFollowUp = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/follow-ups', {
+      await fetchJsonOrThrow('/api/tenant/follow-ups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,7 +90,6 @@ export default function FollowUpsPage() {
           deal_id: createForm.deal_id || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Failed to create');
     },
     onSuccess: () => {
       toast.success('Follow-up created');
@@ -98,7 +98,7 @@ export default function FollowUpsPage() {
       setOffset(0);
       reload();
     },
-    onError: () => toast.error('Failed to create follow-up'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to create follow-up'),
   });
   const saving = createFollowUp.isPending;
 
@@ -109,15 +109,14 @@ export default function FollowUpsPage() {
 
   const completeFollowUp = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/follow-ups/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/follow-ups/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'completed' }),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: () => { toast.success('Marked as complete'); reload(); },
-    onError: () => toast.error('Failed to complete follow-up'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to complete follow-up'),
   });
 
   function handleComplete(id: string) {
@@ -126,11 +125,10 @@ export default function FollowUpsPage() {
 
   const deleteFollowUp = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Follow-up deleted'); reload(); },
-    onError: () => toast.error('Failed to delete follow-up'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete follow-up'),
   });
 
   async function handleDelete(id: string) {

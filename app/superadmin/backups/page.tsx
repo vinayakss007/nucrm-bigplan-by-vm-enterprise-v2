@@ -5,6 +5,7 @@
  */
 'use client';
 
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -84,6 +85,7 @@ interface CriticalStats {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SuperAdminBackups() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'schedules' | 'history' | 'deleted'>('schedules');
   const [_showScheduleModal, setShowScheduleModal] = useState(false);
@@ -176,8 +178,8 @@ export default function SuperAdminBackups() {
   };
 
   const timeAgo = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '—';
-    const diff = Date.now() - new Date(dateStr).getTime();
+    if (!dateStr || now === null) return '—';
+    const diff = now - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;
@@ -189,8 +191,8 @@ export default function SuperAdminBackups() {
   };
 
   const daysUntilExpiry = (dateStr: string | null | undefined) => {
-    if (!dateStr) return 999;
-    const diff = new Date(dateStr).getTime() - Date.now();
+    if (!dateStr || now === null) return 999;
+    const diff = new Date(dateStr).getTime() - now;
     return Math.ceil(diff / 86400000);
   };
 

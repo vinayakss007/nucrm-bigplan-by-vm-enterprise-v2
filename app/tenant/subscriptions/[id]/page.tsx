@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -80,53 +81,50 @@ export default function SubscriptionDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Subscription>) => {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/subscriptions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to update');
     },
     onSuccess: () => {
       setEditing(false);
       toast.success('Subscription updated');
       invalidate();
     },
-    onError: () => toast.error('Failed to update subscription'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update subscription'),
   });
 
   const statusActionMutation = useMutation({
     mutationFn: async ({ newStatus }: { action: 'pause' | 'resume'; newStatus: string }) => {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/subscriptions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: (_data, variables) => {
       toast.success(`Subscription ${variables.action}d`);
       invalidate();
     },
-    onError: (_e, variables) => toast.error(`Failed to ${variables.action} subscription`),
+    onError: (e, variables) => toast.error(e instanceof Error && e.message ? e.message : `Failed to ${variables.action} subscription`),
   });
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = { status: 'cancelled' };
       body['cancelledAt'] = new Date().toISOString();
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/subscriptions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed');
     },
     onSuccess: () => {
       toast.success('Subscription cancelled');
       invalidate();
     },
-    onError: () => toast.error('Failed to cancel subscription'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to cancel subscription'),
   });
 
   const handleEdit = () => {

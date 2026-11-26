@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   BrainCircuit, Save, Loader2, ShieldX, ExternalLink, ArrowUpDown, Eye, EyeOff,
   User, Building2, Globe, RefreshCw, ChevronDown, Plus, Trash2, Info,
@@ -99,13 +100,12 @@ export default function AIProvidersPage() {
       const params = new URLSearchParams({ provider: providerId });
       if (cfg.base_url) params.set('base_url', cfg.base_url);
       if (cfg.api_key) params.set('api_key', cfg.api_key);
-      const res = await fetch(`/api/tenant/ai/models?${params}`);
-      const d = await res.json();
-      if (res.ok) {
-        setModelCache(prev => ({ ...prev, [providerId]: d.models ?? [] }));
-        if (d.error) setModelError(prev => ({ ...prev, [providerId]: d.error }));
-      } else {
-        setModelError(prev => ({ ...prev, [providerId]: d.error || 'Failed to fetch models' }));
+      const result = await fetchJsonSafe<{ models?: ModelEntry[]; error?: string }>(`/api/tenant/ai/models?${params}`);
+      if (result.status === 'ok') {
+        setModelCache(prev => ({ ...prev, [providerId]: result.data.models ?? [] }));
+        if (typeof result.data.error === 'string') setModelError(prev => ({ ...prev, [providerId]: result.data.error ?? null }));
+      } else if (result.status === 'error') {
+        setModelError(prev => ({ ...prev, [providerId]: result.message }));
       }
     } catch (err) {
       setModelError(prev => ({ ...prev, [providerId]: (err as Error).message }));
@@ -148,13 +148,11 @@ export default function AIProvidersPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (providers: Record<string, ProviderConfig>) => {
-      const res = await fetch('/api/tenant/admin/ai-providers', {
+      await fetchJsonOrThrow('/api/tenant/admin/ai-providers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ providers }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
       return providers;
     },
     onSuccess: (providers) => {

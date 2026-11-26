@@ -51,10 +51,10 @@ describe('promtail-config.yml job inventory (#2602)', () => {
 describe('preprod promtail service (#2602)', () => {
   const block = serviceBlock(PREPROD, 'promtail');
 
-  it('still replaces the base list with !override and keeps config + socket mounts', () => {
+  it('still replaces the base list with !override and keeps only the config mount', () => {
     expect(block).toContain('volumes: !override');
     expect(block).toMatch(/promtail-config\.yml:\/etc\/promtail\/promtail-config\.yml:ro/);
-    expect(block).toMatch(/\/var\/run\/docker\.sock:\/var\/run\/docker\.sock:ro/);
+    expect(block).not.toMatch(/\/var\/run\/docker\.sock:/);
   });
 
   // comment lines document the removed mounts by name, so assertions about

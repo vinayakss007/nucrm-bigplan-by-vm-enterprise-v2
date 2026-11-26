@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -58,12 +59,10 @@ export default function TrashPage() {
 
   const restoreMutation = useMutation({
     mutationFn: async (item: TrashItem) => {
-      const res = await fetch('/api/tenant/trash', {
+      await fetchJsonOrThrow('/api/tenant/trash', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error);
       return item;
     },
     onSuccess: (item) => { toast.success(`${item.name} restored`); load(); },
@@ -76,12 +75,10 @@ export default function TrashPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (item: TrashItem) => {
-      const res = await fetch('/api/tenant/trash', {
+      await fetchJsonOrThrow('/api/tenant/trash', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error);
     },
     onSuccess: () => { toast.success('Permanently deleted'); load(); },
     onError: (e: Error) => toast.error(e.message),

@@ -304,7 +304,7 @@ export default function TicketsPage() {
                     >
                       {selectedIds.has(ticket.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
                     </button>
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
+                    <div role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/tenant/tickets/${ticket.id}`); } }} className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
                       <div className="flex items-center gap-2 mb-1">
                         <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
                           {ticket.status.replace('_', ' ')}

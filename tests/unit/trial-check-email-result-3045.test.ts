@@ -85,6 +85,8 @@ describe('trial-check honors sendEmail result (#3045)', () => {
     const res = await POST(request());
     const body = await res.json() as { ok: boolean; expired: number; warned: number };
 
+    expect(body.ok).toBe(false);
+    expect(body.emails_rejected).toBe(2);
     expect(body.expired).toBe(0);
     expect(body.warned).toBe(0);
     // The dedup marker must NOT be written on rejection — that marker is what

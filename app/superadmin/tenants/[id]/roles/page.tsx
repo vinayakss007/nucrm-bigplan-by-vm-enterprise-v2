@@ -364,7 +364,7 @@ function RoleEditorModal({ role, rolesStale, rolesReason, onSave, onClose }: {
               </p>
             )}
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-accent flex items-center justify-center text-muted-foreground">
+          <button onClick={onClose} aria-label="Close role editor" className="w-7 h-7 rounded-lg hover:bg-accent flex items-center justify-center text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>

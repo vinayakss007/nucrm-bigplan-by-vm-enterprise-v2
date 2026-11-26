@@ -4,9 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Mail, TrendingUp, Users, Clock, Pause, Play, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,6 +43,7 @@ interface PoolParticipant {
 const WARMUP_QUERY = ['tenant', 'email-warmup'] as const;
 
 export default function WarmupDashboardPage() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [showSetup, setShowSetup] = useState(false);
   const [form, setForm] = useState({
@@ -71,18 +74,18 @@ export default function WarmupDashboardPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
-      const res = await fetch('/api/tenant/email-warmup', {
+      await fetchJsonOrThrow('/api/tenant/email-warmup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: nextActive }),
       });
-      if (!res.ok) throw new Error('Failed to toggle warmup');
       return nextActive;
     },
     onSuccess: (nextActive) => {
       toast.success(nextActive ? 'Warmup resumed' : 'Warmup paused');
       queryClient.invalidateQueries({ queryKey: WARMUP_QUERY });
     },
+    onError: (e: Error) => toast.error(e.message || 'Failed to toggle warmup'),
   });
   const toggling = toggleMutation.isPending;
 
@@ -93,15 +96,11 @@ export default function WarmupDashboardPage() {
 
   const setupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/email-warmup', {
+      await fetchJsonOrThrow('/api/tenant/email-warmup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to configure');
-      }
     },
     onSuccess: () => {
       toast.success('Warmup configured');
@@ -122,8 +121,8 @@ export default function WarmupDashboardPage() {
   const updateParticipant = (i: number, field: 'email' | 'name', value: string) =>
     setForm(f => ({ ...f, participants: f.participants.map((p, idx) => idx === i ? { ...p, [field]: value } : p) }));
 
-  const daysActive = config?.startedAt
-    ? Math.floor((Date.now() - new Date(config.startedAt).getTime()) / 86400000)
+  const daysActive = config?.startedAt && now !== null
+    ? Math.floor((now - new Date(config.startedAt).getTime()) / 86400000)
     : 0;
   const rampProgress = config ? Math.min(100, Math.round((daysActive / (config.rampUpDays || 21)) * 100)) : 0;
   const replyRate = config?.totalSent ? Math.round((config.totalReplied / config.totalSent) * 100) : 0;

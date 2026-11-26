@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable, Blocks } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -81,7 +82,7 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="text-lg font-bold">{template?.id ? 'Edit Template' : 'New Template'}</h2>
-          <button onClick={onCancel} className="p-2 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+          <button onClick={onCancel} aria-label="Close template editor" className="p-2 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="p-6 space-y-4">
@@ -236,15 +237,11 @@ export default function EmailTemplatesPage() {
   const saveTemplate = useMutation({
     mutationFn: async (t: Partial<Template>) => {
       const isNew = !t.id;
-      const res = await fetch(isNew ? '/api/tenant/email-templates' : `/api/tenant/email-templates/${t.id}`, {
+      await fetchJsonOrThrow(isNew ? '/api/tenant/email-templates' : `/api/tenant/email-templates/${t.id}`, {
         method: isNew ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(t),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to save');
-      }
       return isNew;
     },
     onSuccess: (isNew) => {
@@ -259,11 +256,10 @@ export default function EmailTemplatesPage() {
 
   const deleteTemplate = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); reload(); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const del = async (id: string) => {
@@ -274,15 +270,14 @@ export default function EmailTemplatesPage() {
 
   const duplicateTemplate = useMutation({
     mutationFn: async (t: Template) => {
-      const res = await fetch('/api/tenant/email-templates', {
+      await fetchJsonOrThrow('/api/tenant/email-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...t, id: undefined, name: `${t.name} (copy)` }),
       });
-      if (!res.ok) throw new Error('Failed to duplicate');
     },
     onSuccess: () => { toast.success('Duplicated'); reload(); },
-    onError: () => toast.error('Failed to duplicate'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to duplicate'),
   });
 
   const duplicate = (t: Template) => duplicateTemplate.mutate(t);

@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Trash2, GripVertical, Save, Loader2, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -73,9 +74,7 @@ export default function PipelinesSettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const r = await fetch('/api/tenant/pipelines', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || 'Failed to create pipeline');
+      await fetchJsonOrThrow('/api/tenant/pipelines', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
     },
     onSuccess: () => { toast.success('Pipeline created'); setCreating(false); setNewName(''); load(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to create pipeline'),
@@ -84,9 +83,7 @@ export default function PipelinesSettingsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selected) return;
-      const r = await fetch(`/api/tenant/pipelines/${selected.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: selected.name, stages: selected.stages }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || 'Failed to save pipeline');
+      await fetchJsonOrThrow(`/api/tenant/pipelines/${selected.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: selected.name, stages: selected.stages }) });
     },
     onSuccess: () => { toast.success('Pipeline saved'); load(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save pipeline'),
@@ -94,9 +91,7 @@ export default function PipelinesSettingsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || 'Failed to delete pipeline');
+      await fetchJsonOrThrow(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
     },
     onSuccess: () => { toast.success('Deleted'); load(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to delete pipeline'),

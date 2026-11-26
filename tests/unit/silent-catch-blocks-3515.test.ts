@@ -33,9 +33,10 @@ describe('silent catch verification (#3515)', () => {
     expect(src).toContain("context: 'superadmin/templates/[id]/assign installTemplateModules'");
   });
 
-  it('ensures app/api/tenant/leads/assign/route.ts logs batch insert rejection before fallback', () => {
+  it('ensures app/api/tenant/leads/assign/route.ts has no swallowed batch-insert fallback', () => {
     const src = readFileSync('app/api/tenant/leads/assign/route.ts', 'utf8');
-    expect(src).toContain("context: 'tenant/leads/assign batch-fallback'");
+    expect(src).not.toContain("context: 'tenant/leads/assign batch-fallback'");
+    expect(src).toContain('db.insert(leadAssignments)');
   });
 
   it('ensures app/api/bug-report/route.ts logs when json parsing fails', () => {

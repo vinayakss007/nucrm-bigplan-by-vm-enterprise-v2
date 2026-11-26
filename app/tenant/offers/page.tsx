@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useMemo } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -55,9 +56,9 @@ function fmtCurrency(amt: string | number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
-function fmtRelative(iso: string | null): string {
-  if (!iso) return '—';
-  const ms = Date.now() - new Date(iso).getTime();
+function fmtRelative(iso: string | null, now: number | null): string {
+  if (!iso || now === null) return '—';
+  const ms = now - new Date(iso).getTime();
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
@@ -65,6 +66,7 @@ function fmtRelative(iso: string | null): string {
 }
 
 export default function OffersListPage() {
+  const now = useHydratedNow();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -253,7 +255,7 @@ export default function OffersListPage() {
                     <StatusBadge status={o.status} />
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell">
-                    {fmtRelative(o.sent_at)}
+                    {fmtRelative(o.sent_at, now)}
                   </td>
                   <td className="px-3 py-2 text-center text-xs tabular-nums hidden md:table-cell">
                     {o.viewed_count ?? 0}

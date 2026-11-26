@@ -2,6 +2,11 @@
   "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences — the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
   "entries": [
     {
+      "cite": "app/api/webhooks/resend/route.ts:85",
+      "regLines": [5677],
+      "reason": "Pre-existing drift on main after #3246's resend webhook tenant-context fix: the cited return statement moved below an explanatory comment. This PR does not touch that route; the re-pin belongs to a resend-webhook follow-up, and this entry goes stale once it lands."
+    },
+    {
       "cite": "app/api/cron/auto-backup/route.ts:55",
       "regLines": [2912],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
