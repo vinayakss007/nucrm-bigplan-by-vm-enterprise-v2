@@ -13,6 +13,7 @@ import { eq } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
+import { apiFail } from '@/lib/api/api-envelope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -69,6 +70,9 @@ export const PUT = withApiRoute(async (req: NextRequest,
 
     if (!Array.isArray(offerings)) {
       return NextResponse.json({ error: 'offerings must be an array' }, { status: 400 });
+    }
+    if (offerings.length > 100) {
+      return NextResponse.json(apiFail('BATCH_TOO_LARGE', 'At most 100 offerings per request'), { status: 400 });
     }
 
     for (const item of offerings) {
