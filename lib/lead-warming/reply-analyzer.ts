@@ -15,6 +15,7 @@
  * Uses the AI Gateway (lib/ai/gateway.ts) for multi-provider LLM support.
  */
 
+import { logError } from '@/lib/errors-server';
 import { chat } from '@/lib/ai/gateway';
 import { db } from '@/drizzle/db';
 import { leadWarmingReplies, leadWarmingCampaigns, leadWarmingMessages } from '@/drizzle/schema/lead-warming';
@@ -423,7 +424,7 @@ async function handleIntentActions(
   // Notify owner on positive intent (notification outside transaction — non-critical)
   if (analysis.intent === 'interested' && ownerUserId) {
     const contactName = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'A contact';
-    await createNotification({
+    const stored = await createNotification({
       userId: ownerUserId,
       tenantId,
       type: 'lead_warming',
@@ -432,9 +433,13 @@ async function handleIntentActions(
       link: `/tenant/contacts/${contact?.id}`,
     });
 
-    await tx.update(leadWarmingReplies)
-      .set({ ownerNotified: true, notifiedAt: new Date() })
-      .where(eq(leadWarmingReplies.id, replyId));
+    if (stored) {
+      await tx.update(leadWarmingReplies)
+        .set({ ownerNotified: true, notifiedAt: new Date() })
+        .where(eq(leadWarmingReplies.id, replyId));
+    } else {
+      await logError({ error: new Error('Lead-warming reply notification was not persisted'), context: 'lead-warming/reply-analyzer', tenantId, level: 'warning' });
+    }
   }
 
   // Create follow-up task for actionable intents
