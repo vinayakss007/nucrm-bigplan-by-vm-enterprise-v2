@@ -41,6 +41,7 @@ async function cronRouteHandler(request: NextRequest) {
     // member to receive it — reported, never counted as sent.
     let remindersWithoutRecipient = 0;
     let emailsRejected = 0;
+    let notificationsRejected = 0;
 
     // #2997: UTC calendar windows — the local-midnight-then-toISOString form
     // matched subscriptions one day early on hosts east of Greenwich, so the
@@ -127,7 +128,7 @@ async function cronRouteHandler(request: NextRequest) {
 
           let emailRejected = false;
           for (const member of members) {
-            await createNotification({
+            const delivered = await createNotification({
               userId: member.userId,
               tenantId: sub.tenantId,
               type: 'subscription_renewal',
@@ -137,7 +138,11 @@ async function cronRouteHandler(request: NextRequest) {
               entity_type: 'subscription',
               entity_id: sub.id,
               metadata: { subscription_id: sub.id, reminder_days: days, end_date: sub.currentPeriodEnd },
-            }).catch((err) => logError({ error: err, context: 'subscription-renewal-notification' }));
+            }).catch((err) => {
+              logError({ error: err, context: 'subscription-renewal-notification' });
+              return false;
+            });
+            if (!delivered) notificationsRejected++;
 
             if (member.email) {
               // #3045: sendEmail resolves {success:false} — the .catch() could
@@ -163,9 +168,9 @@ async function cronRouteHandler(request: NextRequest) {
             }
           }
 
-          // #3045: withhold the dedup marker when any send was rejected, so
-          // the next run retries instead of permanently skipping this sub.
-          if (emailRejected) continue;
+          // Withhold the marker when either channel failed so the next run
+          // retries instead of permanently skipping this sub.
+          if (emailRejected || notificationsRejected > 0) continue;
 
           await db.insert(activities).values({
             tenantId: sub.tenantId,
@@ -201,7 +206,7 @@ async function cronRouteHandler(request: NextRequest) {
 
     return NextResponse.json({
       // #3315: an empty recipient read fails the run — see contract-renewal-check.
-      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0,
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0 && notificationsRejected === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

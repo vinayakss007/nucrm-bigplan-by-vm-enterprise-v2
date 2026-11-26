@@ -41,6 +41,7 @@ async function cronRouteHandler(request: NextRequest) {
     // to receive it. Reported rather than folded into `remindersSent`.
     let remindersWithoutRecipient = 0;
     let emailsRejected = 0;
+    let notificationsRejected = 0;
 
     // #2997: UTC calendar windows. The old form mixed local midnight with
     // `toISOString()` (one day early east of Greenwich) and then recomputed
@@ -142,7 +143,7 @@ async function cronRouteHandler(request: NextRequest) {
         let emailRejected = false;
         await Promise.allSettled(members.map(async (member) => {
           // In-app notification
-          await createNotification({
+          const delivered = await createNotification({
             userId: member.userId,
             tenantId: contract.tenantId,
             type: 'contract_renewal',
@@ -152,7 +153,11 @@ async function cronRouteHandler(request: NextRequest) {
             entity_type: 'contract',
             entity_id: contract.id,
             metadata: { contract_id: contract.id, reminder_days: days, end_date: contract.endDate },
-          }).catch((err) => logError({ error: err, context: 'contract-renewal-notification' }));
+          }).catch((err) => {
+            logError({ error: err, context: 'contract-renewal-notification' });
+            return false;
+          });
+          if (!delivered) notificationsRejected++;
 
           // Email
           if (member.email) {
@@ -179,9 +184,9 @@ async function cronRouteHandler(request: NextRequest) {
           }
         }));
 
-        // Withhold the dedup marker when any send was rejected so the next
-        // run retries this contract+days combo instead of skipping forever.
-        if (emailRejected) continue;
+        // Withhold the marker when either channel failed so the next run
+        // retries this contract+days combo instead of skipping forever.
+        if (emailRejected || notificationsRejected > 0) continue;
 
         // Log activity for deduplication
         await db.insert(activities).values({
@@ -218,7 +223,7 @@ async function cronRouteHandler(request: NextRequest) {
       // #3315: an empty recipient read is a failed run, not a clean one. A green
       // scheduler response while contracts run out unannounced is what the
       // per-tenant sweep was written to prevent, one level further down.
-      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0,
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0 && notificationsRejected === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

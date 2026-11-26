@@ -33,6 +33,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           readAt: notifications.readAt,
           createdAt: notifications.createdAt,
           unreadCount: sql<number>`(SELECT count(*)::int FROM ${notifications} n WHERE n.tenant_id = ${tid} AND n.user_id = ${uid} AND n.deleted_at IS NULL AND n.read_at IS NULL)`,
+          totalCount: sql<number>`(SELECT count(*)::int FROM ${notifications} n WHERE n.tenant_id = ${tid} AND n.user_id = ${uid} AND n.deleted_at IS NULL)`,
         })
         .from(notifications)
         .where(and(
@@ -60,7 +61,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           items,
           stats: {
             unreadCount,
-            totalCount: unreadCount,
+            totalCount: first?.totalCount ?? 0,
           },
         },
       });

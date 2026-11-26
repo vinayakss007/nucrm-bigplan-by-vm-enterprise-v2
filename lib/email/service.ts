@@ -383,7 +383,7 @@ export async function sendWebhookNotification(opts: {
   const discordUrl = process.env['DISCORD_WEBHOOK_URL'];
   if (discordUrl) {
     try {
-      await fetch(discordUrl, {
+      const res = await fetch(discordUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -398,6 +398,7 @@ export async function sendWebhookNotification(opts: {
         }),
         signal: AbortSignal.timeout(15_000),
       });
+      if (!res.ok) logger.error('[webhook] Discord refused the delivery', { status: res.status });
     } catch (err) {
       logger.error('[webhook] Discord failed', { error: err instanceof Error ? err.message : String(err) });
     }
@@ -408,7 +409,7 @@ export async function sendWebhookNotification(opts: {
   if (slackUrl) {
     try {
       const slackColor = color.replace('#', '');
-      await fetch(slackUrl, {
+      const res = await fetch(slackUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -421,6 +422,7 @@ export async function sendWebhookNotification(opts: {
         }),
         signal: AbortSignal.timeout(15_000),
       });
+      if (!res.ok) logger.error('[webhook] Slack refused the delivery', { status: res.status });
     } catch (err) {
       logger.error('[webhook] Slack failed', { error: err instanceof Error ? err.message : String(err) });
     }
