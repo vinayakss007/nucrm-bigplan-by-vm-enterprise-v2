@@ -126,8 +126,6 @@ describe('#3312 the real derived walk', () => {
     expect(res.violations).toEqual([]);
     const lib = res.deferred.find((d) => d.dir === LIB_IMPORT_DEFERRAL.dir);
     expect(lib).toMatchObject({ deferredTo: '#3312', maxFindings: LIB_IMPORT_DEFERRAL.maxFindings });
-    // #3408's client-fetch migrations removed one raw read from this surface;
-    // the measured floor is now 199 (the deferral ceiling stays 200).
     expect(lib!.count).toBeGreaterThanOrEqual(199);
     expect(lib!.count).toBeLessThanOrEqual(LIB_IMPORT_DEFERRAL.maxFindings);
   }, 60_000);
