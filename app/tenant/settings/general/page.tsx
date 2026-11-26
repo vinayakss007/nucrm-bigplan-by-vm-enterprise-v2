@@ -39,6 +39,11 @@ const INDUSTRIES = ['','Technology','Healthcare','Finance','Education','Retail',
 const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
 
+interface SubdomainCheck {
+  available?: boolean;
+  current?: boolean;
+}
+
 interface WorkspaceData {
   name?: string;
   // #2949: GET /api/tenant/workspace serializes the Drizzle row with
@@ -111,8 +116,13 @@ export default function TenantGeneralSettings() {
   const checkSubdomain = async (val: string) => {
     if (!val || val.length < 3) { setSubdomainAvailable(null); return; }
     setCheckingSubdomain(true);
-    const r = await fetchJsonSafe<{ available?: boolean; current?: boolean }>(`/api/tenant/subdomain/check?subdomain=${encodeURIComponent(val)}`);
-    setSubdomainAvailable(r.status === 'ok' ? Boolean(r.data.available && !r.data.current) : null);
+    const r = await fetchJsonSafe<SubdomainCheck>(`/api/tenant/subdomain/check?subdomain=${encodeURIComponent(val)}`);
+    if (r.status === 'ok') {
+      const { available, current } = r.data;
+      setSubdomainAvailable(Boolean(available && !current));
+    } else {
+      setSubdomainAvailable(null);
+    }
     setCheckingSubdomain(false);
   };
 
