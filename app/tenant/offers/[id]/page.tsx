@@ -7,6 +7,7 @@
 import { useState, use } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import {
   ArrowLeft, Send, Copy, Check, X, Eye, CheckCircle2, XCircle, Clock,
@@ -98,13 +99,11 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/offers/${id}/send`, {
+      await fetchJsonOrThrow(`/api/tenant/offers/${id}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sendForm),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
     },
     onSuccess: () => { setShowSendModal(false); invalidate(); },
     onError: (e: Error) => setActionError(e.message),
@@ -112,9 +111,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      await fetchJsonOrThrow(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
     },
     onSuccess: () => { invalidate(); },
     onError: (e: Error) => setActionError(e.message),

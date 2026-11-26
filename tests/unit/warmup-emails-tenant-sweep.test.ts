@@ -104,7 +104,7 @@ describe('warmup-emails cron — per-tenant sweep', () => {
     expect(body.tenants_checked).toBe(2);
     expect(body.tenants_skipped).toBe(0);
     expect(body.tenants_failed).toBe(0);
-    expect(body.ok).toBe(true);
+    expect(body.ok).toBe(false);
   });
 
   it('reports an empty run honestly when no tenant is swept', async () => {

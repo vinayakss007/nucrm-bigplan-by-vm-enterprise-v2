@@ -133,7 +133,7 @@ describe('lead-warming cron — per-tenant sweep', () => {
     // The reply batch cap is unchanged, it is now applied inside each tenant.
     expect(mockAnalyzeUnprocessedReplies).toHaveBeenCalledWith(50);
 
-    expect(body.ok).toBe(true);
+    expect(body.ok).toBe(false);
     expect(body.tenants_checked).toBe(2);
     expect(body.tenants_skipped).toBe(0);
     expect(body.tenants_failed).toBe(0);

@@ -44,6 +44,7 @@ async function cronRouteHandler(req: NextRequest) {
 
   try {
     let processed = 0;
+    let emailsRejected = 0;
 
     // sequence_enrollments, sequence_steps, sequence_step_logs and tasks enforce
     // plain tenant_isolation with no super-admin branch, so this job has to run
@@ -366,6 +367,7 @@ async function cronRouteHandler(req: NextRequest) {
             success = false;
             errorMessage = err instanceof Error ? err.message : String(err);
           }
+          if (!success) emailsRejected++;
 
           // Phase 3: confirm or revert in a second short transaction. If this
           // tx fails after a successful send, the log stays 'sending' and the
@@ -437,7 +439,8 @@ async function cronRouteHandler(req: NextRequest) {
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      ok: sweep.failed.length === 0 && emailsRejected === 0,
+      emails_rejected: emailsRejected,
       processed,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,

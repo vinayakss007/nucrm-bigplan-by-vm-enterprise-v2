@@ -40,6 +40,7 @@ async function cronRouteHandler(request: NextRequest) {
     // #3315: subscriptions that were in a reminder window but had no active
     // member to receive it — reported, never counted as sent.
     let remindersWithoutRecipient = 0;
+    let emailsRejected = 0;
 
     // #2997: UTC calendar windows — the local-midnight-then-toISOString form
     // matched subscriptions one day early on hosts east of Greenwich, so the
@@ -156,6 +157,7 @@ async function cronRouteHandler(request: NextRequest) {
               });
               if (!emailResult.success) {
                 emailRejected = true;
+                emailsRejected++;
                 void logError({ error: new Error(`Renewal reminder email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/subscription-renewal-check email' });
               }
             }
@@ -199,7 +201,7 @@ async function cronRouteHandler(request: NextRequest) {
 
     return NextResponse.json({
       // #3315: an empty recipient read fails the run — see contract-renewal-check.
-      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0,
+      ok: sweep.failed.length === 0 && remindersWithoutRecipient === 0 && emailsRejected === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,

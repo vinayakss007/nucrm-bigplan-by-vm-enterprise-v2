@@ -7,6 +7,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -63,11 +64,10 @@ export default function TenantModulesPage() {
   const toggleMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
       const action = mod.status === 'active' ? 'disable' : 'install';
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, {
+      await fetchJsonOrThrow(`/api/superadmin/tenants/${tenantId}/modules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       return action;
     },
     onSuccess: (action) => {

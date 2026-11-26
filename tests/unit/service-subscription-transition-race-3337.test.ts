@@ -66,6 +66,11 @@ const db: Record<string, unknown> = {
         return node;
       },
       returning: () => {
+        // #3849: the optimistic guard's atomic claim also goes through
+        // db.update. It is not the caller's business write, so it neither lands
+        // in `state.updates` nor advances the canned return cursor.
+        const isClaim = Object.keys(rec.set).length === 1 && 'updatedAt' in rec.set;
+        if (isClaim) return Promise.resolve(state.updateReturns[0] ?? []);
         const at = state.updates.length;
         commit();
         return Promise.resolve(state.updateReturns[at] ?? []);

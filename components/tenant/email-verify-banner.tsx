@@ -87,7 +87,7 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
           {sending ? 'Sending...' : failed ? 'Not delivered — try again' : 'Resend email'}
         </button>
       )}
-      <button onClick={handleDismiss} className="shrink-0 opacity-60 hover:opacity-100">
+      <button onClick={handleDismiss} aria-label="Dismiss verification reminder" className="shrink-0 opacity-60 hover:opacity-100">
         <X className="w-3.5 h-3.5" />
       </button>
     </div>

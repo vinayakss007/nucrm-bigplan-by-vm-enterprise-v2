@@ -130,9 +130,14 @@ export default function PortalInvoicesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors">
+                    <a
+                      href={`/api/public/invoices/${inv.id}/pdf`}
+                      aria-label={`Download invoice ${inv.invoiceNumber} as PDF`}
+                      title={`Download invoice ${inv.invoiceNumber} as PDF`}
+                      className="inline-flex p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
+                    >
                       <Download className="w-4 h-4" />
-                    </button>
+                    </a>
                   </td>
                 </tr>
               ))}

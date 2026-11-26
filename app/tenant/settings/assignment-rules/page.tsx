@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Zap, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -126,13 +127,11 @@ export default function AssignmentRulesPage() {
         priority: form.priority,
         entityType: form.entityType,
       };
-      const res = await fetch('/api/tenant/assignment-rules', {
+      await fetchJsonOrThrow('/api/tenant/assignment-rules', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
       return Boolean(editing);
     },
     onSuccess: (wasEditing) => {
@@ -158,11 +157,10 @@ export default function AssignmentRulesPage() {
 
   const deleteRule = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Rule deleted'); reload(); },
-    onError: () => toast.error('Failed to delete'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
   });
 
   const del = async (id: string) => {
