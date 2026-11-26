@@ -112,7 +112,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
   await db
     .update(documents)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(documents.id, id));
+    .where(and(eq(documents.id, id), eq(documents.tenantId, ctx.tenantId), isNull(documents.deletedAt)));
 
   return NextResponse.json({ ok: true });
 });
