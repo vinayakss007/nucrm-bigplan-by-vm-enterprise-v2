@@ -210,13 +210,13 @@ describe('execution status is derived from the actions that ran (#3139)', () => 
     expect((finalStatus().errorMessage as string).length).toBeLessThanOrEqual(500);
   });
 
-  it('an unknown action type is still warn-and-continue, not a failure', async () => {
+  it('an unknown action type is a failed action, not a completed run', async () => {
     queueWorkflow(
       [trigger, { id: 'a', type: 'action_teleport', data: {} }],
       [edge('trg', 'a')],
     );
     await run();
-    expect(finalStatus().status).toBe('completed');
+    expect(finalStatus().status).toBe('failed');
   });
 
   it('a provider that refuses the send is a failed action, not a completed run', async () => {
