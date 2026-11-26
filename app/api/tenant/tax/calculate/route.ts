@@ -32,8 +32,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const parsed = validateBody(z.object({
       amount: z.coerce.number().finite().optional(),
-      taxRateIds: z.array(z.string()).optional(),
-      items: z.array(z.record(z.string(), z.unknown())).optional(),
+      taxRateIds: z.array(z.string().uuid()).max(50).optional(),
+      items: z.array(z.record(z.string(), z.unknown())).max(50).optional(),
     }), await readJsonBody(req));
     if (parsed instanceof NextResponse) return parsed;
     const { amount, taxRateIds, items } = parsed.data;
