@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { csatSurveys } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { readJsonBody } from '@/lib/api/validate';
+import { z } from 'zod';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
@@ -66,12 +67,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { token } = await params;
     if (!SURVEY_TOKEN_RE.test(token)) return NextResponse.json({ error: 'Survey not found' }, { status: 404 });
 
-    const body = await readJsonBody(request);
-    const { score, comment } = body;
-
-    if (typeof score !== 'number' || score < 1 || score > 5) {
-      return NextResponse.json({ error: 'Score must be 1-5' }, { status: 400 });
-    }
+    const validated = validateBody(z.object({
+      score: z.number().int().min(1).max(5),
+      comment: z.string().max(2000).optional(),
+    }), await readJsonBody(request));
+    if (validated instanceof NextResponse) return validated;
+    const { score, comment } = validated.data;
 
     const survey = await withPortalLookupContext({ accessToken: token }, (tx) => tx.select({
       id: csatSurveys.id,
