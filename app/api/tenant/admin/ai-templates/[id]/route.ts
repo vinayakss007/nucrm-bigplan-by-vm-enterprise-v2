@@ -81,7 +81,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (typeof body.default_subject === 'string') patch['defaultSubject'] = body.default_subject.slice(0, 200);
     if (typeof body.active === 'boolean') patch['active'] = body.active;
 
-    const [row] = await db.update(aiDraftTemplates).set(patch).where(eq(aiDraftTemplates.id, id)).returning();
+    const [row] = await db.update(aiDraftTemplates).set(patch).where(and(eq(aiDraftTemplates.id, id), eq(aiDraftTemplates.tenantId, ctx.tenantId), isNull(aiDraftTemplates.deletedAt))).returning();
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
@@ -111,7 +111,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     await db.update(aiDraftTemplates)
       .set({ deletedAt: new Date(), updatedBy: ctx.userId })
-      .where(eq(aiDraftTemplates.id, id));
+      .where(and(eq(aiDraftTemplates.id, id), eq(aiDraftTemplates.tenantId, ctx.tenantId), isNull(aiDraftTemplates.deletedAt)));
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,
