@@ -62,7 +62,7 @@ vi.mock('@/drizzle/db', () => ({
       from: () => ({
         // #2597: the producer's rule lookup ends in `.limit(100)`; callers
         // elsewhere still await `.where()` directly, so keep both shapes.
-        where: () => Object.assign(Promise.resolve([]), { limit: async () => [] }),
+        where: () => Object.assign(Promise.resolve([]), { limit: async () => [], orderBy: async () => [] }),
       }),
     }),
   },
@@ -101,6 +101,16 @@ vi.mock('@/lib/webhooks', () => ({ fireWebhooks: vi.fn(async () => undefined) })
 vi.mock('@/lib/notifications', () => ({ createNotification: vi.fn(async () => undefined) }));
 vi.mock('@/lib/cache', () => ({ cache: { delByPattern: vi.fn(async () => undefined) } }));
 vi.mock('@/lib/automation/engine', () => ({ evaluateAutomations: vi.fn(async () => undefined) }));
+
+vi.mock('@/lib/rbac/approval-producer', () => ({
+  stageDealCreateResponse: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rbac/enforce', () => ({
+  enforceFieldRead: vi.fn(async (_ctx: unknown, _entity: string, rows: unknown[]) => rows),
+  enforceFieldWrite: vi.fn(async (_ctx: unknown, _entity: string, body: unknown) => ({ body, stripped: [] })),
+  attachStrippedFields: vi.fn((res: Response) => res),
+}));
+
 
 // The stage resolver normally queries dealStages; emulate "stage exists in the
 // tenant" for the seeded id so the handler proceeds past the 400 guard.
