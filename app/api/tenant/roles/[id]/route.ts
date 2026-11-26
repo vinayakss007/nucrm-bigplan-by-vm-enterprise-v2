@@ -76,7 +76,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
         .select({ userId: tenantMembers.userId })
         .from(tenantMembers)
         .where(and(eq(tenantMembers.roleId, id), eq(tenantMembers.tenantId, ctx.tenantId)));
-      await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
+      for (let i = 0; i < members.length; i += 50) {
+        await Promise.all(members.slice(i, i + 50).map((m) => invalidateUserContexts(m.userId)));
+      }
     } catch (e) {
       await logError({ error: e, context: 'tenant/roles/[id] PATCH context invalidation' });
     }
@@ -133,7 +135,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
         .select({ userId: tenantMembers.userId })
         .from(tenantMembers)
         .where(and(eq(tenantMembers.roleId, id), eq(tenantMembers.tenantId, ctx.tenantId)));
-      await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
+      for (let i = 0; i < members.length; i += 50) {
+        await Promise.all(members.slice(i, i + 50).map((m) => invalidateUserContexts(m.userId)));
+      }
     } catch (e) {
       await logError({ error: e, context: 'tenant/roles/[id] DELETE context invalidation' });
     }
