@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -93,48 +94,45 @@ export default function OrderDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Order>) => {
-      const res = await fetch(`/api/tenant/orders/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to update');
     },
     onSuccess: () => {
       setEditing(false);
       toast.success('Order updated');
       invalidate();
     },
-    onError: () => toast.error('Failed to update order'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update order'),
   });
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const res = await fetch(`/api/tenant/orders/${id}`, {
+      await fetchJsonOrThrow(`/api/tenant/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed');
       return newStatus;
     },
     onSuccess: (newStatus) => {
       toast.success(`Order marked as ${newStatus}`);
       invalidate();
     },
-    onError: () => toast.error('Failed to change status'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to change status'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/tenant/orders/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/orders/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       toast.success('Order deleted');
       router.push('/tenant/orders');
     },
-    onError: () => toast.error('Failed to delete order'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete order'),
   });
 
   const handleEdit = () => {

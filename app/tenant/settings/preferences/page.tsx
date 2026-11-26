@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
   PanelLeftClose, ShieldCheck,
   type LucideIcon,
@@ -109,13 +110,11 @@ export default function PreferencesPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/user/preferences', {
+      await fetchJsonOrThrow('/api/user/preferences', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Failed to save');
     },
     onSuccess: () => {
       toast.success('Preferences saved');
@@ -130,10 +129,8 @@ export default function PreferencesPage() {
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/user/preferences', { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to reset');
-      const refresh = await fetch('/api/user/preferences');
-      const d = await refresh.json().catch(() => ({}));
+      await fetchJsonOrThrow('/api/user/preferences', { method: 'DELETE' });
+      const d = await fetchJsonOrThrow<{ preferences?: Prefs }>('/api/user/preferences');
       return (d.preferences ?? {}) as Prefs;
     },
     onSuccess: (fresh) => {

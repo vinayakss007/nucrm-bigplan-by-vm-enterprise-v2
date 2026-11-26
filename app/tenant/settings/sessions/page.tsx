@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Monitor, Smartphone, Globe, LogOut, Shield, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -48,18 +49,27 @@ export default function SessionsPage() {
   const revoke = async (sessionId: string) => {
     await confirmThen('Revoke this session? The device will be signed out.', async () => {
       setRevoking(sessionId);
-      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
-      toast.success('Session revoked');
-      reload();
-      setRevoking(null);
+      try {
+        await fetchJsonOrThrow('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
+        toast.success('Session revoked');
+        reload();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to revoke session');
+      } finally {
+        setRevoking(null);
+      }
     });
   };
 
   const revokeAll = async () => {
     await confirmThen('Sign out all other devices? You will remain signed in here.', async () => {
-      await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
-      toast.success('All other sessions revoked');
-      reload();
+      try {
+        await fetchJsonOrThrow('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
+        toast.success('All other sessions revoked');
+        reload();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to revoke sessions');
+      }
     });
   };
 
