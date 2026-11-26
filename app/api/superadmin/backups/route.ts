@@ -40,7 +40,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .from(criticalDataBackups)
           .orderBy(desc(criticalDataBackups.backedUpAt))
           .limit(50)
-          .catch((err) => { void logError({ error: err, context: 'superadmin/backups critical data query' }); return []; }),
+          ,
 
         db.select({
           totalBackups: sql<number>`count(*)::int`,
@@ -50,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         })
         .from(criticalDataBackups)
         .then(rows => rows[0])
-        .catch((err) => { void logError({ error: err, context: 'superadmin/backups stats query' }); return { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 }; }),
+        ,
       ]);
 
       // Get table breakdown
@@ -61,7 +61,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         })
         .from(criticalDataBackups)
         .groupBy(criticalDataBackups.tableName)
-        .catch((err) => { void logError({ error: err, context: 'superadmin/backups tableStats query' }); return []; });
+        ;
 
  
  
@@ -112,7 +112,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(tenantFilter)
         .orderBy(desc(backupRecords.createdAt))
         .limit(50)
-        .catch((err) => { void logError({ error: err, context: 'superadmin/backups recent list query' }); return []; });
+        ;
       
       // #1300: standardize list responses on the { data } envelope. `backups`
       // is retained for backward compatibility with existing consumers during
@@ -143,7 +143,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .from(backupSchedules)
       .leftJoin(tenants, eq(tenants.id, backupSchedules.tenantId))
       .orderBy(desc(backupSchedules.createdAt))
-      .catch((err) => { void logError({ error: err, context: 'superadmin/backups schedules query' }); return []; });
+      ;
 
     // #1300: standardize on { data }; keep `schedules` for backward compat.
     return NextResponse.json({ data: schedules, schedules });
