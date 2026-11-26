@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Users, Plus, Trash2, UserMinus, Loader2, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -46,13 +47,11 @@ export default function TeamsClient({ initialTeams, people }: Props) {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/tenant/teams', {
+      const data = await fetchJsonOrThrow<{ data: TeamVM }>('/api/tenant/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined, managerId: managerId || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create team');
       toast.success('Team created');
       setName(''); setDescription(''); setManagerId(''); setCreating(false);
       router.refresh();
@@ -68,8 +67,12 @@ export default function TeamsClient({ initialTeams, people }: Props) {
     confirmThen(
       `Delete team "${team.name}"? Leads and contacts keep working; they simply lose this team tag.`,
       async () => {
-        const res = await fetch(`/api/tenant/teams/${team.id}`, { method: 'DELETE' });
-        if (!res.ok) { toast.error('Failed to delete team'); return; }
+        try {
+          await fetchJsonOrThrow(`/api/tenant/teams/${team.id}`, { method: 'DELETE' });
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to delete team');
+          return;
+        }
         toast.success('Team deleted');
         setTeams((prev) => prev.filter((t) => t.id !== team.id));
         router.refresh();
@@ -82,12 +85,11 @@ export default function TeamsClient({ initialTeams, people }: Props) {
     if (!userId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/tenant/teams/${teamId}/members`, {
+      await fetchJsonOrThrow(`/api/tenant/teams/${teamId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, role: 'member' }),
       });
-      if (!res.ok) throw new Error();
       toast.success('Member added');
       setTeams((prev) => prev.map((t) => t.id === teamId
         ? { ...t, members: [...t.members.filter((m) => m.userId !== userId), { userId, role: 'member', name: personName(userId) }], memberCount: t.members.some((m) => m.userId === userId) ? t.memberCount : t.memberCount + 1 }
@@ -101,8 +103,12 @@ export default function TeamsClient({ initialTeams, people }: Props) {
   }
 
   async function removeMember(teamId: string, userId: string) {
-    const res = await fetch(`/api/tenant/teams/${teamId}/members?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
-    if (!res.ok) { toast.error('Failed to remove member'); return; }
+    try {
+      await fetchJsonOrThrow(`/api/tenant/teams/${teamId}/members?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove member');
+      return;
+    }
     toast.success('Member removed');
     setTeams((prev) => prev.map((t) => t.id === teamId
       ? { ...t, members: t.members.filter((m) => m.userId !== userId), memberCount: Math.max(0, t.memberCount - 1) }

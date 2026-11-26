@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Users, Plus, Mail, UserMinus, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -211,25 +211,22 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
           setInviting(false);
           return;
         }
-        const res = await fetch('/api/tenant/invite/send',{ 
+        await fetchJsonOrThrow('/api/tenant/invite/send',{
           method:'POST', 
           headers:{'Content-Type':'application/json'}, 
           body:JSON.stringify({email:inviteEmail,roleSlug:inviteRole}) 
         });
-        const d = await res.json();
-        if (res.ok) { 
-          toast.success(`Invitation sent to ${inviteEmail}`); 
-          setShowInvite(false); 
-          setInviteEmail(''); 
-          inviteClearErrors();
-          reload(); 
-        } else toast.error(d.error);
+        toast.success(`Invitation sent to ${inviteEmail}`);
+        setShowInvite(false);
+        setInviteEmail('');
+        inviteClearErrors();
+        reload();
       } else {
         if (!directValidateAll({ email: inviteEmail, full_name: fullName, password })) {
           setInviting(false);
           return;
         }
-        const res = await fetch('/api/tenant/members',{ 
+        await fetchJsonOrThrow('/api/tenant/members',{
           method:'POST', 
           headers:{'Content-Type':'application/json'}, 
           body:JSON.stringify({
@@ -239,19 +236,16 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
             role_slug: inviteRole
           }) 
         });
-        const d = await res.json();
-        if (res.ok) { 
-          toast.success(`Member ${fullName} created successfully`); 
-          setShowInvite(false); 
-          setInviteEmail('');
-          setFullName('');
-          setPassword('');
-          directClearErrors();
-          reload(); 
-        } else toast.error(d.error);
+        toast.success(`Member ${fullName} created successfully`);
+        setShowInvite(false);
+        setInviteEmail('');
+        setFullName('');
+        setPassword('');
+        directClearErrors();
+        reload();
       }
-    } catch {
-      toast.error('Failed to add member');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add member');
     } finally {
       setInviting(false);
     }
@@ -261,11 +255,10 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   // to be a silent unhandled rejection) from a non-2xx response (server error).
   const changeRole = async (memberId: string, roleSlug: string) => {
     try {
-      const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId,action:'change_role',roleSlug}) });
-      if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to update role'); return; }
+      await fetchJsonOrThrow('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId,action:'change_role',roleSlug}) });
       toast.success('Role updated'); reload();
-    } catch {
-      toast.error('Network error — role was not updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error — role was not updated');
     }
   };
 
@@ -273,23 +266,22 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
     const m = removeModal;
     if (!m) return;
     try {
-      const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId:m.id,action:'remove',reassignTo,reason}) });
-      if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to remove member'); return; }
+      await fetchJsonOrThrow('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId:m.id,action:'remove',reassignTo,reason}) });
       toast.success(`${m.full_name||m.email} removed. Data reassigned.`); setRemoveModal(null); reload();
-    } catch {
-      toast.error('Network error — member was not removed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error — member was not removed');
     }
   };
 
   const cancelInvite = async (inviteId: string) => {
     await confirmThen('Cancel this invitation?', async () => {
       try {
-        const res = await fetch(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
-        // #2231: never toast success when the DELETE failed (500 or network drop).
-        if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to cancel invitation'); return; }
+        // #2231: the canonical client throws on a refused DELETE, so success is
+        // only toasted when the invitation was actually cancelled.
+        await fetchJsonOrThrow(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
         toast.success('Invitation cancelled'); reload();
-      } catch {
-        toast.error('Network error — invitation was not cancelled');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Network error — invitation was not cancelled');
       }
     });
   };
