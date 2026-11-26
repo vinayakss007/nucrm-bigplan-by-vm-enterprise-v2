@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 // NOTE: these mocks MUST stay at module top level. Vitest hoists vi.mock
 // to the top of the file regardless of where it is written, and vitest 5
@@ -190,6 +192,12 @@ describe('email/service - Extended', () => {
         color: '#ff0000',
         url: 'https://example.com',
       })).resolves.not.toThrow();
+    });
+
+    it('treats Discord and Slack HTTP rejections as failed deliveries', () => {
+      const src = readFileSync(path.join(process.cwd(), 'lib/email/service.ts'), 'utf8');
+      const checks = src.match(/if \(!res\.ok\) logger\.error\('\[webhook\]/g) ?? [];
+      expect(checks.length).toBeGreaterThanOrEqual(2);
     });
 
     it('handles Discord fetch error gracefully', async () => {

@@ -36,10 +36,10 @@ describe('Notifications Dashboard Widget API', () => {
   });
 
   it('returns notifications for the current user', async () => {
-    // Route performs a SINGLE query with unreadCount as a scalar subselect.
+    // Route performs a SINGLE query with unread and total counts as scalar subselects.
     const mockRows = [
-      { id: 'n1', title: 'Task assigned', body: 'Review proposal', type: 'task_assigned', link: '/tasks/1', readAt: null, createdAt: new Date().toISOString(), unreadCount: 1 },
-      { id: 'n2', title: 'Deal moved', body: null, type: 'deal_stage', link: null, readAt: new Date().toISOString(), createdAt: new Date().toISOString(), unreadCount: 1 },
+      { id: 'n1', title: 'Task assigned', body: 'Review proposal', type: 'task_assigned', link: '/tasks/1', readAt: null, createdAt: new Date().toISOString(), unreadCount: 1, totalCount: 7 },
+      { id: 'n2', title: 'Deal moved', body: null, type: 'deal_stage', link: null, readAt: new Date().toISOString(), createdAt: new Date().toISOString(), unreadCount: 1, totalCount: 7 },
     ];
 
     const limitFn = vi.fn().mockResolvedValue(mockRows);
@@ -56,6 +56,7 @@ describe('Notifications Dashboard Widget API', () => {
     expect(res.status).toBe(200);
     expect(body.data.items).toHaveLength(2);
     expect(body.data.stats.unreadCount).toBe(1);
+    expect(body.data.stats.totalCount).toBe(7);
   });
 
   it('returns empty array when no notifications exist', async () => {

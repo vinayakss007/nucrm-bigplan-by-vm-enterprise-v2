@@ -311,6 +311,19 @@ describe('POST /api/cron/contract-renewal-check', () => {
     expect(res.body).toMatchObject({ remindersSent: 0 });
   });
 
+  it('reports a failed in-app notification as a failed run and withholds the dedup marker', async () => {
+    rowsByTable.set(contracts, [contractRow({})]);
+    rowsByTable.set(activities, []);
+    rowsByTable.set(users, [{ userId: 'user-1', email: 'ada@example.com', fullName: 'Ada' }]);
+    returningRows = [{ id: 'c-9' }, { id: 'c-10' }];
+    mockCreateNotification.mockResolvedValueOnce(false);
+
+    const res = await runCron();
+
+    expect(res.body).toMatchObject({ ok: false, remindersSent: 0 });
+    expect(inserts).toHaveLength(0);
+  });
+
   it('does not re-remind a (contract, days) combo already logged', async () => {
     rowsByTable.set(contracts, [contractRow({})]);
     rowsByTable.set(activities, [{ entityId: 'c-1', metadata: { reminder_days: 30 } }]);

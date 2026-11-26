@@ -180,6 +180,18 @@ describe('POST /api/cron/subscription-renewal-check recipient read (#3315)', () 
     expect(inserts).toHaveLength(1);
   });
 
+  it('reports a failed in-app notification as a failed run and writes no dedup marker', async () => {
+    rowsByTable.set(serviceSubscriptions, [subRow()]);
+    rowsByTable.set(activities, []);
+    rowsByTable.set(users, [member]);
+    mockCreateNotification.mockResolvedValueOnce(false);
+
+    const res = await runCron();
+
+    expect(res.body).toMatchObject({ ok: false, remindersSent: 0 });
+    expect(inserts).toHaveLength(0);
+  });
+
   it('reports an empty recipient read as a failed run and writes no dedup marker', async () => {
     rowsByTable.set(serviceSubscriptions, [subRow(), subRow({ id: 'sub-2', name: 'Hosting plan' })]);
     rowsByTable.set(activities, []);
