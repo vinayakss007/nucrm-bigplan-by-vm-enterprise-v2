@@ -140,7 +140,7 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJsonBody(request: Request): Promise<any> {
-  const declared = Number(request.headers.get('content-length') ?? '0');
+  const declared = Number(request.headers?.get('content-length') ?? '0');
   if (declared > MAX_JSON_BODY_BYTES) {
     throw new InvalidJsonBodyError(new Error('Request body too large'));
   }
