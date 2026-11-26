@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { MoreHorizontal, AlertTriangle, CheckCircle, XCircle, Eye } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -107,30 +107,30 @@ export default function ErrorsDataTable({ initialErrors, summary }: Props) {
   }, [loadData])
 
   const resolveError = useCallback(async (id: string) => {
-    const res = await fetch('/api/superadmin/errors', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/superadmin/errors', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
       toast.success('Error marked as resolved')
       loadData(pagination.pageIndex)
-    } else {
-      toast.error('Failed to resolve')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resolve')
     }
   }, [loadData, pagination.pageIndex])
 
   const resolveAll = async () => {
-    const res = await fetch('/api/superadmin/errors', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resolveAll: true }),
-    })
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/superadmin/errors', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolveAll: true }),
+      })
       toast.success('All errors resolved')
       loadData(0)
-    } else {
-      toast.error('Failed to resolve all')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resolve all')
     }
   }
 

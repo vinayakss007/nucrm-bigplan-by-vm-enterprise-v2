@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal, LogIn, AlertTriangle, Edit, XCircle } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -98,35 +98,35 @@ export default function TenantsDataTable({ initialTenants }: Props) {
 
   const impersonate = async (tenantId: string, tenantName: string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
-      const res = await fetch('/api/superadmin/impersonate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId }),
-      })
-      if (res.ok) {
+      try {
+        await fetchJsonOrThrow('/api/superadmin/impersonate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId }),
+        })
         toast.success('Impersonating tenant...')
         // #1267: intentional full reload — impersonation swaps the session
         // cookie, so we must reload to re-run middleware and rebuild all
         // server components under the new tenant context (a client-side
         // router.push would keep stale superadmin state).
         window.location.href = '/tenant/dashboard'
-      } else {
-        toast.error('Failed to impersonate')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to impersonate')
       }
     })
   }
 
   const suspendTenant = useCallback(async (tenantId: string, _name: string) => {
-    const res = await fetch('/api/superadmin/tenants', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: tenantId, status: 'suspended' }),
-    })
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/superadmin/tenants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tenantId, status: 'suspended' }),
+      })
       toast.success('Tenant suspended')
       loadData(pagination.pageIndex)
-    } else {
-      toast.error('Failed to suspend')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to suspend')
     }
   }, [loadData, pagination.pageIndex])
 

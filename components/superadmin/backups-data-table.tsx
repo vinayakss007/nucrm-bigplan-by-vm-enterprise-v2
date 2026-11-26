@@ -10,7 +10,7 @@ import { MoreHorizontal, Download, Trash2, RefreshCw, Database, Cloud, HardDrive
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -101,29 +101,27 @@ export default function BackupsDataTable({ initialBackups }: Props) {
   }, [loadData])
 
   const runBackup = async () => {
-    const res = await fetch('/api/superadmin/backups', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'manual' }),
-    })
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/superadmin/backups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'manual' }),
+      })
       toast.success('Backup started')
       loadData(0)
-    } else {
-      toast.error('Failed to start backup')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start backup')
     }
   }
 
   const deleteBackup = useCallback(async (id: string) => {
     await confirmThen('Delete this backup record? The archive itself stays in storage until retention removes it.', async () => {
-      const res = await fetch(`/api/superadmin/backups/${id}`, {
-        method: 'DELETE',
-      })
-      if (res.ok) {
+      try {
+        await fetchJsonOrThrow(`/api/superadmin/backups/${id}`, { method: 'DELETE' })
         toast.success('Backup deleted')
         loadData(pagination.pageIndex)
-      } else {
-        toast.error('Failed to delete')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete')
       }
     })
   }, [loadData, pagination.pageIndex])

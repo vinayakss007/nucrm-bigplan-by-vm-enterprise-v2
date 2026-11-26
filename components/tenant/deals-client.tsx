@@ -10,7 +10,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 ;
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { EmptyState } from '@/components/shared/empty-state';
 
 interface DealRecord {
@@ -65,15 +65,18 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
 
   const addDeal = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/deals', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...form, value:Number(form.value)||0, contact_id:form.contact_id||null, company_id:form.company_id||null, assigned_to:form.assigned_to||null }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); setSaving(false); return; }
-    setDeals(prev => [data.data, ...prev]);
-    setForm({ title:'', value:'', stage:'lead', contact_id:'', company_id:'', assigned_to:'', close_date:'', description:'' });
-    setShowAdd(false); setSaving(false); toast.success('Deal created');
+    try {
+      const data = await fetchJsonOrThrow<{ data: DealRecord }>('/api/tenant/deals', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ...form, value:Number(form.value)||0, contact_id:form.contact_id||null, company_id:form.company_id||null, assigned_to:form.assigned_to||null }),
+      });
+      setDeals(prev => [data.data, ...prev]);
+      setForm({ title:'', value:'', stage:'lead', contact_id:'', company_id:'', assigned_to:'', close_date:'', description:'' });
+      setShowAdd(false); toast.success('Deal created');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create deal');
+    }
+    setSaving(false);
   };
 
   const updateStage = useCallback(async (dealId: string, newStage: string) => {
@@ -81,15 +84,15 @@ export default function TenantDealsClient({ initialDeals, contacts, companies, t
     if (!deal || deal.stage === newStage) return;
     // Optimistic update
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d));
-    const res = await fetch(`/api/tenant/deals/${dealId}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stage: newStage }),
-    });
-    if (!res.ok) {
-      setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: deal.stage } : d));
-      toast.error('Failed to update stage');
-    } else {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/deals/${dealId}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stage: newStage }),
+      });
       if (newStage === 'won') toast.success('🎉 Deal won!');
       else if (newStage === 'lost') toast.error('Deal marked as lost');
+    } catch (err) {
+      setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: deal.stage } : d));
+      toast.error(err instanceof Error ? err.message : 'Failed to update stage');
     }
   }, [deals]);
 

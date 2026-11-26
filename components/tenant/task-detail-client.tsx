@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   ArrowLeft, Calendar, User, Building2, TrendingUp, CheckCircle,
   Edit, Trash2, Clock, AlertTriangle, FileText, MoreHorizontal,
@@ -90,40 +91,37 @@ export default function TaskDetailClient({ task, permissions, _tenantId, _userId
 
   const toggleComplete = async () => {
     try {
-      const res = await fetch(`/api/tenant/tasks/${task.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: !task.completed }),
       });
-      if (!res.ok) { toast.error('Failed to update'); return; }
       toast.success(task.completed ? 'Task reopened' : 'Task completed!');
       router.refresh();
-    } catch { toast.error('Failed to update'); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update'); }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/tenant/tasks/${task.id}`, {
+      await fetchJsonOrThrow(`/api/tenant/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       });
-      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Failed'); return; }
       toast.success('Task updated');
       setShowEdit(false);
       router.refresh();
-    } catch { toast.error('Failed to update'); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/tenant/tasks/${task.id}`, { method: 'DELETE' });
-      if (!res.ok) { toast.error('Failed to delete'); return; }
+      await fetchJsonOrThrow(`/api/tenant/tasks/${task.id}`, { method: 'DELETE' });
       toast.success('Task deleted');
       router.push('/tenant/tasks');
-    } catch { toast.error('Failed to delete'); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete'); }
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
