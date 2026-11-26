@@ -115,7 +115,7 @@ describe('#3312 the real derived walk', () => {
     }
   });
 
-  it('walks the re-pinned floor and holds 200 newly visible reads in the counted deferral', async () => {
+  it('walks the re-pinned floor and holds the newly visible reads in the counted deferral', async () => {
     const derived = await deriveTargets(ROOT);
     const res = await run(derived, ROOT, {
       tables: repoTables,
@@ -126,7 +126,9 @@ describe('#3312 the real derived walk', () => {
     expect(res.violations).toEqual([]);
     const lib = res.deferred.find((d) => d.dir === LIB_IMPORT_DEFERRAL.dir);
     expect(lib).toMatchObject({ deferredTo: '#3312', maxFindings: LIB_IMPORT_DEFERRAL.maxFindings });
-    expect(lib!.count).toBeGreaterThanOrEqual(200);
+    // #3408's client-fetch migrations removed one raw read from this surface;
+    // the measured floor is now 199 (the deferral ceiling stays 200).
+    expect(lib!.count).toBeGreaterThanOrEqual(199);
     expect(lib!.count).toBeLessThanOrEqual(LIB_IMPORT_DEFERRAL.maxFindings);
   }, 60_000);
 
