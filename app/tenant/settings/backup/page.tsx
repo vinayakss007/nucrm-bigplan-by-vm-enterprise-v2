@@ -8,6 +8,7 @@ import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   HardDrive, Database, Play, CheckCircle, XCircle, Clock, RefreshCw,
   Save, Loader2, Eye, EyeOff, AlertTriangle, Settings,
@@ -143,7 +144,7 @@ export default function TenantBackupSettingsPage() {
   // Save config
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/backup/config', {
+      await fetchJsonOrThrow('/api/tenant/backup/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,8 +160,6 @@ export default function TenantBackupSettingsPage() {
           point_in_time_recovery: config.point_in_time_recovery,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
     },
     onSuccess: () => {
       toast.success('Backup configuration saved');
@@ -191,13 +190,11 @@ export default function TenantBackupSettingsPage() {
   // Trigger manual backup
   const triggerMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/backup', {
+      await fetchJsonOrThrow('/api/tenant/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_type: bkType }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Backup failed');
     },
     onSuccess: () => {
       toast.success('Backup started');

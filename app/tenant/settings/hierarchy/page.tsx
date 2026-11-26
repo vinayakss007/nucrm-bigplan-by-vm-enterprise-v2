@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plus, Building2, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -78,13 +79,11 @@ export default function HierarchyPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/hierarchy', {
+      await fetchJsonOrThrow('/api/tenant/hierarchy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ childTenantId: form.childTenantId, relationship: form.relationship, permissions: form.permissions }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to create');
     },
     onSuccess: () => { toast.success('Relationship created'); setShowModal(false); reload(); },
     onError: (e: Error) => toast.error(e.message || 'Failed to create'),
@@ -98,10 +97,10 @@ export default function HierarchyPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
+      await fetchJsonOrThrow(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Relationship removed'); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to remove relationship'),
   });
 
   const del = async (id: string) => {
