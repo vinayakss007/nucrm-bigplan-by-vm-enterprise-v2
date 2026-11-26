@@ -12,6 +12,7 @@
  * trigger a refresh without a full reload.
  */
 import { useEffect } from 'react';
+import { fetchJsonSafe } from '@/lib/fetch-json';
 
 const _KEYS = ['font_size', 'ui_density', 'accent_color', 'reduce_motion', 'high_contrast', 'sidebar_default'] as const;
 
@@ -47,13 +48,11 @@ function applyToHtml(prefs: UserPrefs) {
 
 async function fetchAndApply(signal?: AbortSignal) {
   try {
-    const res = await fetch('/api/user/preferences', { cache: 'no-store', signal });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (signal?.aborted) return;
-    applyToHtml(data.preferences ?? {});
+    const result = await fetchJsonSafe<{ preferences?: UserPrefs }>('/api/user/preferences', { cache: 'no-store', signal });
+    if (result.status !== 'ok' || signal?.aborted) return;
+    applyToHtml(result.data.preferences ?? {});
     // Cache a tiny copy so reload feels instant before the next fetch
-    try { sessionStorage.setItem('nucrm.prefs.cache', JSON.stringify(data.preferences ?? {})); } catch { /* Fallback to default on corrupted storage data */ }
+    try { sessionStorage.setItem('nucrm.prefs.cache', JSON.stringify(result.data.preferences ?? {})); } catch { /* Fallback to default on corrupted storage data */ }
   } catch { /* Fallback to default on corrupted storage data */ }
 }
 

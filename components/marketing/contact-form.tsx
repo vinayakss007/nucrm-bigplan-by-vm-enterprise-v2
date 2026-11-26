@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { Icon } from './icon';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
 /**
  * Marketing contact form.
@@ -42,7 +43,7 @@ export function ContactForm({ tenantId }: { tenantId: string }) {
     setState('sending');
     setError('');
     try {
-      const res = await fetch('/api/leads/public', {
+      await fetchJsonOrThrow('/api/leads/public', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,8 +59,6 @@ export function ContactForm({ tenantId }: { tenantId: string }) {
           tenant_id: tenantId,
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Something went wrong. Please email us instead.');
       setState('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');

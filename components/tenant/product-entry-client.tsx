@@ -6,6 +6,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
   LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
@@ -53,10 +54,8 @@ export default function ProductEntryClient({ product, _tenantId, _userId }: Prod
   const templatesQuery = useQuery({
     queryKey: ['industry-templates'],
     queryFn: async (): Promise<TemplateView[]> => {
-      const res = await fetch('/api/tenant/industry-templates');
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to load templates');
-      return (data.data ?? []) as TemplateView[];
+      const data = await fetchJsonOrThrow<{ data?: TemplateView[] }>('/api/tenant/industry-templates');
+      return data.data ?? [];
     },
   });
   const template = templatesQuery.data?.find(t => t.slug === product.templateId) ?? null;
