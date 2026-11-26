@@ -6,6 +6,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard, Building2, Users, CreditCard, BarChart3,
@@ -128,9 +129,12 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
 
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/auth/login');
-      router.refresh();
+      try {
+        await fetchJsonOrThrow('/api/auth/logout', { method: 'POST' });
+      } finally {
+        router.push('/auth/login');
+        router.refresh();
+      }
     }, 'danger_only', 'Log out');
   };
 

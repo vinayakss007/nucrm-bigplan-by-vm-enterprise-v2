@@ -7,7 +7,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Shield, ShieldCheck, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn, formatDateTimeShort, formatRelativeTime } from '@/lib/utils';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 const ACTION_CFG: Record<string, { color: string; bg: string }> = {
@@ -180,11 +180,8 @@ export default function AuditLogClient() {
     if (tenantSearch) params.set('tenant_id', tenantSearch);
     if (dateFrom) params.set('start_date', dateFrom);
     if (dateTo) params.set('end_date', dateTo + 'T23:59:59Z');
-    const res = await fetch(`/api/super-admin/audit-logs?${params}`);
-    if (res.ok) {
-      const data: AuditLogResponse = await res.json();
-      downloadCSV(data.data);
-    }
+    const result = await fetchJsonSafe<AuditLogResponse>(`/api/super-admin/audit-logs?${params}`);
+    if (result.status === 'ok') downloadCSV(result.data.data);
   }, [logs, total, actionF, targetF, search, tenantSearch, dateFrom, dateTo]);
 
   const clearFilters = () => {
@@ -201,9 +198,7 @@ export default function AuditLogClient() {
     setVerifying(true);
     setChainError(null);
     try {
-      const res = await fetch('/api/super-admin/audit-logs?verify=1');
-      if (!res.ok) throw new Error(`http=${res.status}`);
-      const body = await res.json() as { verification: ChainVerification };
+      const body = await fetchJsonOrThrow<{ verification: ChainVerification }>('/api/super-admin/audit-logs?verify=1');
       setChain(body.verification);
     } catch (e) {
       setChain(null);
