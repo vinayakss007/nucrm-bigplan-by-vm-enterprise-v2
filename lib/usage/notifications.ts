@@ -10,7 +10,7 @@
  * so a single hot loop does not spam the same channel.
  */
 import { withTenantDb } from '@/lib/db';
-import { NO_USER_SENTINEL } from '@/lib/db/rls';
+import { NO_USER_SENTINEL, withTenantContext } from '@/lib/db/rls';
 import { tenants, users, limitViolations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
@@ -92,8 +92,8 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
           tenantId: hit.tenantId, channel: 'email',
           error: emailResult.error ?? 'provider failure',
         });
-        await withTenantDb(hit.tenantId, NO_USER_SENTINEL, async (db) =>
-          db.update(limitViolations)
+        await withTenantContext(hit.tenantId, NO_USER_SENTINEL, async (tx) =>
+          tx.update(limitViolations)
             .set({ notified: false, notifiedAt: null })
             .where(and(
               eq(limitViolations.id, updated[0]!.id),
