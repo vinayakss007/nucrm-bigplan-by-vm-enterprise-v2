@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { leadCaptureFormSchema, validateForm } from '@/lib/validation/forms';
 
 interface LeadFormProps {
@@ -67,7 +68,7 @@ export default function LeadCaptureForm({
     setLoading(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/tenant/leads`, {
+      await fetchJsonOrThrow(`${apiUrl}/api/tenant/leads`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,12 +83,6 @@ export default function LeadCaptureForm({
           lead_source: 'Static Form',
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit');
-      }
 
       setSuccess(true);
       setFormData({ first_name: '', last_name: '', email: '', phone: '', company: '' });

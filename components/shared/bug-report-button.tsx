@@ -6,6 +6,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bug, X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { clientLogError } from '@/lib/client-logger';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
@@ -44,7 +45,7 @@ export default function BugReportButton() {
   const submit = async () => {
     setStatus('sending'); setMessage(null);
     try {
-      const res = await fetch('/api/bug-report', {
+      const data = await fetchJsonOrThrow<{ url?: string }>('/api/bug-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -54,12 +55,6 @@ export default function BugReportButton() {
           pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStatus('error');
-        setMessage(data.error ?? `Something went wrong (HTTP ${res.status})`);
-        return;
-      }
       setStatus('sent');
       setIssueUrl(typeof data.url === 'string' ? data.url : null);
     } catch (error) {

@@ -7,6 +7,7 @@
 import { useState, useRef } from 'react';
 import { X, Upload, Download, CheckCircle, AlertTriangle, Loader2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -87,13 +88,11 @@ export default function ImportModal({ onDone, onClose }: Props) {
   const runImport = async () => {
     setImporting(true);
     try {
-      const res = await fetch('/api/tenant/contacts/import', {
+      const data = await fetchJsonOrThrow<{ results: ImportResult }>('/api/tenant/contacts/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv: csvText, ...opts }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Import failed'); setImporting(false); return; }
       setResult(data.results);
       setStep('result');
     } catch (err: unknown) {

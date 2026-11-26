@@ -6,6 +6,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 
 export default function EmailVerifyBanner({ email }: { email: string; emailVerified?: boolean }) {
@@ -17,13 +18,9 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
 
   const checkVerification = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/onboarding/complete', { signal });
-      if (res.ok) {
-        const data = await res.json();
-        if (signal?.aborted) return;
-        if (data.completed) {
-          setServerVerified(true);
-        }
+      const result = await fetchJsonSafe<{ completed?: boolean }>('/api/tenant/onboarding/complete', { signal });
+      if (result.status === 'ok' && !signal?.aborted && result.data.completed) {
+        setServerVerified(true);
       }
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
@@ -45,24 +42,26 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
 
   const resend = async () => {
     setSending(true);
-    const res = await fetch('/api/auth/resend-verification', { method: 'POST' });
-    const data = await res.json();
-    // #2126: HTTP 200 only says the verification row was written. `email_failed`
-    // says whether a provider accepted the mail, and until now it was never read,
-    // so a rejected send showed "Verification email sent!" forever.
-    if (res.ok && !data.email_failed) {
-      setSent(true);
-      setFailed(false);
-      toast.success('Verification email sent!');
-    } else if (res.ok) {
-      setSent(false);
+    try {
+      const data = await fetchJsonOrThrow<{ email_failed?: boolean }>('/api/auth/resend-verification', { method: 'POST' });
+      // #2126: HTTP 200 only says the verification row was written. `email_failed`
+      // says whether a provider accepted the mail, and until now it was never read,
+      // so a rejected send showed "Verification email sent!" forever.
+      if (!data.email_failed) {
+        setSent(true);
+        setFailed(false);
+        toast.success('Verification email sent!');
+      } else {
+        setSent(false);
+        setFailed(true);
+        toast.error('Could not deliver the email — try again or contact support.');
+      }
+    } catch (err) {
       setFailed(true);
-      toast.error('Could not deliver the email — try again or contact support.');
-    } else {
-      setFailed(true);
-      toast.error(data.error || 'Could not send');
+      toast.error(err instanceof Error ? err.message : 'Could not send');
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   const handleDismiss = () => {
