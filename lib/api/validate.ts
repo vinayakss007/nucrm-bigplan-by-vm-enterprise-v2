@@ -147,8 +147,12 @@ export async function readJsonBody(request: Request): Promise<any> {
   let raw: string;
   try {
     raw = await request.text();
-  } catch (e) {
-    throw new InvalidJsonBodyError(e);
+  } catch {
+    try {
+      return await request.json();
+    } catch (e) {
+      throw new InvalidJsonBodyError(e);
+    }
   }
   if (Buffer.byteLength(raw, 'utf8') > MAX_JSON_BODY_BYTES) {
     throw new InvalidJsonBodyError(new Error('Request body too large'));
