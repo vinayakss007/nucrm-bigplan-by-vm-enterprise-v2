@@ -380,14 +380,15 @@ describe('action: db-mutating branches', () => {
     expect(call!.values.direction).toBe('outbound');
   });
 
-  it('unknown action type does not throw and still completes', async () => {
+  it('unknown action type is recorded as a failure, not a successful step', async () => {
     queueWorkflow(
       [trigger, { id: 'a', type: 'action_teleport', data: {} }],
       [edge('trg', 'a')],
     );
     const id = await run();
     expect(id).toBe('exec-1');
-    expect(harness.updates.some((u) => u.set.status === 'completed')).toBe(true);
+    expect(harness.updates.some((u) => u.set.status === 'failed')).toBe(true);
+    expect(harness.updates.some((u) => u.set.status === 'completed')).toBe(false);
   });
 });
 

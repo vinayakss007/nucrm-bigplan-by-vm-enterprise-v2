@@ -17,7 +17,6 @@
  *   ticket.created
  *   invoice.created | invoice.paid
  */
-
 import { logError } from '@/lib/errors-server';
 import { safeFetch } from '@/lib/security/ssrf';
 import { db } from '@/drizzle/db';
@@ -189,7 +188,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     case 'send_notification': {
       const userId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
       if (!userId) return;
-      await createNotification({
+      const stored = await createNotification({
         userId,
         tenantId: payload.tenantId,
         type: 'system',
@@ -197,6 +196,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         body:  config.body ? interpolate(config.body, enrichedData) : undefined,
         link:  config.link || undefined,
       });
+      if (!stored) actionFailures.push('send_notification: notification was not persisted');
       break;
     }
 

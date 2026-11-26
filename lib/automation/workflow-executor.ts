@@ -378,7 +378,7 @@ async function executeActionNode(
       case 'send_notification': {
         const targetUserId = (data.user_id as string) || (ctx.user_id as string);
         if (!targetUserId) break;
-        await createNotification({
+        const stored = await createNotification({
           userId: targetUserId,
           tenantId,
           type: 'system',
@@ -386,13 +386,14 @@ async function executeActionNode(
           body: data.body ? interpolate(data.body as string, ctx) : undefined,
           link: (data.link as string) || undefined,
         });
+        if (!stored) throw new Error('notification was not persisted');
         break;
       }
 
       case 'fire_webhook': {
         const url = data.url as string;
         if (!url) break;
-        await safeFetch(url, {
+        const res = await safeFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -403,6 +404,7 @@ async function executeActionNode(
           }),
           signal: AbortSignal.timeout(10_000),
         });
+        if (!res.ok) throw new Error(`webhook returned HTTP ${res.status}`);
         break;
       }
 
@@ -453,7 +455,7 @@ async function executeActionNode(
       }
 
       default:
-        console.warn(`[workflow] Unknown action type: ${actionType}`);
+        throw new Error(`Unknown workflow action type: ${actionType}`);
     }
 
     actionLog.status = 'success';
