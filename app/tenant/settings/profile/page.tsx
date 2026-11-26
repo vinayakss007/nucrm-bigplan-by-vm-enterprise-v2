@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Save, User, Lock, Loader2, Eye, EyeOff, Bell, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -64,10 +65,8 @@ export default function ProfileSettingsPage() {
 
   const saveProfileMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      return d.user as UserProfile;
+      const d = await fetchJsonOrThrow<{ user: UserProfile }>('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
+      return d.user;
     },
     onSuccess: (u) => { toast.success('Profile updated'); setUserOverride(prev => ({ ...prev, ...u })); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
@@ -75,9 +74,7 @@ export default function ProfileSettingsPage() {
 
   const savePasswordMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/user/password',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:password.current,new_password:password.newPass})});
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed');
+      await fetchJsonOrThrow('/api/user/password',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:password.current,new_password:password.newPass})});
     },
     onSuccess: () => { toast.success('Password updated'); setPassword({current:'',newPass:'',confirm:''}); },
     onError: (e: Error) => toast.error(e.message || 'Failed'),
