@@ -66,7 +66,7 @@ export const tagActionSchema = z.object({
   action: z.enum(['rename', 'merge', 'delete']),
   tag: z.string().trim().min(1).max(40).regex(/^[\w \-./&]{1,40}$/).optional(),
   new_tag: z.string().trim().min(1).max(40).regex(/^[\w \-./&]{1,40}$/).optional(),
-  tags: z.array(z.string().trim().min(1).max(40)).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 });
 
 // ── Upsert Picklist schema ──
