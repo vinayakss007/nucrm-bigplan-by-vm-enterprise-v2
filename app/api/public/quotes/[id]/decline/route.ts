@@ -11,7 +11,8 @@ import { canTransition } from '@/lib/offers';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { readJsonBody } from '@/lib/api/validate';
+import { z } from 'zod';
+import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import { transitionStatus } from '@/lib/state/transition';
 import { allowedFromStatus as transitionFrom } from '@/lib/state/transitions';
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let reason = '';
     try {
-      const body = await readJsonBody(request);
-      reason = (body.reason ?? '').trim();
+      const validated = validateBody(z.object({ reason: z.string().max(500).optional() }), await readJsonBody(request));
+      if (!(validated instanceof NextResponse)) reason = validated.data.reason?.trim() ?? '';
     } catch { /* no body is fine */ }
 
     // #2446: every read here (`contacts`, `quotes`) and every write (`quotes`,
