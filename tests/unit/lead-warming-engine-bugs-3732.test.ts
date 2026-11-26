@@ -22,10 +22,10 @@ describe('#3732 lead-warming engine bugs', () => {
     expect(src.match(/\.leftJoin\(companies, eq\(companies\.id, contacts\.companyId\)\)/g)).toHaveLength(2);
   });
 
-  it('the monthly message cap is read from the campaign and compared', () => {
+  it('the monthly message cap is enforced in SQL before the contact window', () => {
     expect(src).toMatch(/campaign\.maxMessagesPerContactPerMonth \?\? 4/);
-    expect(src).toMatch(/messagesThisMonth \?\? 0\) >= monthlyCap/);
-    expect(src).toContain('!atMonthlyCapIds.has(c.id)');
+    expect(src).toContain('COALESCE(messages_this_month, 0) >= ${monthlyCap}');
+    expect(src).toContain('notInArray(contacts.id, excludedIds)');
   });
 
   it('SMS-only campaigns are reported as skipped, not silently successful', () => {
