@@ -3,6 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -84,11 +86,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Enable portal in settings first' }, { status: 400 });
     }
 
-    const { name, email } = await readJsonBody(request);
-
-    if (!name || !email) {
-      return NextResponse.json({ error: 'Name and email required' }, { status: 400 });
-    }
+    const validated = validateBody(z.object({
+      name: z.string().trim().min(1).max(255),
+      email: z.string().trim().email().max(255),
+    }), await readJsonBody(request));
+    if (validated instanceof NextResponse) return validated;
+    const { name, email } = validated.data;
 
     const accessToken = uuidv4();
     const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
