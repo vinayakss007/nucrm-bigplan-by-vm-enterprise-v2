@@ -20,7 +20,7 @@ const updateModuleBulkSchema = z.object({
       id: z.string().min(1),
       pricing: z.record(z.string(), z.any()),
     })
-  )
+  ).max(100)
 });
 
 export const PATCH = withApiRoute(async (req: NextRequest) => {
