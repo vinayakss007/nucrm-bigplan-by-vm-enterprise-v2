@@ -12,6 +12,8 @@
  * Personal keys are per-user, per-provider. They take priority over
  * tenant and system keys when resolving which key to use for AI calls.
  */
+import { validateBody } from '@/lib/api/validate';
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -48,19 +50,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    let body;
-    try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-
-    const { provider, api_key, base_url, model } = body as {
-      provider?: string;
-      api_key?: string;
-      base_url?: string;
-      model?: string;
-    };
-
-    if (!provider) {
-      return NextResponse.json({ error: 'provider is required' }, { status: 400 });
-    }
+    const validated = validateBody(z.object({
+      provider: z.string().min(1).max(50),
+      api_key: z.string().max(2000).optional(),
+      base_url: z.string().max(500).optional(),
+      model: z.string().max(200).optional(),
+    }), await readJsonBody(req));
+    if (validated instanceof NextResponse) return validated;
+    const { provider, api_key, base_url, model } = validated.data;
 
     let result;
     try {
