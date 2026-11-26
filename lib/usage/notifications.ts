@@ -77,7 +77,7 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
       // #3045: sendEmail never throws — the .catch() was dead code, so an
       // owner limit alert rejected by the provider was silent even though
       // the violation row was already marked notified.
-      void sendEmail({
+      const emailResult = await sendEmail({
         to: owner.email,
         subject,
         html: `
@@ -86,14 +86,21 @@ export async function notifyLimitHit(hit: LimitHit): Promise<void> {
           <p>To keep adding records, upgrade your plan from the billing page:</p>
           <p><a href="${process.env['NEXT_PUBLIC_APP_URL'] ?? ''}/tenant/settings/billing">Upgrade plan</a></p>
         `,
-      }).then((result) => {
-        if (!result.success) {
-          logger.warn('[notifications] Owner limit-alert email rejected by provider', {
-            tenantId: hit.tenantId, channel: 'email',
-            error: result.error ?? 'provider failure',
-          });
-        }
       });
+      if (!emailResult.success) {
+        logger.warn('[notifications] Owner limit-alert email rejected by provider', {
+          tenantId: hit.tenantId, channel: 'email',
+          error: emailResult.error ?? 'provider failure',
+        });
+        await withTenantDb(hit.tenantId, NO_USER_SENTINEL, async (db) =>
+          db.update(limitViolations)
+            .set({ notified: false, notifiedAt: null })
+            .where(and(
+              eq(limitViolations.id, updated[0]!.id),
+              eq(limitViolations.tenantId, hit.tenantId),
+              eq(limitViolations.notified, true),
+            )));
+      }
     }
   }
 
