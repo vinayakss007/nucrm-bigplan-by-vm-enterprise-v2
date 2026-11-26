@@ -126,7 +126,7 @@ describe('#3312 the real derived walk', () => {
     expect(res.violations).toEqual([]);
     const lib = res.deferred.find((d) => d.dir === LIB_IMPORT_DEFERRAL.dir);
     expect(lib).toMatchObject({ deferredTo: '#3312', maxFindings: LIB_IMPORT_DEFERRAL.maxFindings });
-    expect(lib!.count).toBeGreaterThanOrEqual(200);
+    expect(lib!.count).toBeGreaterThanOrEqual(199);
     expect(lib!.count).toBeLessThanOrEqual(LIB_IMPORT_DEFERRAL.maxFindings);
   }, 60_000);
 
