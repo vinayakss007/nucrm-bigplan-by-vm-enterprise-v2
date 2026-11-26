@@ -136,10 +136,36 @@ export { InvalidJsonBodyError } from '@/lib/errors-shared';
 // tightening this to `unknown` is a 906-error change in its own right (#1341
 // tracks it). The ratchet in scripts/check-any-suppressions.mjs counts this
 // line so it cannot grow while that migration is open.
+const MAX_JSON_BODY_BYTES = 1024 * 1024;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJsonBody(request: Request): Promise<any> {
+  const declared = Number(request.headers?.get('content-length') ?? '0');
+  if (declared > MAX_JSON_BODY_BYTES) {
+    throw new InvalidJsonBodyError(new Error('Request body too large'));
+  }
+  let raw: string;
   try {
-    return await request.json();
+    raw = await request.text();
+  } catch {
+    try {
+      return await request.json();
+    } catch (e) {
+      throw new InvalidJsonBodyError(e);
+    }
+  }
+  if (Buffer.byteLength(raw, 'utf8') > MAX_JSON_BODY_BYTES) {
+    throw new InvalidJsonBodyError(new Error('Request body too large'));
+  }
+  if (!raw.trim()) {
+    try {
+      return await request.json();
+    } catch (e) {
+      throw new InvalidJsonBodyError(e);
+    }
+  }
+  try {
+    return JSON.parse(raw);
   } catch (e) {
     throw new InvalidJsonBodyError(e);
   }
