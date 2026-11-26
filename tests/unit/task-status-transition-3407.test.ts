@@ -55,8 +55,8 @@ function recordUpdate(table: unknown): Record<string, unknown> {
 const db: Record<string, unknown> = {
   select: vi.fn(() => {
     const chain: Record<string, unknown> = {};
-    for (const method of ['from', 'where', 'limit']) chain[method] = () =>
-      method === 'limit' ? Promise.resolve(H.selects.shift() ?? []) : chain;
+    for (const method of ['from', 'where', 'limit', 'orderBy']) chain[method] = () =>
+      method === 'limit' || method === 'orderBy' ? Promise.resolve(H.selects.shift() ?? []) : chain;
     return chain;
   }),
   update: vi.fn((table: unknown) => recordUpdate(table)),
