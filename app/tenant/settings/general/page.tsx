@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import Image from 'next/image';
 import { Save, Globe, Palette, Download, Loader2,
   Link2, CheckCircle, AlertTriangle, Copy, Receipt } from 'lucide-react';
@@ -37,6 +38,11 @@ function ToggleRow({ label, desc, checked, onChange }: { label: string; desc?: s
 const INDUSTRIES = ['','Technology','Healthcare','Finance','Education','Retail','Manufacturing','Real Estate','Consulting','Marketing','Legal','Other'];
 const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
+
+interface SubdomainCheck {
+  available?: boolean;
+  current?: boolean;
+}
 
 interface WorkspaceData {
   name?: string;
@@ -110,18 +116,20 @@ export default function TenantGeneralSettings() {
   const checkSubdomain = async (val: string) => {
     if (!val || val.length < 3) { setSubdomainAvailable(null); return; }
     setCheckingSubdomain(true);
-    const res = await fetch(`/api/tenant/subdomain/check?subdomain=${encodeURIComponent(val)}`);
-    const d = await res.json();
-    setSubdomainAvailable(d.available && !d.current);
+    const r = await fetchJsonSafe<SubdomainCheck>(`/api/tenant/subdomain/check?subdomain=${encodeURIComponent(val)}`);
+    if (r.status === 'ok') {
+      const { available, current } = r.data;
+      setSubdomainAvailable(Boolean(available && !current));
+    } else {
+      setSubdomainAvailable(null);
+    }
     setCheckingSubdomain(false);
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/workspace', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
-      return d.data as WorkspaceData;
+      const d = await fetchJsonOrThrow<{ data: WorkspaceData }>('/api/tenant/workspace', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
+      return d.data;
     },
     onSuccess: (d) => { toast.success('Settings saved'); setTenantOverride(prev => ({ ...prev, ...d })); },
     onError: (e: Error) => toast.error(e.message || 'Failed to save'),

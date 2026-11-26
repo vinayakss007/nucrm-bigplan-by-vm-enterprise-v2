@@ -429,7 +429,7 @@ describe('the ratchet these two pages are measured by (#2872)', () => {
     expect(ud, 'the read failure moved into an effect instead').not.toMatch(/useEffect\(\(\) => \{ if \(defaultsError\) toast\.error/);
     expect(ud, 'the read has no durable channel at all').toMatch(/<InlineErrorState/);
     expect(ud, 'an action still owes the operator transient feedback').toMatch(/onError: \(e: Error\) => toast\.error\(e\.message \|\| 'Failed'\)/);
-    expect(ud).toMatch(/onError: \(\) => toast\.error\('Failed'\)/);
+    expect(ud.match(/onError: \(e: Error\) => toast\.error\(e\.message \|\| 'Failed'\)/g)).toHaveLength(2);
     expect(srcOf(ADMIN), 'the organization panel started carrying state on a toast').not.toMatch(/react-hot-toast/);
   });
 

@@ -458,7 +458,7 @@ describe('canned-responses: a refused reload after a save keeps the templates (#
     await act(async () => {
       fireEvent.click(row.querySelectorAll('button')[1]);
     });
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to delete'), { interval: 10 });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('no'), { interval: 10 });
     expect(alerts()).toBe('');
     expect(screen.getByText('Invoice timeline')).toBeTruthy();
   });

@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Tab = 'retention' | 'gdpr' | 'soc2';
@@ -89,12 +90,11 @@ export default function ComplianceSettingsPage() {
 
   const retentionMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/compliance/retention', {
+      await fetchJsonOrThrow('/api/tenant/compliance/retention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPolicy),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to create policy');
     },
     onSuccess: () => { setMessage({ type: 'success', text: 'Retention policy created.' }); invalidate('retention'); },
     onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
@@ -102,12 +102,11 @@ export default function ComplianceSettingsPage() {
 
   const gdprMutation = useMutation({
     mutationFn: async (type: 'export' | 'delete') => {
-      const res = await fetch('/api/tenant/compliance/gdpr', {
+      await fetchJsonOrThrow('/api/tenant/compliance/gdpr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
       return type;
     },
     onSuccess: (type) => { setMessage({ type: 'success', text: type === 'export' ? 'Data export initiated.' : 'Deletion request submitted.' }); invalidate('gdpr'); },
@@ -116,12 +115,11 @@ export default function ComplianceSettingsPage() {
 
   const soc2Mutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/tenant/compliance/soc2', {
+      await fetchJsonOrThrow('/api/tenant/compliance/soc2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ periodDays: 90 }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Report generation failed');
     },
     onSuccess: () => { setMessage({ type: 'success', text: 'SOC 2 report generated successfully.' }); invalidate('soc2'); },
     onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
@@ -156,8 +154,8 @@ export default function ComplianceSettingsPage() {
   return (
     <div className="max-w-3xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Compliance</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-foreground">Compliance</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Manage data retention policies, GDPR requests, and SOC 2 compliance reports.
         </p>
       </div>
@@ -169,7 +167,7 @@ export default function ComplianceSettingsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-border">
         <nav className="-mb-px flex space-x-8">
           {tabs.map(tab => (
             <button
@@ -178,7 +176,7 @@ export default function ComplianceSettingsPage() {
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
                 activeTab === tab.id
                   ? 'border-violet-500 text-violet-600 dark:text-violet-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
+                  : 'border-transparent text-muted-foreground hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               {tab.label}
@@ -203,10 +201,10 @@ export default function ComplianceSettingsPage() {
             />
           )}
           <form onSubmit={createRetentionPolicy} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-            <h3 className="mb-4 text-sm font-medium text-gray-900 dark:text-gray-100">New Retention Policy</h3>
+            <h3 className="mb-4 text-sm font-medium text-foreground">New Retention Policy</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Entity Type</label>
+                <label className="block text-xs font-medium text-muted-foreground">Entity Type</label>
                 <select
                   value={newPolicy.entityType}
                   onChange={e => setNewPolicy(p => ({ ...p, entityType: e.target.value }))}
@@ -220,7 +218,7 @@ export default function ComplianceSettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Retention (days)</label>
+                <label className="block text-xs font-medium text-muted-foreground">Retention (days)</label>
                 <input
                   type="number"
                   min={1}
@@ -231,7 +229,7 @@ export default function ComplianceSettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Action</label>
+                <label className="block text-xs font-medium text-muted-foreground">Action</label>
                 <select
                   value={newPolicy.action}
                   onChange={e => setNewPolicy(p => ({ ...p, action: e.target.value }))}
@@ -253,22 +251,22 @@ export default function ComplianceSettingsPage() {
           </form>
 
           {policies.length > 0 && (
-            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Retention</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Retention</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Action</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-border">
                   {policies.map(p => (
                     <tr key={p.id}>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{p.entityType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{p.retentionDays} days</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 capitalize">{p.action}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{p.entityType}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{p.retentionDays} days</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{p.action}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                           {p.isActive ? 'Active' : 'Inactive'}
@@ -317,21 +315,21 @@ export default function ComplianceSettingsPage() {
 
           {(gdprRequests.exports.length > 0 || gdprRequests.deletions.length > 0) && (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Past Requests</h3>
-              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+              <h3 className="text-sm font-medium text-foreground">Past Requests</h3>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Completed</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Requested</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Completed</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="divide-y divide-border">
                     {[...gdprRequests.exports, ...gdprRequests.deletions].map(r => (
                       <tr key={r.id}>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{r.type}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{r.type}</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                             r.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
@@ -340,8 +338,8 @@ export default function ComplianceSettingsPage() {
                             {r.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{new Date(r.createdAt).toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{r.completedAt ? new Date(r.completedAt).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{r.completedAt ? new Date(r.completedAt).toLocaleString() : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -377,20 +375,20 @@ export default function ComplianceSettingsPage() {
 
           {soc2Reports.length > 0 && (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Generated Reports</h3>
-              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+              <h3 className="text-sm font-medium text-foreground">Generated Reports</h3>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Report</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Generated</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Report</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Generated</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="divide-y divide-border">
                     {soc2Reports.map(r => (
                       <tr key={r.id}>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">SOC 2 Compliance Report</td>
+                        <td className="px-4 py-3 text-sm text-foreground">SOC 2 Compliance Report</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                             r.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
@@ -399,7 +397,7 @@ export default function ComplianceSettingsPage() {
                             {r.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{new Date(r.createdAt).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

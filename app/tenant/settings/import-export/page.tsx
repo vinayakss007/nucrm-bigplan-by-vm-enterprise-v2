@@ -6,6 +6,7 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Upload, Download, Loader2, AlertTriangle, CheckCircle, X, Database, FileSpreadsheet, ArrowRight, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -204,14 +205,12 @@ function ImportExportInner() {
   // #1328: import/export POSTs via useMutation (were raw fetch + useState flags).
   const importMutation = useMutation({
     mutationFn: async (csv: string) => {
-      const res = await fetch(`/api/tenant/${entityType}/import`, {
+      const data = await fetchJsonOrThrow<ImportResultData>(`/api/tenant/${entityType}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      return data as ImportResultData;
+      return data;
     },
     onSuccess: (data) => { setResult({ type: 'success', data }); setStep('preview'); toast.success('Import completed'); },
     onError: (err: Error) => {

@@ -102,8 +102,8 @@ export default function RBACSettingsPage() {
   return (
     <div className="max-w-3xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Access Control (RBAC)</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h1 className="text-2xl font-bold text-foreground">Access Control (RBAC)</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Configure granular field-level permissions, record access rules, and approval workflows.
         </p>
       </div>
@@ -115,7 +115,7 @@ export default function RBACSettingsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-border">
         <nav className="-mb-px flex space-x-8">
           {tabs.map(tab => (
             <button
@@ -124,7 +124,7 @@ export default function RBACSettingsPage() {
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium ${
                 activeTab === tab.id
                   ? 'border-violet-500 text-violet-600 dark:text-violet-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
+                  : 'border-transparent text-muted-foreground hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               {tab.label}
@@ -136,7 +136,7 @@ export default function RBACSettingsPage() {
       {/* Field Permissions Tab */}
       {activeTab === 'field-permissions' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Control which roles can read or write specific fields on each entity type.
           </p>
           {/* The refused refresh sits ABOVE the rows it did not replace (#2872). */}
@@ -147,7 +147,7 @@ export default function RBACSettingsPage() {
             />
           )}
           {fpLoading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading field permissions…</p>
+            <p className="text-sm text-muted-foreground">Loading field permissions…</p>
           ) : fpFailed ? (
             // #2597: a read that never answered is not an empty matrix. This sentence
             // is pinned by tests/unit/rbac-tab-error-state-2597.test.tsx.
@@ -156,22 +156,22 @@ export default function RBACSettingsPage() {
               onRetry={() => void refetchFp()}
             />
           ) : fieldPermissions.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Role</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Field</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Access</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Field</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Access</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-border">
                   {fieldPermissions.map(fp => (
                     <tr key={fp.id}>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{fp.roleName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{fp.entityType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{fp.fieldName}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{fp.roleName}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{fp.entityType}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{fp.fieldName}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                           fp.access === 'write' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
@@ -187,7 +187,7 @@ export default function RBACSettingsPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 No field permissions configured yet. Field permissions allow you to restrict which fields
                 each role can see or edit.
               </p>
@@ -199,7 +199,7 @@ export default function RBACSettingsPage() {
       {/* Record Permissions Tab */}
       {activeTab === 'record-permissions' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Share a single record with a role. Ownership rules come from the role's view_all
             permission; a grant here is an explicit exception for one record, not a team-wide rule.
           </p>
@@ -210,7 +210,7 @@ export default function RBACSettingsPage() {
             />
           )}
           {rpLoading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading record permissions…</p>
+            <p className="text-sm text-muted-foreground">Loading record permissions…</p>
           ) : rpFailed ? (
             // #2597: pinned by tests/unit/rbac-tab-error-state-2597.test.tsx.
             <InlineErrorState
@@ -218,21 +218,21 @@ export default function RBACSettingsPage() {
               onRetry={() => void refetchRp()}
             />
           ) : recordPermissions.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Role</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Entity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Access Level</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Entity</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Access Level</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-border">
                   {recordPermissions.map(rp => (
                     <tr key={rp.id}>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{rp.roleName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{rp.entityType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 capitalize">{rp.accessLevel}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{rp.roleName}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{rp.entityType}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{rp.accessLevel}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -240,7 +240,7 @@ export default function RBACSettingsPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 No record permissions configured yet. A grant lets one role see one record
                 it would otherwise be restricted from by ownership.
               </p>
@@ -252,7 +252,7 @@ export default function RBACSettingsPage() {
       {/* Approval Rules Tab */}
       {activeTab === 'approval-rules' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Configure approval workflows that require manager sign-off before changes take effect.
           </p>
           {arStale && (
@@ -262,7 +262,7 @@ export default function RBACSettingsPage() {
             />
           )}
           {arLoading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading approval rules…</p>
+            <p className="text-sm text-muted-foreground">Loading approval rules…</p>
           ) : arFailed ? (
             // #2597: GET /api/tenant/rbac/approval-rules now exists and answers 200
             // with [], so an empty list really does mean "none configured" — the 404
@@ -281,14 +281,14 @@ export default function RBACSettingsPage() {
               {approvalRules.map(rule => (
                 <div key={rule.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{rule.name}</h4>
+                    <h4 className="text-sm font-medium text-foreground">{rule.name}</h4>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                       rule.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                     }`}>
                       {rule.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Entity: {rule.entityType} | Approvers: {rule.approvers.length}
                   </p>
                 </div>
@@ -296,7 +296,7 @@ export default function RBACSettingsPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 No approval rules configured yet. Approval rules require specific actions to be
                 approved before they take effect (e.g., deals above a certain value).
               </p>
