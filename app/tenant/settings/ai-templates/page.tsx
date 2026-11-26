@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   FileEdit, Plus, Save, X, Sparkles, Loader2, Trash2, Eye, RefreshCw,
@@ -84,13 +85,11 @@ export default function AITemplatesPage() {
 
   const installMutation = useMutation({
     mutationFn: async (slug: string) => {
-      const r = await fetch('/api/tenant/admin/ai-templates', {
+      await fetchJsonOrThrow('/api/tenant/admin/ai-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug }),
       });
-      const body = await r.json();
-      if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
     },
     onSuccess: invalidate,
   });
@@ -101,7 +100,7 @@ export default function AITemplatesPage() {
         ? `/api/tenant/admin/ai-templates/${t.id}`
         : '/api/tenant/admin/ai-templates';
       const method = t.id ? 'PATCH' : 'POST';
-      const r = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,16 +116,13 @@ export default function AITemplatesPage() {
           active: t.active,
         }),
       });
-      const body = await r.json();
-      if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
     },
     onSuccess: () => { setEditing(null); invalidate(); },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tenant/admin/ai-templates/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      await fetchJsonOrThrow(`/api/tenant/admin/ai-templates/${id}`, { method: 'DELETE' });
     },
     onSuccess: invalidate,
   });
