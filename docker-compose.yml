@@ -418,6 +418,39 @@ services:
       - nucrm-net
 
   # ── Promtail ────────────────────────────────────────────────────────────
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    container_name: nucrm-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      INFO: "1"
+      PING: "1"
+      VERSION: "1"
+      EVENTS: "1"
+      AUTH: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      DELETE: "0"
+      EXEC: "0"
+      IMAGES: "0"
+      NETWORKS: "0"
+      NODES: "0"
+      PATCH: "0"
+      PLUGINS: "0"
+      POST: "0"
+      PUT: "0"
+      SECRETS: "0"
+      SERVICES: "1"
+      SWARM: "0"
+      TASKS: "1"
+      VOLUMES: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - nucrm-net
+
   promtail:
     image: grafana/promtail:3.0.0
     container_name: nucrm-promtail
@@ -425,14 +458,14 @@ services:
     volumes:
       - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
-      # #2053: docker_sd_configs target discovery. Read-only mount is still a
-      # powerful surface (container control via socket); promtail is the only
-      # consumer and the stack is single-host.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
     command:
       - "--config.file=/etc/promtail/promtail-config.yml"
+      - "--config.expand-env=true"
     depends_on:
       - loki
+      - docker-socket-proxy
     restart: unless-stopped
     networks:
       - nucrm-net
