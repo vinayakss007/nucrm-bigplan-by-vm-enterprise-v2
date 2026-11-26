@@ -38,7 +38,7 @@ type WarmingEventInput = {
   defaultEmailSubject: string | null;
   defaultWhatsappTemplate: string | null;
 };
-import { eq, and, sql, gte, isNull, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, isNull, or, inArray, notInArray } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
 import { addJob } from '@/lib/queue';
@@ -264,13 +264,22 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
     conditions.push(inArray(contacts.leadStatus, filter['leadStatus']));
   }
 
+  const monthlyCap = campaign.maxMessagesPerContactPerMonth ?? 4;
+  const excludedIds = sql`(SELECT contact_id FROM lead_warming_schedule
+    WHERE campaign_id = ${campaign.id}
+      AND deleted_at IS NULL
+      AND (opted_out = true
+        OR next_eligible_at >= ${new Date()}
+        OR COALESCE(messages_this_month, 0) >= ${monthlyCap}))`;
+
+  conditions.push(notInArray(contacts.id, excludedIds));
+
   const allContacts = await db.select({
     id: contacts.id,
     firstName: contacts.firstName,
     lastName: contacts.lastName,
     email: contacts.email,
     phone: contacts.phone,
-    // #3732: the NAME, not the UUID contacts.companyId holds — see the join.
     companyName: companies.name,
     leadStatus: contacts.leadStatus,
     tags: contacts.tags,
@@ -281,50 +290,17 @@ async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactTo
   .from(contacts)
   .leftJoin(companies, eq(companies.id, contacts.companyId))
   .where(and(...conditions))
-  .limit(500); // Process max 500 contacts per campaign per run
+  .orderBy(contacts.id)
+  .limit(500);
 
-  // Filter out opted-out contacts via schedule table
-  const contactIds = allContacts.map(c => c.id);
-  if (contactIds.length === 0) return [];
+  if (allContacts.length === 500) {
+    logger.warn('[lead-warming] eligible window truncated at 500 contacts', {
+      campaignId: campaign.id,
+      tenantId: campaign.tenantId,
+    });
+  }
 
-  const optedOut = await db.select({ contactId: leadWarmingSchedule.contactId })
-    .from(leadWarmingSchedule)
-    .where(and(
-      eq(leadWarmingSchedule.campaignId, campaign.id),
-      eq(leadWarmingSchedule.optedOut, true),
-      inArray(leadWarmingSchedule.contactId, contactIds)
-    ));
-
-  const optedOutIds = new Set(optedOut.map(o => o.contactId));
-
-  // Filter out contacts on cooldown, reading messagesThisMonth in the SAME
-  // statement — a second bare db.select here would be a new unbound RLS read.
-  const onCooldown = await db.select({
-    contactId: leadWarmingSchedule.contactId,
-    messagesThisMonth: leadWarmingSchedule.messagesThisMonth,
-  })
-    .from(leadWarmingSchedule)
-    .where(and(
-      eq(leadWarmingSchedule.campaignId, campaign.id),
-      inArray(leadWarmingSchedule.contactId, contactIds),
-      gte(leadWarmingSchedule.nextEligibleAt, new Date())
-    ));
-
-  const cooldownIds = new Set(onCooldown.map(c => c.contactId));
-  // #3732: the cap was stored/counted but never compared — "max 1/month"
-  // still sent daily. A schedule row always has a future nextEligibleAt, so
-  // cap-reached contacts are in this set; compare the counter here.
-  const monthlyCap = campaign.maxMessagesPerContactPerMonth ?? 4;
-  const atMonthlyCapIds = new Set(
-    onCooldown.filter(c => (c.messagesThisMonth ?? 0) >= monthlyCap).map(c => c.contactId)
-  );
-
-  return allContacts.filter(c =>
-    !optedOutIds.has(c.id) &&
-    !cooldownIds.has(c.id) &&
-    !atMonthlyCapIds.has(c.id) &&
-    (c.email || c.phone) // Must have at least one contact method
-  ) as ContactToWarm[];
+  return allContacts.filter(c => c.email || c.phone) as ContactToWarm[];
 }
 
 /**
@@ -507,6 +483,7 @@ async function processBirthdayCampaigns(
         sql`EXTRACT(MONTH FROM ${contacts.birthday}) = ${todayMonth}`,
         sql`EXTRACT(DAY FROM ${contacts.birthday}) = ${todayDay}`,
       ))
+      .orderBy(contacts.id)
       .limit(200);
 
       const birthdayEvent = {
