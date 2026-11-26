@@ -11,7 +11,7 @@ import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -113,35 +113,35 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
 
   const toggleTaskComplete = async (taskId: string, completed: boolean) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed } : t))
-    const res = await fetch(`/api/tenant/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed }),
-    })
-    if (!res.ok) {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !completed } : t))
-      toast.error('Failed to update task')
-    } else {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed }),
+      })
       toast.success(completed ? 'Task completed' : 'Task reopened')
+    } catch (err) {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !completed } : t))
+      toast.error(err instanceof Error ? err.message : 'Failed to update task')
     }
   }
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    const res = await fetch('/api/tenant/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        contact_id: form.contact_id || null,
-        deal_id: form.deal_id || null,
-        assigned_to: form.assigned_to || null,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error)
+    try {
+      await fetchJsonOrThrow('/api/tenant/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          contact_id: form.contact_id || null,
+          deal_id: form.deal_id || null,
+          assigned_to: form.assigned_to || null,
+        }),
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create task')
       setSaving(false)
       return
     }
@@ -320,17 +320,16 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     };
 
     const exec = async (action: string, ids: string[], payload?: Record<string, unknown>, isSelectAllMatching?: boolean) => {
-      const res = await fetch('/api/tenant/tasks/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody(action, ids, payload, isSelectAllMatching)),
-      })
-      const data = await res.json()
-      if (res.ok) {
+      try {
+        const data = await fetchJsonOrThrow<{ action?: string; affected?: number }>('/api/tenant/tasks/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildBody(action, ids, payload, isSelectAllMatching)),
+        })
         toast.success(`${data.action}: ${data.affected} task(s)`)
         loadData(pagination.pageIndex)
-      } else {
-        toast.error(data.error || `Failed to ${action} tasks`)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : `Failed to ${action} tasks`)
       }
     };
 
