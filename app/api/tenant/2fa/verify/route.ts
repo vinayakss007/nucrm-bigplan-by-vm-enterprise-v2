@@ -13,11 +13,18 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { check2faLockout, record2faFailure, clear2faFailures } from '@/lib/auth/totp-lockout';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'twoFactor', 'post');
+    if (limited) return limited;
+    const locked = await check2faLockout(ctx.userId);
+    if (locked) return locked;
 
     // readJsonBody turns a malformed body into a 400 (not a 500);
     // validateBody then enforces the 6-digit TOTP shape.
@@ -39,8 +46,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // Verify TOTP code
     const isValid = verifyTOTP(userRow.totpSecret, totp_code);
     if (!isValid) {
+      await record2faFailure(ctx.userId);
       return NextResponse.json({ error: 'Invalid code' }, { status: 400 });
     }
+    await clear2faFailures(ctx.userId);
 
     // Enable 2FA
     await db.update(users)

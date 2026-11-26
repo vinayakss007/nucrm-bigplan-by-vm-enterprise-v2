@@ -4,7 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { describe, it, expect } from 'vitest';
-import { checkVerifierTarget, loadJournal } from '../../scripts/verify-migration-chain';
+import {
+  checkVerifierTarget,
+  driftCheckFailure,
+  driftCheckInvocation,
+  loadJournal,
+} from '../../scripts/verify-migration-chain';
 import type { PlannedFile } from '../../scripts/migrate-fresh';
 
 function plan(tags: string[], action: PlannedFile['action'] = 'skip-stamped'): PlannedFile[] {
@@ -38,6 +43,21 @@ describe('checkVerifierTarget (#3824)', () => {
     const problems = checkVerifierTarget({ publicTables: 0, ledgerRows: 0, plan: plan(['0099_ghost'], 'missing-file') });
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/0099_ghost\.sql/);
+  });
+});
+
+describe('schema-equality gate (#3826)', () => {
+  it('runs the real drift-check CLI, not a stub', () => {
+    const { command, args } = driftCheckInvocation('/repo');
+    expect(command).toBe('/repo/node_modules/.bin/tsx');
+    expect(args).toEqual(['/repo/scripts/drift-check.ts']);
+  });
+
+  it('fails the gate on a red screen, a killed process or a spawn error', () => {
+    expect(driftCheckFailure({ status: 0 })).toBeNull();
+    expect(driftCheckFailure({ status: 1 })).toMatch(/schema-equality screen failed \(exit 1\)/);
+    expect(driftCheckFailure({ status: null })).toMatch(/exit signal/);
+    expect(driftCheckFailure({ status: null, error: new Error('ENOENT') })).toMatch(/ENOENT/);
   });
 });
 

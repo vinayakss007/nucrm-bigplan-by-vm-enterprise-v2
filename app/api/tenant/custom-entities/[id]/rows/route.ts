@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customEntities, customEntityData } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
@@ -12,6 +12,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -52,6 +53,10 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const limited = await rateLimitMutating(request, 'customFields', 'post');
+    if (limited) return limited;
+    const denied = requirePerm(ctx, 'settings.manage');
+    if (denied) return denied;
 
     const entityId = (await params).id;
 

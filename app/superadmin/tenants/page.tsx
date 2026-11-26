@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
+import { useHydratedNow } from '@/hooks/use-hydrated-now';
 import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -16,7 +17,6 @@ import { confirmThen, ConfirmDialog, ConfirmWithInput } from '@/components/ui/co
 import { PromptDialog } from '@/components/ui/prompt-dialog';
 import TenantFeaturesPanel from '@/components/superadmin/tenant-features-panel';
 import { fetchJsonOrThrow, fetchJsonSafe } from '@/lib/fetch-json';
-
 const STATUS_COLORS: Record<string,string> = {
   active:       'bg-emerald-500/15 text-emerald-400',
   trialing:     'bg-amber-500/15 text-amber-400',
@@ -35,7 +35,6 @@ const BILLING_TYPE_COLORS: Record<string,string> = {
 const PLANS = ['free','starter','pro','enterprise','lifetime'];
 const STATUSES = ['trialing','active','suspended','cancelled','past_due','trial_expired','churned','deleted'];
 const BILLING_TYPES = ['trial','stripe','manual','lifetime','complimentary'];
-
 const LIMIT_FIELDS: { key: string; label: string; unit?: string }[] = [
   { key: 'maxUsers', label: 'Users' },
   { key: 'maxContacts', label: 'Contacts' },
@@ -251,6 +250,7 @@ interface MeInfo {
 }
 
 export default function SuperAdminTenantsPage() {
+  const now = useHydratedNow();
   const queryClient = useQueryClient();
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -518,7 +518,7 @@ export default function SuperAdminTenantsPage() {
             {loading&&<tr><td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
             {!loading&&!tenants.length&&(tenantsQuery.error?<tr><td colSpan={6}><div role="alert" className="px-4 py-12 text-center text-sm text-red-400">Failed to load organizations: {tenantsQuery.error.message}. An empty table would mean no organization exists; this message means the request did not succeed. <button onClick={() => void tenantsQuery.refetch()} className="underline">Try again</button></div></td></tr>:<tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">No organizations found</td></tr>)}
             {tenants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(t=>{
-              const trialLeft = t.trial_ends_at ? Math.max(0,Math.ceil((new Date(t.trial_ends_at).getTime()-Date.now())/86400000)) : null;
+              const trialLeft = t.trial_ends_at && now !== null ? Math.max(0,Math.ceil((new Date(t.trial_ends_at).getTime()-now)/86400000)) : null;
               const isOwnOrg = t.id === meInfo?.ownTenantId;
               return (
                 <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">

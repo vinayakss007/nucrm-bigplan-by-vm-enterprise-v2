@@ -84,6 +84,7 @@ vi.mock('@/drizzle/db', () => {
       };
       return chain;
     },
+    execute: async () => [],
     query: { pipelines: { findFirst: async () => h.findFirstPipeline } },
     transaction: async (cb: (tx: Record<string, unknown>) => unknown) => cb(db),
   };

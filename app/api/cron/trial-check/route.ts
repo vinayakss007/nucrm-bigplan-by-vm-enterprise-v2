@@ -24,7 +24,7 @@ async function cronRouteHandler(request: NextRequest) {
   const refusal = await refuseIfCronLockHeld('cron:trial-check', 3600);
   if (refusal) return refusal;
   try {
-    let expired=0, warned=0;
+    let expired=0, warned=0, emailsRejected=0;
 
     // 1. Expire trials that ended
     //
@@ -78,6 +78,7 @@ async function cronRouteHandler(request: NextRequest) {
           text: `Your NuCRM trial for ${t.name} has ended. Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
         });
         if (!result.success) {
+          emailsRejected++;
           void logError({ error: new Error(`Trial-expiry email rejected: ${result.error ?? 'provider failure'}`), context: 'cron/trial-check expiry email' });
           continue;
         }
@@ -141,6 +142,7 @@ async function cronRouteHandler(request: NextRequest) {
           text: `Your NuCRM trial for ${t.name} expires in ${daysLeft} day(s). Upgrade: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/settings/billing`,
         });
         if (!result.success) {
+          emailsRejected++;
           rejected = true;
           void logError({ error: new Error(`Trial warning email rejected: ${result.error ?? 'provider failure'}`), context: 'cron/trial-check warn email' });
         } else {
@@ -167,7 +169,7 @@ async function cronRouteHandler(request: NextRequest) {
       })).catch((err) => logError({ error: err, context: 'trial-check:dedup-insert' }));
     }
 
-    return NextResponse.json({ ok:true, expired, warned });
+    return NextResponse.json({ ok: emailsRejected === 0, expired, warned, emails_rejected: emailsRejected });
  
   } catch (err) { 
     void logError({ error: err, context: 'cron/trial-check' });

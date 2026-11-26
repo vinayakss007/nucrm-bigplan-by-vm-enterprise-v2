@@ -38,6 +38,7 @@ async function cronRouteHandler(request: NextRequest) {
     let tenantsProcessed = 0;
     let totalDealsFlagged = 0;
     let totalEmailsSent = 0;
+    let emailsRejected = 0;
 
     // at_risk_rules (and contacts/companies, which getAtRiskDeals joins) enforce
     // a plain tenant_isolation policy with no super-admin branch, so on the bare
@@ -118,24 +119,27 @@ async function cronRouteHandler(request: NextRequest) {
           text: `Hi ${name}, you have ${deals.length} at-risk deals. View them at ${process.env.NEXT_PUBLIC_APP_URL}/tenant/ai/at-risk`
           });
           if (!result.success) {
+            emailsRejected++;
             void logError({ error: result.error ?? 'provider rejection', context: 'cron/process-at-risk email', level: 'warning' });
           } else {
             totalEmailsSent++;
           }
         } catch (err) {
+          emailsRejected++;
           void logError({ error: err, context: 'cron/process-at-risk email', level: 'warning' });
         }
       }
     });
 
     return NextResponse.json({
-      ok: sweep.failed.length === 0,
+      ok: sweep.failed.length === 0 && emailsRejected === 0,
       tenants_checked: sweep.visited,
       tenants_skipped: sweep.skipped.length,
       tenants_failed: sweep.failed.length,
       tenants_processed: tenantsProcessed,
       deals_flagged: totalDealsFlagged,
-      emails_sent: totalEmailsSent
+      emails_sent: totalEmailsSent,
+      emails_rejected: emailsRejected
     });
  
  

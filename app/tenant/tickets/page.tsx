@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   LifeBuoy, Plus, Search,
@@ -103,13 +104,11 @@ export default function TicketsPage() {
   const bulkActionMutation = useMutation({
     mutationFn: async ({ action, payload }: { action: string; payload?: Record<string, unknown> }) => {
       const ids = Array.from(selectedIds);
-      const res = await fetch('/api/tenant/tickets/bulk', {
+      const data = await fetchJsonOrThrow<{ affected?: number; skipped?: number }>('/api/tenant/tickets/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket_ids: ids, action, payload }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bulk action failed');
       return {
         affected: data.affected as number | undefined,
         skipped: data.skipped as number | undefined,
@@ -305,7 +304,7 @@ export default function TicketsPage() {
                     >
                       {selectedIds.has(ticket.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
                     </button>
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
+                    <div role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/tenant/tickets/${ticket.id}`); } }} className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/tenant/tickets/${ticket.id}`)}>
                       <div className="flex items-center gap-2 mb-1">
                         <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", getStatusColor(ticket.status))}>
                           {ticket.status.replace('_', ' ')}
@@ -420,14 +419,13 @@ function TicketCreateModal({ onClose, onCreated }: { onClose: () => void; onCrea
     if (!form.subject.trim()) { toast.error('Subject is required'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/tenant/tickets', {
+      await fetchJsonOrThrow('/api/tenant/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) { toast.success('Ticket created'); onCreated(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed to create ticket'); }
+      toast.success('Ticket created'); onCreated();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to create ticket'); }
     setSaving(false);
   };
 

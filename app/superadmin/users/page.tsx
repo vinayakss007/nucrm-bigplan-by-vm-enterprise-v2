@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2, Edit, UserX, X, Save } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { createUserSchema, validateForm } from '@/lib/validation/forms';
@@ -52,14 +53,11 @@ function EditUserDialog({ user, onSave, onClose }: { user: UserData; onSave: () 
   // #1328: PATCH via useMutation (was raw fetch + useState saving flag).
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/users', {
+      await fetchJsonOrThrow('/api/superadmin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: user.id, ...form }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to update');
-      return d;
     },
     onSuccess: () => { toast.success('User updated'); onSave(); },
     onError: (e: Error) => toast.error(e.message),
@@ -157,13 +155,11 @@ export default function SuperAdminUsersPage() {
 
   const transferMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/transfer-admin', {
+      const d = await fetchJsonOrThrow<{ message?: string }>('/api/superadmin/transfer-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetUserId: transferTarget }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
       return d;
     },
     onSuccess: (d) => {
@@ -183,10 +179,7 @@ export default function SuperAdminUsersPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/superadmin/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...form, is_super_admin: false }) });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed to create user');
-      return d;
+      await fetchJsonOrThrow('/api/superadmin/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...form, is_super_admin: false }) });
     },
     onSuccess: () => { toast.success('User created'); setShowCreate(false); setForm({email:'',full_name:'',password:''}); invalidateUsers(); },
     onError: (e: Error) => toast.error(e.message),
@@ -203,14 +196,11 @@ export default function SuperAdminUsersPage() {
 
   const patchMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
-      const res = await fetch('/api/superadmin/users', {
+      await fetchJsonOrThrow('/api/superadmin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      return d;
     },
     onSuccess: () => invalidateUsers(),
   });

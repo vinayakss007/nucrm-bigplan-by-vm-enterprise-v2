@@ -24,9 +24,11 @@ type GuardableColumns = {
  *    Returns a SQL fragment for use in .where(), or null if no expectedUpdatedAt.
  *
  * 2. concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)
- *    Reads the DB row and compares timestamps. Returns null to proceed, or a
- *    NextResponse: 409 if the row moved on, 404 if it is gone, 400 if
- *    expectedUpdatedAt could not be parsed.
+ *    Atomically claims the row with UPDATE ... WHERE updatedAtMs(expected).
+ *    Returns null to proceed, or a NextResponse: 409 if the row moved on,
+ *    404 if it is gone, 400 if expectedUpdatedAt could not be parsed. The
+ *    check and the claim are one statement (#3849): a read-then-compare
+ *    guard lets two concurrent requests both pass on the same timestamp.
  *
  * Both overloads pass (return null) when expectedUpdatedAt is absent -- sending it
  * is what opts a request into the check.
@@ -119,8 +121,11 @@ async function concurrencyGuardAsync(
   const tenantCol = cols.tenantId ?? cols.parentTenantId;
   const deletedCol = cols.deletedAt;
   const updatedAtCol = cols.updatedAt;
+  const updatedAtKey = Object.keys(table).find(
+    (key) => (table as unknown as Record<string, unknown>)[key] === updatedAtCol,
+  );
 
-  if (!idCol || !updatedAtCol) return null;
+  if (!idCol || !updatedAtCol || !updatedAtKey) return null;
 
   const conditions = [eq(idCol, id)];
   if (tenantCol && tenantId) {
@@ -133,8 +138,24 @@ async function concurrencyGuardAsync(
     conditions.push(isNull(deletedCol));
   }
 
+  // #3849: the check and the claim are one statement. A read followed by a
+  // comparison lets two concurrent requests see the same updated_at and both
+  // proceed, and exact-ms equality never clears a DB-now() microsecond value.
+  // The conditional UPDATE claims the row only if the caller's timestamp still
+  // matches at millisecond precision; a loser affects zero rows and gets 409.
+  const [claimed] = await db
+    .update(table)
+    .set({ [updatedAtKey]: new Date() } as never)
+    .where(and(...conditions, updatedAtMs(table, timestamp)))
+    .returning({ id: idCol });
+
+  if (claimed) return null;
+
+  // Zero rows can mean a stale timestamp or a deleted/missing row; a follow-up
+  // read distinguishes them. There is no longer a race to lose here: the
+  // conditional UPDATE already decided who won the claim.
   const [row] = await db
-    .select({ updatedAt: updatedAtCol })
+    .select({ id: idCol })
     .from(table)
     .where(and(...conditions))
     .limit(1);
@@ -146,17 +167,10 @@ async function concurrencyGuardAsync(
     );
   }
 
-  const dbTime = new Date(row.updatedAt as Date | string);
-  const clientTime = new Date(timestamp);
-
-  if (dbTime.getTime() !== clientTime.getTime()) {
-    return NextResponse.json(
-      { error: 'Stale data — this record was modified by another user. Please refresh and retry.' },
-      { status: 409 },
-    );
-  }
-
-  return null;
+  return NextResponse.json(
+    { error: 'Stale data — this record was modified by another user. Please refresh and retry.' },
+    { status: 409 },
+  );
 }
 
 /**

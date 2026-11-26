@@ -191,7 +191,7 @@ describe('portal invoices: a refused refresh does not silence the money on scree
     expect(alerts()).toContain('the invoices below are the last read');
     expect(alerts()).toContain('Request failed (504)');
     // …and the kept row is still the row the customer can act on.
-    expect(document.querySelector('tbody tr button')).toBeTruthy();
+    expect(document.querySelector('tbody tr a[href*="/api/public/invoices/"]')).toBeTruthy();
     // Neither of the two sentences this slice replaces may speak here.
     expect(screen.queryByText(/We could not load your invoices/)).toBeNull();
     expect(screen.queryByText('No invoices yet')).toBeNull();

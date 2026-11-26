@@ -49,6 +49,7 @@ function ownerClause(table: 'leads' | 'contacts') {
 let reads: { sql: string; params: unknown[] }[] = [];
 let writes: { sql: string }[] = [];
 let raws: { sql: string; params: unknown[] }[] = [];
+let inserts: { values: unknown }[] = [];
 let lastWhere: { sql: string; params: unknown[] } | undefined;
 
 /** The row every lead read is about: owned and created by another rep by default. */
@@ -104,6 +105,7 @@ function resultOf(rows: unknown) {
   const p = Promise.resolve(rows) as Promise<unknown> & Record<string, unknown>;
   p['returning'] = () => p;
   p['values'] = () => p;
+  p['onConflictDoNothing'] = () => p;
   p['getSQL'] = () => '';
   return p;
 }
@@ -181,13 +183,18 @@ beforeEach(() => {
   reads = [];
   writes = [];
   raws = [];
+  inserts = [];
   lastWhere = undefined;
   leadRow = { id: LEAD, assignedTo: OTHER, createdBy: OTHER, contactId: CONTACT, companyId: null };
   contactRow = { id: CONTACT, assignedTo: OTHER, createdBy: OTHER };
   mockDb.select.mockImplementation(() => makeBuilder());
   mockDb.update.mockImplementation(() => makeWriter());
   mockDb.delete.mockImplementation(() => makeWriter());
-  mockDb.insert.mockImplementation(() => resultOf([{ id: CONTACT }]));
+  mockDb.insert.mockImplementation(() => {
+    const p = resultOf([{ id: 'trail-1' }]);
+    p['values'] = (values: unknown) => { inserts.push({ values }); return p; };
+    return p;
+  });
   mockDb.execute.mockImplementation((fragment: unknown) => {
     raws.push(render(fragment));
     return resultOf({ rows: [] });
@@ -355,8 +362,8 @@ describe('bulk assign/unassign only touch contacts the caller may touch (#2696)'
     expect(res.status, await res.text()).toBe(200);
     expect(writesOn('contacts')).toHaveLength(1);
     // The trail insert names the resolved id, not the caller's raw list.
-    expect(raws).toHaveLength(1);
-    expect(raws[0].params).toContain(CONTACT);
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].values).toEqual([expect.objectContaining({ contactId: CONTACT, tenantId: TENANT })]);
   });
 
   it('DELETE ends the trail for rows the caller owns', async () => {
@@ -365,7 +372,7 @@ describe('bulk assign/unassign only touch contacts the caller may touch (#2696)'
       body: { contact_ids: [CONTACT], assign_to: MINE },
     });
     expect(res.status, await res.text()).toBe(200);
-    expect(raws).toHaveLength(1);
+    expect(writesOn('lead_assignments')).toHaveLength(1);
     expect(writesOn('contacts')).toHaveLength(1);
   });
 

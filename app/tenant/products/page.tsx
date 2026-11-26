@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import {
   Plus, Search, Trash2, X, Package, Edit2, ChevronDown,
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
@@ -94,7 +95,7 @@ export default function ProductsPage() {
         ? `/api/tenant/products/${editingProduct.id}`
         : '/api/tenant/products';
       const method = editingProduct ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      await fetchJsonOrThrow(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,10 +105,6 @@ export default function ProductsPage() {
           base_price: parseFloat(form.base_price) || 0,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save product');
-      }
     },
     onSuccess: () => {
       toast.success(editingProduct ? 'Product updated' : 'Product created');
@@ -125,11 +122,10 @@ export default function ProductsPage() {
 
   const removeProduct = useMutation({
     mutationFn: async (product: Product) => {
-      const res = await fetch(`/api/tenant/products/${product.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await fetchJsonOrThrow(`/api/tenant/products/${product.id}`, { method: 'DELETE' });
     },
     onSuccess: () => { toast.success('Product deleted'); reload(); },
-    onError: () => toast.error('Failed to delete product'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete product'),
   });
 
   const deleteProduct = async (product: Product) => {

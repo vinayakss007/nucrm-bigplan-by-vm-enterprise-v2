@@ -162,6 +162,6 @@ describe('super admin audit writer', () => {
     execute.mockImplementationOnce(() => Promise.reject(new Error('boom')));
     await expect(
       logSuperAdminAction({ ...ADMIN, action: 'settings.changed' }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 });
