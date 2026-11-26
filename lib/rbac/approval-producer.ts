@@ -137,7 +137,7 @@ async function findMatchingApprovalRule(
       eq(approvalRules.isActive, true),
       isNull(approvalRules.deletedAt),
     ))
-    .limit(100);
+    .orderBy(approvalRules.id);
 
   const rules: ApprovalRule[] = rows.map((r) => ({
     id: r.id, tenantId: r.tenantId, entityType: r.entityType,

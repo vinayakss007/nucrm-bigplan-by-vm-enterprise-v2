@@ -41,11 +41,13 @@ vi.mock('@/drizzle/db', async () => {
       let where = { sql: '', params: [] as unknown[] };
       b.from = () => b;
       b.where = (p: unknown) => { where = render(p); return b; };
-      b.limit = () => Promise.resolve(
+      const result = () => Promise.resolve(
         where.sql.includes('approval_rules') ? h.ruleRows
           : where.sql.includes('approval_requests') ? h.pendingRows.shift() ?? []
             : [],
       );
+      b.limit = result;
+      b.orderBy = result;
       return b;
     },
     insert: (table: unknown) => {
