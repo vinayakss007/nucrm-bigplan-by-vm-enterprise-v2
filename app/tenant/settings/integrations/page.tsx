@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Plug, Trash2, CheckCircle, XCircle, Globe, Mail, Zap, Send, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate } from '@/lib/utils';
@@ -71,9 +71,12 @@ function IntegrationModal({ type, onSaved, onClose }: {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/integrations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:type.id,name,config})});
-    const d = await res.json();
-    if(res.ok){toast.success(`${name} connected`);onSaved();}else toast.error(d.error||'Failed');
+    try {
+      await fetchJsonOrThrow('/api/tenant/integrations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:type.id,name,config})});
+      toast.success(`${name} connected`);onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    }
     setSaving(false);
   };
 
@@ -84,17 +87,12 @@ function IntegrationModal({ type, onSaved, onClose }: {
       if (!botToken || !chatId) { toast.error('Enter Bot Token and Chat ID first'); return; }
       setTesting(true);
       try {
-        const res = await fetch(`/api/tenant/integrations/telegram/test`, {
+        await fetchJsonOrThrow(`/api/tenant/integrations/telegram/test`, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ bot_token: botToken, chat_id: chatId }),
         });
-        const d = await res.json();
-        if (res.ok) {
-          toast.success('Test message sent! Check Telegram');
-        } else {
-          toast.error(d.error || 'Test failed');
-        }
+        toast.success('Test message sent! Check Telegram');
       } catch (err) {
         toast.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
