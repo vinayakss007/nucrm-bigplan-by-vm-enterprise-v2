@@ -49,7 +49,7 @@ const m = vi.hoisted(() => {
       execute: vi.fn(async () => undefined),
       select: vi.fn(() => {
         const c: Record<string, unknown> = {};
-        c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+        c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]); c.orderBy = () => Promise.resolve([]);
         return c;
       }),
       insert: vi.fn((table: unknown) => {
@@ -70,7 +70,7 @@ const m = vi.hoisted(() => {
     }),
     select: vi.fn(() => {
       const c: Record<string, unknown> = {};
-      c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+      c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]); c.orderBy = () => Promise.resolve([]);
       return c;
     }),
   };
@@ -125,6 +125,19 @@ vi.mock('@/lib/assignment-resolver', () => ({
   resolveAssignee: vi.fn(async () => null),
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: vi.fn(async () => undefined) }));
+
+// The POST now stages approval-gated creates and enforces field grants; this
+// test is about the lead_oid retry, so mock those collaborators with their real
+// shapes rather than letting them issue unmocked DB reads.
+vi.mock('@/lib/rbac/approval-producer', () => ({
+  stageLeadCreateResponse: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rbac/enforce', () => ({
+  enforceFieldRead: vi.fn(async (_ctx: unknown, _entity: string, rows: unknown[]) => rows),
+  enforceFieldWrite: vi.fn(async (_ctx: unknown, _entity: string, body: unknown) => ({ body, stripped: [] })),
+  attachStrippedFields: vi.fn((res: Response) => res),
+}));
+
 vi.mock('@/lib/leads/oid', async () => {
   const actual = await vi.importActual<typeof import('@/lib/leads/oid')>('@/lib/leads/oid');
   return {
@@ -165,7 +178,7 @@ describe('POST /api/tenant/leads — lead_oid collision retry (#2343)', () => {
         execute: vi.fn(async () => undefined),
         select: vi.fn(() => {
           const c: Record<string, unknown> = {};
-          c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+          c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]); c.orderBy = () => Promise.resolve([]);
           return c;
         }),
         insert: vi.fn(() => ({
