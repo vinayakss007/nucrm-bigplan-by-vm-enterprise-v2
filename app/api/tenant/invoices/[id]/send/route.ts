@@ -19,6 +19,7 @@
  * payment ledger. A send that loses that claim emails the customer, records the
  * activity, and reports the status the ledger actually holds.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireCsrf, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -35,6 +36,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'invoices', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)

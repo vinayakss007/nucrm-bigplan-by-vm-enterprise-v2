@@ -9,6 +9,7 @@
  *   GET    /api/tenant/admin/at-risk           — list rules
  *   POST   /api/tenant/admin/at-risk           — create new rule
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -42,6 +43,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'atrisk', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

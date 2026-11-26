@@ -17,6 +17,7 @@
  * Body: { assigned_to: uuid, reason?: string }
  */
 
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -38,6 +39,8 @@ const assignSchema = z.object({
 
 export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const rateLimited = await rateLimitMutating(request, 'leads', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

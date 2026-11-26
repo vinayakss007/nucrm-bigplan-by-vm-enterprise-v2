@@ -16,6 +16,7 @@
  * (all text[]). Deals store tags inside metadata.tags[] and are out of scope for
  * this manager (no native column).
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { logError, tenantMeta } from '@/lib/errors-server';
@@ -128,6 +129,8 @@ const _TAG_RE = /^[\w \-./&]{1,40}$/;
 export const POST = withApiRoute(async (req: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
+    const rateLimited = await rateLimitMutating(req, 'tags', 'post');
+    if (rateLimited) return rateLimited;
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
@@ -18,6 +19,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  */
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'billing', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const permErr = requirePerm(ctx, 'billing.manage');

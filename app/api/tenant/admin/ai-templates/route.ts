@@ -16,6 +16,7 @@
  * are returned alongside saved rows on GET (so the picker is never empty),
  * but POSTing a seed slug saves it as a real row that the admin can edit.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { logError } from '@/lib/errors-server';
@@ -95,6 +96,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'aitemplates', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

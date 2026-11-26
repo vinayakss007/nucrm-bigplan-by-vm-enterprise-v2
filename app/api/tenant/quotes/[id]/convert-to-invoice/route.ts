@@ -10,6 +10,7 @@
  *
  * Creates a new invoice from the quote's line items and links them.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -47,6 +48,8 @@ function isQuoteUniqueViolation(err: unknown): boolean {
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'quotes', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

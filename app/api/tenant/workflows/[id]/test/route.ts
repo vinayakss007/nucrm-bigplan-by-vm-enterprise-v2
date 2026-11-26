@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
@@ -36,6 +37,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 export const POST = withApiRoute(async (request: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const rateLimited = await rateLimitMutating(request, 'workflows', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'automations.manage')) {

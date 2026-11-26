@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
  * POST /api/tenant/integrations/telegram/test
  * Send a test Telegram message to verify bot token and chat ID
  */
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -16,6 +17,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
+    const rateLimited = await rateLimitMutating(req, 'integrations', 'post');
+    if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     // #3000: connector test relays to api.telegram.org with a caller-supplied
