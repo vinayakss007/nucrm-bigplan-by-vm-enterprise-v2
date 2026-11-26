@@ -40,8 +40,6 @@
   "components/tenant/lead-import-modal.tsx": 1,
   "components/tenant/leads-client.tsx": 14,
   "components/tenant/product-entry-client.tsx": 1,
-  "components/tenant/project-detail-client.tsx": 7,
-  "components/tenant/project-related-panel.tsx": 2,
   "components/tenant/report-builder.tsx": 2,
   "components/tenant/saved-views.tsx": 2,
   "components/tenant/sequences-client.tsx": 3,
