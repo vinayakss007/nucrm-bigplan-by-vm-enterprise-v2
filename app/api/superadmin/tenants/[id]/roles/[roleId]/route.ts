@@ -44,7 +44,9 @@ function notGuarded(outcome: object): outcome is Guarded {
 async function invalidateMembers(userIds: string[], where: string): Promise<void> {
   if (userIds.length === 0) return;
   try {
-    await Promise.all(userIds.map((userId) => invalidateUserContexts(userId)));
+    for (let i = 0; i < userIds.length; i += 50) {
+      await Promise.all(userIds.slice(i, i + 50).map((userId) => invalidateUserContexts(userId)));
+    }
   } catch (e) {
     await logError({ error: e, context: `superadmin/tenants/[id]/roles/[roleId] ${where} context invalidation` });
   }
