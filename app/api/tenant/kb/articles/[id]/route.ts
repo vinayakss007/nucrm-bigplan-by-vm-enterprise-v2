@@ -88,7 +88,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (body['status'] === 'published') updates['publishedAt'] = new Date();
     updates['updatedAt'] = new Date();
 
-    await db.update(kbArticles).set(updates).where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
+    await db.update(kbArticles).set(updates).where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)));
     return NextResponse.json({ success: true });
  
  
@@ -109,7 +109,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
 
     const { id } = await params;
     await db.update(kbArticles).set({ deletedAt: new Date() })
-      .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
+      .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)));
     return NextResponse.json({ success: true });
  
  
@@ -132,18 +132,18 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     if (body.action === 'helpful') {
       await db.update(kbArticles)
         .set({ helpful: sql`${kbArticles.helpful} + 1` })
-        .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
+        .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)));
     } else if (body.action === 'not_helpful') {
       await db.update(kbArticles)
         .set({ notHelpful: sql`${kbArticles.notHelpful} + 1` })
-        .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)));
+        .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)));
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
     const [updated] = await db.select({ helpful: kbArticles.helpful, notHelpful: kbArticles.notHelpful })
       .from(kbArticles)
-      .where(eq(kbArticles.id, id))
+      .where(and(eq(kbArticles.id, id), eq(kbArticles.tenantId, ctx.tenantId), isNull(kbArticles.deletedAt)))
       .limit(1);
 
     return NextResponse.json({ success: true, data: updated });
