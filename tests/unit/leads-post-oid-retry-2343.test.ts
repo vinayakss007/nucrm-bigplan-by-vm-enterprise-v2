@@ -49,7 +49,7 @@ const m = vi.hoisted(() => {
       execute: vi.fn(async () => undefined),
       select: vi.fn(() => {
         const c: Record<string, unknown> = {};
-        c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+        c.from = () => c; c.where = () => c; c.orderBy = () => Promise.resolve([]); c.limit = () => Promise.resolve([]);
         return c;
       }),
       insert: vi.fn((table: unknown) => {
@@ -70,7 +70,7 @@ const m = vi.hoisted(() => {
     }),
     select: vi.fn(() => {
       const c: Record<string, unknown> = {};
-      c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+      c.from = () => c; c.where = () => c; c.orderBy = () => Promise.resolve([]); c.limit = () => Promise.resolve([]);
       return c;
     }),
   };
@@ -165,7 +165,7 @@ describe('POST /api/tenant/leads — lead_oid collision retry (#2343)', () => {
         execute: vi.fn(async () => undefined),
         select: vi.fn(() => {
           const c: Record<string, unknown> = {};
-          c.from = () => c; c.where = () => c; c.limit = () => Promise.resolve([]);
+          c.from = () => c; c.where = () => c; c.orderBy = () => Promise.resolve([]); c.limit = () => Promise.resolve([]);
           return c;
         }),
         insert: vi.fn(() => ({
