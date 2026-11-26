@@ -2,6 +2,56 @@
   "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences — the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
   "entries": [
     {
+      "cite": "analytics/forecast/route.ts:93",
+      "regLines": [214],
+      "reason": "Pre-existing drift from #3408's forecast hardening: the cited deletedAt predicate moved inside a new and(...) block. This PR does not touch that route; a forecast follow-up owns the re-pin."
+    },
+    {
+      "cite": "app/api/tenant/analytics/forecast/route.ts:93",
+      "regLines": [5026],
+      "reason": "Same #3408 forecast shift as the shorthand pointer above, cited by full path in a second register sentence."
+    },
+    {
+      "cite": "billing/dunning/route.ts:111",
+      "regLines": [2182],
+      "reason": "Pre-existing drift from #3851's dunning changes: the tenantId line moved when the branch was restructured. No code in this PR touches dunning."
+    },
+    {
+      "cite": "app/api/tenant/compliance/gdpr/route.ts:112",
+      "regLines": [5432],
+      "reason": "Pre-existing drift from #3917's compliance write path: the status line moved below the insert values declaration."
+    },
+    {
+      "cite": "app/api/tenant/compliance/soc2/route.ts:80",
+      "regLines": [5432],
+      "reason": "Same #3917 compliance write-path shift, cited for the SOC2 twin."
+    },
+    {
+      "cite": "gdpr/route.ts:109",
+      "regLines": [5435],
+      "reason": "Pre-existing drift from #3917's GDPR insert: the insert declaration moved above the complianceType assignment."
+    },
+    {
+      "cite": "soc2/route.ts:77",
+      "regLines": [5435],
+      "reason": "Same #3917 SOC2 insert shift, cited by shorthand path."
+    },
+    {
+      "cite": "gdpr/route.ts:155",
+      "regLines": [5443],
+      "reason": "Pre-existing drift from #3917's GDPR status-claim change: recordUpdateFailed moved within the update payload."
+    },
+    {
+      "cite": "soc2/route.ts:118",
+      "regLines": [5444],
+      "reason": "Same #3917 SOC2 status-claim change."
+    },
+    {
+      "cite": "app/tenant/settings/compliance/page.tsx:340",
+      "regLines": [5480],
+      "reason": "Pre-existing drift from #3917's compliance UI change: the status cell moved a line. This PR does not touch that page."
+    },
+    {
       "cite": "deploy/docker-compose.production.yml:691",
       "regLines": [4472],
       "reason": "Pre-existing drift on main after #3854's docker-compose hardening: the cited postgres_exporter DATA_SOURCE_NAME line moved above a new volumes block. This PR does not touch compose files; the re-pin belongs to that follow-up, and this entry goes stale once it lands."

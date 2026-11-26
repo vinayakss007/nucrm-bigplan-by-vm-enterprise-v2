@@ -8,9 +8,13 @@ import { forms, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { isEntityId } from '@/lib/id';
 import { withFormLookupContext } from '@/lib/db/form-capture-context';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const limited = await checkRateLimit(req, { action: 'public-form-view', max: 60, windowMinutes: 1 });
+    if (limited) return limited;
+
     const { id } = await params;
     if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
