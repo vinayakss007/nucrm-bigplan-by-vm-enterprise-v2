@@ -230,7 +230,7 @@ describe('chat: a session list nobody can see is not a queue nobody is in (#2829
     render_(<ChatPage />);
     fireEvent.click(screen.getByText('Ravi Sharma'));
     await waitFor(() => expect(alerts()).toContain('Failed to load this conversation'));
-    expect(alerts()).toContain('Failed to fetch');
+    expect(alerts()).toMatch(/Network error|could not be completed/);
   });
 
   it('shows the messages a successful thread read returned', async () => {
@@ -242,7 +242,7 @@ describe('chat: a session list nobody can see is not a queue nobody is in (#2829
     render_(<ChatPage />);
     fireEvent.click(screen.getByText('Ravi Sharma'));
     await waitFor(() => expect(screen.getByText('Is anyone available?')).toBeTruthy());
-    expect(fetchMock).toHaveBeenCalledWith(THREAD);
+    expect(fetchMock).toHaveBeenCalledWith(THREAD, {});
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('No messages yet')).toBeNull();
   });
@@ -357,7 +357,7 @@ describe('the ratchet this slice closes (#2829)', () => {
     // { offends: false }`. The thread pane is a plain fetch, so its false "No messages yet" is only
     // ever guarded by this file. Rewinding the branch must be visible here.
     const src = readFileSync(join(ROOT, 'app/tenant/chat/page.tsx'), 'utf8');
-    expect(src).toMatch(/setMessagesError\(d\.error \|\| `Request failed \(\$\{res\.status\}\)`\)/);
+    expect(src).toMatch(/setMessagesError\(result\.message\)/);
     expect(src).toMatch(/err instanceof Error && err\.message \? err\.message : 'no response from the server'/);
     // #2872's thread slice split `messagesError` into "never read" and "read, but refused to
     // refresh" — the outage branch is `threadFailed` now, and the rows-still-on-screen branch is

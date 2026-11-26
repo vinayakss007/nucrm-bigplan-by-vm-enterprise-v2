@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { MessageCircle, Loader2, User, Bot, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -87,7 +88,7 @@ function ChatInner() {
   // the tab labelled All, which names nothing at all.
   const scope = filter === 'all' ? 'chat sessions' : `${filter} sessions`;
 
-  // On-demand fetch (only runs when a session is selected) — left as plain fetch.
+  // On-demand read (only runs when a session is selected).
   // #2872: it cleared `messages` before it asked, so re-clicking the session already open threw
   // away the transcript on screen and reported the loss as an outage. Clearing belongs to
   // switching sessions, not to re-reading one — the same rule the sidebar got in #2893.
@@ -98,14 +99,13 @@ function ChatInner() {
       setMessages([]);
     setMessagesError(null);
     try {
-      const res = await fetch(`/api/tenant/chat/${session.id}/messages`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setMessagesError(d.error || `Request failed (${res.status})`);
+      const result = await fetchJsonSafe<{ data: ChatMessage[] }>(`/api/tenant/chat/${session.id}/messages`);
+      if (result.status === 'aborted') return;
+      if (result.status === 'error') {
+        setMessagesError(result.message);
         return;
       }
-      const d = await res.json();
-      setMessages(d.data ?? []);
+      setMessages(result.data.data ?? []);
     } catch (err: unknown) {
       // A rejection that is not an Error used to leave `messages` at [], and the thread pane
       // reported an unread conversation as one the visitor never wrote in.
@@ -123,14 +123,12 @@ function ChatInner() {
   const sendReplyMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!selectedSession) throw new Error('No session');
-      const res = await fetch(`/api/tenant/chat/${selectedSession.id}/messages`, {
+      const d = await fetchJsonOrThrow<{ data: ChatMessage }>(`/api/tenant/chat/${selectedSession.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, senderType: 'agent' }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to send message');
-      return d.data as ChatMessage;
+      return d.data;
     },
     onSuccess: (msg) => {
       setMessages(prev => [...prev, msg]);

@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
   Search, ChevronLeft, ChevronRight, Download,
@@ -147,28 +148,26 @@ function DataExplorerInner() {
 
   const saveEditMutation = useMutation({
     mutationFn: async (target: { table: string; id: string; field: string; value: unknown }) => {
-      const res = await fetch('/api/tenant/data-explorer', {
+      await fetchJsonOrThrow('/api/tenant/data-explorer', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(target),
       });
-      if (!res.ok) throw new Error('Update failed');
     },
     onSuccess: () => { toast.success('Record updated'); setEditTarget(null); refetch(); },
-    onError: () => toast.error('Failed to update record'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update record'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch('/api/tenant/data-explorer', {
+      await fetchJsonOrThrow('/api/tenant/data-explorer', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table: entityType, id }),
       });
-      if (!res.ok) throw new Error('Delete failed');
     },
     onSuccess: () => { toast.success('Record deleted'); refetch(); },
-    onError: () => toast.error('Failed to delete record'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete record'),
   });
   const handleDelete = async (id: string) => {
     await confirmThen('Delete this record? It will be soft-deleted.', async () => {
