@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
 /**
@@ -27,6 +27,7 @@ const mockRateLimit = vi.fn();
 const mockCreateBackup = vi.fn();
 const mockConcurrencyGuard = vi.fn();
 const mockCheckFileExists = vi.fn();
+const mockDownloadFromS3 = vi.fn();
 
 let rows: Record<string, unknown>[] = [];
 const joinConditions: unknown[] = [];
@@ -76,7 +77,7 @@ vi.mock('@/lib/backups/backup-service', () => ({
   BackupConfigurationError: class extends Error { statusCode = 503; },
 }));
 vi.mock('@/lib/restore/runtime-fs', () => ({
-  downloadFromS3: vi.fn(),
+  downloadFromS3: (...a: unknown[]) => mockDownloadFromS3(...a),
   checkFileExists: (...a: unknown[]) => mockCheckFileExists(...a),
   deleteFile: vi.fn(async () => {}),
 }));
@@ -103,6 +104,8 @@ beforeEach(() => {
   mockCreateBackup.mockResolvedValue({ id: 'b1', metadata: {} });
   mockCheckFileExists.mockResolvedValue(false);
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('GET /api/superadmin/backups?list=recent', () => {
   it('establishes the platform context for a super admin, before the query', async () => {
@@ -220,6 +223,29 @@ describe('POST /api/superadmin/restore', () => {
     const res = await restoreRoute.POST(req('/api/superadmin/restore', body(true)));
     expect(mockSetSuperAdminContext).toHaveBeenCalledTimes(1);
     expect(res.status).toBe(404); // checkFileExists mocked false
+  });
+
+  it('downloads through the resolved S3 config, not the raw AWS_* env vars', async () => {
+    vi.stubEnv('S3_BUCKET', 'nucrm-files');
+    vi.stubEnv('BACKUP_BUCKET', '');
+    vi.stubEnv('S3_ACCESS_KEY', 'AKIAEXAMPLE');
+    vi.stubEnv('S3_SECRET_KEY', 'secretexample');
+    vi.stubEnv('S3_ENDPOINT', 'http://minio:9000');
+    vi.stubEnv('S3_REGION', 'auto');
+    rows = [{ id: 'b1', status: 'completed', storagePath: 'backups/d.sql', storageType: 's3' }];
+    mockDownloadFromS3.mockResolvedValue('/tmp/restore_b1.dump');
+
+    await restoreRoute.POST(req('/api/superadmin/restore', body(true)));
+
+    expect(mockDownloadFromS3).toHaveBeenCalledWith(
+      { storagePath: 'backups/d.sql', id: 'b1' },
+      {
+        bucket: 'nucrm-files',
+        region: 'auto',
+        endpoint: 'http://minio:9000',
+        credentials: { accessKeyId: 'AKIAEXAMPLE', secretAccessKey: 'secretexample' },
+      },
+    );
   });
 
   it('rejects a malformed body before any privileged read', async () => {

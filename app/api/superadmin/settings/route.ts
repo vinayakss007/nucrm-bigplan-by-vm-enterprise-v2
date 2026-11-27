@@ -15,6 +15,7 @@ import { isNull, sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { getS3Config } from '@/lib/storage/s3-config';
 
 const ALLOWED = [
   'platform_name', 'support_email', 'app_url', 'allow_signups', 'require_email_verify',
@@ -83,7 +84,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       session_duration_days: '30',
       max_sessions_per_user: '10',
       backup_retention_days: '30',
-      backup_bucket: process.env.BACKUP_BUCKET ?? '',
+      backup_bucket: getS3Config().backupBucket ?? '',
       ai_features_enabled: 'false',
       anthropic_api_key: '',
     };

@@ -119,6 +119,20 @@ describe('downloadFromS3', () => {
     });
   });
 
+  it('forwards resolved credentials to the S3 client', async () => {
+    awsMocks.send.mockResolvedValue({
+      Body: { transformToByteArray: async () => new Uint8Array([1]) },
+    });
+    const credentials = { accessKeyId: 'AKIAEXAMPLE', secretAccessKey: 'secretexample' };
+    await downloadFromS3(backup, { bucket: 'b', region: 'auto', endpoint: 'https://acct.r2.example', credentials });
+    expect(awsMocks.clientCtor).toHaveBeenCalledWith({
+      region: 'auto',
+      endpoint: 'https://acct.r2.example',
+      credentials,
+      forcePathStyle: true,
+    });
+  });
+
   it('throws instead of writing an empty file when the object has no body', async () => {
     awsMocks.send.mockResolvedValue({});
     await expect(downloadFromS3(backup, { bucket: 'b' })).rejects.toThrow(
