@@ -12,7 +12,7 @@ import bcrypt from 'bcryptjs';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const _AUTH_TAG_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
 
 export class CryptoError extends Error {
   constructor(message: string) {
@@ -96,6 +96,10 @@ export function decrypt(encryptedText: string, key: string): string {
   }
   const keyBuffer = keyBytes.subarray(0, 32);
   
+  if (authTag.length !== AUTH_TAG_LENGTH) {
+    throw new CryptoError(`Invalid authentication tag length: ${authTag.length}`);
+  }
+
   const decipher = createDecipheriv(ALGORITHM, keyBuffer, iv);
   decipher.setAuthTag(authTag);
   
