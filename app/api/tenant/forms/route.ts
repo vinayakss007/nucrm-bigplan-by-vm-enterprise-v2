@@ -44,11 +44,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
     const formsWithEmbed = allForms.map((f) => ({
       ...f,
-      embed_code: `<iframe src="${appUrl}/lead-capture?form=${f.slug}" 
+      embed_code: `<iframe src="${appUrl}/lead-capture?form=${f.id}" 
   style="width:100%;min-height:500px;border:none;border-radius:8px;" 
   title="${f.name}" loading="lazy" allow="clipboard-write"></iframe>
 <!-- Powered by abetworks.in — NuCRM -->`,
-      public_url: `${appUrl}/lead-capture?form=${f.slug}`
+      public_url: `${appUrl}/lead-capture?form=${f.id}`
     }));
 
     return NextResponse.json({ data: formsWithEmbed, total, limit, offset, hasMore: offset + allForms.length < total });
@@ -96,16 +96,20 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       })
       .returning();
 
+    if (!newForm) {
+      return apiError(new Error('Form insert returned no row'));
+    }
+
     // Generate embed code with abetworks branding
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const embedCode = `<iframe src="${appUrl}/lead-capture?form=${slug}" 
+    const embedCode = `<iframe src="${appUrl}/lead-capture?form=${newForm.id}" 
   style="width:100%;min-height:500px;border:none;border-radius:8px;" 
   title="${name.trim()}" loading="lazy"
   allow="clipboard-write"></iframe>
 <!-- Powered by abetworks.in — NuCRM -->`;
 
     return NextResponse.json({ 
-      data: { ...newForm, embed_code: embedCode, public_url: `${appUrl}/lead-capture?form=${slug}` }
+      data: { ...newForm, embed_code: embedCode, public_url: `${appUrl}/lead-capture?form=${newForm.id}` }
     }, { status: 201 });
  
  

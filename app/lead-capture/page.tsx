@@ -3,9 +3,52 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { eq } from 'drizzle-orm';
+import { forms, tenants } from '@/drizzle/schema';
+import { withFormLookupContext } from '@/lib/db/form-capture-context';
+import { logError } from '@/lib/errors-server';
+import { isUuid } from '@/lib/id';
+import { BRAND } from '@/lib/marketing/site';
 import SimpleLeadForm from '@/components/shared/simple-lead-form';
 
-export default function LeadCapturePage() {
+const MARKETING_TENANT_ID = process.env.NEXT_PUBLIC_MARKETING_TENANT_ID ?? '';
+
+type LeadDestination = { tenantId: string; formId?: string };
+
+async function resolveEmbeddedForm(form: string | string[] | undefined): Promise<LeadDestination | null> {
+  const formId = Array.isArray(form) ? form[0] : form;
+  if (!formId || !isUuid(formId)) return null;
+  try {
+    const [row] = await withFormLookupContext(formId, (tx) =>
+      tx
+        .select({ tenantId: forms.tenantId, isActive: forms.isActive, tenantStatus: tenants.status })
+        .from(forms)
+        .innerJoin(tenants, eq(tenants.id, forms.tenantId))
+        .where(eq(forms.id, formId))
+        .limit(1),
+    );
+    if (!row?.isActive || row.tenantStatus !== 'active') return null;
+    return { tenantId: row.tenantId, formId };
+  } catch (err) {
+    await logError({ error: err, context: 'lead-capture/embedded-form-lookup' });
+    return null;
+  }
+}
+
+export default async function LeadCapturePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ form?: string | string[] }>;
+}) {
+  const { form } = await searchParams;
+  const requestedForm = Array.isArray(form) ? form[0] : form;
+  const embedded = Boolean(requestedForm);
+  const destination: LeadDestination | null = embedded
+    ? await resolveEmbeddedForm(form)
+    : MARKETING_TENANT_ID
+      ? { tenantId: MARKETING_TENANT_ID }
+      : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-violet-950 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
@@ -29,7 +72,29 @@ export default function LeadCapturePage() {
         </div>
 
         {/* Form */}
-        <SimpleLeadForm />
+        {destination ? (
+          <SimpleLeadForm tenantId={destination.tenantId} formId={destination.formId} />
+        ) : embedded ? (
+          <div className="max-w-md mx-auto p-8 rounded-2xl border border-border bg-card shadow-xl text-center">
+            <h2 className="text-xl font-semibold">This form is temporarily unavailable</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Please contact the organization that shared this form with you.
+            </p>
+          </div>
+        ) : (
+          <div className="max-w-md mx-auto p-8 rounded-2xl border border-border bg-card shadow-xl text-center">
+            <h2 className="text-xl font-semibold">Email us directly</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Tell us what you are trying to do and we will get back to you within one working day.
+            </p>
+            <a
+              href={`mailto:${BRAND.email}`}
+              className="mt-6 inline-flex items-center justify-center rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-violet-700"
+            >
+              {BRAND.email}
+            </a>
+          </div>
+        )}
 
         {/* Features */}
         <div className="mt-8 grid grid-cols-3 gap-4 text-center">
