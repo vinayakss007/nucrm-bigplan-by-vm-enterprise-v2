@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, type ComponentProps } from 'react';
 import { BarChart3, PieChart, TrendingUp, Download, Loader2, Play, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 // Derive the Tooltip `formatter` type from the installed recharts Tooltip — its type
@@ -129,25 +130,17 @@ export default function ReportBuilder() {
         body.dateRange = dateRange;
       }
 
-      const res = await fetch('/api/tenant/reports/builder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Failed to generate report');
-        setResult(null);
-      } else {
-        setResult(data);
-        // Auto-select chart type based on data shape
-        if (data.data?.length <= 5) setChartType('pie');
-        else if (selectedGroupBy.includes('month') || selectedGroupBy.includes('week')) setChartType('line');
-        else setChartType('bar');
-      }
+      let data: ReportResult;
+      try {
+        data = await fetchJsonOrThrow<ReportResult>('/api/tenant/reports/builder', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body),
+        });
+      } catch (err) { setError(err instanceof Error ? err.message : 'Failed to generate report'); setResult(null); return; }
+      setResult(data);
+      // Auto-select chart type based on data shape
+      if (data.data?.length <= 5) setChartType('pie');
+      else if (selectedGroupBy.includes('month') || selectedGroupBy.includes('week')) setChartType('line');
+      else setChartType('bar');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error');
     } finally {

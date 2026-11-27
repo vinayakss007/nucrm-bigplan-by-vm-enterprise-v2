@@ -2,7 +2,6 @@
   "app/p/offers/[publicToken]/page.tsx": 1,
   "app/p/sign/[token]/page.tsx": 1,
   "app/superadmin/selective-restore/page.tsx": 1,
-  "app/superadmin/settings/page.tsx": 4,
   "app/tenant/documents/page.tsx": 1,
   "app/tenant/invoices/page.tsx": 1,
   "app/tenant/settings/general/page.tsx": 1,
@@ -11,13 +10,12 @@
   "components/documents/documents-panel.tsx": 4,
   "components/superadmin/use-dashboard-panels.ts": 2,
   "components/tenant/companies-data-table.tsx": 2,
-  "components/tenant/contact-detail-client.tsx": 8,
   "components/tenant/contact-detail-panel-loader.ts": 1,
-  "components/tenant/contacts-client.tsx": 6,
+  "components/tenant/contacts-client.tsx": 3,
   "components/tenant/contacts-data-table.tsx": 3,
   "components/tenant/deal-detail-client.tsx": 2,
   "components/tenant/lead-detail-client.tsx": 1,
   "components/tenant/leads-client.tsx": 1,
-  "components/tenant/report-builder.tsx": 2,
+  "components/tenant/report-builder.tsx": 1,
   "components/tenant/workflow-builder.tsx": 3
 }

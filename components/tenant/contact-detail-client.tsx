@@ -19,6 +19,7 @@ import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ContactTimeline from '@/components/tenant/contact-timeline';
 import { CallLogger, CallLogList } from '@/components/tenant/call-logger';
 import toast from 'react-hot-toast';
+import { fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { Company } from '@/types';
 import type { LucideIcon } from 'lucide-react';
@@ -112,13 +113,12 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/tasks', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...form, contact_id: contactId }),
-    });
-    const data = await res.json();
-    if (res.ok) { toast.success('Task created'); setOpen(false); setForm({ title:'', priority:'medium', due_date:'', assigned_to:'' }); onAdded(data.data); }
-    else toast.error(data.error);
+    try {
+      const data = await fetchJsonOrThrow<{ data: ContactTask }>('/api/tenant/tasks', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...form, contact_id: contactId }),
+      });
+      toast.success('Task created'); setOpen(false); setForm({ title:'', priority:'medium', due_date:'', assigned_to:'' }); onAdded(data.data);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to create task'); }
     setSaving(false);
   };
   return (
@@ -161,13 +161,12 @@ function QuickAddDeal({ contactId, _companies, onAdded }: {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/deals', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...form, contact_id: contactId, value: Number(form.value)||0 }),
-    });
-    const data = await res.json();
-    if (res.ok) { toast.success('Deal created'); setOpen(false); setForm({ title:'', value:'', stage:'lead', close_date:'' }); onAdded(data.data); }
-    else toast.error(data.error);
+    try {
+      const data = await fetchJsonOrThrow<{ data: ContactDeal }>('/api/tenant/deals', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...form, contact_id: contactId, value: Number(form.value)||0 }),
+      });
+      toast.success('Deal created'); setOpen(false); setForm({ title:'', value:'', stage:'lead', close_date:'' }); onAdded(data.data);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to create deal'); }
     setSaving(false);
   };
   return (
@@ -206,13 +205,12 @@ function QuickAddMeeting({ contactId, onAdded }: {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/meetings', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...form, contact_id: contactId }),
-    });
-    const data = await res.json();
-    if (res.ok) { toast.success('Meeting scheduled'); setOpen(false); onAdded(data.data); }
-    else toast.error(data.error);
+    try {
+      const data = await fetchJsonOrThrow<{ data: { id: string; title: string } }>('/api/tenant/meetings', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...form, contact_id: contactId }),
+      });
+      toast.success('Meeting scheduled'); setOpen(false); onAdded(data.data);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to schedule meeting'); }
     setSaving(false);
   };
   return (
@@ -326,42 +324,41 @@ export default function ContactDetailClient({
     e.preventDefault();
     if (!noteText.trim()) return;
     setAddingNote(true);
-    const res = await fetch(`/api/tenant/contacts/${contact.id}/notes`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type: noteType, description: noteText.trim() }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); setAddingNote(false); return; }
-    setActivities((prev) => [{
-      ...data.data,
-      full_name: 'You',
-      created_at: new Date().toISOString(),
-    }, ...prev]);
-    setNoteText('');
+    try {
+      const data = await fetchJsonOrThrow<{ data: ActivityRow }>(`/api/tenant/contacts/${contact.id}/notes`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type: noteType, description: noteText.trim() }),
+      });
+      setActivities((prev) => [{
+        ...data.data,
+        full_name: 'You',
+        created_at: new Date().toISOString(),
+      }, ...prev]);
+      setNoteText('');
+      toast.success(`${noteType === 'note' ? 'Note' : noteType.charAt(0).toUpperCase() + noteType.slice(1)} logged`);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to log activity'); }
     setAddingNote(false);
-    toast.success(`${noteType === 'note' ? 'Note' : noteType.charAt(0).toUpperCase() + noteType.slice(1)} logged`);
   };
 
   // ── Delete note ──────────────────────────────────────────────
   const deleteNote = async (noteId: string) => {
     await confirmThen('Delete this note?', async () => {
-      await fetch(`/api/tenant/contacts/${contact.id}/notes`, {
-        method:'DELETE', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ noteId }),
-      });
-      setActivities((prev) => prev.filter((a) => a.id !== noteId));
-      toast.success('Note deleted');
+      try {
+        await fetchJsonOrThrow(`/api/tenant/contacts/${contact.id}/notes`, {
+          method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ noteId }),
+        });
+        setActivities((prev) => prev.filter((a) => a.id !== noteId));
+        toast.success('Note deleted');
+      } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete note'); }
     });
   };
 
   // ── Change lead status ───────────────────────────────────────
   const changeStatus = async (newStatus: string) => {
-    const res = await fetch(`/api/tenant/contacts/${contact.id}/status`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ lead_status: newStatus, reason: statusReason }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); return; }
+    try {
+      await fetchJsonOrThrow(`/api/tenant/contacts/${contact.id}/status`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ lead_status: newStatus, reason: statusReason }),
+      });
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update status'); return; }
     setContact((c) => ({ ...c, lead_status: newStatus }));
     const desc = `Status changed: ${contact.lead_status} → ${newStatus}${statusReason ? ` — ${statusReason}` : ''}`;
     setActivities((prev) => [{
@@ -380,12 +377,12 @@ export default function ContactDetailClient({
       ? editForm.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
       : [];
 
-    const res = await fetch(`/api/tenant/contacts/${contact.id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...editForm, tags: tagsArray }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); setSavingEdit(false); return; }
+    let data: { data: ContactDetailData };
+    try {
+      data = await fetchJsonOrThrow(`/api/tenant/contacts/${contact.id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...editForm, tags: tagsArray }),
+      });
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update contact'); setSavingEdit(false); return; }
     setContact(data.data);
     setEditing(false); setSavingEdit(false);
     toast.success('Contact updated');
@@ -393,13 +390,12 @@ export default function ContactDetailClient({
 
   // ── Toggle task complete ─────────────────────────────────────
   const toggleTask = async (taskId: string, completed: boolean) => {
-    const res = await fetch(`/api/tenant/tasks/${taskId}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ completed }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/tasks/${taskId}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ completed }),
+      });
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed } : t));
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update task'); }
   };
 
   return (
