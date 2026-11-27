@@ -57,6 +57,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       .leftJoin(roles, eq(roles.id, recordPermissions.roleId))
       .where(and(
         eq(recordPermissions.tenantId, ctx.tenantId),
+        isNull(recordPermissions.deletedAt),
         ...(roleId ? [eq(recordPermissions.roleId, roleId)] : []),
         ...(entityType ? [eq(recordPermissions.entityType, entityType)] : []),
       ))
