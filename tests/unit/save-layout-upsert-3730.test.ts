@@ -47,7 +47,7 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('@/drizzle/schema/dashboard', () => ({
-  dashboardLayouts: { tenantId: 't', userId: 'u', isDefault: 'd', id: 'id', layout: 'l' },
+  dashboardLayouts: { tenantId: 't', userId: 'u', isDefault: 'd', id: 'id', layout: 'l', deletedAt: 'deleted_at' },
 }));
 vi.mock('@/drizzle/schema', () => ({}));
 vi.mock('@/drizzle/schema/lead-warming', () => ({}));
@@ -79,6 +79,25 @@ describe('#3730 saveLayout upsert', () => {
     expect(calls).not.toContain('insert');
     expect(inserts).toHaveLength(0);
     expect(updates).toHaveLength(2); // one to clear the flag, one to update the row
+  });
+
+  it('keeps isDefault set on the updated row so later saves stay visible', async () => {
+    await saveLayout('tenant-1', 'user-1', { widgets: [] } as never, 'user');
+    await saveLayout('tenant-1', 'user-1', { widgets: ['changed'] } as never, 'user');
+
+    expect(updates).toHaveLength(4);
+    expect(updates[1]?.set.isDefault).toBe(true);
+    expect(updates[3]?.set.isDefault).toBe(true);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('soft-deletes the saved layout when resetting to default', async () => {
+    const { clearSavedLayout } = await import('@/lib/dashboard/layout-resolver');
+    await clearSavedLayout('tenant-1', 'user-1');
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.set.deletedAt).toBeInstanceOf(Date);
+    expect(updates[0]?.set.isDefault).toBe(false);
   });
 
   it('inserts a default row only when none exists', async () => {
