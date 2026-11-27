@@ -6,13 +6,14 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useEntityBulkOptions } from '@/hooks/use-entity-bulk-options'
 import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
-import { clientLogWarn, clientLogError } from '@/lib/client-logger'
+import { clientLogError } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
 import { useSubmitLock } from '@/hooks/use-submit-lock'
 import { Button } from '@/components/ui/button'
@@ -82,6 +83,8 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [stages, setStages] = useState<{ id: string; name: string; pipeline: string }[]>([])
+  const [stagesError, setStagesError] = useState<string | null>(null)
+  const [stagesRetry, setStagesRetry] = useState(0)
   const [form, setForm] = useState({
     title: '',
     amount: '',
@@ -135,18 +138,23 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     filterDebounce.current = setTimeout(() => loadData(0, filter), 350)
   }, [loadData])
 
-  // Load pipelines/stages once for the bulk-stage selector (#2231: failures log instead of faking zero stages).
   useEffect(() => {
     const controller = new AbortController()
     fetchJsonSafe<{ data?: { id: string; name: string; stages?: { id: string; name: string }[] }[] }>('/api/tenant/pipelines', { signal: controller.signal })
       .then(d => {
-        if (d.status !== 'ok') { if (d.status === 'error') clientLogError('deals:stages-fetch', new Error(d.message)); return }
+        if (d.status === 'aborted') return
+        if (d.status !== 'ok') {
+          setStagesError(d.message)
+          clientLogError('deals:stages-fetch', new Error(d.message))
+          return
+        }
         const flat: { id: string; name: string; pipeline: string }[] = []
         for (const p of d.data.data ?? []) for (const s of p.stages ?? []) flat.push({ id: s.id, name: s.name, pipeline: p.name })
         setStages(flat)
+        setStagesError(null)
       })
     return () => { controller.abort() }
-  }, [])
+  }, [stagesRetry])
 
   // #2230 — in-flight lock + error toast; a throwing fetch used to leave
   // `saving` stuck true and wedge the dialog at "Creating…".
@@ -271,22 +279,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   ], [deleteEntity, router])
 
   // ── Bulk actions ──────────────────────────────────────────
-  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
-  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('deals-data-table', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
-    return () => abort.abort();
-  }, [])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('deals-data-table', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+  const { customFields, segments, optionErrors, retry: retryOptions } = useEntityBulkOptions('deal')
   // #2230 — shared lock: double-clicking a bulk button used to POST twice,
   // and a network/HTML-502 error escaped silently.
   const { isPending: bulkBusy, run: runBulk } = useSubmitLock(async (action: string, ids: string[], payload: Record<string, unknown> = {}, isSelectAll = false) => {
@@ -437,6 +430,13 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
           <h1 className="text-lg font-bold">Deals</h1>
           <p className="text-sm text-muted-foreground">{total.toLocaleString()} total</p>
           {loadError && <InlineErrorState className="mt-1" message={`Failed to load deals — showing previous results. ${loadError}`} onRetry={() => void loadData(pagination.pageIndex)} />}
+          {(stagesError || Object.keys(optionErrors).length > 0) && (
+            <InlineErrorState
+              className="mt-1"
+              message={`Bulk action options could not be loaded (${[stagesError ? 'pipeline stages' : '', ...Object.keys(optionErrors)].filter(Boolean).join(', ')}). An empty picker here would be a lie.`}
+              onRetry={() => { setStagesRetry(n => n + 1); retryOptions() }}
+            />
+          )}
         </div>
         {permissions.canCreate && (
           <Button onClick={() => setShowAdd(!showAdd)}>

@@ -153,3 +153,49 @@ describe('DealsDataTable error vs false-empty (#2231)', () => {
     expect(signals[1]!.aborted).toBe(false);
   });
 });
+
+describe('DealsDataTable bulk pickers distinguish a failed option read from an empty one', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function mountWith(overrides: Record<string, Response>) {
+    const mock = vi.fn(async (input: unknown) => {
+      const url = String(input);
+      const key = Object.keys(overrides).find(k => url.includes(k));
+      return key ? overrides[key] : jsonResponse({ data: [], fields: [], total: 0 });
+    });
+    mountDeals(mock);
+    return mock;
+  }
+
+  it('names the failed pipeline-stages read instead of empty Stage pickers', async () => {
+    mountWith({ '/api/tenant/pipelines': jsonResponse({ error: 'offline' }, false, 500) });
+    await waitFor(() => expect(screen.getByText(/Bulk action options could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/pipeline stages/)).toBeTruthy();
+  });
+
+  it('names the failed segments read', async () => {
+    mountWith({ '/api/tenant/segments': jsonResponse({ error: 'forbidden' }, false, 403) });
+    await waitFor(() => expect(screen.getByText(/Bulk action options could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/segments/)).toBeTruthy();
+  });
+
+  it('re-runs the failed stages read from the retry button', async () => {
+    const mock = mountWith({ '/api/tenant/pipelines': jsonResponse({ error: 'offline' }, false, 500) });
+    await waitFor(() => expect(screen.getByText(/Bulk action options could not be loaded/)).toBeTruthy());
+    const before = mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/pipelines')).length;
+    fireEvent.click(screen.getAllByRole('button', { name: /try again/i })[0]);
+    await waitFor(() => {
+      const after = mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/pipelines')).length;
+      expect(after).toBe(before + 1);
+    });
+  });
+
+  it('shows no option alert when every option read answers empty', async () => {
+    const mock = mountWith({});
+    await waitFor(() => expect(mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/pipelines')).length).toBe(1));
+    expect(screen.queryByText(/Bulk action options could not be loaded/)).toBeNull();
+  });
+});

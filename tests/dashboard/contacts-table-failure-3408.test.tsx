@@ -35,6 +35,15 @@ function mount(initialContacts: typeof aContact[]) {
   />);
 }
 
+function stubByUrl(overrides: Record<string, Response>) {
+  const mock = vi.fn().mockImplementation(async (input: string) => {
+    const match = Object.keys(overrides).find(k => String(input).includes(k));
+    return match ? overrides[match] : resp({ data: [], total: 0, fields: [] });
+  });
+  vi.stubGlobal('fetch', mock);
+  return mock;
+}
+
 async function triggerReload() {
   await waitFor(() => expect(screen.getByPlaceholderText('Search contacts by name, email, or company...')).toBeTruthy());
   fireEvent.change(screen.getByPlaceholderText('Search contacts by name, email, or company...'), {
@@ -61,5 +70,34 @@ describe('#3408: contacts list distinguishes a failed refresh from an empty list
     await triggerReload();
     await waitFor(() => expect(screen.getByText('No contacts yet')).toBeTruthy());
     expect(screen.queryByText(/Could not load contacts/)).toBeNull();
+  });
+});
+
+describe('#3408: contacts bulk-action options distinguish a failed read from an empty one', () => {
+  it('names the failed option read instead of silently hiding the action', async () => {
+    stubByUrl({ '/api/tenant/email-templates': resp({ error: 'templates offline' }, false, 500) });
+    mount([aContact]);
+    await waitFor(() => expect(screen.getByText(/Bulk action options could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/email templates/)).toBeTruthy();
+    expect(screen.queryByText(/Bulk action options could not be loaded \(\)/)).toBeNull();
+  });
+
+  it('re-runs the failed option read from the retry button', async () => {
+    const mock = stubByUrl({ '/api/tenant/segments': resp({ error: 'segments offline' }, false, 403) });
+    mount([aContact]);
+    await waitFor(() => expect(screen.getByText(/Bulk action options could not be loaded/)).toBeTruthy());
+    const before = mock.mock.calls.filter(([url]) => String(url).includes('/segments')).length;
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => {
+      const after = mock.mock.calls.filter(([url]) => String(url).includes('/segments')).length;
+      expect(after).toBe(before + 1);
+    });
+  });
+
+  it('shows no option alert when every option read answered empty', async () => {
+    const mock = stubByUrl({});
+    mount([aContact]);
+    await waitFor(() => expect(mock.mock.calls.filter(([url]) => String(url).includes('/email-templates')).length).toBe(1));
+    expect(screen.queryByText(/Bulk action options could not be loaded/)).toBeNull();
   });
 });
