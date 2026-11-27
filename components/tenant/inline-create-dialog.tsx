@@ -17,6 +17,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import toast from 'react-hot-toast'
+import { fetchJsonOrThrow } from '@/lib/fetch-json'
 
 const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -35,7 +36,9 @@ export function InlineContactCreate({ onCreated }: InlineContactCreateProps) {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch('/api/tenant/contacts', {
+      const data = await fetchJsonOrThrow<{ data: {
+        id: string; firstName?: string; lastName?: string; first_name?: string; last_name?: string;
+      } }>('/api/tenant/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -44,12 +47,6 @@ export function InlineContactCreate({ onCreated }: InlineContactCreateProps) {
           email: form.email || null,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to create contact')
-        setSaving(false)
-        return
-      }
       toast.success('Contact created')
       const newContact = data.data
       onCreated({
@@ -59,8 +56,8 @@ export function InlineContactCreate({ onCreated }: InlineContactCreateProps) {
       })
       setForm({ first_name: '', last_name: '', email: '' })
       setOpen(false)
-    } catch {
-      toast.error('Failed to create contact')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create contact')
     }
     setSaving(false)
   }
@@ -141,7 +138,7 @@ export function InlineCompanyCreate({ onCreated }: InlineCompanyCreateProps) {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch('/api/tenant/companies', {
+      const data = await fetchJsonOrThrow<{ data: { id: string; name?: string } }>('/api/tenant/companies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -149,12 +146,6 @@ export function InlineCompanyCreate({ onCreated }: InlineCompanyCreateProps) {
           website: form.website || null,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to create company')
-        setSaving(false)
-        return
-      }
       toast.success('Company created')
       const newCompany = data.data
       onCreated({
@@ -163,8 +154,8 @@ export function InlineCompanyCreate({ onCreated }: InlineCompanyCreateProps) {
       })
       setForm({ name: '', website: '' })
       setOpen(false)
-    } catch {
-      toast.error('Failed to create company')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create company')
     }
     setSaving(false)
   }
