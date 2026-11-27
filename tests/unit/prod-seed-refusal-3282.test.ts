@@ -442,7 +442,8 @@ describe('#3282 the destructive screen is wired where a regression cannot slip p
     }
     const jobKeys = [...ci.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map((m) => m[1]);
     expect(jobKeys.at(-1)).toBe('constraint-vocab');
-    expect(jobKeys.indexOf('destructive-gate')).toBe(jobKeys.length - 2);
+    // #3985: the invariant is the order, not a fixed rank — e2e now sits between.
+    expect(jobKeys.indexOf('destructive-gate')).toBeLessThan(jobKeys.length - 1);
     expect(jobKeys.indexOf('destructive-gate')).toBeGreaterThan(jobKeys.indexOf('seed-credential'));
     expect(ci.slice(0, jobStart).split('\n').length).toBeGreaterThan(447);
   });
