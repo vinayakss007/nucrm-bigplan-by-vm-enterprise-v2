@@ -26,6 +26,7 @@ import {
   Plus, Save, Play, Trash2, Mail, Bell, Users, Calendar, Zap, Tag, Clock, DollarSign, GitBranch, Loader2, X, Undo2, Redo2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { fetchJsonOrThrow } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
 import toast from 'react-hot-toast'
 import { useUndoRedo } from './use-undo-redo'
@@ -252,11 +253,9 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
     const loadWorkflow = async () => {
       try {
-        const res = await fetch(`/api/tenant/workflows/${workflowId}`, { signal: abort.signal })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
+        const data = await fetchJsonOrThrow<{ data: WorkflowResponse; error?: string }>(`/api/tenant/workflows/${workflowId}`, { signal: abort.signal })
 
-        const wf = data.data as WorkflowResponse
+        const wf = data.data
         setWorkflowName(wf.name)
         setWorkflowDescription(wf.description || '')
         // chk_workflows_trigger_type is only satisfied by the four kinds, so a
@@ -433,14 +432,9 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         body.actions = actions
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      await fetchJsonOrThrow(url, {
+        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
 
       toast.success(workflowId ? 'Workflow updated' : 'Workflow created')
       onSave?.()
@@ -459,9 +453,8 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
     setTesting(true)
     try {
-      const res = await fetch(`/api/tenant/workflows/${workflowId}/test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await fetchJsonOrThrow<{ execution_id: string }>(`/api/tenant/workflows/${workflowId}/test`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // #2806 (a): for an event trigger the test payload names the entity
           // from the stored pair; other kinds name the kind itself. No entity
@@ -470,8 +463,6 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           trigger_entity_type: triggerType === 'event' ? triggerEvent.split('.')[0] : triggerType,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
       toast.success(`Test execution started: ${data.execution_id}`)
     } catch (err: unknown) {
       toast.error(errorMessage(err, 'Test failed'))

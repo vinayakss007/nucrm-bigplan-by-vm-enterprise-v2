@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import pLimit from 'p-limit';
 
@@ -94,7 +94,7 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   // recorded a row pointing at bytes nobody uploaded.
   const uploadFile = async (file: File) => {
     const contentType = file.type || 'application/octet-stream';
-    const metaRes = await fetch('/api/tenant/documents', {
+    const meta = await fetchJsonOrThrow<{ data: { uploadUrl: string; document: { id: string } } }>('/api/tenant/documents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -106,8 +106,6 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
         entityId,
       }),
     });
-    const meta = await metaRes.json();
-    if (!metaRes.ok) throw new Error(meta.error || 'Could not record document');
 
     const putRes = await fetch(meta.data.uploadUrl, {
       method: 'PUT',
@@ -156,9 +154,7 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
 
   const downloadDocument = async (doc: DocumentRow) => {
     try {
-      const res = await fetch(`/api/tenant/documents/${doc.id}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Could not get download URL');
+      const json = await fetchJsonOrThrow<{ data: { download_url: string } }>(`/api/tenant/documents/${doc.id}`);
       window.open(json.data.download_url, '_blank');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Download failed');
@@ -168,9 +164,7 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   const deleteDocument = async (doc: DocumentRow) => {
     await confirmThen(`Delete "${doc.name}"? This cannot be undone.`, async () => {
       try {
-        const res = await fetch(`/api/tenant/documents/${doc.id}`, { method: 'DELETE' });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Delete failed');
+        await fetchJsonOrThrow(`/api/tenant/documents/${doc.id}`, { method: 'DELETE' });
         toast.success('Deleted');
         load();
       } catch (err) {
