@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -134,13 +134,11 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/tenant/lead-warming/campaigns', {
+      await fetchJsonOrThrow('/api/tenant/lead-warming/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create campaign');
       onCreated();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error');
