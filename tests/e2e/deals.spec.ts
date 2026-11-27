@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const TEST_USER = {
   email: 'superadmin@nucrm.com',
-  password: 'admin123',
+  password: process.env.SEED_PASSWORD ?? '',
 };
 
 

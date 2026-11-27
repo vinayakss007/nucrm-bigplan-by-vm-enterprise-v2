@@ -1111,6 +1111,7 @@ jobs:
     timeout-minutes: 25
     env:
       REDIS_URL: redis://localhost:6379
+      SEED_PASSWORD: ${{ format('e2e-{0}A1!', github.run_id) }}
     services:
       postgres:
         image: postgres:16-alpine
