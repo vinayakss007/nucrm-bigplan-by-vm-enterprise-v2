@@ -3,6 +3,9 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import sanitizeHtml from 'sanitize-html';
+import { escapeHtml } from '@/lib/email/escape-html';
+
 export type BlockType = 'heading' | 'text' | 'image' | 'button' | 'divider' | 'spacer' | 'columns' | 'html';
 
 export interface EmailBlock {
@@ -102,47 +105,115 @@ export function createBlock(type: BlockType): EmailBlock {
   };
 }
 
+function safeAlign(value: unknown, fallback = 'left'): string {
+  return value === 'left' || value === 'center' || value === 'right' ? value : fallback;
+}
+
+function safeColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i.test(value) ? value : fallback;
+}
+
+function safeNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+function safeSize(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^\d{1,4}(px|%)?$/.test(value) ? value : fallback;
+}
+
+function safeUrl(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol) ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function safeText(value: unknown): string {
+  return escapeHtml(typeof value === 'string' ? value : value == null ? '' : String(value));
+}
+
+const RICH_HTML_OPTIONS = {
+  allowedTags: ['b', 'i', 'em', 'strong', 'u', 'a', 'p', 'br', 'ul', 'ol', 'li', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'],
+  allowedAttributes: {
+    a: ['href', 'title', 'target', 'rel'],
+    img: ['src', 'alt', 'width', 'height'],
+    '*': ['style'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesAppliedToAttributes: ['href', 'src'],
+  allowProtocolRelative: false,
+  allowedStyles: {
+    '*': {
+      color: [/^#[0-9a-f]{3,8}$/i, /^[a-z]{3,20}$/i],
+      'background-color': [/^#[0-9a-f]{3,8}$/i, /^[a-z]{3,20}$/i],
+      'font-size': [/^\d{1,3}px$/],
+      'text-align': [/^(left|center|right|justify)$/],
+      width: [/^\d{1,4}(px|%)$/],
+      height: [/^\d{1,4}(px|%)$/],
+    },
+  },
+  disallowedTagsMode: 'discard' as const,
+};
+
+function safeHtml(value: unknown): string {
+  return typeof value === 'string' ? sanitizeHtml(value, RICH_HTML_OPTIONS) : '';
+}
+
 export function blocksToHtml(blocks: EmailBlock[]): string {
-  return blocks.map(b => blockToHtml(b)).join('\n');
+  return (Array.isArray(blocks) ? blocks : []).map(b => blockToHtml(b)).join('\n');
 }
 
 function blockToHtml(block: EmailBlock): string {
+  if (!block || typeof block !== 'object') return '';
   const c = block.content;
   switch (block.type) {
     case 'heading': {
       const hc = c as HeadingContent;
-      const tag = `h${hc.level}`;
-      return `<${tag} style="margin:0;padding:0;color:${hc.color};text-align:${hc.align};font-weight:600;">${hc.text}</${tag}>`;
+      const tag = `h${Math.round(safeNumber(hc.level, 2, 1, 3))}`;
+      return `<${tag} style="margin:0;padding:0;color:${safeColor(hc.color, '#1a1a1a')};text-align:${safeAlign(hc.align)};font-weight:600;">${safeText(hc.text)}</${tag}>`;
     }
     case 'text': {
       const tc = c as TextContent;
-      return `<div style="text-align:${tc.align};color:${tc.color};font-size:${tc.fontSize}px;line-height:1.6;">${tc.html}</div>`;
+      return `<div style="text-align:${safeAlign(tc.align)};color:${safeColor(tc.color, '#4a4a4a')};font-size:${safeNumber(tc.fontSize, 15, 8, 72)}px;line-height:1.6;">${safeHtml(tc.html)}</div>`;
     }
     case 'image': {
       const ic = c as ImageContent;
-      if (!ic.src) return '<p style="color:#999;text-align:center;">[Image placeholder]</p>';
-      const img = `<img src="${ic.src}" alt="${ic.alt}" style="max-width:${ic.width};height:auto;display:block;" />`;
-      return ic.href ? `<a href="${ic.href}" style="display:block;text-align:${ic.align};">${img}</a>` : `<div style="text-align:${ic.align};">${img}</div>`;
+      const src = safeUrl(ic.src);
+      if (!src) return '<p style="color:#999;text-align:center;">[Image placeholder]</p>';
+      const img = `<img src="${escapeHtml(src)}" alt="${safeText(ic.alt)}" style="max-width:${safeSize(ic.width, '100%')};height:auto;display:block;" />`;
+      const href = safeUrl(ic.href);
+      return href
+        ? `<a href="${escapeHtml(href)}" style="display:block;text-align:${safeAlign(ic.align)};">${img}</a>`
+        : `<div style="text-align:${safeAlign(ic.align)};">${img}</div>`;
     }
     case 'button': {
       const bc = c as ButtonContent;
-      return `<div style="text-align:${bc.align};"><a href="${bc.href}" style="display:inline-block;padding:12px 28px;background:${bc.bgColor};color:${bc.textColor};text-decoration:none;border-radius:${bc.borderRadius}px;font-weight:600;font-size:15px;">${bc.text}</a></div>`;
+      return `<div style="text-align:${safeAlign(bc.align)};"><a href="${escapeHtml(safeUrl(bc.href) || '#')}" style="display:inline-block;padding:12px 28px;background:${safeColor(bc.bgColor, '#7c3aed')};color:${safeColor(bc.textColor, '#ffffff')};text-decoration:none;border-radius:${safeNumber(bc.borderRadius, 8, 0, 100)}px;font-weight:600;font-size:15px;">${safeText(bc.text)}</a></div>`;
     }
     case 'divider': {
       const dc = c as DividerContent;
-      return `<hr style="border:none;border-top:${dc.thickness}px ${dc.style} ${dc.color};width:${dc.width};margin:0 auto;" />`;
+      const style = dc.style === 'dashed' || dc.style === 'dotted' ? dc.style : 'solid';
+      return `<hr style="border:none;border-top:${safeNumber(dc.thickness, 1, 0, 50)}px ${style} ${safeColor(dc.color, '#e5e7eb')};width:${safeSize(dc.width, '100%')};margin:0 auto;" />`;
     }
     case 'spacer': {
       const sc = c as SpacerContent;
-      return `<div style="height:${sc.height}px;line-height:${sc.height}px;">&nbsp;</div>`;
+      const height = safeNumber(sc.height, 32, 0, 500);
+      return `<div style="height:${height}px;line-height:${height}px;">&nbsp;</div>`;
     }
     case 'html': {
-      return (c as HtmlContent).html;
+      return safeHtml((c as HtmlContent).html);
     }
     case 'columns': {
       const cc = c as ColumnsContent;
-      const cols = cc.columns.map(col =>
-        `<td style="width:${col.width};vertical-align:top;padding:0 8px;">${blocksToHtml(col.blocks)}</td>`
+      const cols = (Array.isArray(cc.columns) ? cc.columns : []).map(col =>
+        `<td style="width:${safeSize(col.width, '50%')};vertical-align:top;padding:0 8px;">${blocksToHtml(col.blocks)}</td>`
       ).join('');
       return `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>${cols}</tr></table>`;
     }
