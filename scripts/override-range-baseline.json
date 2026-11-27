@@ -23,6 +23,13 @@
       "reason": "Deliberate nested override: the 0.18 line is what the advisory-free build needs. Scope is already limited to this parent, so no other esbuild consumer is touched."
     },
     {
+      "parent": "@typescript-eslint/typescript-estree",
+      "name": "minimatch",
+      "range": "^10.2.2",
+      "forced_by": "\"@typescript-eslint/typescript-estree\": { \"minimatch\": \"11.0.1\" }",
+      "reason": "Deliberate nested override pinning the patched minimatch 11.0.1 line to clear #4018. Scope is limited to this parent, and the glob API typescript-estree uses is unchanged across the major."
+    },
+    {
       "parent": "exceljs",
       "name": "uuid",
       "range": "^8.3.0",
