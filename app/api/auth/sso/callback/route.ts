@@ -34,6 +34,14 @@ import { logError } from '@/lib/errors-server';
 
 const SESSION_TTL_DAYS = 30;
 
+export function redactRequestUrl(requestUrl: string): string {
+  try {
+    return new URL(requestUrl).pathname;
+  } catch {
+    return '(invalid-url)';
+  }
+}
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -81,7 +89,7 @@ export async function GET(request: NextRequest) {
   try {
     cfg = loadProviderConfig(provider.config, decrypt);
   } catch (err) {
-    void logError({ error: err, context: 'auth/sso/callback decrypt provider config', requestUrl: request.url, requestMethod: request.method });
+    void logError({ error: err, context: 'auth/sso/callback decrypt provider config', requestUrl: redactRequestUrl(request.url), requestMethod: request.method });
     await clearSsoState();
     return redirectToLogin('SSO provider configuration is invalid');
   }
@@ -98,7 +106,7 @@ export async function GET(request: NextRequest) {
       expectedNonce: stateCookie.nonce,
     });
   } catch (err) {
-    void logError({ error: err, context: 'auth/sso/callback token exchange/verify', requestUrl: request.url, requestMethod: request.method });
+    void logError({ error: err, context: 'auth/sso/callback token exchange/verify', requestUrl: redactRequestUrl(request.url), requestMethod: request.method });
     await clearSsoState();
     return redirectToLogin('Could not verify your SSO login');
   }
