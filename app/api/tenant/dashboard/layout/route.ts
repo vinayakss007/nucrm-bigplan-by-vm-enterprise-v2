@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { resolveDashboardLayout, saveLayout } from '@/lib/dashboard/layout-resolver';
+import { clearSavedLayout, resolveDashboardLayout, saveLayout } from '@/lib/dashboard/layout-resolver';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -79,6 +79,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         LIMIT 1`
   );
   const row = (result.rows?.[0] ?? {}) as { industry?: string | null; plan_name?: string };
+
+  // Retire the saved layout first, otherwise resolveDashboardLayout() returns
+  // it and "reset" answers success without changing anything.
+  await clearSavedLayout(ctx.tenantId, ctx.userId);
 
   const layoutResult = await resolveDashboardLayout(
     ctx.tenantId,

@@ -14,6 +14,13 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
+class ModuleRowMissError extends Error {
+  constructor(readonly moduleId: string) {
+    super(`Module ${moduleId} has no row to update`);
+    this.name = 'ModuleRowMissError';
+  }
+}
+
 const updateModuleBulkSchema = z.object({
   updates: z.array(
     z.object({
@@ -38,14 +45,26 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ ok: true });
     }
 
+    // Built-in modules have no `modules` row until a tenant installs one, so
+    // an UPDATE can silently match zero rows. Verify both available witnesses
+    // (driver rowCount and RETURNING rows) and roll the whole batch back on
+    // a miss instead of reporting a successful save that changed nothing.
     await db.transaction(async (tx) => {
       for (const update of updates) {
-        await tx.execute(sql`
+        const result = await tx.execute(sql`
           UPDATE public.modules
           SET manifest = jsonb_set(COALESCE(manifest, '{}'::jsonb), '{pricing}', ${JSON.stringify(update.pricing)}::jsonb),
               updated_at = now()
           WHERE id = ${update.id}
+          RETURNING id
         `);
+        const resultRows = (result as { rows?: unknown[] } | undefined)?.rows;
+        const rowCount = (result as { rowCount?: number | null } | undefined)?.rowCount;
+        const witnesses: number[] = [];
+        if (typeof rowCount === 'number') witnesses.push(rowCount);
+        if (Array.isArray(resultRows)) witnesses.push(resultRows.length);
+        const written = witnesses.length > 0 ? Math.min(...witnesses) : 0;
+        if (written !== 1) throw new ModuleRowMissError(update.id);
       }
     });
 
@@ -63,6 +82,13 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, count: updates.length });
   } catch (err) {
+    if (err instanceof ModuleRowMissError) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Module pricing was not saved: the module has no installed row',
+        moduleId: err.moduleId,
+      }, { status: 404 });
+    }
     await logError({ error: err, context: 'superadmin/modules/bulk PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }

@@ -185,9 +185,34 @@ export class CriticalDataCapture {
         const colList = sql.join(columns.map(c => sql.identifier(c)), sql`, `);
         const placeholders = sql.join(values.map(v => sql`${v}`), sql`, `);
 
-        await tx.execute(
-          sql`INSERT INTO ${sql.identifier(tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`
+        const insertResult = await tx.execute(
+          sql`INSERT INTO ${sql.identifier(tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING RETURNING id`
         );
+
+        // Two independent witnesses that the row actually landed: the driver's
+        // rowCount and the RETURNING rows. A zero-row INSERT (RLS WITH CHECK,
+        // stale id, conflict) used to be reported as a successful restore and
+        // then flipped the only recoverable copy to canRestore=false. When
+        // either witness says zero, fail closed and leave the backup intact.
+        const resultRows = (insertResult as { rows?: unknown[] } | undefined)?.rows;
+        const rowCount = (insertResult as { rowCount?: number | null } | undefined)?.rowCount;
+        const witnesses: number[] = [];
+        if (typeof rowCount === 'number') witnesses.push(rowCount);
+        if (Array.isArray(resultRows)) witnesses.push(resultRows.length);
+        const restoredRows = witnesses.length > 0 ? Math.min(...witnesses) : 0;
+
+        if (restoredRows !== 1) {
+          logger.warn('Restore inserted no rows; backup left restorable', {
+            backupId,
+            tableName: backup.tableName,
+            recordId: backup.recordId,
+            restoredRows,
+          });
+          return {
+            success: false,
+            message: `Restore inserted ${restoredRows} rows; the backup remains restorable`,
+          };
+        }
 
         await tx.update(criticalDataBackups)
           .set({ canRestore: false })

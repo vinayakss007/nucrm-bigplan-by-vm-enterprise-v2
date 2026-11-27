@@ -29,6 +29,9 @@ export async function checkRecordAccess(
       eq(recordPermissions.roleId, roleId),
       eq(recordPermissions.entityType, entityType),
       eq(recordPermissions.entityId, entityId),
+      // A revoked grant is tombstoned; it must not authorize access even if a
+      // caller consults this helper directly instead of record-scope.ts.
+      isNull(recordPermissions.deletedAt),
       or(
         isNull(recordPermissions.expiresAt),
         gt(recordPermissions.expiresAt, now)
@@ -67,10 +70,20 @@ export async function grantRecordAccess(
       .limit(1);
 
     if (existing) {
+      // Re-granting after a revoke updates the tombstoned row. Clear the
+      // tombstone AND any stale expiry in the same UPDATE: the consumers in
+      // record-scope.ts filter deleted_at IS NULL and compare expires_at, so
+      // otherwise the new grant returns 201 but authorizes nothing.
       await tx.update(recordPermissions)
-        .set({ accessLevel, grantedBy, updatedAt: new Date() })
+        .set({
+          accessLevel,
+          grantedBy,
+          updatedAt: new Date(),
+          deletedAt: null,
+          expiresAt: null,
+        })
         .where(eq(recordPermissions.id, existing.id));
-      return { ...existing, accessLevel, grantedBy };
+      return { ...existing, accessLevel, grantedBy, deletedAt: null, expiresAt: null };
     }
 
     const [result] = await tx.insert(recordPermissions).values({

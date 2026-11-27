@@ -178,14 +178,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const capture = new CriticalDataCapture();
       const result = await capture.restoreFromBackup(parsed.data.backupId);
 
+      // A zero-row INSERT is a failed restore, not a completed one. Record the
+      // real outcome and answer with a failing status so no caller mistakes it
+      // for a successful recovery of their data.
       await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
-        action: 'restore.executed',
-        metadata: { backupId: parsed.data.backupId, via: 'backup-route' },
+        action: result.success ? 'restore.executed' : 'restore.failed',
+        metadata: {
+          backupId: parsed.data.backupId,
+          via: 'backup-route',
+          success: result.success,
+          message: result.message,
+        },
       });
 
-      return NextResponse.json(result);
+      return NextResponse.json(result, { status: result.success ? 200 : 502 });
     }
 
     const backup = await createBackup({
