@@ -30,6 +30,7 @@ vi.mock('@/drizzle/schema/dashboard', () => ({
     name: 'name',
     source: 'source',
     createdAt: 'created_at',
+    deletedAt: 'deleted_at',
   },
 }));
 
@@ -37,6 +38,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn(() => true),
   and: vi.fn(() => true),
   desc: vi.fn(() => true),
+  isNull: vi.fn(() => true),
 }));
 
 // #2633: industry layouts resolve from product_templates via lib/templates/resolve
