@@ -79,15 +79,26 @@ async function ensureUserAndTenant(tx: RlsTransaction) {
     .where(and(eq(roles.tenantId, tenantId), eq(roles.slug, 'admin'), isNull(roles.deletedAt)))
     .limit(1);
 
-  if (!role) {
-    console.error('Admin role not auto-created by trigger. Check DB functions.');
-    process.exit(1);
+  // #3985: there is no DB trigger that creates roles on tenant insert — the
+  // app creates them in the signup handler. This seed script bypasses signup,
+  // so it must provision its own admin role (same shape as seed-fresh.ts).
+  let adminRole = role;
+  if (!adminRole) {
+    const [inserted] = await tx.insert(roles).values({
+      tenantId,
+      slug: 'admin',
+      name: 'Administrator',
+      permissions: { all: true },
+      isSystem: true,
+    }).returning();
+    if (!inserted) throw new Error('Failed to insert the E2E admin role');
+    adminRole = inserted;
   }
 
   await tx.insert(tenantMembers).values({
     tenantId,
     userId,
-    roleId: role.id,
+    roleId: adminRole.id,
     roleSlug: 'admin',
     status: 'active',
     joinedAt: new Date(),
