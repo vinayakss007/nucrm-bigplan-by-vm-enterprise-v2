@@ -7,10 +7,11 @@ import { existsSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createS3Client } from '@/lib/storage/s3-client';
+import type { S3Credentials } from '@/lib/storage/s3-config';
 
 const MAX_RESTORE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
 
-export async function downloadFromS3(backup: { storagePath: string; id: string }, s3Options: { bucket: string; region?: string; endpoint?: string }): Promise<string> {
+export async function downloadFromS3(backup: { storagePath: string; id: string }, s3Options: { bucket: string; region?: string; endpoint?: string; credentials?: S3Credentials }): Promise<string> {
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
   const { writeFile } = await import('fs/promises');
 
@@ -18,6 +19,7 @@ export async function downloadFromS3(backup: { storagePath: string; id: string }
   const s3Client = await createS3Client({
     region: s3Options.region,
     endpoint: s3Options.endpoint,
+    credentials: s3Options.credentials,
   });
 
   const response = await s3Client.send(new GetObjectCommand({
