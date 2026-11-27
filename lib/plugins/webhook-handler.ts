@@ -21,6 +21,9 @@ import { logger } from '@/lib/logger';
 /** Maximum age (in ms) for a webhook timestamp to be considered valid (5 minutes). */
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 
+/** Small allowance for clock skew between sender and receiver. */
+const MAX_WEBHOOK_FUTURE_SKEW_MS = 60 * 1000;
+
 /**
  * Verify an inbound webhook signature using HMAC-SHA256.
  * Fail-closed in production: if no secret is configured, verification fails.
@@ -71,6 +74,10 @@ export function isWebhookTimestampValid(timestampHeader: string | null): boolean
   // Timestamp could be in seconds or milliseconds - normalize to ms
   const timestampMs = timestamp < 1e12 ? timestamp * 1000 : timestamp;
   const age = Date.now() - timestampMs;
+
+  // The signature covers the body, not this header, so a timestamp far in the
+  // future would otherwise make any stale or replayed payload look fresh.
+  if (age < -MAX_WEBHOOK_FUTURE_SKEW_MS) return false;
 
   return age <= MAX_WEBHOOK_AGE_MS;
 }
