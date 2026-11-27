@@ -15,7 +15,7 @@
   "components/tenant/contact-detail-client.tsx": 8,
   "components/tenant/contact-detail-panel-loader.ts": 1,
   "components/tenant/contacts-client.tsx": 6,
-  "components/tenant/contacts-data-table.tsx": 11,
+  "components/tenant/contacts-data-table.tsx": 3,
   "components/tenant/deal-detail-client.tsx": 2,
   "components/tenant/inline-create-dialog.tsx": 2,
   "components/tenant/layout/header.tsx": 1,

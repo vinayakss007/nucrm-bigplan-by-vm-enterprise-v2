@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
 import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { useSubmitLock } from '@/hooks/use-submit-lock'
 import { clientLogWarn } from '@/lib/client-logger'
@@ -227,9 +227,8 @@ export default function ContactsDataTable({
       cell: ({ row }) => (
         <InlineEdit value={row.original.email ?? ''} className="text-sm text-muted-foreground truncate max-w-[180px] block"
           onSave={async (v) => {
-            await fetch(`/api/tenant/contacts/${row.original.id}`, {
-              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: v || null }),
+            await fetchJsonOrThrow(`/api/tenant/contacts/${row.original.id}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: v || null }),
             });
           }} />
       ),
@@ -240,9 +239,8 @@ export default function ContactsDataTable({
       cell: ({ row }) => (
         <InlineEdit value={row.original.phone ?? ''} className="text-sm text-muted-foreground"
           onSave={async (v) => {
-            await fetch(`/api/tenant/contacts/${row.original.id}`, {
-              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone: v || null }),
+            await fetchJsonOrThrow(`/api/tenant/contacts/${row.original.id}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: v || null }),
             });
           }} />
       ),
@@ -292,13 +290,11 @@ export default function ContactsDataTable({
                 className="text-red-600 dark:text-red-400"
                 onClick={async () => {
                   await confirmThen(`Delete ${contact.first_name} ${contact.last_name}?`, async () => {
-                    const res = await fetch(`/api/tenant/contacts/${contact.id}`, { method: 'DELETE' })
-                    if (res.ok) {
+                    try {
+                      await fetchJsonOrThrow(`/api/tenant/contacts/${contact.id}`, { method: 'DELETE' })
                       toast.success('Contact deleted')
                       loadData(pagination.pageIndex)
-                    } else {
-                      toast.error('Failed to delete')
-                    }
+                    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete') }
                   })
                 }}
               >
@@ -319,10 +315,9 @@ export default function ContactsDataTable({
     errorMessage: string = 'Bulk action failed',
     url: string = '/api/tenant/contacts/bulk',
   ) => {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const data = await res.json().catch(() => ({}) as { affected?: number; sent?: number; failed?: number; errors?: unknown[]; error?: string })
-    if (!res.ok) throw new Error(data.error || errorMessage)
-    return data
+    return fetchJsonOrThrow<{ affected?: number; sent?: number; failed?: number; errors?: unknown[]; error?: string }>(
+      url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    ).catch((err: unknown) => { throw new Error(err instanceof Error ? err.message : errorMessage) })
   })
   const [_showBulkAction, _setShowBulkAction] = useState<string | null>(null)
   const [_bulkPayload, _setBulkPayload] = useState<Record<string, string>>({})
@@ -347,19 +342,15 @@ export default function ContactsDataTable({
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/sequences', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load sequences', err); });
+    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/sequences', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load sequences', new Error(r.message)); else if (r.status === 'ok') setSequences(r.data.data ?? []); });
     return () => abort.abort();
   }, [])
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/email-templates', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setEmailTemplates(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load email templates', err); });
+    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/email-templates', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load email templates', new Error(r.message)); else if (r.status === 'ok') setEmailTemplates(r.data.data ?? []); });
     return () => abort.abort();
   }, [])
 
@@ -447,18 +438,14 @@ export default function ContactsDataTable({
               <button
                 onClick={async () => {
                   toast.dismiss(t.id)
-                  const restoreRes = await fetch('/api/tenant/contacts/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(buildBody('restore', archivedIds, undefined, isSelectAllMatching)),
-                  })
-                  const restoreData = await restoreRes.json().catch(() => ({}) as { affected?: number; error?: string })
-                  if (restoreRes.ok) {
+                  try {
+                    const restoreData = await fetchJsonOrThrow<{ affected?: number; error?: string }>('/api/tenant/contacts/bulk', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(buildBody('restore', archivedIds, undefined, isSelectAllMatching)),
+                    })
                     toast.success(`Restored ${restoreData.affected} contacts`)
                     loadData(pagination.pageIndex)
-                  } else {
-                    toast.error(restoreData.error || 'Failed to restore')
-                  }
+                  } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to restore') }
                 }}
                 className="text-sm font-medium underline hover:no-underline"
               >
@@ -500,18 +487,14 @@ export default function ContactsDataTable({
               <button
                 onClick={async () => {
                   toast.dismiss(t.id)
-                  const restoreRes = await fetch('/api/tenant/contacts/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(buildBody('restore', deletedIds, undefined, isSelectAllMatching)),
-                  })
-                  const restoreData = await restoreRes.json().catch(() => ({}) as { affected?: number; error?: string })
-                  if (restoreRes.ok) {
+                  try {
+                    const restoreData = await fetchJsonOrThrow<{ affected?: number; error?: string }>('/api/tenant/contacts/bulk', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(buildBody('restore', deletedIds, undefined, isSelectAllMatching)),
+                    })
                     toast.success(`Restored ${restoreData.affected} contacts`)
                     loadData(pagination.pageIndex)
-                  } else {
-                    toast.error(restoreData.error || 'Failed to restore')
-                  }
+                  } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to restore') }
                 }}
                 className="text-sm font-medium underline hover:no-underline"
               >
