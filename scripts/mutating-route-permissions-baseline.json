@@ -5,8 +5,6 @@
     "app/api/tenant/chat/route.ts",
     "app/api/tenant/forms/[id]/analytics/route.ts",
     "app/api/tenant/onboarding/complete/route.ts",
-    "app/api/tenant/record-links/route.ts",
-    "app/api/tenant/sms/route.ts",
     "app/api/tenant/tax/calculate/route.ts"
   ]
 }

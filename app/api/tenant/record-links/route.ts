@@ -6,7 +6,7 @@
 import { validateBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import {
@@ -62,6 +62,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // Linking edits CRM records; the same gate used by other record writes.
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     const validated = validateBody(z.object({
       fromType: z.string().min(1),
@@ -99,6 +102,8 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return badRequest('id is required');
