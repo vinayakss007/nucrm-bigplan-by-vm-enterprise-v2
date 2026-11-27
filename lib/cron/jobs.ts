@@ -93,7 +93,10 @@ export const CRON_JOBS: readonly CronJobSpec[] = [
   // reinstalled on the host at deploy time.
   { name: 'recurring-invoice-generator', path: '/api/cron/recurring-invoice-generator', cron: '0 6 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'backup', path: '/api/cron/backup', cron: '30 2 * * *', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
-  { name: 'lead-warming', path: '/api/cron/lead-warming', cron: '0 9 * * *', owner: 'email', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
+  // #3983: the route was scheduler-only, so production (crontab topology)
+  // never started a warming campaign. Schedule it at 09:00 UTC, the cadence
+  // its own manifest already declares.
+  { name: 'lead-warming', path: '/api/cron/lead-warming', cron: '0 9 * * *', owner: 'email', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: false, scheduler: true } },
   // #3410 PR-2B — the last two orphans are now scheduled, at the cadence their
   // own route headers declare: lead scoring is a nightly recompute of leads not
   // scored in 24h (the hourly value here was never installed anywhere, so it
