@@ -62,11 +62,11 @@ export const LOCK_MODULE = '@/lib/cron/cron-lock';
  */
 // #3410 PR-2B scheduled process-lead-scoring and sla-check: they now have a
 // crontab line, so their tracked-debt entries were removed in the same PR.
-// The three below are still awaiting the owner's topology decision.
+// #3982 scheduled recurring-invoice-generator on the production crontab.
+// The two below are still awaiting the owner's topology decision.
 export const UNSCHEDULED_IN_CRONTAB = new Set([
   'backup',
   'lead-warming',
-  'recurring-invoice-generator',
 ]);
 
 // ── Pure parsers: text in, job-name list out (no filesystem touched) ────────

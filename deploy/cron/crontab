@@ -34,5 +34,6 @@
 0 8 * * *	/usr/local/bin/run-cron.sh process-at-risk
 0 7 * * *	/usr/local/bin/run-cron.sh subscription-renewal-check
 0 8 * * *	/usr/local/bin/run-cron.sh scheduled-report-delivery
+0 6 * * *	/usr/local/bin/run-cron.sh recurring-invoice-generator
 0 2 * * *	/usr/local/bin/run-cron.sh process-lead-scoring
 */10 * * * *	/usr/local/bin/run-cron.sh sla-check
