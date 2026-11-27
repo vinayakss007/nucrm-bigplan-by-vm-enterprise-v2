@@ -101,7 +101,7 @@ export function decrypt(encryptedText: string, key: string): string {
   }
 
   const decipher = createDecipheriv(ALGORITHM, keyBuffer, iv);
-  decipher.setAuthTag(authTag, AUTH_TAG_LENGTH);
+  decipher.setAuthTag(authTag);
   
   let decrypted = decipher.update(encrypted, 'base64', 'utf8');
   decrypted += decipher.final('utf8');
