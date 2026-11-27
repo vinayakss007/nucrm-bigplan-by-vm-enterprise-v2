@@ -87,10 +87,11 @@ export const CRON_JOBS: readonly CronJobSpec[] = [
   { name: 'process-at-risk', path: '/api/cron/process-at-risk', cron: '0 8 * * *', owner: 'crm', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'subscription-renewal-check', path: '/api/cron/subscription-renewal-check', cron: '0 7 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: false } },
   { name: 'scheduled-report-delivery', path: '/api/cron/scheduled-report-delivery', cron: '0 8 * * *', owner: 'analytics', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: false } },
-  // The VM omission on `recurring-invoice-generator` and the crontab omission
-  // on `backup`/`lead-warming` are #2539 step-3 debt that #3410 tracks —
-  // flipping a `sources` flag IS the owner decision, made as a PR diff.
-  { name: 'recurring-invoice-generator', path: '/api/cron/recurring-invoice-generator', cron: '0 6 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: true, scheduler: true } },
+  // #3982: recurring invoices were Vercel-only, so contracts with a past
+  // billing date generated nothing on the production VM/Docker crontab.
+  // Flipping this flag IS the owner decision; the generated crontab is
+  // reinstalled on the host at deploy time.
+  { name: 'recurring-invoice-generator', path: '/api/cron/recurring-invoice-generator', cron: '0 6 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'backup', path: '/api/cron/backup', cron: '30 2 * * *', owner: 'backups', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
   { name: 'lead-warming', path: '/api/cron/lead-warming', cron: '0 9 * * *', owner: 'email', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: false, vercel: false, scheduler: true } },
   // #3410 PR-2B — the last two orphans are now scheduled, at the cadence their
