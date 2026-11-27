@@ -9,12 +9,19 @@ import { join } from 'path';
 import { createS3Client } from '@/lib/storage/s3-client';
 
 const MAX_RESTORE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
+const SAFE_BACKUP_ID = /^[a-zA-Z0-9_-]{1,128}$/;
+
+export function safeBackupFileName(id: unknown): string | null {
+  return typeof id === 'string' && SAFE_BACKUP_ID.test(id) ? `restore_${id}.dump` : null;
+}
 
 export async function downloadFromS3(backup: { storagePath: string; id: string }, s3Options: { bucket: string; region?: string; endpoint?: string }): Promise<string> {
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
   const { writeFile } = await import('fs/promises');
 
-  const tempPath = join(tmpdir(), `restore_${backup.id}.dump`);
+  const fileName = safeBackupFileName(backup.id);
+  if (!fileName) throw new Error('Invalid backup id');
+  const tempPath = join(tmpdir(), fileName);
   const s3Client = await createS3Client({
     region: s3Options.region,
     endpoint: s3Options.endpoint,
