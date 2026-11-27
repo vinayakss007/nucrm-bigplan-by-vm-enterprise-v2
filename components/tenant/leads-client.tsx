@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import ImportModal from '@/components/tenant/import-modal';
 import toast from 'react-hot-toast';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 
 // ── Pipeline Configuration ──────────────────────────────────────
 const PIPELINE_CONFIG = {
@@ -174,10 +174,8 @@ export default function LeadsClient({
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/sequences', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load sequences', err); });
+    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/sequences', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load sequences', new Error(r.message)); else if (r.status === 'ok') setSequences(r.data.data ?? []); });
     return () => abort.abort();
   }, []);
 
@@ -185,21 +183,15 @@ export default function LeadsClient({
   // request for. Non-fatal: the pickers simply stay empty if these fail.
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/products?limit=200', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load products', err); });
-    fetch('/api/tenant/services?limit=200', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { services: [] })
-      // The services route returns { services: [...] } while products returns
-      // { data: [...] } — tolerate both until the response shapes are unified.
-      .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load services', err); });
+    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/products?limit=200', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load products', new Error(r.message)); else if (r.status === 'ok') setProducts(r.data.data ?? []); });
+    // The services route returns { services: [...] } while products returns
+    // { data: [...] } — tolerate both until the response shapes are unified.
+    void fetchJsonSafe<{ data?: { id: string; name: string }[]; services?: { id: string; name: string }[] }>('/api/tenant/services?limit=200', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load services', new Error(r.message)); else if (r.status === 'ok') setServices(r.data.data ?? r.data.services ?? []); });
     // Existing contacts, so a lead can be tied to one instead of creating a new.
-    fetch('/api/tenant/contacts?limit=200', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setContactOptions(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load contacts', err); });
+    void fetchJsonSafe<{ data?: { id: string; firstName?: string; lastName?: string; email?: string }[] }>('/api/tenant/contacts?limit=200', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load contacts', new Error(r.message)); else if (r.status === 'ok') setContactOptions(r.data.data ?? []); });
     return () => abort.abort();
   }, []);
 
@@ -261,7 +253,7 @@ export default function LeadsClient({
       // leads API so it becomes a proper lead record (which resolves-or-creates
       // the contact, honours an existing company id, and runs auto-assignment)
       // instead of a bare contact.
-      const res = await fetch('/api/tenant/leads', {
+      await fetchJsonOrThrow('/api/tenant/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -281,8 +273,6 @@ export default function LeadsClient({
           requested_service_id: quickAddData.requested_service_id || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
       toast.success('Lead added successfully');
       setShowQuickAdd(false);
       setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', contact_id: '', lead_source: '', tags: '', requested_product_id: '', requested_service_id: '' });
@@ -296,28 +286,20 @@ export default function LeadsClient({
 
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/tenant/contacts/${leadId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_status: newStatus }),
+      await fetchJsonOrThrow(`/api/tenant/contacts/${leadId}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_status: newStatus }),
       });
-      if (!res.ok) throw new Error();
       toast.success('Status updated');
       load();
-    } catch {
-      toast.error('Failed to update status');
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update status'); }
   };
 
   const deleteLead = async (leadId: string, _name: string) => {
     try {
-      const res = await fetch(`/api/tenant/contacts/${leadId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
+      await fetchJsonOrThrow(`/api/tenant/contacts/${leadId}`, { method: 'DELETE' });
       toast.success('Lead deleted');
       load();
-    } catch {
-      toast.error('Failed to delete lead');
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete lead'); }
   };
 
   const toggleSelect = (id: string) => {
@@ -329,18 +311,13 @@ export default function LeadsClient({
   const bulkUpdateStatus = async (newStatus: string) => {
     if (selectedLeads.size === 0) return;
     try {
-      const res = await fetch('/api/tenant/contacts/bulk', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(selectedLeads), updates: { lead_status: newStatus } }),
+      await fetchJsonOrThrow('/api/tenant/contacts/bulk', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: Array.from(selectedLeads), updates: { lead_status: newStatus } }),
       });
-      if (!res.ok) throw new Error();
       toast.success(`Updated ${selectedLeads.size} leads`);
       setSelectedLeads(new Set());
       load();
-    } catch {
-      toast.error('Failed to update');
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update'); }
   };
 
   return (
@@ -463,22 +440,18 @@ export default function LeadsClient({
                   if (!bulkFieldKey) { toast.error('Select a field'); return; }
                   const value = bulkFieldValue.trim();
                   if (!value) { toast.error('Enter a value for the field'); return; }
-                  const res = await fetch('/api/tenant/leads/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'update_field', lead_ids: Array.from(selectedLeads), payload: { field_key: bulkFieldKey, field_value: value } }),
-                  });
-                  if (res.ok) {
+                  try {
+                    await fetchJsonOrThrow('/api/tenant/leads/bulk', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'update_field', lead_ids: Array.from(selectedLeads), payload: { field_key: bulkFieldKey, field_value: value } }),
+                    });
                     toast.success('Field updated');
                     setSelectedLeads(new Set());
                     setShowBulkField(false);
                     setBulkFieldKey('');
                     setBulkFieldValue('');
                     load();
-                  } else {
-                    const data = await res.json();
-                    toast.error(data.error || 'Failed to update field');
-                  }
+                  } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update field'); }
                 }}>
                   Apply
                 </Button>
@@ -505,21 +478,17 @@ export default function LeadsClient({
                 </select>
                 <Button size="sm" onClick={async () => {
                   if (!segmentId) { toast.error('Select a segment'); return; }
-                  const res = await fetch('/api/tenant/leads/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'add_to_segment', lead_ids: Array.from(selectedLeads), payload: { segment_id: segmentId } }),
-                  });
-                  if (res.ok) {
+                  try {
+                    await fetchJsonOrThrow('/api/tenant/leads/bulk', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'add_to_segment', lead_ids: Array.from(selectedLeads), payload: { segment_id: segmentId } }),
+                    });
                     toast.success('Added to segment');
                     setSelectedLeads(new Set());
                     setShowSegmentPicker(false);
                     setSegmentId('');
                     load();
-                  } else {
-                    const data = await res.json();
-                    toast.error(data.error || 'Failed to add to segment');
-                  }
+                  } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to add to segment'); }
                 }}>
                   Apply
                 </Button>
@@ -546,21 +515,17 @@ export default function LeadsClient({
                 </select>
                 <Button size="sm" onClick={async () => {
                   if (!bulkSequenceId) { toast.error('Select a sequence'); return; }
-                  const res = await fetch('/api/tenant/leads/bulk', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'add_to_sequence', lead_ids: Array.from(selectedLeads), payload: { sequence_id: bulkSequenceId } }),
-                  });
-                  if (res.ok) {
+                  try {
+                    await fetchJsonOrThrow('/api/tenant/leads/bulk', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'add_to_sequence', lead_ids: Array.from(selectedLeads), payload: { sequence_id: bulkSequenceId } }),
+                    });
                     toast.success('Enrolled in sequence');
                     setSelectedLeads(new Set());
                     setShowBulkSequence(false);
                     setBulkSequenceId('');
                     load();
-                  } else {
-                    const data = await res.json();
-                    toast.error(data.error || 'Failed to enroll');
-                  }
+                  } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to enroll'); }
                 }}>
                   Apply
                 </Button>
