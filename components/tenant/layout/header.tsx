@@ -13,7 +13,7 @@ import { useTheme } from 'next-themes';
 import { clientLogError } from '@/lib/client-logger';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { deriveViewState } from '@/lib/view-state';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -152,7 +152,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
 
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      try {
+        await fetchJsonOrThrow('/api/auth/logout', { method: 'POST' });
+      } catch (e) { clientLogError('header:logout', e); return; }
       try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { clientLogError('header:broadcast', e); }
       router.push('/auth/login');
       router.refresh();

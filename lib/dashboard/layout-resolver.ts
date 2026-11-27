@@ -5,7 +5,7 @@
  */
 import { withTenantDb } from '@/lib/db';
 import { dashboardLayouts } from '@/drizzle/schema/dashboard';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { getPlanDefaultLayout, getRoleDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import { resolveTemplate } from '@/lib/templates/resolve';
 import type { DashboardLayout, LayoutSource } from '@/types/dashboard';
@@ -42,6 +42,7 @@ export async function getSavedLayout(
         eq(dashboardLayouts.tenantId, tenantId),
         eq(dashboardLayouts.userId, userId),
         eq(dashboardLayouts.isDefault, true),
+        isNull(dashboardLayouts.deletedAt),
       ),
       orderBy: desc(dashboardLayouts.updatedAt),
     });
@@ -54,6 +55,7 @@ export async function getSavedLayout(
         eq(dashboardLayouts.tenantId, tenantId),
         eq(dashboardLayouts.userId, null as unknown as string),
         eq(dashboardLayouts.isDefault, true),
+        isNull(dashboardLayouts.deletedAt),
       ),
       orderBy: desc(dashboardLayouts.updatedAt),
     });
@@ -62,6 +64,26 @@ export async function getSavedLayout(
     }
 
     return null;
+  });
+}
+
+/**
+ * "Reset to default" must actually retire the saved layout. Previously the
+ * route answered success while resolveDashboardLayout() returned the saved
+ * row first, so the reset was a no-op presented as a completed action.
+ * Soft-delete keeps the user's previous layout recoverable.
+ */
+export async function clearSavedLayout(
+  tenantId: string,
+  userId: string,
+): Promise<void> {
+  await withTenantDb(tenantId, userId, async (tx) => {
+    await tx.update(dashboardLayouts)
+      .set({ deletedAt: new Date(), isDefault: false })
+      .where(and(
+        eq(dashboardLayouts.tenantId, tenantId),
+        eq(dashboardLayouts.userId, userId),
+      ));
   });
 }
 
@@ -81,6 +103,7 @@ export async function saveLayout(
         eq(dashboardLayouts.tenantId, tenantId),
         eq(dashboardLayouts.userId, userId),
         eq(dashboardLayouts.isDefault, true),
+        isNull(dashboardLayouts.deletedAt),
       ),
     });
 
@@ -93,8 +116,12 @@ export async function saveLayout(
       ));
 
     if (existing) {
+      // The clear above removes isDefault from every row. Put it back on the
+      // row we are updating in the SAME transaction — otherwise the second
+      // save is written but getSavedLayout() finds no default row and the
+      // dashboard silently reverts to a built-in default.
       await tx.update(dashboardLayouts)
-        .set({ layout, updatedAt: new Date() })
+        .set({ layout, isDefault: true, source, updatedAt: new Date() })
         .where(eq(dashboardLayouts.id, existing.id));
     } else {
       await tx.insert(dashboardLayouts).values({

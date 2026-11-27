@@ -5,20 +5,21 @@ const mockDbInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue
 const mockFindMany = vi.fn().mockResolvedValue([]);
 const mockFindFirst = vi.fn();
 const mockTxExecute = vi.fn();
-const _mockTxUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockResolvedValue(undefined) });
+const mockTxUpdateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+const mockTxUpdate = vi.fn().mockReturnValue({ set: mockTxUpdateSet });
 
 /** The transaction handle the mock hands to db.transaction callbacks. */
 type MockTx = {
   query: { criticalDataBackups: { findFirst: typeof mockFindFirst } };
   execute: typeof mockTxExecute;
-  update: () => { set: (values: unknown) => Promise<void> };
+  update: typeof mockTxUpdate;
 };
 
 const mockTransaction = vi.fn((cb: (tx: MockTx) => Promise<unknown>) => {
   const mockTx: MockTx = {
     query: { criticalDataBackups: { findFirst: mockFindFirst } },
     execute: mockTxExecute,
-    update: () => ({ set: vi.fn().mockResolvedValue(undefined) }),
+    update: mockTxUpdate,
   };
   return cb(mockTx);
 });
@@ -66,7 +67,10 @@ vi.mock('drizzle-orm', () => ({
   count: () => ({ op: 'count' }),
   sql: Object.assign(
     (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values }),
-    { identifier: (name: string) => ({ op: 'identifier', name }) }
+    {
+      identifier: (name: string) => ({ op: 'identifier', name }),
+      join: (parts: unknown[], separator: unknown) => ({ op: 'join', parts, separator }),
+    }
   ),
   isNull: (a: unknown) => ({ op: 'isNull', a }),
 }));
@@ -176,6 +180,53 @@ describe('CriticalDataCapture', () => {
       const result = await cdc.restoreFromBackup('nonexistent');
       expect(result.success).toBe(false);
       expect(result.message).toContain('not found');
+    });
+
+    const restorableBackup = {
+      id: 'backup-1',
+      tableName: 'contacts',
+      recordId: 'contact-1',
+      canRestore: true,
+      backupData: { id: 'contact-1', name: 'Alice' },
+    };
+
+    it('does not consume a backup when the INSERT matched zero rows', async () => {
+      mockFindFirst.mockResolvedValue(restorableBackup);
+      mockTxExecute.mockResolvedValue({ rowCount: 0, rows: [] });
+      const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
+      const cdc = new CriticalDataCapture();
+
+      const result = await cdc.restoreFromBackup('backup-1');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('0 rows');
+      expect(mockTxExecute.mock.calls[0]?.[0]?.sql).toContain('RETURNING id');
+      expect(mockTxUpdateSet).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the driver result carries no row evidence', async () => {
+      mockFindFirst.mockResolvedValue(restorableBackup);
+      mockTxExecute.mockResolvedValue({});
+      const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
+      const cdc = new CriticalDataCapture();
+
+      const result = await cdc.restoreFromBackup('backup-1');
+
+      expect(result.success).toBe(false);
+      expect(mockTxUpdateSet).not.toHaveBeenCalled();
+    });
+
+    it('marks the backup consumed only when one row is confirmed', async () => {
+      mockFindFirst.mockResolvedValue(restorableBackup);
+      mockTxExecute.mockResolvedValue({ rowCount: 1, rows: [{ id: 'contact-1' }] });
+      const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
+      const cdc = new CriticalDataCapture();
+
+      const result = await cdc.restoreFromBackup('backup-1');
+
+      expect(result.message).toContain('Restored');
+      expect(result.success).toBe(true);
+      expect(mockTxUpdateSet).toHaveBeenCalledWith({ canRestore: false });
     });
   });
 

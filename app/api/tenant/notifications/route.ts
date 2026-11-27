@@ -91,17 +91,23 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const body = await readJsonBody(request);
 
     if (body.action === 'mark_all_read' || body.markAllRead === true) {
-      await db.update(notifications)
+      const marked = await db.update(notifications)
         .set({ readAt: new Date(), updatedAt: new Date() })
         .where(and(
           eq(notifications.tenantId, ctx.tenantId),
           eq(notifications.userId, ctx.userId),
+          isNull(notifications.deletedAt),
           isNull(notifications.readAt),
-        ));
-      // Push the authoritative count so every other tab/device for this user
-      // clears its badge instead of waiting for a poll (#644). Best-effort.
-      void publishUnreadCount(ctx.tenantId, ctx.userId, 0);
-      return NextResponse.json({ success: true });
+        ))
+        .returning({ id: notifications.id });
+
+      // Only broadcast "zero unread" when this request actually changed rows.
+      // A lost tenant context used to match nothing yet publish 0 to every
+      // device, clearing badges for notifications still unread in the DB.
+      if (marked.length > 0) {
+        void publishUnreadCount(ctx.tenantId, ctx.userId, 0);
+      }
+      return NextResponse.json({ success: true, updated: marked.length });
     }
 
     if (body.id) {
@@ -157,12 +163,19 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
       const stale = checkStaleUpdate(updated);
       if (stale) return stale;
     } else {
-      await db.update(notifications)
+      const removed = await db.update(notifications)
         .set({ deletedAt: new Date() })
         .where(and(
           eq(notifications.tenantId, ctx.tenantId),
           eq(notifications.userId, ctx.userId),
-        ));
+          isNull(notifications.deletedAt),
+        ))
+        .returning({ id: notifications.id });
+
+      if (removed.length > 0) {
+        void publishUnreadCount(ctx.tenantId, ctx.userId, 0);
+      }
+      return NextResponse.json({ success: true, deleted: removed.length });
     }
 
     return NextResponse.json({ success: true });
