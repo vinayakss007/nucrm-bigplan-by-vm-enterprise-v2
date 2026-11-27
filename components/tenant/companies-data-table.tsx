@@ -14,7 +14,7 @@ import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Ar
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
 import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -110,21 +110,15 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const addCompany = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    const res = await fetch('/api/tenant/companies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error)
-      setSaving(false)
-      return
-    }
-    toast.success('Company created')
-    setShowForm(false)
-    setForm({ name: '', industry: '', website: '', phone: '', city: '', country: '', notes: '' })
-    loadData(pagination.pageIndex)
+    try {
+      await fetchJsonOrThrow('/api/tenant/companies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      toast.success('Company created')
+      setShowForm(false)
+      setForm({ name: '', industry: '', website: '', phone: '', city: '', country: '', notes: '' })
+      loadData(pagination.pageIndex)
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to create company') }
     setSaving(false)
   }
 
@@ -257,18 +251,13 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const callBulk = useCallback(async (body: Record<string, unknown>) => {
     setBulkBusy(true)
     try {
-      const res = await fetch('/api/tenant/companies/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (res.ok) {
+      try {
+        const data = await fetchJsonOrThrow<{ action: string; affected: number }>('/api/tenant/companies/bulk', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        })
         toast.success(`${data.action}: ${data.affected} compan${data.affected === 1 ? 'y' : 'ies'}`)
         loadData(pagination.pageIndex)
-      } else {
-        toast.error(data.error || `Failed to ${body.action} companies`)
-      }
+      } catch (err) { toast.error(err instanceof Error ? err.message : `Failed to ${body.action} companies`) }
     } finally {
       setBulkBusy(false)
     }

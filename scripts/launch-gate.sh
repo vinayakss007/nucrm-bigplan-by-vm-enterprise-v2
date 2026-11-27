@@ -94,6 +94,30 @@ else
   echo "  Mode: GRACEFUL (stages 4-6 SKIP if DB/server absent)"
 fi
 
+# ── Toolchain precheck ─────────────────────────────────────────────────────
+# A missing `npm ci` makes tsc/eslint/vitest resolve to unrelated global
+# packages or fail to start. Reporting that as three quality failures sends an
+# agent chasing source bugs when the only problem is the install. Fail once,
+# with the actionable fix, before any stage runs.
+MISSING_TOOLS=()
+for bin in tsc eslint vitest; do
+  if [ ! -x "node_modules/.bin/$bin" ]; then
+    MISSING_TOOLS+=("$bin")
+  fi
+done
+if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
+  header "TOOLCHAIN PRECHECK"
+  echo "   ❌ Missing installed tool(s): ${MISSING_TOOLS[*]}"
+  echo "   Run 'npm ci' first — the quality stages cannot be trusted without them."
+  echo ""
+  header "LAUNCH GATE SUMMARY"
+  echo "  ❌ FAIL  Toolchain (${MISSING_TOOLS[*]} not installed)"
+  echo "  Totals: 0 passed, 0 skipped, 1 failed"
+  echo "  ❌ LAUNCH GATE FAILED — toolchain not installed"
+  echo "═══════════════════════════════════════════"
+  exit 1
+fi
+
 # ── Stage 1: Typecheck (hard) ───────────────────────────────────────────────
 header "▶ 1/6 Typecheck (npm run typecheck)"
 if npm run typecheck; then

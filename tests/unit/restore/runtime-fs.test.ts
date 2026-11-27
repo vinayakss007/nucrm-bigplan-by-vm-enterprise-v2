@@ -26,7 +26,20 @@ vi.mock('@aws-sdk/client-s3', () => ({
   },
 }));
 
-import { checkFileExists, deleteFile, downloadFromS3 } from '@/lib/restore/runtime-fs';
+import { checkFileExists, deleteFile, downloadFromS3, safeBackupFileName } from '@/lib/restore/runtime-fs';
+
+describe('safeBackupFileName (#4014)', () => {
+  it.each(['abc123', 'backup-1', 'a_b-c', 'x'.repeat(128)])('accepts safe ids: %s', (id) => {
+    expect(safeBackupFileName(id)).toBe(`restore_${id}.dump`);
+  });
+
+  it.each(['../../etc/passwd', 'a/b', 'a b', '../x', '', 'x'.repeat(129), 'id;drop', null, 42])(
+    'rejects unsafe ids: %j',
+    (id) => {
+      expect(safeBackupFileName(id)).toBeNull();
+    }
+  );
+});
 
 describe('checkFileExists / deleteFile', () => {
   let dir: string;
@@ -68,6 +81,13 @@ describe('downloadFromS3', () => {
 
   afterEach(() => {
     if (existsSync(tempPath)) unlinkSync(tempPath);
+  });
+
+  it('rejects a traversal id before any S3 request or file write (#4014)', async () => {
+    await expect(
+      downloadFromS3({ id: '../../etc/passwd', storagePath: 'backups/x.dump' }, { bucket: 'nucrm-backups' })
+    ).rejects.toThrow('Invalid backup id');
+    expect(awsMocks.send).not.toHaveBeenCalled();
   });
 
   it('writes the downloaded bytes to restore_<id>.dump in the OS temp dir and returns that path', async () => {
@@ -115,6 +135,20 @@ describe('downloadFromS3', () => {
       region: 'auto',
       endpoint: 'https://acct.r2.cloudflarestorage.com',
       credentials: undefined,
+      forcePathStyle: true,
+    });
+  });
+
+  it('forwards resolved credentials to the S3 client', async () => {
+    awsMocks.send.mockResolvedValue({
+      Body: { transformToByteArray: async () => new Uint8Array([1]) },
+    });
+    const credentials = { accessKeyId: 'AKIAEXAMPLE', secretAccessKey: 'secretexample' };
+    await downloadFromS3(backup, { bucket: 'b', region: 'auto', endpoint: 'https://acct.r2.example', credentials });
+    expect(awsMocks.clientCtor).toHaveBeenCalledWith({
+      region: 'auto',
+      endpoint: 'https://acct.r2.example',
+      credentials,
       forcePathStyle: true,
     });
   });

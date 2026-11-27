@@ -2,10 +2,16 @@ import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, roles, tenantMembers } from '@/drizzle/schema';
 import { hashPassword } from '@/lib/auth/session';
 import { eq, sql } from 'drizzle-orm';
+import { resolveSeedPassword } from './seed/credential';
 
 async function main() {
+  const credential = resolveSeedPassword(process.env);
+  if (credential.error) {
+    console.error(`[ERROR] ${credential.error}`);
+    process.exit(1);
+  }
+  const password = credential.password as string;
   const email = 'debug@admin.test';
-  const password = 'DebugPass123456!';
   const workspace_name = 'Debug Workspace';
   
   const passwordHash = await hashPassword(password);

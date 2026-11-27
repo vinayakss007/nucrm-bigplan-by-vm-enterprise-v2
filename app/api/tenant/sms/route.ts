@@ -6,7 +6,7 @@
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { smsMessages } from '@/drizzle/schema/sms';
@@ -68,6 +68,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (rateLimited) return rateLimited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // Sending spends the tenant's SMS credentials — gate like whatsapp/send.
+    const permErr = requirePerm(ctx, 'contacts.edit');
+    if (permErr) return permErr;
 
     const moduleGate = await requireModule(ctx.tenantId, 'whatsapp-bot', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;

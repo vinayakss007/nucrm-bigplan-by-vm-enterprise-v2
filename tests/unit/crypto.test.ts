@@ -85,6 +85,20 @@ describe('encrypt/decrypt', () => {
     expect(() => decrypt('part1:part2', testKey)).toThrow('Invalid encrypted format');
   });
 
+  it('rejects a truncated GCM authentication tag (#4013)', () => {
+    const iv = Buffer.alloc(16, 1).toString('base64');
+    const shortTag = Buffer.from('short').toString('base64');
+    const ciphertext = Buffer.from('hello').toString('base64');
+    expect(() => decrypt(`${iv}:${shortTag}:${ciphertext}`, testKey)).toThrow('Invalid authentication tag length');
+  });
+
+  it('still round-trips with the pinned 16-byte authentication tag (#4013)', () => {
+    const encrypted = encrypt('pinned-tag-roundtrip', testKey);
+    const tag = Buffer.from(encrypted.split(':')[1]!, 'base64');
+    expect(tag.length).toBe(16);
+    expect(decrypt(encrypted, testKey)).toBe('pinned-tag-roundtrip');
+  });
+
   it('handles special characters in plaintext', () => {
     const specials = 'hello\nworld\t!@#$%^&*()_+={}[]|\\:;"\'<>,.?/~`';
     const encrypted = encrypt(specials, testKey);

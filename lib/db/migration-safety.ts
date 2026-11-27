@@ -210,6 +210,10 @@ export async function withMigrationLock<T>(
 ): Promise<T> {
   const { lockKey = DEFAULT_ADVISORY_LOCK_KEY, lockTimeoutMs = 10_000 } = options;
 
+  if (!Number.isInteger(lockTimeoutMs) || lockTimeoutMs < 1 || lockTimeoutMs > 3_600_000) {
+    throw new Error('lockTimeoutMs must be an integer between 1 and 3600000');
+  }
+
   const pool: Pool = getPool();
   const client = await pool.connect();
 

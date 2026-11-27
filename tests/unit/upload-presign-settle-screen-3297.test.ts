@@ -91,8 +91,10 @@ describe('every presigned uploader settles its row (#3297)', () => {
     // rendered "uploaded successfully". A refused request is a failure, not an
     // empty result.
     const panel = read('components/documents/documents-panel.tsx');
-    expect(panel).toMatch(/if\s*\(!metaRes\.ok\)/);
-    expect(panel).toMatch(/if\s*\(!putRes\.ok\)/);
+    // #3408: the metadata create now goes through fetchJsonOrThrow, which throws
+    // on a refusal; the assertion pins that contract, not the old res.ok shape.
+    expect(panel, 'a refused metadata create must still fail the upload').toMatch(/fetchJsonOrThrow<\{ data: \{ uploadUrl: string/);
+    expect(panel, 'the presigned PUT response is discarded — a failed store write still looks like success').toMatch(/if\s*\(!putRes\.ok\)/);
 
     const page = read('app/tenant/documents/page.tsx');
     expect(page, 'a refused metadata create must still fail the upload').toMatch(/fetchJsonOrThrow<\{ data:/);
