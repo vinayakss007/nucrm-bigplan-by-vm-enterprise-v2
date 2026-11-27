@@ -28,6 +28,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { get, incr } from '@/lib/cache';
 
 /**
  * A single file attachment. `content` may be a Node Buffer (raw bytes) or a
@@ -134,6 +135,16 @@ function initializeUsage() {
 // Initialize on first load
 initializeUsage();
 
+function usageWindow(providerKey: string, period: 'day' | 'month', now = new Date()) {
+  const nextBoundary = period === 'day'
+    ? Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+    : Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  return {
+    key: `email-usage:${providerKey}:${now.toISOString().slice(0, period === 'day' ? 10 : 7)}`,
+    ttl: Math.max(1, Math.ceil((nextBoundary - now.getTime()) / 1000)),
+  };
+}
+
 /**
  * Auto-reset daily counters if a new day has started since the last reset.
  * Prevents stale counters from accumulating if resetDailyCounters() is
@@ -153,7 +164,7 @@ function ensureDailyReset(): void {
 /**
  * Get best provider for email type
  */
-function getBestProvider(emailType: string): string | null {
+async function getBestProvider(emailType: string): Promise<string | null> {
   // Auto-reset daily counters if a new calendar day has elapsed
   ensureDailyReset();
 
@@ -168,14 +179,20 @@ function getBestProvider(emailType: string): string | null {
     // Check if provider is healthy
     if (!stats.healthy) continue;
 
+    // Limits are shared counters in the cache (Redis in production), not this
+    // process's memory: counters survive restarts and are shared by every
+    // instance sending through the same provider credentials.
+    const sentToday = Math.max(stats.sentToday, (await get<number>(usageWindow(key, 'day').key)) ?? 0);
+    const sentThisMonth = Math.max(stats.sentThisMonth, (await get<number>(usageWindow(key, 'month').key)) ?? 0);
+
     // Check limits
-    if (stats.sentToday >= config.dailyLimit) {
-      console.log(`[EmailRouter] ${config.name} daily limit reached (${stats.sentToday}/${config.dailyLimit})`);
+    if (sentToday >= config.dailyLimit) {
+      console.log(`[EmailRouter] ${config.name} daily limit reached (${sentToday}/${config.dailyLimit})`);
       continue;
     }
 
-    if (stats.sentThisMonth >= config.monthlyLimit) {
-      console.log(`[EmailRouter] ${config.name} monthly limit reached (${stats.sentThisMonth}/${config.monthlyLimit})`);
+    if (sentThisMonth >= config.monthlyLimit) {
+      console.log(`[EmailRouter] ${config.name} monthly limit reached (${sentThisMonth}/${config.monthlyLimit})`);
       continue;
     }
 
@@ -305,7 +322,7 @@ async function sendViaSendGrid(options: EmailOptions) {
 /**
  * Update provider usage stats
  */
-function updateUsage(providerKey: string, success: boolean, error?: string) {
+async function updateUsage(providerKey: string, success: boolean, error?: string) {
   const stats = usage.get(providerKey);
   if (!stats) return;
 
@@ -313,6 +330,9 @@ function updateUsage(providerKey: string, success: boolean, error?: string) {
     stats.sentToday++;
     stats.sentThisMonth++;
     stats.healthy = true;
+    const day = usageWindow(providerKey, 'day');
+    const month = usageWindow(providerKey, 'month');
+    await Promise.all([incr(day.key, day.ttl), incr(month.key, month.ttl)]);
   } else {
     stats.healthy = false;
     stats.lastError = error;
@@ -329,7 +349,7 @@ export async function sendSmartEmail(options: SendOptions) {
   console.log(`[EmailRouter] Sending ${emailType} email to ${options.to}`);
 
   // Get best available provider
-  const providerKey = getBestProvider(emailType);
+  const providerKey = await getBestProvider(emailType);
   
   if (!providerKey) {
     const error = 'No email providers available (all at limit or unhealthy)';
@@ -358,7 +378,7 @@ export async function sendSmartEmail(options: SendOptions) {
       throw new Error(`Unknown provider: ${providerKey}`);
     }
 
-    updateUsage(providerKey, true);
+    await updateUsage(providerKey, true);
     console.log(`[EmailRouter] ✓ Email sent via ${provider.name}`);
     
     return { success: true, provider: provider.name, result };
@@ -368,7 +388,7 @@ export async function sendSmartEmail(options: SendOptions) {
   } catch (err: unknown) {
     const errMessage = err instanceof Error ? err.message : String(err);
     logger.error('[EmailRouter] provider failed', { provider: provider.name, error: errMessage });
-    updateUsage(providerKey, false, errMessage);
+    await updateUsage(providerKey, false, errMessage);
 
     // Try fallback providers for critical emails
     if (emailType === 'critical') {
@@ -381,7 +401,7 @@ export async function sendSmartEmail(options: SendOptions) {
       }
 
       // Try next available provider
-      const fallback = getBestProvider(emailType);
+      const fallback = await getBestProvider(emailType);
       if (fallback && fallback !== providerKey) {
         console.log(`[EmailRouter] Falling back to ${PROVIDERS[fallback as keyof typeof PROVIDERS].name}`);
         return sendSmartEmail({ ...options, type: emailType, _depth: depth + 1 });
