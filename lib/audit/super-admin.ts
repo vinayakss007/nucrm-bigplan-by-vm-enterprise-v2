@@ -58,7 +58,6 @@ export type SuperAdminAction =
   | 'backup.restored'
   | 'restore.executed'
   | 'restore.failed'
-  
   // System
   | 'settings.changed'
   | 'settings.secrets_updated'
