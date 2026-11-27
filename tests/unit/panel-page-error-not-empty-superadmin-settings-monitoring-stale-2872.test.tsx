@@ -564,7 +564,9 @@ describe('the ratchet (#2872)', () => {
       expect(s).toMatch(/InlineErrorState/);
     }
     // Settings' action feedback stays transient — a save is an action, not a page state.
-    expect(src(SETTINGS)).toMatch(/if\(res\.ok\) \{ toast\.success\('Settings saved'\)/);
+    // #3408 routes the save through fetchJsonOrThrow, which throws on a refusal; the
+    // success toast is still emitted only after an accepted write, never from the render body.
+    expect(src(SETTINGS)).toMatch(/toast\.success\('Settings saved'\)/);
   });
 
   it('says why, in each page\'s own words', () => {

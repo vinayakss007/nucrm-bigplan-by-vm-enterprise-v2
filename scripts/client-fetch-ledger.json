@@ -2,7 +2,6 @@
   "app/p/offers/[publicToken]/page.tsx": 1,
   "app/p/sign/[token]/page.tsx": 1,
   "app/superadmin/selective-restore/page.tsx": 1,
-  "app/superadmin/settings/page.tsx": 4,
   "app/tenant/documents/page.tsx": 1,
   "app/tenant/invoices/page.tsx": 1,
   "app/tenant/settings/general/page.tsx": 1,
@@ -19,7 +18,7 @@
   "components/tenant/inline-create-dialog.tsx": 2,
   "components/tenant/lead-detail-client.tsx": 1,
   "components/tenant/leads-client.tsx": 1,
-  "components/tenant/report-builder.tsx": 2,
+  "components/tenant/report-builder.tsx": 1,
   "components/tenant/sequences-client.tsx": 3,
   "components/tenant/whatsapp-chat.tsx": 3,
   "components/tenant/workflow-builder.tsx": 3
