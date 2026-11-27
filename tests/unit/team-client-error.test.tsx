@@ -152,8 +152,13 @@ describe('TeamSettingsClient error vs empty (#2231)', () => {
     fireEvent.change(select, { target: { value: 'viewer' } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     // The roster state must be untouched, and the user must be told — the old
-    // code had no catch, so a network drop was a silent no-op.
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Network error — role was not updated'));
+    // code had no catch, so a network drop was a silent no-op. #3408 routes the
+    // failure through fetchJsonOrThrow, whose network message is canonical;
+    // assert the claim (a network error is surfaced), not the old wording.
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls.some(
+      (c) => /network|request could not be completed/i.test(String(c[0])),
+    )).toBe(true);
     expect(screen.getByText('Ada Sales')).toBeTruthy();
   });
 });
