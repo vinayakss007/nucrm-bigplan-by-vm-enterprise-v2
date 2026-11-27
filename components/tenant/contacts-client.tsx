@@ -19,7 +19,7 @@ import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ImportModal from './import-modal';
 import Pagination from './pagination';
 import toast from 'react-hot-toast';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { showUndoToast } from '@/lib/undo';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
@@ -243,20 +243,18 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const deleteContact = async (id:string, name:string) => {
     await confirmThen(`Delete ${name}?`, async () => {
       const contact = contacts.find(c => c['id'] === id);
-      const res = await fetch(`/api/tenant/contacts/${id}`, { method:'DELETE' });
-      if (res.ok) {
-        showUndoToast(`Deleted ${name}`, async () => {
-          if (contact) {
-            await fetch('/api/tenant/contacts', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(contact),
-            });
-          }
-        });
-        setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
-        load(offset);
-      }
-      else toast.error('Failed to delete');
+      try {
+        await fetchJsonOrThrow(`/api/tenant/contacts/${id}`, { method:'DELETE' });
+      } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete'); return; }
+      showUndoToast(`Deleted ${name}`, async () => {
+        if (contact) {
+          try { await fetchJsonOrThrow('/api/tenant/contacts', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contact),
+          }); } catch (err) { toast.error(err instanceof Error ? err.message : 'Undo failed'); return; }
+        }
+      });
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      load(offset);
     });
   };
 
@@ -314,16 +312,14 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
     if (ids.length === 0) return;
     setBulkBusy(true);
     try {
-      const res = await fetch('/api/tenant/contacts/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ids, updates: payload ?? {} }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error || `Bulk ${action} failed`);
-        return;
-      }
+      let data: { affected?: number };
+      try {
+        data = await fetchJsonOrThrow('/api/tenant/contacts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ids, updates: payload ?? {} }),
+        });
+      } catch (err) { toast.error(err instanceof Error ? err.message : `Bulk ${action} failed`); return; }
       const verb =
         action === 'delete' ? 'Deleted' :
         action === 'tag' ? 'Tagged' :
