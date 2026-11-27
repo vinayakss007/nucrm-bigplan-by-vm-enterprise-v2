@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Settings, Trash2, ToggleLeft, ToggleRight, Loader2, Users, MapPin, Brain, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import type { LucideIcon } from 'lucide-react';
@@ -64,25 +64,29 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: T
   }, [loadRules]);
 
   const toggleRule = async (id: string, current: boolean) => {
-    const res = await fetch(`/api/tenant/assignment-rules`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_active: !current }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow(`/api/tenant/assignment-rules`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, is_active: !current }),
+      });
       setRules(p => p.map(r => r.id === id ? { ...r, isActive: !current } : r));
       toast.success(current ? 'Rule disabled' : 'Rule enabled');
-    } else toast.error('Failed to toggle');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to toggle');
+    }
   };
 
   const deleteRule = async (id: string) => {
     const rule = rules.find(r => r.id === id);
     await confirmThen(`Delete assignment rule "${rule?.name || 'this rule'}"?`, async () => {
-      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      try {
+        await fetchJsonOrThrow(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
         setRules(p => p.filter(r => r.id !== id));
         toast.success('Rule deleted');
-      } else toast.error('Failed to delete');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      }
     });
   };
 
@@ -174,9 +178,16 @@ function AssignmentRuleForm({ onSaved, onClose }: AssignmentRuleFormProps) {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    let configObj: unknown;
     try {
-      const configObj = JSON.parse(form.config);
-      const res = await fetch('/api/tenant/assignment-rules', {
+      configObj = JSON.parse(form.config);
+    } catch {
+      toast.error('Invalid JSON in config');
+      setSaving(false);
+      return;
+    }
+    try {
+      await fetchJsonOrThrow('/api/tenant/assignment-rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -186,15 +197,10 @@ function AssignmentRuleForm({ onSaved, onClose }: AssignmentRuleFormProps) {
           config: configObj,
         }),
       });
-      if (res.ok) {
-        toast.success('Rule created');
-        onSaved();
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed');
-      }
-    } catch {
-      toast.error('Invalid JSON in config');
+      toast.success('Rule created');
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
     }
     setSaving(false);
   };
