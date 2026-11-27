@@ -4,10 +4,17 @@ import { users, tenants, tenantMembers, roles, sessions, pipelines, dealStages, 
 import { and, eq, isNull } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken } from '../lib/auth/session';
 import { withSecurityContext, type RlsTransaction } from '../lib/db/rls';
+import { resolveSeedPassword } from './seed/credential';
 import * as crypto from 'crypto';
 
+const credential = resolveSeedPassword(process.env);
+if (credential.error) {
+  console.error(`[ERROR] ${credential.error}`);
+  process.exit(1);
+}
+const PASSWORD = credential.password as string;
+
 const EMAIL = 'superadmin@nucrm.com';
-const PASSWORD = 'admin123';
 const STANDARD_STAGES = [
   { name: 'Lead', order: 0 },
   { name: 'Qualified', order: 1 },
@@ -248,7 +255,7 @@ async function main() {
 
   console.log('E2E seed data ready!');
   console.log(`  Email:    ${EMAIL}`);
-  console.log(`  Password: ${PASSWORD}`);
+  console.log('  Password: $SEED_PASSWORD (not printed)');
 }
 
 main().catch(console.error);
