@@ -301,6 +301,45 @@ describe('never answered: the outage is what is reported, and the absence senten
   });
 });
 
+describe('the stage picker names a failed pipelines read instead of showing only its placeholder', () => {
+  const openEditor = () => fireEvent.click(screen.getByRole('button', { name: /^add rule$/i }));
+
+  it('a failed stage read shows an announced error above the picker, not a bare placeholder', () => {
+    mount(ok(RULES), failed('Request failed (503)'));
+    openEditor();
+    expect(alerts()).toMatch(/Could not load stages for this picker: Request failed \(503\)/);
+    expect(alerts()).toMatch(/An empty picker here would be a lie/);
+    expect(screen.getByRole('combobox')).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Negotiation' })).toBeNull();
+  });
+
+  it('binds the stage retry to the pipelines read, not the rules read beside it', () => {
+    const rulesRead = ok(RULES);
+    const pipelinesRead = failed('Request failed (503)');
+    registry.byUrl = { [RULES_URL]: rulesRead, [PIPELINES_URL]: pipelinesRead };
+    wrapped(<AtRiskRulesPage />);
+    openEditor();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(pipelinesRead.refetch).toHaveBeenCalledTimes(1);
+    expect(rulesRead.refetch).not.toHaveBeenCalled();
+  });
+
+  it('a refused refresh keeps the stages already on screen and labels them the last read', () => {
+    mount(ok(RULES), staleRead(PIPELINES, 'Request failed (504)'));
+    openEditor();
+    expect(alerts()).toMatch(/the list below is the last read/);
+    expect(alerts()).toContain('Request failed (504)');
+    expect(screen.getByRole('option', { name: 'Negotiation' })).toBeTruthy();
+  });
+
+  it('a healthy stage read still shows the stages with no extra alert', () => {
+    mount(ok(RULES));
+    openEditor();
+    expect(screen.getByRole('option', { name: 'Negotiation' })).toBeTruthy();
+    expect(alerts()).toBe('');
+  });
+});
+
 describe('the shape that fixes it, and the screen that cannot see it', () => {
   const ROOT = process.cwd();
   const PAGE = 'app/tenant/settings/at-risk-rules/page.tsx';
@@ -323,9 +362,9 @@ describe('the shape that fixes it, and the screen that cannot see it', () => {
       /rulesError \? \(rulesError\.message/,
     );
     expect(src).toMatch(/import InlineErrorState from '@\/components\/shared\/inline-error-state';/);
-    // Both read states and the write slot are separate affordances, each bound to a retry where
-    // a retry is the point.
-    expect(src.match(/<InlineErrorState/g)).toHaveLength(3);
+    // Both rules-read states, the write slot and the stage-picker read are separate
+    // affordances, each bound to a retry where a retry is the point.
+    expect(src.match(/<InlineErrorState/g)).toHaveLength(4);
     expect(src).toMatch(/onRetry=\{\(\) => void refetchRules\(\)\}/);
   });
 

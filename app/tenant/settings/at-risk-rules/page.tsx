@@ -50,13 +50,14 @@ export default function AtRiskRulesPage() {
     AT_RISK_QUERY,
     '/api/tenant/admin/at-risk',
   );
-  const { data: pipelinesData, isLoading: pipelinesLoading } = useApiQuery<{ data?: Pipeline[] }>(
+  const { data: pipelinesData, isLoading: pipelinesLoading, error: pipelinesError, refetch: refetchPipelines } = useApiQuery<{ data?: Pipeline[] }>(
     ['tenant', 'pipelines'],
     '/api/tenant/pipelines',
   );
   const rules: AtRiskRule[] = useMemo(() => rulesData ?? [], [rulesData]);
   const pipelines: Pipeline[] = pipelinesData?.data ?? [];
   const loading = rulesLoading || pipelinesLoading;
+  const pipelinesReason = pipelinesError?.message || 'no response from the server';
   // #2872: this used to fold the error back into one derived string, which is the spelling
   // `scripts/check-panel-error-state.mjs` cannot see and which collapses the two states into
   // one message. Both writes here end in `load()`, an invalidate of this very key, and
@@ -192,6 +193,16 @@ export default function AtRiskRulesPage() {
                       Applies to
                       <Info className="w-3.5 h-3.5 text-muted-foreground" />
                     </label>
+                    {pipelinesError && (
+                      <InlineErrorState
+                        message={
+                          pipelinesData
+                            ? `Could not refresh stages for this picker — the list below is the last read: ${pipelinesReason}.`
+                            : `Could not load stages for this picker: ${pipelinesReason}. An empty picker here would be a lie.`
+                        }
+                        onRetry={() => void refetchPipelines()}
+                      />
+                    )}
                     <select
                       value={editing.stageId || ''}
                       onChange={e => setEditing({ ...editing, stageId: e.target.value || null })}

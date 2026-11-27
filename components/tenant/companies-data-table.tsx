@@ -5,14 +5,14 @@
  */
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
+import { useEntityBulkOptions } from '@/hooks/use-entity-bulk-options'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
-import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import InlineErrorState from '@/components/shared/inline-error-state'
@@ -232,22 +232,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
-  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
-  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=company', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('companies-data-table', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
-    return () => abort.abort();
-  }, [])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=company', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('companies-data-table', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+  const { customFields, segments, optionErrors, retry: retryOptions } = useEntityBulkOptions('company')
   const callBulk = useCallback(async (body: Record<string, unknown>) => {
     setBulkBusy(true)
     try {
@@ -442,6 +427,14 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
 
       {/* DataTable */}
       {loadError && <div className="p-3"><InlineErrorState message={`Could not load companies — an empty list here would be a lie. (${loadError})`} onRetry={() => void loadData(pagination.pageIndex)} /></div>}
+      {Object.keys(optionErrors).length > 0 && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Bulk action options could not be loaded (${Object.keys(optionErrors).join(', ')}). An empty picker here would be a lie.`}
+            onRetry={retryOptions}
+          />
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={companies}

@@ -39,6 +39,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [sending, setSending] = useState(false)
   const [sendingTemplate, setSendingTemplate] = useState(false)
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
+  const [templatesError, setTemplatesError] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -61,13 +62,16 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   }, [contactId])
 
   const loadTemplates = useCallback(async (signal?: AbortSignal) => {
-    const result = await fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/whatsapp/templates', { signal })
+    const result = await fetchJsonSafe<{ data?: { id: string; name: string }[] }>(
+      '/api/tenant/whatsapp/templates', { signal })
     if (result.status === 'aborted') return
-    if (result.status === 'error') {
+    if (result.status === 'ok') {
+      setTemplates(result.data.data || [])
+      setTemplatesError(null)
+    } else {
+      setTemplatesError(result.message)
       clientLogError('whatsapp:load-templates', new Error(result.message))
-      return
     }
-    setTemplates(result.data.data || [])
   }, [])
 
   useEffect(() => {
@@ -171,20 +175,32 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
             <p className="text-xs text-muted-foreground">{contactPhone}</p>
           </div>
         </div>
-        {templates.length > 0 && (
-          <button
-            onClick={() => setShowTemplates(p => !p)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent"
-          >
-            Templates
-          </button>
-        )}
+        <button
+          onClick={() => setShowTemplates(p => !p)}
+          aria-expanded={showTemplates}
+          className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent"
+        >
+          Templates
+        </button>
       </div>
 
       {/* Template Selector */}
       {showTemplates && (
         <div className="px-4 py-3 border-b border-border bg-muted/50">
           <p className="text-xs font-medium text-muted-foreground mb-2">Select a template:</p>
+          {templatesError && (
+            <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+              <p>Templates could not be loaded — {templatesError}</p>
+              <p className="mt-1">An empty list here would be a lie.</p>
+              <button
+                type="button"
+                onClick={() => void loadTemplates()}
+                className="mt-2 rounded border border-amber-400 px-2 py-1 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30"
+              >
+                Try again
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <button
@@ -200,6 +216,11 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
               </button>
             ))}
           </div>
+          {!templatesError && templates.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              No templates are configured for this WhatsApp account.
+            </p>
+          )}
         </div>
       )}
 

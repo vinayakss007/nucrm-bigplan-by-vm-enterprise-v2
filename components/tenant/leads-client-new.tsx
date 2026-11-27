@@ -26,6 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 import { useSubmitLock } from '@/hooks/use-submit-lock';
+import QuickAddCatalogueFields from '@/components/tenant/quick-add-catalogue-fields';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 import LeadImportModal from '@/components/tenant/lead-import-modal';
@@ -108,9 +109,6 @@ function KanbanColumn({ status, leads, onNavigate }: { status: string; leads: Le
   );
 }
 
-interface ProductOpt { id: string; name: string; price?: number | string | null }
-interface ServiceOpt { id: string; name: string }
-
 function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }: { companies: CompanyOpt[]; teamMembers: TeamMemberOpt[]; contacts: ContactOpt[]; onClose: () => void; onSuccess: () => void }) {
   const [contactSearch, setContactSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -118,22 +116,7 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
   const contactInputRef = useRef<HTMLInputElement>(null);
   const contactDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [products, setProducts] = useState<ProductOpt[]>([]);
-  const [services, setServices] = useState<ServiceOpt[]>([]);
-
   const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:'',requested_product_id:'',requested_service_id:'',notes:'',expected_value:''});
-
-  // Load product & service catalogues for the "What They Want" picker
-  useEffect(() => {
-    const abort = new AbortController();
-    // #3408: a refused catalogue read is not an empty picker — log it instead
-    // of rendering a false "no products/services" state.
-    fetchJsonSafe<{ data?: ProductOpt[] }>('/api/tenant/products?limit=200', { signal: abort.signal })
-      .then(r => { if (abort.signal.aborted) return; if (r.status === 'ok') setProducts(r.data.data ?? []); else if (r.status === 'error') clientLogWarn('leads', 'Failed to load products', r.message); });
-    fetchJsonSafe<{ data?: ServiceOpt[]; services?: ServiceOpt[] }>('/api/tenant/services?limit=200', { signal: abort.signal })
-      .then(r => { if (abort.signal.aborted) return; if (r.status === 'ok') setServices(r.data.data ?? r.data.services ?? []); else if (r.status === 'error') clientLogWarn('leads', 'Failed to load services', r.message); });
-    return () => abort.abort();
-  }, []);
 
   const filteredContacts = useMemo(() => {
     const q = contactSearch.toLowerCase();
@@ -274,18 +257,15 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
           <div className="border-t border-border/50 pt-4">
             <p className="text-xs font-extrabold uppercase tracking-widest text-foreground/70 mb-3 flex items-center gap-2"><Target className="w-3.5 h-3.5"/>What They Want</p>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className={lbl}>Product</label>
-                <select className={inp} value={data.requested_product_id} onChange={e=>setData(p=>({...p,requested_product_id:e.target.value}))}>
-                  <option value="">No product</option>
-                  {products.map((p)=>(<option key={p.id} value={p.id}>{p.name}{p.price ? ` — ${formatCurrency(Number(p.price))}` : ''}</option>))}
-                </select>
-              </div>
-              <div><label className={lbl}>Service</label>
-                <select className={inp} value={data.requested_service_id} onChange={e=>setData(p=>({...p,requested_service_id:e.target.value}))}>
-                  <option value="">No service</option>
-                  {services.map((s)=>(<option key={s.id} value={s.id}>{s.name}</option>))}
-                </select>
-              </div>
+              <QuickAddCatalogueFields
+                productId={data.requested_product_id}
+                serviceId={data.requested_service_id}
+                onProductChange={id=>setData(p=>({...p,requested_product_id:id}))}
+                onServiceChange={id=>setData(p=>({...p,requested_service_id:id}))}
+                inputClassName={inp}
+                labelClassName={lbl}
+                formatPrice={price=>formatCurrency(Number(price))}
+              />
               <div className="col-span-2"><label className={lbl}>Requirements / Notes</label>
                 <textarea className={cn(inp, 'min-h-[80px] resize-y')} placeholder="What specifically the lead needs, any pricing discussion, context..." value={data.notes} onChange={e=>setData(p=>({...p,notes:e.target.value}))}/>
               </div>
