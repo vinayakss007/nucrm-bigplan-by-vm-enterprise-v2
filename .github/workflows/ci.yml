@@ -1217,6 +1217,70 @@ jobs:
           }
           echo "OK: a CHECK the database enforces more narrowly than the code writes turns this screen red, exactly as PP-059 requires."
 
+  # #3985: the Playwright specs existed but no workflow ever ran them, so a
+  # broken login/hydration/redirect could ship green. This job is appended after
+  # every cited coordinate in the file, so it re-pins nothing.
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REDIS_URL: redis://localhost:6379
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Sync database schema
+        run: npm run db:sync
+
+      - name: Apply RLS migrations
+        run: node scripts/apply-rls-ci.mjs
+
+      # playwright.config.ts seeds the E2E user in its webServer step, then
+      # starts `npm run dev`. No production or preprod target is touched.
+      - name: Playwright tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 3
+
 # #3267: the token scopes are declared here instead of inherited — with no
 # top-level block every job gets whatever the repository default happens to be.
 # `security-events: write` is the only write scope anything in this file needs
