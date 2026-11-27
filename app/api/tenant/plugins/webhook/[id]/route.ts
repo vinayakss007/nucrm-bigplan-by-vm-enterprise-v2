@@ -11,35 +11,21 @@ import { verifyWebhookSignature, isWebhookTimestampValid, handleInboundWebhook }
 import { logError } from '@/lib/errors-server';
 import { isUuid } from '@/lib/id';
 import { withPluginWebhookLookupContext, setPluginWebhookTenantContext } from '@/lib/db/plugin-webhook-context';
+import { incr } from '@/lib/cache';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-/** Per-process only: a fleet behind PgBouncer multiplies this limit by its replica count. */
-const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
 
-function isRateLimited(pluginId: string): boolean {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-
-  let timestamps = rateLimitMap.get(pluginId);
-  if (!timestamps) {
-    timestamps = [];
-    rateLimitMap.set(pluginId, timestamps);
-  }
-
-  const filtered = timestamps.filter((t) => t > windowStart);
-  rateLimitMap.set(pluginId, filtered);
-
-  if (filtered.length >= RATE_LIMIT_MAX) {
-    return true;
-  }
-
-  filtered.push(now);
-  return false;
+/** Fixed-window counter in the shared cache: a fleet gets one budget per plugin. */
+export async function isRateLimited(pluginId: string): Promise<boolean> {
+  const window = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
+  const key = `webhook-rate:${pluginId}:${window}`;
+  const count = await incr(key, Math.ceil(RATE_LIMIT_WINDOW_MS / 1000));
+  return count > RATE_LIMIT_MAX;
 }
 
 /**
@@ -50,7 +36,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
 
-    if (isRateLimited(id)) {
+    if (await isRateLimited(id)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
