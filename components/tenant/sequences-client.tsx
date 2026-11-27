@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { Plus, Mail, Pause, Play, Trash2, Users, TrendingUp, Edit } from 'lucide-react'
 import { confirmThen } from '@/components/ui/confirm-dialog'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -66,16 +66,11 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
     
     const method = editingSequence ? 'PATCH' : 'POST'
     
-    const res = await fetch(url, {
+    await fetchJsonOrThrow(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sequenceData),
     })
-    
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Failed to save')
-    }
     
     // Reload sequences — a refused refresh must not wipe the list into
     // "No sequences yet" right after a successful save.
@@ -95,15 +90,14 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
   const handleToggleStatus = async (sequenceId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'paused' : 'active'
     
-    const res = await fetch(`/api/tenant/sequences/${sequenceId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    
-    if (!res.ok) {
-      const data = await res.json()
-      toast.error(data.error || 'Failed to update status')
+    try {
+      await fetchJsonOrThrow(`/api/tenant/sequences/${sequenceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status')
       return
     }
     
@@ -115,13 +109,12 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
 
   const handleDeleteSequence = async (sequenceId: string) => {
     await confirmThen('Delete this sequence? This cannot be undone.', async () => {
-      const res = await fetch(`/api/tenant/sequences/${sequenceId}`, {
-        method: 'DELETE',
-      })
-      
-      if (!res.ok) {
-        const data = await res.json()
-        toast.error(data.error || 'Failed to delete')
+      try {
+        await fetchJsonOrThrow(`/api/tenant/sequences/${sequenceId}`, {
+          method: 'DELETE',
+        })
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete')
         return
       }
       

@@ -9,7 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Phone, Loader2, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { clientLogError } from '@/lib/client-logger'
-import { fetchJsonSafe } from '@/lib/fetch-json'
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import toast from 'react-hot-toast'
 
 interface WhatsAppMessage {
@@ -61,15 +61,13 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   }, [contactId])
 
   const loadTemplates = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/whatsapp/templates', { signal })
-      if (!res.ok) return
-      const data = await res.json()
-      if (!signal?.aborted) setTemplates(data.data || [])
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) clientLogError('whatsapp:load-templates', err);
+    const result = await fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/whatsapp/templates', { signal })
+    if (result.status === 'aborted') return
+    if (result.status === 'error') {
+      clientLogError('whatsapp:load-templates', new Error(result.message))
+      return
     }
+    setTemplates(result.data.data || [])
   }, [])
 
   useEffect(() => {
@@ -88,7 +86,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
     if (!newMessage.trim() || !contactPhone) return
     setSending(true)
     try {
-      const res = await fetch('/api/tenant/whatsapp/send', {
+      await fetchJsonOrThrow('/api/tenant/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,8 +95,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
           contact_id: contactId,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
       setNewMessage('')
       toast.success('Message sent')
       loadMessages()
@@ -112,7 +108,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const sendTemplate = async (templateName: string) => {
     setSendingTemplate(true)
     try {
-      const res = await fetch('/api/tenant/whatsapp/send', {
+      await fetchJsonOrThrow('/api/tenant/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,8 +118,6 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
           contact_id: contactId,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
       setShowTemplates(false)
       setSelectedTemplate(null)
       toast.success('Template sent')
