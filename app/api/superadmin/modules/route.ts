@@ -86,11 +86,19 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       if (_cg) return _cg;
     }
 
-      await db.update(modules)
+      const priced = await db.update(modules)
         .set({
           manifest: sql`jsonb_set(COALESCE(manifest, '{}'::jsonb), '{pricing}', ${JSON.stringify(v.pricing)}::jsonb)`,
         })
-        .where(eq(modules.id, v.module_id));
+        .where(eq(modules.id, v.module_id))
+        .returning({ id: modules.id });
+
+      if (!priced.length) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Module pricing was not saved: the module has no installed row',
+        }, { status: 404 });
+      }
 
       await logSuperAdminAction({
         adminId: ctx.userId,
@@ -105,9 +113,21 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     }
 
     if (v.is_available !== undefined) {
-      await db.execute(sql`
+      const availability = await db.execute(sql`
         UPDATE public.modules SET is_available = ${v.is_available}, updated_at = now() WHERE id = ${v.module_id}
+        RETURNING id
       `);
+      const rows = (availability as { rows?: unknown[] } | undefined)?.rows;
+      const rowCount = (availability as { rowCount?: number | null } | undefined)?.rowCount;
+      const witnesses = [rowCount, Array.isArray(rows) ? rows.length : null].filter(
+        (n): n is number => typeof n === 'number'
+      );
+      if (!witnesses.length || witnesses.some(n => n === 0)) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Module availability was not saved: the module has no installed row',
+        }, { status: 404 });
+      }
 
       await logSuperAdminAction({
         adminId: ctx.userId,
