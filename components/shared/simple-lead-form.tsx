@@ -10,7 +10,13 @@ import { CheckCircle, AlertCircle, Loader2, Building2, Mail, Phone, User } from 
 import { simpleLeadFormSchema, validateForm } from '@/lib/validation/forms';
 import { fetchJsonOrThrow } from '@/lib/fetch-json';
 
-export default function LeadCaptureForm() {
+export default function LeadCaptureForm({
+  tenantId,
+  formId,
+}: {
+  tenantId: string;
+  formId?: string;
+}) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -47,6 +53,8 @@ export default function LeadCaptureForm() {
         body: JSON.stringify({
           ...formData,
           source: 'Website Form',
+          tenant_id: tenantId,
+          ...(formId ? { form_id: formId } : {}),
         }),
       });
 
