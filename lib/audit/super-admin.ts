@@ -57,6 +57,7 @@ export type SuperAdminAction =
   | 'backup.deleted'
   | 'backup.restored'
   | 'restore.executed'
+  | 'restore.failed'
   
   // System
   | 'settings.changed'
