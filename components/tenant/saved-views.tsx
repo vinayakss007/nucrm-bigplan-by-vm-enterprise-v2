@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bookmark, BookmarkPlus, X, Trash2, Share2, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import { fetchJsonSafe } from '@/lib/fetch-json';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import toast from 'react-hot-toast';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -67,26 +67,25 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
   const saveView = async () => {
     if (!saveName.trim()) return;
     setSaving(true);
-    const res = await fetch('/api/tenant/views', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: saveName.trim(),
-        entity_type: entityType,
-        // #3755: persist the query with the filters so applying the view
-        // restores the exact result set it was saved from.
-        filters: { ...currentFilters, query: currentQuery },
-        is_shared: saveShared,
-      }),
-    });
-    if (res.ok) {
+    try {
+      await fetchJsonOrThrow('/api/tenant/views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: saveName.trim(),
+          entity_type: entityType,
+          // #3755: persist the query with the filters so applying the view
+          // restores the exact result set it was saved from.
+          filters: { ...currentFilters, query: currentQuery },
+          is_shared: saveShared,
+        }),
+      });
       toast.success('View saved');
       setShowSaveDialog(false);
       setSaveName('');
       loadViews();
-    } else {
-      const err = await res.json();
-      toast.error(err.error || 'Failed to save');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
     }
     setSaving(false);
   };
@@ -95,11 +94,13 @@ export function SavedViews({ entityType, currentFilters, currentQuery, onApplyVi
     e.stopPropagation();
     const view = views.find(v => v.id === id);
     await confirmThen(`Delete view "${view?.name || 'this view'}"?`, async () => {
-      const res = await fetch(`/api/tenant/views/${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      try {
+        await fetchJsonOrThrow(`/api/tenant/views/${id}`, { method: 'DELETE' });
         toast.success('View deleted');
         setViews(p => p.filter(v => v.id !== id));
-      } else toast.error('Failed to delete');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      }
     });
   };
 

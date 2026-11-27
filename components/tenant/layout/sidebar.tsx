@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useModules } from '@/lib/modules/client-gate';
 import type { TenantInfo, ProfileInfo } from './types';
@@ -56,13 +57,16 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       let serverPinned: string[] | null = null;
       let serverSections: Record<string, boolean> | null = null;
       try {
-        const res = await fetch('/api/tenant/user/preferences', { signal: abort.signal });
-        if (res.ok && !abort.signal.aborted) {
-          const { data } = await res.json();
+        const result = await fetchJsonSafe<{
+          data?: { pinned?: string[]; sections?: Record<string, boolean> };
+        }>('/api/tenant/user/preferences', { signal: abort.signal });
+        if (result.status === 'aborted') return;
+        if (result.status === 'ok') {
+          const data = result.data.data;
           if (Array.isArray(data?.pinned) && data.pinned.length) serverPinned = data.pinned;
           if (data?.sections && Object.keys(data.sections).length) serverSections = data.sections;
         }
-      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; clientLogError('sidebar', e); }
+      } catch (e) { clientLogError('sidebar', e); }
 
       // localStorage fallback for whatever the server did not provide
       try {
@@ -139,7 +143,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
 
   const persistSidebarPrefs = useCallback(async (prefs: { pinned?: string[]; sections?: Record<string, boolean> }) => {
     try {
-      await fetch('/api/tenant/user/preferences', {
+      await fetchJsonOrThrow('/api/tenant/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
