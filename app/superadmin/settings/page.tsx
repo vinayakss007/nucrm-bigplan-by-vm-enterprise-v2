@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
@@ -118,21 +119,16 @@ export default function SuperAdminSettingsPage() {
       Object.entries(secrets).filter(([, val]) => typeof val === 'string' && val.trim() !== '')
     );
     const payload = { ...s, ...typedSecrets };
-    const res = await fetch('/api/superadmin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const d = await res.json();
-    if(res.ok) { toast.success('Settings saved'); setSecrets({}); }
-    else toast.error(d.error||'Save failed');
+    try { await fetchJsonOrThrow('/api/superadmin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); toast.success('Settings saved'); setSecrets({}); }
+    catch (err) { toast.error(err instanceof Error ? err.message : 'Save failed'); }
     setSaving(false);
   };
 
   const sendTestEmail = async () => {
     if(!testEmail){toast.error('Enter email');return;}
     setTesting(true); setTestResult(null);
-    const res = await fetch('/api/tenant/email/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:testEmail})});
-    const d = await res.json();
-    setTestResult(d.ok?'ok':'fail');
-    if(d.ok) toast.success('Test email sent');
-    else toast.error(d.error||'Email failed');
+    try { await fetchJsonOrThrow('/api/tenant/email/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:testEmail})}); setTestResult('ok'); toast.success('Test email sent'); }
+    catch (err) { setTestResult('fail'); toast.error(err instanceof Error ? err.message : 'Email failed'); }
     setTesting(false);
   };
 
@@ -310,18 +306,18 @@ export default function SuperAdminSettingsPage() {
             {[
               { label:'Purge Trash (30+ days old)', action:async()=>{
                 await confirmThen('Permanently purge all trash items older than 30 days? This cannot be undone.', async()=>{
-                  const r=await fetch('/api/tenant/trash',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({purge_all:true})});
-                  const d=await r.json(); toast.success(`Purged ${d.purged??0} items`);
+                  try { const d=await fetchJsonOrThrow<{purged?:number}>('/api/tenant/trash',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({purge_all:true})}); toast.success(`Purged ${d.purged??0} items`); }
+                  catch (err) { toast.error(err instanceof Error ? err.message : 'Purge failed'); }
                 });
               }},
               { label:'Run Cleanup (sessions/rate limits)', action:async()=>{
                 await confirmThen('Run cleanup to remove stale sessions and rate limit entries?', async()=>{
                   // #1087: authenticated as super admin via the session cookie —
                   // do NOT send a (blank) cron secret from the browser.
-                  const r = await fetch('/api/cron/cleanup',{method:'POST',credentials:'same-origin'});
+                  const r = await fetchJsonSafe('/api/cron/cleanup',{method:'POST',credentials:'same-origin'});
                   // 423 is #2539's lock refusal: the job is running elsewhere, not broken.
-                  if (r.status === 423) { toast('Cleanup is already running — this request was skipped'); return; }
-                  if (!r.ok) { toast.error('Cleanup failed'); return; }
+                  if (r.status === 'error' && r.statusCode === 423) { toast('Cleanup is already running — this request was skipped'); return; }
+                  if (r.status !== 'ok') { toast.error(r.status === 'error' ? r.message : 'Cleanup failed'); return; }
                   toast.success('Cleanup triggered');
                 });
               }},
