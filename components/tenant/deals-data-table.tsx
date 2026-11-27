@@ -276,19 +276,15 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { fields: [] })
-      .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('deals-data-table', 'Failed to load custom fields', err); });
+    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('deals-data-table', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
     return () => abort.abort();
   }, [])
 
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('deals-data-table', 'Failed to load segments', err); });
+    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
+      .then(r => { if (r.status === 'error') clientLogWarn('deals-data-table', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
     return () => abort.abort();
   }, [])
   // #2230 — shared lock: double-clicking a bulk button used to POST twice,
