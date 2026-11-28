@@ -370,6 +370,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
   const limit = 50;
   
   const lastRequestTime = useRef(0);
+  const loadingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const statsMap = useMemo(()=>{const m:Record<string,number>={};stats.forEach(s=>{m[s.lead_status]=Number(s.count);});return m;},[stats]);
   const totalLeads = useMemo(()=>Object.values(statsMap).reduce((a,b)=>a+b,0),[statsMap]);
@@ -402,7 +403,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
         setSelectedLeads(new Set());
         
         // Small delay before removing loading state for smoother UI
-        setTimeout(() => {
+        loadingTimer.current = setTimeout(() => {
           if (lastRequestTime.current === requestTime) {
             setLoading(false);
           }
@@ -428,7 +429,10 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
   useEffect(()=>{
     const abort = new AbortController();
     load(0, activeStatus, debouncedSearch, abort.signal);
-    return () => abort.abort();
+    return () => {
+      abort.abort();
+      if (loadingTimer.current) clearTimeout(loadingTimer.current);
+    };
   }, [debouncedSearch, activeStatus, sortBy, sortOrder, filterSource, filterAssignedTo, filterLifecycle, filterTags, filterScoreMin, filterScoreMax, load]);
 
   const handleSearch=(q:string)=>{setSearch(q);};
