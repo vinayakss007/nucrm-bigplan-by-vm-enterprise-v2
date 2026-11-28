@@ -66,10 +66,10 @@ test.describe('Contacts', () => {
   test('contact detail page loads', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
-    const firstRow = page.locator('table tbody tr').first();
-    await expect(firstRow).toBeVisible();
+    const nameCell = page.locator('table tbody tr').first().locator('td').nth(1);
+    await expect(nameCell).toBeVisible();
     for (let attempt = 0; attempt < 3 && page.url().endsWith('/tenant/contacts'); attempt++) {
-      await firstRow.click();
+      await nameCell.click();
       await page.waitForTimeout(300);
     }
     await expect(page).toHaveURL(/\/tenant\/contacts\/[^/]+$/, { timeout: 5000 });
