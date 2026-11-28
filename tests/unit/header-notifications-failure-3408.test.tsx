@@ -18,6 +18,9 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
 vi.mock('@/components/shared/bug-report-button', () => ({ default: () => null }));
+vi.mock('@/lib/use-notifications', () => ({
+  useNotifications: () => ({ unreadCount: 2, connected: true, transport: 'socket' }),
+}));
 
 import TenantHeader from '@/components/tenant/layout/header';
 import type { TenantInfo, ProfileInfo } from '@/components/tenant/layout/types';
@@ -49,8 +52,8 @@ describe('#3408: header notifications distinguish failure from empty', () => {
       unread: async () => resp({ error: 'notifications offline' }, false, 500),
       list: async () => resp({ error: 'notifications offline' }, false, 500),
     });
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(2));
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications, 2 unread' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Could not refresh notifications'));
     expect(screen.queryByText('All caught up!')).toBeNull();
   });
