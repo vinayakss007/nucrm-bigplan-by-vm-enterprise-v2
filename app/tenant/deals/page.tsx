@@ -7,6 +7,7 @@ import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenantMembers, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
+import { DROPDOWN_LIMIT } from '@/lib/api/query-params';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import dynamic from 'next/dynamic';
 import { withTenantScope } from '@/lib/api/with-api-route';
@@ -87,13 +88,15 @@ export default async function DealsPage() {
     db.query.contacts.findMany({
       where: eq(contacts.tenantId, tid),
       columns: { id: true, firstName: true, lastName: true },
-      orderBy: [asc(contacts.firstName)]
+      orderBy: [asc(contacts.firstName)],
+      limit: DROPDOWN_LIMIT
     }),
 
     db.query.companies.findMany({
       where: eq(companies.tenantId, tid),
       columns: { id: true, name: true },
-      orderBy: [asc(companies.name)]
+      orderBy: [asc(companies.name)],
+      limit: DROPDOWN_LIMIT
     }),
 
     db
@@ -104,6 +107,7 @@ export default async function DealsPage() {
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active')))
+      .limit(DROPDOWN_LIMIT)
   ]);
 
   const defaultView = await getUserDefaultView(tid, ctx.userId);
