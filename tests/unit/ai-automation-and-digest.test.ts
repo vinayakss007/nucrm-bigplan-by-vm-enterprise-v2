@@ -8,24 +8,23 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
 describe('automation AI draft action (# no migration)', () => {
   const engine = read('lib/automation/engine.ts');
+  const helper = read('lib/automation/ai-draft-action.ts');
 
   it('adds an ai_draft action that reuses the allowed draft action string', () => {
     expect(engine).toContain("case 'ai_draft':");
-    expect(engine).toContain("action: 'draft'");
-    expect(engine).not.toMatch(/action:\s*'ai_draft'/);
+    expect(helper).toContain("action: 'draft'");
+    expect(helper).not.toMatch(/action:\s*'ai_draft'/);
   });
 
   it('routes the result to a human review notification instead of sending it', () => {
-    const block = engine.slice(engine.indexOf("case 'ai_draft':"), engine.indexOf("case 'update_field':"));
-    expect(block).toContain('createNotification(');
-    expect(block).toContain('AI draft ready for review');
-    expect(block).not.toContain('sendEmail(');
+    expect(helper).toContain('createNotification(');
+    expect(helper).toContain('AI draft ready for review');
+    expect(helper).not.toContain('sendEmail(');
   });
 
   it('reports provider outages as action failures without throwing', () => {
-    const block = engine.slice(engine.indexOf("case 'ai_draft':"), engine.indexOf("case 'update_field':"));
-    expect(block).toContain('instanceof GatewayError');
-    expect(block).toContain('actionFailures.push');
+    expect(helper).toContain('instanceof GatewayError');
+    expect(engine).toContain('actionFailures.push(...await runAiDraft(');
   });
 });
 
