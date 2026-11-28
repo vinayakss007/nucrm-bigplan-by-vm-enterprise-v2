@@ -67,7 +67,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
-    const gate = await requireAiFeature(ctx, 'ai_insights');
+    const gate = await requireAiFeature(ctx, 'ai_assistant');
     if (gate) return gate;
     const limited = await checkRateLimit(request, { action: 'ai_insights', max: 30, windowMinutes: 60 });
     if (limited) return limited;

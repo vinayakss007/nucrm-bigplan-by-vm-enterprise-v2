@@ -12,7 +12,7 @@
  */
 import {
   Sparkles, FileEdit, Target, AlertTriangle, Activity,
-  BrainCircuit, MessageSquare, Heart,
+  BrainCircuit, MessageSquare, Heart, Lightbulb, Mail,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -104,6 +104,24 @@ export const AI_CAPABILITIES: AICapability[] = [
     desc: 'AI replies, festival messages & birthday greetings',
     depends_on: ['Contacts', 'Email integration'],
     featureKey: 'ai_lead_warming',
+    badge: 'beta',
+  },
+  {
+    href: '/tenant/ai/insights',
+    label: 'AI Insights',
+    icon: Lightbulb,
+    desc: 'Next-best-action recommendations from your CRM history',
+    depends_on: ['Contacts', 'Deals', 'Activities'],
+    featureKey: 'ai_assistant',
+    badge: 'beta',
+  },
+  {
+    href: '/tenant/ai/email-drafts',
+    label: 'AI Email Drafts',
+    icon: Mail,
+    desc: 'Context-aware emails you review before sending',
+    depends_on: ['Contacts', 'Email integration'],
+    featureKey: 'ai_assistant',
     badge: 'beta',
   },
   {

@@ -246,4 +246,30 @@ export const SEED_DRAFT_TEMPLATES: Array<{
     userPrompt:
       'Notes: {{contact.notes}}\nDeal: {{deal.title}}',
   },
+  {
+    slug: 're-engage-quiet-contact',
+    name: 'Re-engage a quiet contact',
+    description: 'Warm, low-pressure note to a contact who has gone quiet.',
+    kind: 'email',
+    entityTypes: 'contact',
+    tone: 'warm',
+    defaultSubject: 'Checking in',
+    systemPrompt:
+      'Write a 60-90 word re-engagement email to a contact who has been quiet. Be warm, never guilt-tripping. Reference one concrete detail from the context, offer one useful next step, and end with an easy question. Do not invent facts.',
+    userPrompt:
+      'Contact: {{contact.first_name}} {{contact.last_name}} at {{company.name}}.\nNotes: {{contact.notes}}\nWrite the email body only, no subject line.',
+  },
+  {
+    slug: 'deal-risk-check-in',
+    name: 'Deal risk check-in',
+    description: 'Surfaces a stalled deal and asks for a decision, not a meeting.',
+    kind: 'email',
+    entityTypes: 'deal',
+    tone: 'professional',
+    defaultSubject: 'Where should we go from here?',
+    systemPrompt:
+      'Write a short email about a stalled deal. Name the likely blocker from the context without blaming anyone, offer two concrete paths forward, and ask the buyer which they prefer. Under 100 words. Do not invent facts.',
+    userPrompt:
+      'Buyer: {{contact.first_name}} at {{company.name}}. Deal: {{deal.title}} ({{deal.amount}}).\nWrite the email body only, no subject line.',
+  },
 ];

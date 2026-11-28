@@ -9,7 +9,7 @@ import { useApiQuery } from '@/lib/query/client';
 import {
   Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
   ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle, Lock,
-  type LucideIcon,
+  Lightbulb, Mail, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -135,6 +135,20 @@ export default function AIHubPage() {
             title="Summarize a record"
             desc="TL;DR of any contact, company or deal."
             tone="emerald"
+          />
+          <ActionCard
+            href="/tenant/ai/insights"
+            icon={Lightbulb}
+            title="Get AI insights"
+            desc="Next-best actions for a contact or deal."
+            tone="amber"
+          />
+          <ActionCard
+            href="/tenant/ai/email-drafts"
+            icon={Mail}
+            title="Draft an email"
+            desc="Context-aware email you review before sending."
+            tone="violet"
           />
         </div>
       </div>
