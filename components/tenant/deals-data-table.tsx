@@ -160,6 +160,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         contact_id: form.contact_id || null,
         company_id: form.company_id || null,
         assigned_to: form.assigned_to || null,
+        close_date: form.close_date || null,
       }),
     })
     track('feature_used', { feature: 'deal.create' })

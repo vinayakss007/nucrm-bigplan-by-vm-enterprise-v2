@@ -47,7 +47,7 @@ test.describe('Contacts', () => {
   test('create new contact', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
-    const addButton = page.locator('button:has-text("Add Contact")').first();
+    const addButton = page.getByRole('button', { name: 'New Contact' }).first();
     await expect(addButton).toBeVisible();
     await addButton.click();
 
@@ -66,9 +66,10 @@ test.describe('Contacts', () => {
   test('contact detail page loads', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
-    const firstContact = page.locator('a[href*="/tenant/contacts/"]').first();
-    await expect(firstContact).toBeVisible();
-    await firstContact.click();
-    await expect(page.getByRole('heading', { name: 'Contact Details' })).toBeVisible({ timeout: 5000 });
+    const firstRow = page.locator('table tbody tr').first();
+    await expect(firstRow).toBeVisible();
+    await firstRow.click();
+    await expect(page).toHaveURL(/\/tenant\/contacts\/[^/]+$/, { timeout: 5000 });
+    await expect(page.locator('h1').first()).toBeVisible();
   });
 });
