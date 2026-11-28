@@ -30,7 +30,7 @@ describe('auto-followup works with AI disabled (#3863)', () => {
     const src = readFileSync(join(process.cwd(), 'lib/ai/auto-followup.ts'), 'utf8');
     expect(src).toContain('let deterministic = false;');
     expect(src).toContain('draftText = buildDeterministicDraft({');
-    expect(src).toContain('results.push({ followUpId: fu.id, drafted: true, ...(deterministic ? { deterministic: true } : {}) });');
+    expect(src).toContain('return { followUpId: fu.id, drafted: true, ...(deterministic ? { deterministic: true } : {}) };');
     expect(src).not.toContain('body: aiResult.text.slice(0, 500)');
   });
 });
