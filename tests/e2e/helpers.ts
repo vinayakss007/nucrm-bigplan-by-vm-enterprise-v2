@@ -2,7 +2,7 @@ import { Page, BrowserContext } from '@playwright/test';
 
 export const TEST_USER = {
   email: 'superadmin@nucrm.com',
-  password: 'admin123',
+  password: process.env.SEED_PASSWORD ?? '',
 };
 
 export async function loginAsTestUser(page: Page) {

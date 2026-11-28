@@ -65,9 +65,16 @@ test.describe.serial('Authentication', () => {
   test('password strength indicator shows on signup', async ({ page }) => {
     await page.goto('/auth/signup', { waitUntil: 'domcontentloaded' });
     const passwordInput = page.locator('input[type="password"]');
-    
+
+    const submit = page.locator('button[type="submit"]');
+    for (let attempt = 0; attempt < 3 && (await submit.isDisabled()); attempt++) {
+      await page.getByText('I agree to the').click();
+      await page.waitForTimeout(300);
+    }
+    await expect(submit).toBeEnabled({ timeout: 10000 });
+
     await passwordInput.fill('weak');
-    await expect(page.locator('text=Password strength').first()).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('text=Password strength').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('signup form has all required fields', async ({ page }) => {

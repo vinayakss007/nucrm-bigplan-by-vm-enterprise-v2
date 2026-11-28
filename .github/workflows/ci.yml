@@ -859,10 +859,10 @@ jobs:
   #
   # Appended as a NEW JOB below `ci.yml:447` — the last cited coordinate in the file, so
   # no register pointer moves — and ABOVE #3282's `destructive-gate`. The tail of this
-  # file is an order, not a queue: `tests/unit/prod-seed-refusal-3282.test.ts:445` pins
-  # `destructive-gate` second-to-last while `tests/unit/ci-constraint-vocab-job-3241.test.ts:63`
-  # pins `constraint-vocab` last, so an append between those two asserts a predecessor to
-  # move. `npm ci` is needed only because the screen runs under `tsx`.
+  # file is an order, not a queue: `tests/unit/prod-seed-refusal-3282.test.ts` requires
+  # `destructive-gate` above the last job while `tests/unit/ci-constraint-vocab-job-3241.test.ts`
+  # pins `constraint-vocab` last; #3985's e2e job is the only allowed tail insertion.
+  # `npm ci` is needed only because the screen runs under `tsx`.
   #
   # BOTH CONTROLS, per the rule `.github/workflows/schema-drift.yml:17-24` adopts: the
   # step above is evidence only once a copy of the three surfaces that grants 1024 under a
@@ -1101,6 +1101,71 @@ jobs:
             exit 1
           }
           echo "OK: five planted defects turn this screen red, one named rule each, and a stale allowance is a finding — exactly as #3282 requires."
+
+  # #3985: the Playwright specs existed but no workflow ever ran them, so a
+  # broken login/hydration/redirect could ship green. Placed below every cited
+  # coordinate and above constraint-vocab, which #3241 pins as the last job.
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REDIS_URL: redis://localhost:6379
+      SEED_PASSWORD: ${{ format('e2e-{0}A1!', github.run_id) }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # The migration chain installs the role-creation trigger seed-e2e-user.ts
+      # relies on; db:sync pushed a schema without it and the webServer died
+      # with "Admin role not auto-created by trigger".
+      - name: Build schema from the migration chain
+        run: npm run db:bootstrap -- --yes
+
+      # playwright.config.ts seeds the E2E user in its webServer step, then
+      # starts `npm run dev`. No production or preprod target is touched.
+      - name: Playwright tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 3
 
   # PP-059 / #3241 — `npm run guard:vocab` is the only command in this repository
   # that asks a REAL database what its `CHECK` constraints will actually reject, and

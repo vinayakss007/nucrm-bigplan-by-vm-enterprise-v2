@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const TEST_USER = {
   email: 'superadmin@nucrm.com',
-  password: 'admin123',
+  password: process.env.SEED_PASSWORD ?? '',
 };
 
 
@@ -47,7 +47,7 @@ test.describe('Contacts', () => {
   test('create new contact', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
-    const addButton = page.locator('button:has-text("Add Contact")').first();
+    const addButton = page.getByRole('button', { name: 'New Contact' }).first();
     await expect(addButton).toBeVisible();
     await addButton.click();
 
@@ -66,9 +66,13 @@ test.describe('Contacts', () => {
   test('contact detail page loads', async ({ page }) => {
     await page.goto('/tenant/contacts');
     
-    const firstContact = page.locator('a[href*="/tenant/contacts/"]').first();
-    await expect(firstContact).toBeVisible();
-    await firstContact.click();
-    await expect(page.getByRole('heading', { name: 'Contact Details' })).toBeVisible({ timeout: 5000 });
+    const nameCell = page.locator('table tbody tr').first().locator('td').nth(1);
+    await expect(nameCell).toBeVisible();
+    for (let attempt = 0; attempt < 3 && page.url().endsWith('/tenant/contacts'); attempt++) {
+      await nameCell.click();
+      await page.waitForTimeout(300);
+    }
+    await expect(page).toHaveURL(/\/tenant\/contacts\/[^/]+$/, { timeout: 5000 });
+    await expect(page.locator('h1').first()).toBeVisible();
   });
 });

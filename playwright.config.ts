@@ -37,6 +37,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npx tsx scripts/seed-e2e-user.ts && npm run dev',
+    env: { ...process.env, TRUST_PROXY: 'true' } as Record<string, string>,
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env['CI'],
     timeout: 120 * 1000,
