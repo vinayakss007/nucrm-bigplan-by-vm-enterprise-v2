@@ -12,6 +12,7 @@ vi.mock('@/drizzle/db', () => ({
     query: {
       taxRates: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       taxExemptions: {
         findFirst: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/drizzle/schema/financial', () => ({
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => args),
   and: vi.fn((...args: unknown[]) => args),
+  inArray: vi.fn((...args: unknown[]) => args),
   desc: vi.fn((col: unknown) => col),
   sql: vi.fn(),
 }));
@@ -107,14 +109,10 @@ describe('Tax - calculateCompoundTax', () => {
   });
 
   it('calculates compound tax with multiple rates', async () => {
-    let callCount = 0;
-    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
-      callCount++;
-      if (callCount === 1) {
-        return { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true };
-      }
-      return { id: 'pst', name: 'PST', rate: '7', type: 'percentage', tenantId: 'tenant-1', isActive: true };
-    });
+    vi.mocked(db.query.taxRates.findMany).mockResolvedValue([
+      { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+      { id: 'pst', name: 'PST', rate: '7', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+    ] as never);
 
     const result = await calculateCompoundTax(100, ['gst', 'pst'], 'tenant-1');
 

@@ -10,6 +10,7 @@ vi.mock('@/drizzle/db', () => ({
     query: {
       taxRates: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       taxExemptions: {
         findFirst: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/drizzle/schema/financial', () => ({
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => args),
   and: vi.fn((...args: unknown[]) => args),
+  inArray: vi.fn((...args: unknown[]) => args),
   desc: vi.fn((col: unknown) => col),
   sql: vi.fn(),
 }));
@@ -56,7 +58,11 @@ function mockSelectResult(rows: unknown[]) {
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockResolvedValue(rows),
     }),
-  });
+  } as never);
+}
+
+function mockBatchRates(rows: unknown[]) {
+  vi.mocked(db.query.taxRates.findMany).mockResolvedValue(rows as never);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +141,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.mocked(db.query.taxRates.findMany).mockResolvedValue([]);
   });
 
   it('handles a single tax rate', async () => {
@@ -146,14 +153,10 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('handles mix of fixed and percentage rates', async () => {
-    let calls = 0;
-    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
-      calls++;
-      if (calls === 1) {
-        return { id: 'fee', name: 'Service Fee', rate: '2.50', type: 'fixed', tenantId: 'tenant-1', isActive: true };
-      }
-      return { id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true };
-    });
+    mockBatchRates([
+      { id: 'fee', name: 'Service Fee', rate: '2.50', type: 'fixed', tenantId: 'tenant-1', isActive: true },
+      { id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+    ]);
     const { calculateCompoundTax } = await import('@/lib/tax');
     const result = await calculateCompoundTax(100, ['fee', 'vat'], 'tenant-1');
     expect(result.totalTax).toBe(12.5);
@@ -162,22 +165,17 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('throws error when a middle rate is not found', async () => {
-    let calls = 0;
-    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
-      calls++;
-      if (calls === 1) return { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true };
-      if (calls === 2) return null;
-      return { id: 'pst', name: 'PST', rate: '7', type: 'percentage', tenantId: 'tenant-1', isActive: true };
-    });
+    mockBatchRates([
+      { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+      { id: 'pst', name: 'PST', rate: '7', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+    ]);
     const { calculateCompoundTax } = await import('@/lib/tax');
     await expect(calculateCompoundTax(100, ['gst', 'missing', 'pst'], 'tenant-1'))
       .rejects.toThrow("Tax rate 'missing' not found or inactive");
   });
 
   it('applies the same rate ID multiple times', async () => {
-    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
-      id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
-    });
+    mockBatchRates([{ id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true }]);
     const { calculateCompoundTax } = await import('@/lib/tax');
     const result = await calculateCompoundTax(100, ['vat', 'vat'], 'tenant-1');
     expect(result.totalTax).toBe(20);
@@ -185,16 +183,11 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('rounds total tax with many fractional rates', async () => {
-    let calls = 0;
-    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
-      calls++;
-      const rates = [
-        { id: 'r1', name: 'R1', rate: '5.55', type: 'percentage', tenantId: 'tenant-1', isActive: true },
-        { id: 'r2', name: 'R2', rate: '3.33', type: 'percentage', tenantId: 'tenant-1', isActive: true },
-        { id: 'r3', name: 'R3', rate: '2.22', type: 'percentage', tenantId: 'tenant-1', isActive: true },
-      ];
-      return rates[calls - 1] || null;
-    });
+    mockBatchRates([
+      { id: 'r1', name: 'R1', rate: '5.55', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+      { id: 'r2', name: 'R2', rate: '3.33', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+      { id: 'r3', name: 'R3', rate: '2.22', type: 'percentage', tenantId: 'tenant-1', isActive: true },
+    ]);
     const { calculateCompoundTax } = await import('@/lib/tax');
     const result = await calculateCompoundTax(99.99, ['r1', 'r2', 'r3'], 'tenant-1');
     expect(result.totalTax).toBe(11.10);
@@ -202,9 +195,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('handles zero amount with multiple rates', async () => {
-    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
-      id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
-    });
+    mockTaxRate({ id: 'vat', name: 'VAT', rate: '10', type: 'percentage' });
     const { calculateCompoundTax } = await import('@/lib/tax');
     const result = await calculateCompoundTax(0, ['vat'], 'tenant-1');
     expect(result.totalTax).toBe(0);
@@ -212,9 +203,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('rounds individual line items with fractional amounts', async () => {
-    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
-      id: 'r1', name: 'R1', rate: '8.25', type: 'percentage', tenantId: 'tenant-1', isActive: true,
-    });
+    mockTaxRate({ id: 'r1', name: 'R1', rate: '8.25', type: 'percentage' });
     const { calculateCompoundTax } = await import('@/lib/tax');
     const result = await calculateCompoundTax(0.03, ['r1'], 'tenant-1');
     // 0.03 * 0.0825 = 0.002475 → rounds to 0.00

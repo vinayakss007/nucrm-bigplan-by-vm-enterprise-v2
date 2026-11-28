@@ -13,7 +13,7 @@
 
 import { db } from '@/drizzle/db';
 import { taxRates, taxExemptions } from '@/drizzle/schema/financial';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 export interface TaxRate {
   id: string;
@@ -120,14 +120,21 @@ export async function calculateCompoundTax(
   const breakdown: TaxBreakdown[] = [];
   let totalTax = 0;
 
+  const where = and(
+    eq(taxRates.tenantId, tenantId),
+    eq(taxRates.isActive, true),
+  );
+  const byId = new Map<string, typeof taxRates.$inferSelect>();
+  if (taxRateIds.length === 1) {
+    const rate = await db.query.taxRates.findFirst({ where: and(eq(taxRates.id, taxRateIds[0]!), where) });
+    if (rate) byId.set(rate.id, rate);
+  } else {
+    const rates = await db.query.taxRates.findMany({ where: and(inArray(taxRates.id, taxRateIds), where) });
+    for (const rate of rates) byId.set(rate.id, rate);
+  }
+
   for (const taxRateId of taxRateIds) {
-    const rate = await db.query.taxRates.findFirst({
-      where: and(
-        eq(taxRates.id, taxRateId),
-        eq(taxRates.tenantId, tenantId),
-        eq(taxRates.isActive, true)
-      ),
-    });
+    const rate = byId.get(taxRateId);
 
     if (!rate) {
       throw new Error(`Tax rate '${taxRateId}' not found or inactive`);
