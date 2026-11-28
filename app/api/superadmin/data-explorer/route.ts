@@ -105,8 +105,6 @@ async function handleSummary(searchParams: URLSearchParams) {
     `)).rows, 300);
 
     return NextResponse.json({ summary: rows[0] });
- 
- 
   } catch (err) {
     return apiError(err);
   }
@@ -163,8 +161,6 @@ async function handleSchemaInfo() {
     }, 300);
 
     return NextResponse.json({ tables: tableDetails });
- 
- 
   } catch (err) {
     return apiError(err);
   }
