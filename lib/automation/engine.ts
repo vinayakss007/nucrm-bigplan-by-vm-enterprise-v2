@@ -39,6 +39,7 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
+import { chat, GatewayError } from '@/lib/ai/gateway';
 import { captureError } from '@/lib/capture-error';
 import type { AutomationCondition, AutomationAction } from './types';
 
@@ -197,6 +198,39 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         link:  config.link || undefined,
       });
       if (!stored) actionFailures.push('send_notification: notification was not persisted');
+      break;
+    }
+
+    case 'ai_draft': {
+      const prompt = interpolate(String(config.prompt || ''), enrichedData).slice(0, 2000);
+      if (!prompt) break;
+      const targetUserId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
+      if (!targetUserId) break;
+      try {
+        const resp = await chat({
+          tenantId: payload.tenantId,
+          userId: targetUserId,
+          action: 'draft',
+          system: 'You are a CRM assistant. Write a short, professional draft using only the facts supplied. Do not invent facts.',
+          messages: [{ role: 'user', content: prompt }],
+          metadata: { feature: 'automation_ai_draft' },
+        });
+        const stored = await createNotification({
+          userId: targetUserId,
+          tenantId: payload.tenantId,
+          type: 'system',
+          title: 'AI draft ready for review',
+          body: resp.text.slice(0, 1000),
+          link: '/tenant/ai/activity',
+        });
+        if (!stored) actionFailures.push('ai_draft: notification was not persisted');
+      } catch (err) {
+        if (err instanceof GatewayError) {
+          actionFailures.push(`ai_draft: AI provider unavailable (${err.code})`);
+        } else {
+          throw err;
+        }
+      }
       break;
     }
 
