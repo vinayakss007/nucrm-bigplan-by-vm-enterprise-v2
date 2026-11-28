@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+function configChain(rows: unknown[]) {
+  const chain: Record<string, unknown> = {};
+  chain.from = () => chain;
+  chain.innerJoin = () => chain;
+  chain.leftJoin = () => chain;
+  chain.where = () => chain;
+  chain.groupBy = () => Promise.resolve(rows);
+  return chain;
+}
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(),
@@ -52,13 +62,7 @@ describe('Email Warmup Engine', () => {
   describe('processWarmUp', () => {
     it('returns zero counts when no configs exist', async () => {
       const { db } = await import('@/drizzle/db');
-      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([])),
-          })),
-        })),
-      });
+      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue(configChain([]));
 
       const { processWarmUp } = await import('@/lib/email/warmup');
       const result = await processWarmUp();
@@ -69,30 +73,24 @@ describe('Email Warmup Engine', () => {
 
     it('handles config with daily limit reached', async () => {
       const { db } = await import('@/drizzle/db');
-      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([{
-              config: {
-                id: 'cfg-1',
-                tenantId: 'tenant-1',
-                dailyLimitCurrent: 10,
-                dailyLimitStart: 5,
-                dailyLimitMax: 50,
-                rampUpDays: 21,
-                startedAt: new Date(),
-                fromName: 'Test',
-                isActive: true,
-                totalSent: 100,
-                lastWarmupAt: new Date(),
-              },
-              sentToday: 10,
-              bouncesLast7Days: 0,
-              sendsLast7Days: 100,
-            }])),
-          })),
-        })),
-      });
+      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue(configChain([{
+        config: {
+          id: 'cfg-1',
+          tenantId: 'tenant-1',
+          dailyLimitCurrent: 10,
+          dailyLimitStart: 5,
+          dailyLimitMax: 50,
+          rampUpDays: 21,
+          startedAt: new Date(),
+          fromName: 'Test',
+          isActive: true,
+          totalSent: 100,
+          lastWarmupAt: new Date(),
+        },
+        sentToday: 10,
+        bouncesLast7Days: 0,
+        sendsLast7Days: 100,
+      }]));
 
       const { processWarmUp } = await import('@/lib/email/warmup');
       const result = await processWarmUp();
@@ -119,13 +117,9 @@ describe('Email Warmup Engine', () => {
       ];
 
       const { db } = await import('@/drizzle/db');
-      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 100 }])),
-          })),
-        })),
-      });
+      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue(configChain([
+        { config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 100 },
+      ]));
       (db.query.emailWarmupPool.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockParticipants);
       (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
         values: vi.fn(() => ({
@@ -168,13 +162,9 @@ describe('Email Warmup Engine', () => {
       ];
 
       const { db } = await import('@/drizzle/db');
-      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 100 }])),
-          })),
-        })),
-      });
+      (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue(configChain([
+        { config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 100 },
+      ]));
       (db.query.emailWarmupPool.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(mockParticipants);
       (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
         values: vi.fn(() => ({
