@@ -66,35 +66,38 @@ export class CriticalDataCapture {
     if (!CRITICAL_TABLES.includes(tableName)) return 0;
     if (!isValidTableName(tableName)) return 0;
 
-    let captured = 0;
+    if (recordIds.length === 0) return 0;
 
-    for (const recordId of recordIds) {
-      try {
-        const result = await db.execute(
-          sql`SELECT * FROM ${sql.identifier(tableName)} WHERE id = ${recordId}`
-        );
-
-        if (result.rows.length === 0) continue;
-
-        const rowData = result.rows[0];
-        if (!isJsonRecord(rowData)) continue;
-        const cleanData = toJsonSafeRow(rowData);
-
-        await db.insert(criticalDataBackups).values({
-          tenantId, tableName, recordId,
-          backupData: cleanData,
-          operation: 'delete',
+    try {
+      // One read for the whole batch instead of one round trip per record (#4067).
+      const result = await db.execute(
+        sql`SELECT * FROM ${sql.identifier(tableName)} WHERE id = ANY(${recordIds})`
+      );
+      const rows = Array.isArray(result.rows) ? result.rows : [];
+      const retainedUntil = new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      const values = rows.flatMap((rowData) => {
+        if (!isJsonRecord(rowData) || typeof rowData['id'] !== 'string') return [];
+        return [{
+          tenantId,
+          tableName,
+          recordId: rowData['id'],
+          backupData: toJsonSafeRow(rowData),
+          operation: 'delete' as const,
           deletedBy: deletedBy || null,
-          retainedUntil: new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000),
-        });
+          retainedUntil,
+        }];
+      });
 
-        captured++;
-      } catch (err) {
-        logger.error('[CriticalDataCapture] Failed to capture record', { tableName, recordId, error: err instanceof Error ? err.message : String(err) });
-      }
+      if (values.length === 0) return 0;
+      await db.insert(criticalDataBackups).values(values);
+      return values.length;
+    } catch (err) {
+      logger.error('[CriticalDataCapture] Failed to capture records', {
+        tableName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return 0;
     }
-
-    return captured;
   }
 
   async captureBeforeUpdate(tenantId: string, tableName: string, recordId: string): Promise<void> {
