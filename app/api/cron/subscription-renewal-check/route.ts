@@ -54,6 +54,21 @@ async function cronRouteHandler(request: NextRequest) {
     // The work has to run once per tenant — see lib/cron/tenant-scope.ts.
     const sweep = await sweepTenants('cron/subscription-renewal-check', async (tenantId) => {
       let recipientWarningLogged = false;
+
+      // Batch the recipient read once per tenant instead of once per
+      // subscription: every subscription in this sweep shares the same tenant,
+      // so the previous query was pure repeated round trips (#4058).
+      const members = await db.select({
+        userId: users.id,
+        email: users.email,
+        fullName: users.fullName,
+      })
+      .from(users)
+      .innerJoin(
+        sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${tenantId} AND status = 'active') tm`,
+        sql`tm.user_id = ${users.id}`
+      );
+
       for (const { days, targetStr } of windows) {
 
         // Find active subscriptions ending on exactly `days` from now
@@ -96,18 +111,6 @@ async function cronRouteHandler(request: NextRequest) {
           // Deduplication
           if (sentSet.has(sub.id)) continue;
 
-          // Find tenant members to notify
-          const members = await db.select({
-            userId: users.id,
-            email: users.email,
-            fullName: users.fullName,
-          })
-          .from(users)
-          .innerJoin(
-            sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${sub.tenantId} AND status = 'active') tm`,
-            sql`tm.user_id = ${users.id}`
-          );
-
           // #3315: nobody in this tenant to tell. Send nothing, write no dedup
           // marker (the next run has to retry once a member exists again), count
           // nothing as reminded, and say so.
@@ -127,7 +130,7 @@ async function cronRouteHandler(request: NextRequest) {
           const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
           let emailRejected = false;
-          for (const member of members) {
+          await Promise.allSettled(members.map(async (member) => {
             const delivered = await createNotification({
               userId: member.userId,
               tenantId: sub.tenantId,
@@ -166,7 +169,7 @@ async function cronRouteHandler(request: NextRequest) {
                 void logError({ error: new Error(`Renewal reminder email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/subscription-renewal-check email' });
               }
             }
-          }
+          }));
 
           // Withhold the marker when either channel failed so the next run
           // retries instead of permanently skipping this sub.

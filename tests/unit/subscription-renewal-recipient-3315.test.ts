@@ -192,6 +192,18 @@ describe('POST /api/cron/subscription-renewal-check recipient read (#3315)', () 
     expect(inserts).toHaveLength(0);
   });
 
+  it('reads recipient members once per tenant, not once per subscription (#4058)', async () => {
+    rowsByTable.set(serviceSubscriptions, [subRow(), subRow({ id: 'sub-2', name: 'Hosting plan' })]);
+    rowsByTable.set(activities, []);
+    rowsByTable.set(users, [member]);
+
+    const res = await runCron();
+
+    expect(selectCalls.filter(c => c.table === users)).toHaveLength(1);
+    expect(mockCreateNotification).toHaveBeenCalledTimes(2);
+    expect(res.body).toMatchObject({ remindersSent: 2 });
+  });
+
   it('reports an empty recipient read as a failed run and writes no dedup marker', async () => {
     rowsByTable.set(serviceSubscriptions, [subRow(), subRow({ id: 'sub-2', name: 'Hosting plan' })]);
     rowsByTable.set(activities, []);
