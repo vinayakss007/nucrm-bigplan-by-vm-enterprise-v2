@@ -8,7 +8,7 @@ import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, users, contacts, notifications } from '@/drizzle/schema';
-import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, sql, inArray, gte, lt } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
@@ -26,6 +26,12 @@ async function cronRouteHandler(request: NextRequest) {
   if (refusal) return refusal;
   try {
     const today = new Date().toISOString().split('T')[0];
+    // Half-open UTC ranges on the raw timestamp columns keep idx_tasks_due_date
+    // and the notifications time index usable; casting the column to ::date
+    // forces a full scan (#4059).
+    const dayStart = new Date(`${today}T00:00:00.000Z`);
+    const nextDayStart = new Date(dayStart.getTime() + 86_400_000);
+    const threeDaysAgoStart = new Date(dayStart.getTime() - 3 * 86_400_000);
 
     let dueTodayCount = 0;
     let overdueCount = 0;
@@ -70,8 +76,10 @@ async function cronRouteHandler(request: NextRequest) {
         eq(tasks.tenantId, tenantId),
         eq(tasks.completed, false),
         isNull(tasks.deletedAt),
-        sql`(${tasks.dueDate})::date = ${today}::date`
-      ));
+        gte(tasks.dueDate, dayStart),
+        lt(tasks.dueDate, nextDayStart)
+      ))
+      .limit(200);
 
       // Tasks OVERDUE (1-3 days) — remind again
       const overdue = await db.select({
@@ -94,9 +102,10 @@ async function cronRouteHandler(request: NextRequest) {
         eq(tasks.tenantId, tenantId),
         eq(tasks.completed, false),
         isNull(tasks.deletedAt),
-        sql`(${tasks.dueDate})::date >= ${today}::date - interval '3 days'`,
-        sql`(${tasks.dueDate})::date < ${today}::date`
-      ));
+        gte(tasks.dueDate, threeDaysAgoStart),
+        lt(tasks.dueDate, dayStart)
+      ))
+      .limit(200);
 
       dueTodayCount += dueToday.length;
       overdueCount += overdue.length;
@@ -118,7 +127,8 @@ async function cronRouteHandler(request: NextRequest) {
           eq(notifications.tenantId, tenantId),
           inArray(notifications.type, ['task_due', 'task_overdue']),
           sql`${notifications.metadata}->>'entity_type' = 'task'`,
-          sql`(${notifications.createdAt})::date = ${today}::date`,
+          gte(notifications.createdAt, dayStart),
+          lt(notifications.createdAt, nextDayStart),
         ));
         for (const row of remindedToday) {
           remindedKeys.add(`${row.userId}|${row.type}|${row.entityId}`);
@@ -126,9 +136,9 @@ async function cronRouteHandler(request: NextRequest) {
       }
 
       // Send in-app notifications for due today
-      for (const task of dueToday) {
+      await Promise.allSettled(dueToday.map(async (task) => {
         const marker = `${task.userId}|task_due|${task.id}`;
-        if (remindedKeys.has(marker)) { alreadyReminded++; continue; }
+        if (remindedKeys.has(marker)) { alreadyReminded++; return; }
         // createNotification() reports a failed write by RETURNING FALSE, not by
         // throwing — after its retry is exhausted it only logs. Counting the
         // result rather than the attempt is what keeps this response honest: the
@@ -140,13 +150,13 @@ async function cronRouteHandler(request: NextRequest) {
           body: task.contactFirst ? `Contact: ${task.contactFirst} ${task.contactLast}` : undefined,
           entity_type: 'task', entity_id: task.id,
         })) { notified++; remindedKeys.add(marker); } else notifyFailed++;
-      }
+      }));
 
       // Send in-app notifications + email for overdue
-      for (const task of overdue) {
-        if (!task.dueDate) continue;
+      await Promise.allSettled(overdue.map(async (task) => {
+        if (!task.dueDate) return;
         const marker = `${task.userId}|task_overdue|${task.id}`;
-        if (remindedKeys.has(marker)) { alreadyReminded++; continue; }
+        if (remindedKeys.has(marker)) { alreadyReminded++; return; }
         const daysOverdue = Math.floor((Date.now() - new Date(task.dueDate).getTime()) / 86400000);
 
         if (daysOverdue === 1 && task.email) {
@@ -160,7 +170,7 @@ async function cronRouteHandler(request: NextRequest) {
           if (!emailResult.success) {
             emailFailed++;
             void logError({ error: new Error(`Task-reminders email rejected: ${emailResult.error ?? 'provider failure'}`), context: 'cron/task-reminders overdue email' });
-            continue;
+            return;
           }
         }
 
@@ -170,7 +180,7 @@ async function cronRouteHandler(request: NextRequest) {
           entity_type: 'task', entity_id: task.id,
         });
         if (overdueDelivered) { notified++; remindedKeys.add(marker); } else notifyFailed++;
-      }
+      }));
     });
 
     return NextResponse.json({

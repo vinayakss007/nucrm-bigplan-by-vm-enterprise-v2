@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const src = readFileSync(join(process.cwd(), 'app/api/cron/task-reminders/route.ts'), 'utf8');
-const start = src.indexOf('for (const task of overdue)');
+const start = src.indexOf('overdue.map(async (task) => {');
 const end = src.indexOf('\n    });', start);
 const loop = src.slice(start, end);
 
@@ -15,13 +15,13 @@ describe('task-reminders withholds the marker when email fails (#3848)', () => {
     expect(notificationIdx).toBeGreaterThan(emailIdx);
   });
 
-  it('continues past the marker write on a rejected send', () => {
+  it('returns before the marker write on a rejected send', () => {
     const rejectionIdx = loop.indexOf('if (!emailResult.success)');
-    const continueIdx = loop.indexOf('continue;', rejectionIdx);
+    const returnIdx = loop.indexOf('return;', rejectionIdx);
     const notificationIdx = loop.indexOf('await createNotification(');
     expect(rejectionIdx).toBeGreaterThanOrEqual(0);
-    expect(continueIdx).toBeGreaterThan(rejectionIdx);
-    expect(continueIdx).toBeLessThan(notificationIdx);
+    expect(returnIdx).toBeGreaterThan(rejectionIdx);
+    expect(returnIdx).toBeLessThan(notificationIdx);
   });
 
   it('only adds the dedup marker after a delivered notification', () => {
