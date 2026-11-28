@@ -7,7 +7,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { clientLogWarn } from '@/lib/client-logger';
+import { useLeadOptionCatalogues } from '@/hooks/use-lead-option-catalogues';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   Users, Plus, Download, Upload, Search, MoreHorizontal, Trash2,
   Phone, Building2, Calendar, User, Star, Archive,
@@ -142,58 +143,14 @@ export default function LeadsClient({
     requested_service_id: '',
   });
   const [addingLead, setAddingLead] = useState(false);
-  // Catalogue for "what is this lead a request for" (WF-02).
-  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
-  const [services, setServices] = useState<{ id: string; name: string }[]>([]);
-  // Existing contacts a lead can be tied to (as well as creating a new one).
-  const [contactOptions, setContactOptions] = useState<{ id: string; firstName?: string; lastName?: string; email?: string }[]>([]);
-  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([]);
+  const { products, services, contactOptions, customFields, segments, sequences, optionErrors, retry: retryOptions } = useLeadOptionCatalogues();
   const [showBulkField, setShowBulkField] = useState(false);
   const [bulkFieldKey, setBulkFieldKey] = useState('');
   const [bulkFieldValue, setBulkFieldValue] = useState('');
-  const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
   const [showSegmentPicker, setShowSegmentPicker] = useState(false);
   const [segmentId, setSegmentId] = useState('');
-  const [sequences, setSequences] = useState<{ id: string; name: string }[]>([]);
   const [showBulkSequence, setShowBulkSequence] = useState(false);
   const [bulkSequenceId, setBulkSequenceId] = useState('');
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=lead', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
-    return () => abort.abort();
-  }, []);
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=lead', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
-    return () => abort.abort();
-  }, []);
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/sequences', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load sequences', new Error(r.message)); else if (r.status === 'ok') setSequences(r.data.data ?? []); });
-    return () => abort.abort();
-  }, []);
-
-  // Load the product & service catalogue so a lead can name what it is a
-  // request for. Non-fatal: the pickers simply stay empty if these fail.
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/products?limit=200', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load products', new Error(r.message)); else if (r.status === 'ok') setProducts(r.data.data ?? []); });
-    // The services route returns { services: [...] } while products returns
-    // { data: [...] } — tolerate both until the response shapes are unified.
-    void fetchJsonSafe<{ data?: { id: string; name: string }[]; services?: { id: string; name: string }[] }>('/api/tenant/services?limit=200', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load services', new Error(r.message)); else if (r.status === 'ok') setServices(r.data.data ?? r.data.services ?? []); });
-    // Existing contacts, so a lead can be tied to one instead of creating a new.
-    void fetchJsonSafe<{ data?: { id: string; firstName?: string; lastName?: string; email?: string }[] }>('/api/tenant/contacts?limit=200', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('leads-client', 'Failed to load contacts', new Error(r.message)); else if (r.status === 'ok') setContactOptions(r.data.data ?? []); });
-    return () => abort.abort();
-  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -350,6 +307,14 @@ export default function LeadsClient({
           </Button>
         </div>
       </div>
+      {Object.keys(optionErrors).length > 0 && (
+        <div className="-mt-3">
+          <InlineErrorState
+            message={`Lead option lists could not be loaded (${Object.keys(optionErrors).join(', ')}). An empty picker here would be a lie.`}
+            onRetry={retryOptions}
+          />
+        </div>
+      )}
 
       {/* Pipeline Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
