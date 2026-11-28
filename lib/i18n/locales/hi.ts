@@ -98,4 +98,7 @@ export const hi = {
     createdBy: '{{user}} द्वारा बनाया गया',
     page: 'पृष्ठ {{current}} का {{total}}',
   },
+  notifications: {
+    viewAll: 'सभी सूचनाएँ देखें',
+  },
 } as const;

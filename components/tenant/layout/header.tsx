@@ -19,6 +19,8 @@ import { deriveViewState } from '@/lib/view-state';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import BugReportButton from '@/components/shared/bug-report-button';
+import LocaleSwitcher from '@/components/shared/locale-switcher';
+import { useTranslation } from '@/lib/i18n/provider';
 import type {
   TenantInfo, ProfileInfo, HeaderNotification, HeaderSearchResults,
 } from './types';
@@ -40,6 +42,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [notifError, setNotifError] = useState<string | null>(null);
   const { theme, setTheme }       = useTheme();
   const router                    = useRouter();
+  const { t }                     = useTranslation();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);
   const searchAbortRef            = useRef<AbortController | null>(null);
@@ -365,7 +368,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               
               <Link href="/tenant/notifications" onClick={() => setShowNotifPanel(false)}
                 className="block py-2.5 text-center text-xs font-bold text-muted-foreground hover:text-violet-600 bg-muted/10 hover:bg-muted/30 border-t border-border transition-all capitalize">
-                View all notifications
+                {t('notifications.viewAll')}
               </Link>
             </div>
           )}
@@ -394,6 +397,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               <div className="px-4 py-3 border-b border-border bg-muted/20">
                 <p className="text-sm font-semibold truncate">{profile?.full_name || 'User'}</p>
                 <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
+              </div>
+              <div className="px-4 py-2 border-b border-border">
+                <LocaleSwitcher />
               </div>
               <div className="py-1">
                 <Link href="/tenant/settings/profile" onClick={()=>setShowProfile(false)}

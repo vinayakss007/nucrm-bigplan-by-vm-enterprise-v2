@@ -11,6 +11,7 @@ import {
   Star, Filter, Settings, Command,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n/provider';
 import { clientLogError } from '@/lib/client-logger';
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -26,6 +27,20 @@ interface Props {
   _roleSlug?: string;
 }
 
+const LABEL_KEYS: Record<string, string> = {
+  Dashboard: 'navigation.dashboard',
+  Leads: 'navigation.leads',
+  Contacts: 'navigation.contacts',
+  Companies: 'navigation.companies',
+  Deals: 'navigation.deals',
+  Tasks: 'navigation.tasks',
+  Calendar: 'navigation.calendar',
+  Settings: 'navigation.settings',
+  Reports: 'navigation.reports',
+  Invoices: 'navigation.invoices',
+  Quotes: 'navigation.quotes',
+};
+
 const PIN_KEY = 'nucrm.sidebar.pinned';
 const FILTER_KEY = 'nucrm.sidebar.query';
 const SECTION_KEY = 'nucrm.sidebar.sections';
@@ -33,6 +48,7 @@ const SECTION_KEY = 'nucrm.sidebar.sections';
 export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
   const { hasModule } = useModules();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -211,7 +227,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         {flatTop.map(({href, icon:Icon, label, exact}) => {
           const active = isActive(href, exact);
           return (
-            <Link key={href} href={href} title={label}
+            <Link key={href} href={href} title={t(LABEL_KEYS[label] ?? label)}
           className={cn('w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200',
                  active ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 shadow-sm shadow-violet-500/20' : 'text-foreground/80 hover:scale-110 hover:bg-accent hover:text-foreground')}>
               <Icon className="w-5 h-5" />
@@ -241,7 +257,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
               ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/20'
               : 'text-foreground hover:scale-[1.02] hover:bg-accent hover:shadow-sm hover:shadow-violet-500/10')}>
           <Icon className={cn('w-5 h-5 shrink-0', active && 'text-violet-600 dark:text-violet-400')} />
-          <span className="flex-1 truncate">{label}</span>
+          <span className="flex-1 truncate">{t(LABEL_KEYS[label] ?? label)}</span>
           {shortcut && !isPinned && (
             <span className="text-xs font-bold text-foreground/60 group-hover:text-foreground/80 transition-colors">
               {shortcut}
