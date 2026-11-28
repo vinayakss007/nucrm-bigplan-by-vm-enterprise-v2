@@ -20,6 +20,7 @@ import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
 const REPORT_LOCK_KEY = 'cron:scheduled-report-delivery';
 const REPORT_LOCK_TTL = 120; // 2 minutes
+const REPORT_CONCURRENCY = 5;
 
 /**
  * Scheduled Report Delivery cron
@@ -225,7 +226,10 @@ async function cronRouteHandler(req: NextRequest) {
 
       totalDue += dueRows.length;
 
-      for (const report of dueRows) {
+      // Bound concurrency: export + PDF + email are slow network/CPU steps, so
+      // a serial loop can hold the cron lock past its TTL (#4063).
+      for (let i = 0; i < dueRows.length; i += REPORT_CONCURRENCY) {
+        await Promise.all(dueRows.slice(i, i + REPORT_CONCURRENCY).map(async (report) => {
         try {
           // #1276: A scheduled report is tenant-scoped and already authorized at
           // scheduling time, so it runs with a system/cron identity rather than an
@@ -327,6 +331,7 @@ async function cronRouteHandler(req: NextRequest) {
             updatedAt: new Date(),
           }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.status, 'active'))); // #3407
         }
+        }));
       }
     });
 
