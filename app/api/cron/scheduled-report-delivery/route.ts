@@ -20,7 +20,6 @@ import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
 const REPORT_LOCK_KEY = 'cron:scheduled-report-delivery';
 const REPORT_LOCK_TTL = 120; // 2 minutes
-const REPORT_CONCURRENCY = 5;
 
 /**
  * Scheduled Report Delivery cron
@@ -356,3 +355,5 @@ async function cronRouteHandler(req: NextRequest) {
 
 // #3410: every attempt — run, failure, or lock-refusal — lands in cron_runs.
 export const POST = instrumentCronRun('scheduled-report-delivery', cronRouteHandler);
+
+const REPORT_CONCURRENCY = 5;
