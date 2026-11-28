@@ -35,7 +35,7 @@ async function portalExplicitlyDisabled(tenantId: string): Promise<boolean> {
         ))
         .limit(1);
       const raw = row?.value;
-      const config = typeof raw === 'string' ? JSON.parse(raw) as Record<string, unknown> : raw;
+      const config = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown> | null;
       return config?.['enabled'] === false;
     });
   } catch {
