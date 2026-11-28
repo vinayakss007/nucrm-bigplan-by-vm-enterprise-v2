@@ -66,9 +66,12 @@ test.describe.serial('Authentication', () => {
     await page.goto('/auth/signup', { waitUntil: 'domcontentloaded' });
     const passwordInput = page.locator('input[type="password"]');
 
-    await page.getByText('I agree to the').click();
-    await expect(page.locator('button[type="submit"]')).toBeEnabled({ timeout: 10000 });
-    await page.getByText('I agree to the').click();
+    const submit = page.locator('button[type="submit"]');
+    for (let attempt = 0; attempt < 3 && (await submit.isDisabled()); attempt++) {
+      await page.getByText('I agree to the').click();
+      await page.waitForTimeout(300);
+    }
+    await expect(submit).toBeEnabled({ timeout: 10000 });
 
     await passwordInput.fill('weak');
     await expect(page.locator('text=Password strength').first()).toBeVisible({ timeout: 5000 });

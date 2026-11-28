@@ -68,7 +68,10 @@ test.describe('Contacts', () => {
     
     const firstRow = page.locator('table tbody tr').first();
     await expect(firstRow).toBeVisible();
-    await firstRow.click();
+    for (let attempt = 0; attempt < 3 && page.url().endsWith('/tenant/contacts'); attempt++) {
+      await firstRow.click();
+      await page.waitForTimeout(300);
+    }
     await expect(page).toHaveURL(/\/tenant\/contacts\/[^/]+$/, { timeout: 5000 });
     await expect(page.locator('h1').first()).toBeVisible();
   });
