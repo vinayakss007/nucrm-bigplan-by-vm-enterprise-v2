@@ -17,6 +17,13 @@ import { plans, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import type { AuthContext } from '@/lib/auth/middleware';
 
+const COARSE_AI_FEATURE = 'ai_assistant';
+
+function grantsFeature(features: string[], featureKey: string): boolean {
+  return features.includes(featureKey)
+    || (featureKey.startsWith('ai_') && features.includes(COARSE_AI_FEATURE));
+}
+
 /**
  * Check if a tenant's plan includes a specific AI feature key.
  * Returns null if allowed, NextResponse if blocked.
@@ -43,7 +50,7 @@ export async function requireAiFeature(
 
   const features = (row?.features as string[]) ?? [];
 
-  if (!features.includes(featureKey)) {
+  if (!grantsFeature(features, featureKey)) {
     return NextResponse.json(
       {
         error: `This AI feature is not available on your current plan.`,
@@ -74,5 +81,5 @@ export async function planHasFeature(
     .then(r => r[0]);
 
   const features = (row?.features as string[]) ?? [];
-  return features.includes(featureKey);
+  return grantsFeature(features, featureKey);
 }

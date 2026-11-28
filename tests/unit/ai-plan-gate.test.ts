@@ -71,6 +71,27 @@ describe('AI Plan Gate', () => {
       expect(result).toBeNull();
     });
 
+    it('allows a fine-grained AI feature when the plan has ai_assistant', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                then: vi.fn((fn: (r: unknown[]) => unknown) => fn([{ features: ['ai_assistant', 'basic_crm'] }])),
+              })),
+            })),
+          })),
+        })),
+      });
+
+      const { requireAiFeature } = await import('@/lib/ai/plan-gate');
+      const ctx = { isSuperAdmin: false, tenantId: 't1' } as Parameters<typeof requireAiFeature>[0];
+      expect(await requireAiFeature(ctx, 'ai_sentiment')).toBeNull();
+      expect(await requireAiFeature(ctx, 'ai_insights')).toBeNull();
+      expect(await requireAiFeature(ctx, 'sso')).not.toBeNull();
+    });
+
     it('handles null row gracefully', async () => {
       const { db } = await import('@/drizzle/db');
       (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -130,6 +151,26 @@ describe('AI Plan Gate', () => {
       const { planHasFeature } = await import('@/lib/ai/plan-gate');
       const result = await planHasFeature('t1', 'ai_advanced');
       expect(result).toBe(false);
+    });
+
+    it('treats ai_assistant as granting every fine-grained AI feature', async () => {
+      const { db } = await import('@/drizzle/db');
+      (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                then: vi.fn((fn: (r: unknown[]) => unknown) => fn([{ features: ['ai_assistant'] }])),
+              })),
+            })),
+          })),
+        })),
+      });
+
+      const { planHasFeature } = await import('@/lib/ai/plan-gate');
+      expect(await planHasFeature('t1', 'ai_insights')).toBe(true);
+      expect(await planHasFeature('t1', 'ai_summarize')).toBe(true);
+      expect(await planHasFeature('t1', 'api_access')).toBe(false);
     });
   });
 });
