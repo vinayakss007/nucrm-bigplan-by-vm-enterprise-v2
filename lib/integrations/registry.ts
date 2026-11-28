@@ -180,59 +180,63 @@ async function handleMailgun(instance: IntegrationInstance, action: string, para
   return { success: false, error: `Unknown action: ${action}` };
 }
 
-async function handleOpenAI(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
-  const apiKey = instance.config['api_key'];
-  const model = instance.config['model'] || 'gpt-4o-mini';
-  const baseUrl = 'https://api.openai.com/v1';
-
-  if (action === 'generate') {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+async function openAiCompletion(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  temperature: number,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  let res: Response;
+  try {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: params['prompt'] }],
-        temperature: params['temperature'] ?? 0.7,
+        messages: [{ role: 'user', content: prompt }],
+        temperature,
       }),
       signal: AbortSignal.timeout(30_000),
     });
-    const data = await res.json();
-    if (!res.ok) return { success: false, error: data.error?.message };
-    return { success: true, data: { text: data.choices?.[0]?.message?.content } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'OpenAI request failed' };
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data?.error?.message || data?.message || `OpenAI returned HTTP ${res.status}`;
+    return { ok: false, error: message };
+  }
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) {
+    return { ok: false, error: 'OpenAI returned no completion text' };
+  }
+  return { ok: true, text };
+}
+
+async function handleOpenAI(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
+  const apiKey = String(instance.config['api_key'] ?? '');
+  const model = String(instance.config['model'] || 'gpt-4o-mini');
+
+  if (action === 'generate') {
+    const result = await openAiCompletion(apiKey, model, String(params['prompt'] ?? ''), Number(params['temperature'] ?? 0.7));
+    return result.ok ? { success: true, data: { text: result.text } } : { success: false, error: result.error };
   }
 
   if (action === 'summarize') {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: `Please summarize the following text concisely:\n\n${params['text']}` }],
-        temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    const data = await res.json();
-    return { success: true, data: { summary: data.choices?.[0]?.message?.content } };
+    const result = await openAiCompletion(apiKey, model, `Please summarize the following text concisely:\n\n${String(params['text'] ?? '')}`, 0.3);
+    return result.ok ? { success: true, data: { summary: result.text } } : { success: false, error: result.error };
   }
 
   if (action === 'draft_email') {
     const tone = params['tone'] || 'professional';
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [{
-          role: 'user',
-          content: `Write a ${tone} email reply to this conversation:\n\n${params['context']}\n\nWrite only the email body, no preamble.`
-        }],
-        temperature: 0.7,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    const data = await res.json();
-    return { success: true, data: { draft: data.choices?.[0]?.message?.content } };
+    const result = await openAiCompletion(
+      apiKey,
+      model,
+      `Write a ${tone} email reply to this conversation:\n\n${String(params['context'] ?? '')}\n\nWrite only the email body, no preamble.`,
+      0.7,
+    );
+    return result.ok ? { success: true, data: { draft: result.text } } : { success: false, error: result.error };
   }
 
   return { success: false, error: `Unknown action: ${action}` };
