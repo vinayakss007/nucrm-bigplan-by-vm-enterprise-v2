@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { openExternalUrl } from '@/lib/sanitize';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -375,7 +376,7 @@ export default function SubscriptionPage() {
                   // #3408: a refused portal request can no longer open a blank tab.
                   try {
                     const data = await fetchJsonOrThrow<{ url: string }>('/api/tenant/billing/portal', { method: 'POST' });
-                    window.open(data.url, '_blank');
+                    openExternalUrl(data.url);
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : 'Could not open billing portal');
                   }
