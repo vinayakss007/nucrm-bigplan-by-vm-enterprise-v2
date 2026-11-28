@@ -939,7 +939,7 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'that forgot withTenantContext(). #3741 added one more: the default sla_policies row is '
       + 'inserted inside sweepTenants, which sets the tenant GUC on the pinned connection, so the '
       + 'write is context-bound at runtime even though a static walk cannot see it.',
-    maxFindings: 61,
+    maxFindings: 60,
   },
 ];
 
