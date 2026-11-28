@@ -243,13 +243,13 @@ export default function ContactDetailClient({
   tasks: initialTasks, companies, teamMembers, permissions, userId,
   invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
   callLogs: initialCallLogs=[],
-  tickets=[], followUps=[], sourceLead=null,
+  tickets=[], followUps=[], followUpsLoadFailed=false, sourceLead=null,
 }: {
   contact: ContactDetailData; initialActivities: ActivityRow[]; deals: ContactDeal[]; tasks: ContactTask[];
   companies: Pick<Company, 'id' | 'name'>[]; teamMembers: TeamMemberOption[];
   permissions: { canEdit: boolean; canDelete: boolean; canAssign: boolean }; userId: string;
   invoices?: BillingDoc[]; orders?: BillingDoc[]; contracts?: BillingDoc[]; subscriptions?: BillingDoc[]; quotes?: BillingDoc[]; callLogs?: CallLogRow[];
-  tickets?: TicketRow[]; followUps?: FollowUpRow[];
+  tickets?: TicketRow[]; followUps?: FollowUpRow[]; followUpsLoadFailed?: boolean;
   sourceLead?: { id: string; name: string } | null;
 }) {
   const [contact, setContact]       = useState(initialContact);
@@ -596,7 +596,7 @@ export default function ContactDetailClient({
               { id:'activity', label:`Activity (${activities.length})` },
               { id:'leads',    label:`Leads${contactLeads.length ? ` (${contactLeads.length})` : ''}` },
               { id:'tasks',    label:`Tasks (${tasks.filter(t=>!t.completed).length} open)` },
-              { id:'followups',label:`Follow-ups (${followUps.filter(f=>f.status!=='completed'&&f.status!=='done').length} open)`, icon: ListChecks },
+              { id:'followups',label:followUpsLoadFailed?'Follow-ups':`Follow-ups (${followUps.filter(f=>f.status!=='completed'&&f.status!=='done').length} open)`, icon: ListChecks },
               { id:'deals',    label:`Deals (${deals.length})` },
               { id:'tickets',  label:`Tickets (${tickets.filter(t=>t.status!=='closed'&&t.status!=='resolved').length} open)`, icon: Ticket },
               { id:'calls',    label:`Calls (${callLogs.length})`, icon: PhoneCall },
@@ -816,7 +816,9 @@ export default function ContactDetailClient({
                 <p className="text-sm font-semibold">Follow-ups</p>
                 <span className="text-xs text-muted-foreground">Scheduled next steps for this contact</span>
               </div>
-              {!followUps.length ? (
+              {followUpsLoadFailed ? (
+                <div role="alert" className="px-5 py-10 text-center text-sm text-amber-700 dark:text-amber-300">Follow-ups could not be loaded — an empty list here would be a lie.</div>
+              ) : !followUps.length ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No follow-ups scheduled</div>
               ) : (
                 <div className="divide-y divide-border">
