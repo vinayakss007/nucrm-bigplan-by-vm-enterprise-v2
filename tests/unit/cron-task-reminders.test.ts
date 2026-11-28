@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CronTenantSweep } from '@/lib/cron/tenant-scope';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
@@ -54,7 +56,7 @@ vi.mock('@/lib/cron/tenant-scope', () => ({
 
 // Records every condition node the route attaches to a SELECT (from / join /
 // where) so tenant filters can be asserted without a live connection.
-type SelectCall = { nodes: Array<{ kind: string; cond: unknown }>; rows: unknown[]; fromTable: string };
+type SelectCall = { nodes: Array<{ kind: string; cond: unknown }>; rows: unknown[]; fromTable: string; limit?: number };
 const selectCalls: SelectCall[] = [];
 let dueTodayRows: unknown[] = [];
 let overdueRows: unknown[] = [];
@@ -84,18 +86,20 @@ vi.mock('@/drizzle/db', () => ({
         sawLeftJoin = true;
         return chain;
       };
+      chain.limit = (n: number) => { call.limit = n; return chain; };
       chain.where = (cond: unknown) => {
         call.nodes.push({ kind: 'where', cond });
+        return chain;
+      };
+      chain.then = (onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) => {
         if (call.fromTable === 'notifications') {
-          // The dedupe marker lookup — rows are already in their final shape.
           call.rows = remindedRows;
-          return Promise.resolve(call.rows);
+        } else {
+          // dueToday query leftJoins contacts; the overdue query does not.
+          const base = sawLeftJoin ? dueTodayRows : overdueRows;
+          call.rows = base.map((r) => ({ ...(r as Record<string, unknown>), tenantId: currentSweepTenant }));
         }
-        // dueToday query leftJoins contacts; the overdue query does not.
-        const base = sawLeftJoin ? dueTodayRows : overdueRows;
-        // Rows come back scoped to whichever tenant the sweep is running for.
-        call.rows = base.map((r) => ({ ...(r as Record<string, unknown>), tenantId: currentSweepTenant }));
-        return Promise.resolve(call.rows);
+        return Promise.resolve(call.rows).then(onFulfilled, onRejected);
       };
       return chain;
     },
@@ -174,6 +178,19 @@ describe('POST /api/cron/task-reminders', () => {
     mockCreateNotification.mockResolvedValue(true);
     mockSendEmail.mockClear();
     mockSendEmail.mockResolvedValue({ success: true, provider: 'resend', messageId: 'msg-1' });
+  });
+
+  it('uses index-friendly half-open ranges and caps per-tenant batches (#4059)', async () => {
+    const routeSrc = readFileSync(join(process.cwd(), 'app/api/cron/task-reminders/route.ts'), 'utf8');
+    expect(routeSrc).toContain('gte(tasks.dueDate, dayStart)');
+    expect(routeSrc).toContain('lt(tasks.dueDate, nextDayStart)');
+    expect(routeSrc).not.toContain('(tasks.dueDate)::date');
+    expect(routeSrc).not.toContain('(notifications.createdAt)::date');
+
+    await runCron();
+    const taskQueries = selectCalls.filter(c => c.fromTable === 'tasks');
+    expect(taskQueries).toHaveLength(2);
+    for (const query of taskQueries) expect(query.limit).toBe(200);
   });
 
   it('runs the due/overdue work inside a per-tenant sweep and reports the counters', async () => {
@@ -312,7 +329,7 @@ describe('POST /api/cron/task-reminders', () => {
       // marker lookup binds today's UTC date.
       let res = await runCron();
       expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 0 });
-      expect(markerLookupPredicates()).toContain('2026-06-15');
+      expect(markerLookupPredicates()).toContain('2026-06-15T00:00:00.000Z');
 
       // Run 2, same day: the run-1 notification IS the marker -> nothing fires.
       selectCalls.length = 0;
@@ -328,7 +345,7 @@ describe('POST /api/cron/task-reminders', () => {
       remindedRows = [];
       res = await runCron();
       expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 0 });
-      expect(markerLookupPredicates()).toContain('2026-06-16');
+      expect(markerLookupPredicates()).toContain('2026-06-16T00:00:00.000Z');
 
       // One notification per day per task across three hourly-style runs.
       expect(mockCreateNotification).toHaveBeenCalledTimes(2);
@@ -438,11 +455,13 @@ describe('POST /api/cron/task-reminders', () => {
 function renderValues(node: unknown, out: string[] = [], depth = 0): string {
   if (depth > 12) return out.join(' ');
   if (typeof node === 'string') { out.push(node); return out.join(' '); }
+  if (node instanceof Date) { out.push(node.toISOString()); return out.join(' '); }
   if (node === null || typeof node !== 'object') return out.join(' ');
   if (Array.isArray(node)) { for (const n of node) renderValues(n, out, depth + 1); return out.join(' '); }
   const rec = node as Record<string, unknown>;
   if (typeof rec['columnType'] === 'string' && typeof rec['name'] === 'string') { out.push(String(rec['name'])); return out.join(' '); }
-  if ('value' in rec && typeof rec['value'] !== 'object') out.push(String(rec['value']));
+  if ('value' in rec && rec['value'] instanceof Date) out.push(rec['value'].toISOString());
+  else if ('value' in rec && typeof rec['value'] !== 'object') out.push(String(rec['value']));
   if (Array.isArray(rec['queryChunks'])) renderValues(rec['queryChunks'], out, depth + 1);
   if (rec['encoder']) renderValues(rec['encoder'], out, depth + 1);
   return out.join(' ');
