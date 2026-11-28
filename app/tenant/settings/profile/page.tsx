@@ -24,11 +24,16 @@ interface UserProfile {
   email_verified?: boolean | null;
 }
 
+const PREF_EVENTS = {
+  email_task_reminders: 'task.due_today',
+  email_deal_updates: 'deal.stage_changed',
+  email_mentions: 'comment.mentioned_me',
+} as const;
+
 export default function ProfileSettingsPage() {
   const [userOverride, setUserOverride] = useState<UserProfile | null>(null);
   const [profile, setProfile] = useState({ full_name:'', phone:'', timezone:'UTC', avatar_url:'' });
   const [password, setPassword] = useState({ current:'', newPass:'', confirm:'' });
-  const [prefs, setPrefs] = useState({ email_task_reminders:true, email_deal_updates:true, email_mentions:true, browser_notifications:false });
   const [showPass, setShowPass] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
@@ -38,6 +43,35 @@ export default function ProfileSettingsPage() {
   // never answered as a read still in flight, so an outage left the operator
   // staring at a skeleton forever (the skeleton never resolves: nothing retries it).
   const { data, isLoading: loading, error: meError, refetch } = useApiQuery<{ user?: UserProfile }>(['tenant', 'me'], '/api/tenant/me');
+  const matrixQuery = useApiQuery<{ matrix?: Record<string, Record<string, boolean>>; updatedAt?: string | null }>(
+    ['tenant', 'notification-matrix'], '/api/tenant/notifications/matrix');
+  const matrix = matrixQuery.data?.matrix ?? {};
+  const prefs = {
+    email_task_reminders: matrix['task.due_today']?.email ?? true,
+    email_deal_updates: matrix['deal.stage_changed']?.email ?? true,
+    email_mentions: matrix['comment.mentioned_me']?.email ?? true,
+  };
+
+  const togglePref = async (k: keyof typeof PREF_EVENTS) => {
+    const event = PREF_EVENTS[k];
+    const current = matrix[event] ?? {};
+    try {
+      await fetchJsonOrThrow('/api/tenant/notifications/matrix', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matrix: { [event]: {
+            in_app: current.in_app ?? true,
+            email: !prefs[k],
+            telegram: current.telegram ?? false,
+          } },
+          ...(matrixQuery.data?.updatedAt ? { expectedUpdatedAt: matrixQuery.data.updatedAt } : {}),
+        }),
+      });
+      await matrixQuery.refetch();
+      toast.success('Notification preference saved');
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to save preference'); }
+  };
   const fetchedUser = data?.user ?? null;
   // Merge local edits saved via the profile mutation on top of the fetched user.
   const user: UserProfile | null = fetchedUser ? { ...fetchedUser, ...userOverride } : userOverride;
@@ -189,7 +223,7 @@ export default function ProfileSettingsPage() {
         ].map(({k,label,desc})=>(
           <div key={k} className="flex items-center justify-between py-1.5">
             <div><p className="text-sm">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>
-            <button type="button" onClick={()=>setPrefs(p=>({...p,[k]:!p[k as keyof typeof p]}))}
+            <button type="button" onClick={()=>void togglePref(k as keyof typeof PREF_EVENTS)}
               className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',prefs[k as keyof typeof prefs]?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400':'bg-muted text-muted-foreground')}>
               {prefs[k as keyof typeof prefs]?'On':'Off'}
             </button>

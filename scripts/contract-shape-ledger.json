@@ -170,6 +170,7 @@
     "workspace_defaults"
   ],
   "app/tenant/settings/profile/page.tsx": [
+    "matrix",
     "user"
   ],
   "app/tenant/settings/security/page.tsx": [
