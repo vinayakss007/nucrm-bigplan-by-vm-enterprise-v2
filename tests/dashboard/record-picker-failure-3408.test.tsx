@@ -49,3 +49,19 @@ describe('#3408: record picker distinguishes a failed search from no matches', (
     expect(screen.queryByText(/Search could not be completed/)).toBeNull();
   });
 });
+
+describe('a preselected record shows its name instead of the literal word "Selected"', () => {
+  it('hydrates the label from the record endpoint', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(resp({ id: 'C1', first_name: 'Ada', last_name: 'Lovelace' })));
+    render(<RecordPicker kind="contact" value="C1" onChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Ada Lovelace')).toBeTruthy());
+    expect(screen.queryByText('Selected')).toBeNull();
+  });
+
+  it('also accepts the enveloped record shape', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(resp({ data: { id: 'D1', title: 'Renewal deal' } })));
+    render(<RecordPicker kind="deal" value="D1" onChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Renewal deal')).toBeTruthy());
+    expect(screen.queryByText('Selected')).toBeNull();
+  });
+});

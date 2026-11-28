@@ -67,6 +67,23 @@ export function RecordPicker({
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!value) {
+      setSelectedLabel(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetchJsonSafe<unknown>(`${ENDPOINT[kind]}/${value}`, { signal: controller.signal })
+      .then(result => {
+        if (result.status !== 'ok') return;
+        const body = result.data as Record<string, unknown> | null;
+        if (!body || typeof body !== 'object') return;
+        const row = ('data' in body ? body.data : body) as RecordRow | null;
+        if (row && typeof row === 'object') setSelectedLabel(toLabel(kind, row).label);
+      });
+    return () => controller.abort();
+  }, [value, kind]);
+
   // Close on outside click.
   useEffect(() => {
     if (!open) return;
