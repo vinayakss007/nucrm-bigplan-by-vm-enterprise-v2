@@ -7,7 +7,6 @@ import { verifyCronSecret } from '@/lib/auth/cron';
 import { logError } from '@/lib/errors-server';
 import { instrumentCronRun, refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { aiActivity } from '@/drizzle/schema/ai';
 import { aiInsights } from '@/drizzle/schema';
 import { and, eq, gte, sql } from 'drizzle-orm';
@@ -16,6 +15,7 @@ import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { apiFail } from '@/lib/api/api-envelope';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 const WINDOW_DAYS = 7;
 const LOCK_SECONDS = 7 * 24 * 60 * 60;
@@ -40,15 +40,18 @@ async function cronRouteHandler(request: NextRequest) {
     let notificationsSent = 0;
 
     const sweep = await sweepTenants('cron/ai-weekly-digest', async (tenantId) => {
-      const [[runRow], [insightRow], actingResult] = await Promise.all([
-        db.select({
-          runs: sql<number>`count(*)::int`,
-          successes: sql<number>`count(*) FILTER (WHERE ${aiActivity.status} = 'success')::int`,
-        }).from(aiActivity).where(and(eq(aiActivity.tenantId, tenantId), gte(aiActivity.createdAt, since))),
-        db.select({ count: sql<number>`count(*)::int` })
-          .from(aiInsights).where(and(eq(aiInsights.tenantId, tenantId), gte(aiInsights.createdAt, since))),
-        db.execute(sql`SELECT current_setting('app.current_user', true) AS user_id`),
-      ]);
+      const [[runRow], [insightRow], actingResult] = await withTenantContext(
+        tenantId, NO_USER_SENTINEL,
+        async (tx) => Promise.all([
+          tx.select({
+            runs: sql<number>`count(*)::int`,
+            successes: sql<number>`count(*) FILTER (WHERE ${aiActivity.status} = 'success')::int`,
+          }).from(aiActivity).where(and(eq(aiActivity.tenantId, tenantId), gte(aiActivity.createdAt, since))),
+          tx.select({ count: sql<number>`count(*)::int` })
+            .from(aiInsights).where(and(eq(aiInsights.tenantId, tenantId), gte(aiInsights.createdAt, since))),
+          tx.execute(sql`SELECT current_setting('app.current_user', true) AS user_id`),
+        ]),
+      );
 
       const stats: DigestStats = {
         runs: runRow?.runs ?? 0,
