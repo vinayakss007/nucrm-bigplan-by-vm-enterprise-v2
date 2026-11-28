@@ -83,7 +83,7 @@ export default function PreferencesPage() {
 
   // #1328: load preferences via TanStack Query (was raw fetch + useEffect).
   // retry:false — endpoint returns empty defaults when unset.
-  const { data, isLoading: loading } = useApiQuery<PreferencesResponse>(
+  const { data, isLoading: loading, error } = useApiQuery<PreferencesResponse>(
     ['user', 'preferences'],
     '/api/user/preferences',
     { retry: false },
@@ -161,6 +161,7 @@ export default function PreferencesPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {error && <div role="alert" className="text-sm text-red-600 dark:text-red-400">Preferences could not be loaded — the defaults shown below are not your saved settings. Save is disabled until the read succeeds.</div>}
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -169,8 +170,8 @@ export default function PreferencesPage() {
             How NuCRM looks and behaves for you. Workspace admins set defaults; your settings override them.
           </p>
         </div>
-        <button onClick={resetToWorkspace} type="button"
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+        <button onClick={resetToWorkspace} type="button" disabled={!!error}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 disabled:opacity-50">
           <RotateCcw className="w-3 h-3" /> Reset to workspace defaults
         </button>
       </div>
@@ -421,7 +422,7 @@ export default function PreferencesPage() {
           className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
           Discard
         </button>
-        <button onClick={save} disabled={saving || !dirty}
+        <button onClick={save} disabled={saving || !dirty || !!error}
           className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving…' : 'Save preferences'}
