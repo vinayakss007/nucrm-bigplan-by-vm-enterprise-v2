@@ -250,11 +250,11 @@ async function cronRouteHandler(request: NextRequest) {
 
                 const [maxRow] = await tx
                   .select({
-                    maxNum: sql<number>`COALESCE(MAX(
-                      CASE WHEN ${invoices.invoiceNumber} ~ '^INV-[0-9]+$'
-                      THEN CAST(SUBSTRING(${invoices.invoiceNumber} FROM 5) AS integer)
-                      ELSE 0 END
-                    ), 0)`,
+                    // MAX over the indexed invoice_number column lets Postgres
+                    // take a loose index scan; the old regex CASE forced a full
+                    // scan of every invoice on every template (#4066). Numbers
+                    // are zero-padded, so lexicographic MAX is numeric MAX.
+                    maxNum: sql<number>`COALESCE(CAST(SUBSTRING(MAX(${invoices.invoiceNumber}) FROM 5) AS integer), 0)`,
                   })
                   .from(invoices)
                   .where(eq(invoices.tenantId, tenantId));
