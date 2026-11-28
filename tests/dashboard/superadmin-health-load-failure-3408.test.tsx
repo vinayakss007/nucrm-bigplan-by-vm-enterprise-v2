@@ -101,3 +101,37 @@ describe('#3408: superadmin health panel does not report "ALL UP" on a failed lo
     expect(screen.queryByText('ALL UP')).toBeNull();
   });
 });
+
+describe('#3408: superadmin dashboard names failed platform reads instead of an all-clear', () => {
+  const renderWith = (flags: Record<string, boolean>) => render(
+    <SuperAdminDashboardClient
+      stats={{}} recentTenants={[]} recentErrors={[]} expiringSoon={[]}
+      userName="Admin" {...flags}
+    />,
+  );
+
+  it('announces every failed read and says zeros/empties are not evidence', () => {
+    stubFetch(json({}));
+    renderWith({ statsFailed: true, tenantsFailed: true, errorsFailed: true, trialsFailed: true });
+    const alert = screen.getAllByRole('alert').find(el => /Platform data could not be read/.test(el.textContent ?? ''));
+    expect(alert).toBeTruthy();
+    for (const name of ['platform stats', 'recent tenants', 'recent errors', 'expiring trials']) {
+      expect(alert?.textContent).toContain(name);
+    }
+    expect(alert?.textContent).toContain('not evidence');
+  });
+
+  it('a failed tenants read does not say "No tenants yet"', () => {
+    stubFetch(json({}));
+    renderWith({ tenantsFailed: true });
+    expect(screen.queryByText('No tenants yet')).toBeNull();
+    expect(screen.getByText('Recent tenants could not be loaded.')).toBeTruthy();
+  });
+
+  it('healthy server reads produce no platform-data alert', () => {
+    stubFetch(json({ checks }));
+    renderWith({});
+    expect(screen.queryByText(/Platform data could not be read/)).toBeNull();
+    expect(screen.getByText('No tenants yet')).toBeTruthy();
+  });
+});
