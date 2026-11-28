@@ -8,7 +8,7 @@ describe('contact-deal sentiment batching (#4067)', () => {
   it('writes all open deals with one inArray UPDATE', () => {
     expect(src).toContain('inArray(deals.id, dealIds)');
     expect(src).not.toContain('for (const deal of contactDeals)');
-    expect(src).toContain('updateDealSentiment(dealId, tenantId, sentiment)');
+    expect(src).toContain('export async function updateDealSentiment(');
   });
 
   it('keeps the tenant and tombstone predicates on the bulk update', () => {
