@@ -60,28 +60,24 @@ export async function processWarmUp(): Promise<WarmUpResult> {
     // Get all active warm-up configs
     const configsWithSentToday = await db.select({
       config: emailWarmupConfigs,
-      sentToday: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
-                 WHERE l.config_id = ${emailWarmupConfigs.id}
-                   AND l.direction = 'outbound'
-                   AND l.created_at >= CURRENT_DATE
-                   AND l.status = 'sent')`,
-      bouncesLast7Days: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
-                 WHERE l.config_id = ${emailWarmupConfigs.id}
-                   AND l.direction = 'outbound'
-                   AND l.status = 'failed'
-                   AND l.created_at >= CURRENT_DATE - INTERVAL '7 days')`,
-      sendsLast7Days: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
-                 WHERE l.config_id = ${emailWarmupConfigs.id}
-                   AND l.direction = 'outbound'
-                   AND l.status = 'sent'
-                   AND l.created_at >= CURRENT_DATE - INTERVAL '7 days')`
+      sentToday: sql<number>`COALESCE(SUM(CASE WHEN ${emailWarmupLogs.direction} = 'outbound'
+        AND ${emailWarmupLogs.status} = 'sent'
+        AND ${emailWarmupLogs.createdAt} >= CURRENT_DATE THEN 1 ELSE 0 END), 0)::int`,
+      bouncesLast7Days: sql<number>`COALESCE(SUM(CASE WHEN ${emailWarmupLogs.direction} = 'outbound'
+        AND ${emailWarmupLogs.status} = 'failed'
+        AND ${emailWarmupLogs.createdAt} >= CURRENT_DATE - INTERVAL '7 days' THEN 1 ELSE 0 END), 0)::int`,
+      sendsLast7Days: sql<number>`COALESCE(SUM(CASE WHEN ${emailWarmupLogs.direction} = 'outbound'
+        AND ${emailWarmupLogs.status} = 'sent'
+        AND ${emailWarmupLogs.createdAt} >= CURRENT_DATE - INTERVAL '7 days' THEN 1 ELSE 0 END), 0)::int`
     })
     .from(emailWarmupConfigs)
     .innerJoin(tenants, eq(tenants.id, emailWarmupConfigs.tenantId))
+    .leftJoin(emailWarmupLogs, eq(emailWarmupLogs.configId, emailWarmupConfigs.id))
     .where(and(
       eq(emailWarmupConfigs.isActive, true),
       eq(tenants.status, 'active')
-    ));
+    ))
+    .groupBy(emailWarmupConfigs.id);
 
     for (const { config, sentToday, bouncesLast7Days, sendsLast7Days } of configsWithSentToday) {
       try {
