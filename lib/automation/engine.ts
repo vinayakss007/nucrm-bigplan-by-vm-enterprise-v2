@@ -37,9 +37,9 @@ import {
 } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
-import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
-import { chat, GatewayError } from '@/lib/ai/gateway';
+import { runAiDraftAction } from './ai-draft-action';
+import { str, interpolate, interpolateHtml } from './interpolate';
 import { captureError } from '@/lib/capture-error';
 import type { AutomationCondition, AutomationAction } from './types';
 
@@ -153,16 +153,6 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 /**
- * Read a payload value as a string (undefined when absent/null), so
- * arbitrary tenant-record data can flow into string-typed columns and
- * SDK params without an `any` escape hatch.
- */
-function str(data: Record<string, unknown>, key: string): string | undefined {
-  const v = data[key];
-  return v == null ? undefined : String(v);
-}
-
-/**
  * Run one configured action. `actionFailures` receives a reason for any action
  * that failed WITHOUT throwing (#3131) — a refused mail must not abort the
  * caller's transaction and roll back the sibling actions the tenant also asked
@@ -203,34 +193,8 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
 
     case 'ai_draft': {
       const prompt = interpolate(String(config.prompt || ''), enrichedData).slice(0, 2000);
-      if (!prompt) break;
       const targetUserId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
-      if (!targetUserId) break;
-      try {
-        const resp = await chat({
-          tenantId: payload.tenantId,
-          userId: targetUserId,
-          action: 'draft',
-          system: 'You are a CRM assistant. Write a short, professional draft using only the facts supplied. Do not invent facts.',
-          messages: [{ role: 'user', content: prompt }],
-          metadata: { feature: 'automation_ai_draft' },
-        });
-        const stored = await createNotification({
-          userId: targetUserId,
-          tenantId: payload.tenantId,
-          type: 'system',
-          title: 'AI draft ready for review',
-          body: resp.text.slice(0, 1000),
-          link: '/tenant/ai/activity',
-        });
-        if (!stored) actionFailures.push('ai_draft: notification was not persisted');
-      } catch (err) {
-        if (err instanceof GatewayError) {
-          actionFailures.push(`ai_draft: AI provider unavailable (${err.code})`);
-        } else {
-          throw err;
-        }
-      }
+      if (prompt && targetUserId) await runAiDraftAction({ tenantId: payload.tenantId, userId: String(targetUserId), prompt, failures: actionFailures });
       break;
     }
 
@@ -523,18 +487,4 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
   }
 }
 
-function interpolate(template: string, data: Record<string, unknown>, opts?: { escapeValues?: boolean }): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const value = String(data[key] ?? '');
-    return opts?.escapeValues ? escapeHtml(value) : value;
-  });
-}
 
-/**
- * Like interpolate(), but HTML-escapes each substituted value.
- * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
- * to prevent XSS via user-controlled template variables.
- */
-function interpolateHtml(template: string, data: Record<string, unknown>): string {
-  return interpolate(template, data, { escapeValues: true });
-}

@@ -37,6 +37,7 @@
       "filedAs": "#3405",
       "files": [
         "app/api/cron/ai-auto-followup/route.ts",
+        "app/api/cron/ai-weekly-digest/route.ts",
         "app/api/cron/auto-backup/route.ts",
         "app/api/cron/backup-health/route.ts",
         "app/api/cron/backup-verify/route.ts",

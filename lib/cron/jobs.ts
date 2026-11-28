@@ -83,6 +83,7 @@ export const CRON_JOBS: readonly CronJobSpec[] = [
   { name: 'subscription-check', path: '/api/cron/subscription-check', cron: '0 5 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'detect-missed-followups', path: '/api/cron/detect-missed-followups', cron: '*/30 * * * *', owner: 'crm', maxDurationMs: 120_000, expectedEveryMs: 30 * MIN, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'ai-auto-followup', path: '/api/cron/ai-auto-followup', cron: '0 * * * *', owner: 'ai', maxDurationMs: 120_000, expectedEveryMs: HOUR, sources: { crontab: true, vercel: true, scheduler: true } },
+  { name: 'ai-weekly-digest', path: '/api/cron/ai-weekly-digest', cron: '0 9 * * 1', owner: 'ai', maxDurationMs: 120_000, expectedEveryMs: WEEK, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'contract-renewal-check', path: '/api/cron/contract-renewal-check', cron: '0 7 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'process-at-risk', path: '/api/cron/process-at-risk', cron: '0 8 * * *', owner: 'crm', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: true } },
   { name: 'subscription-renewal-check', path: '/api/cron/subscription-renewal-check', cron: '0 7 * * *', owner: 'billing', maxDurationMs: 120_000, expectedEveryMs: DAY, sources: { crontab: true, vercel: true, scheduler: false } },

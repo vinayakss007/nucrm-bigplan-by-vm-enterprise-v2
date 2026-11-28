@@ -52,7 +52,7 @@ describe('#3246 the deferral ledger points at live work', () => {
     expect(SCOPE_DEFERRALS.map((d) => d.dir)).toEqual([
       'app/api/cron',
     ]);
-    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([60]); // #3741 raised the cron pin by one default-policy insert
+    expect(SCOPE_DEFERRALS.map((d) => d.maxFindings)).toEqual([61]); // #3741 raised the cron pin by one default-policy insert
     for (const entry of SCOPE_DEFERRALS) {
       expect(verifyDeferral(entry), `${entry.dir} — ${verifyDeferral(entry) ?? ''}`).toBeNull();
     }

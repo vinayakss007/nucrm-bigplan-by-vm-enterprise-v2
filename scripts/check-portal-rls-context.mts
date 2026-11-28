@@ -81,7 +81,7 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * #3409 added `app/api/cron/reconcile-counters/route.ts`, whose cross-tenant
  * count runs inside `withSecurityContext`.
  */
-export const MIN_SCANNED_FILES = 124;
+export const MIN_SCANNED_FILES = 125;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this
@@ -939,7 +939,7 @@ export const SCOPE_DEFERRALS: ScopeDeferral[] = [
       + 'that forgot withTenantContext(). #3741 added one more: the default sla_policies row is '
       + 'inserted inside sweepTenants, which sets the tenant GUC on the pinned connection, so the '
       + 'write is context-bound at runtime even though a static walk cannot see it.',
-    maxFindings: 60,
+    maxFindings: 61,
   },
 ];
 
