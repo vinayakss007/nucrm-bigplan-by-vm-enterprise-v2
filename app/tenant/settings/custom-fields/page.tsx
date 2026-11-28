@@ -89,7 +89,7 @@ export default function TenantCustomFields() {
     ['tenant', 'custom-fields', entityType],
     `/api/tenant/custom-fields?entityType=${entityType}`,
   );
-  const { data: featuresData } = useApiQuery<{ features?: Feature[] }>(
+  const { data: featuresData, error: featuresError, refetch: refetchFeatures } = useApiQuery<{ features?: Feature[] }>(
     ['tenant', 'custom-fields', 'features'],
     '/api/tenant/custom-fields?action=features',
     { retry: false },
@@ -335,7 +335,7 @@ export default function TenantCustomFields() {
       )}
 
       {/* Active Features */}
-      {features.length > 0 && (
+      {featuresError ? <div className="p-3"><InlineErrorState message="Active Features could not be loaded — an empty list here would be a lie." onRetry={() => void refetchFeatures()} /></div> : features.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
             <Database className="w-4 h-4" />
