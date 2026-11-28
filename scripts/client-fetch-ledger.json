@@ -12,7 +12,6 @@
   "components/tenant/contact-detail-panel-loader.ts": 1,
   "components/tenant/contacts-client.tsx": 3,
   "components/tenant/contacts-data-table.tsx": 3,
-  "components/tenant/deal-detail-client.tsx": 2,
   "components/tenant/lead-detail-client.tsx": 1,
   "components/tenant/leads-client.tsx": 1,
   "components/tenant/report-builder.tsx": 1

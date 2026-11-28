@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import DocumentsPanel from '@/components/documents/documents-panel';
 import DealRelatedPanel from '@/components/tenant/deal-related-panel';
 import DealTimeline from '@/components/tenant/deal-timeline';
@@ -115,32 +117,13 @@ interface Props {
 }
 
 export default function DealDetailClient({ deal, tasks, activities, followUps = [], followUpsLoadFailed = false, sourceLead = null, permissions, _tenantId, _userId }: Props) {
-  // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
-  const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    // #3408: kept raw — an abortable read with three legacy body shapes; pinned
-    // in scripts/client-fetch-ledger.json until a signal-aware helper covers it.
-    fetch('/api/tenant/pipelines', { signal })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (signal.aborted) return;
-        const stages = d?.stages ?? d?.data?.stages ?? d?.data;
-        if (Array.isArray(stages) && stages.length > 0) {
-          setSTAGES(stages.map((s: { id: string; name: string; color?: string }) => ({
-            id: s.id, label: s.name, color: s.color || 'bg-slate-100 text-slate-700', dot: 'bg-slate-400',
-          })));
-        }
-      })
-      .catch((err) => clientLogError('deal:fetch-stages', err));
-    return () => controller.abort();
-  }, []);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents' | 'related' | 'timeline' | 'forecast'>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [stages, setStages] = useState(DEFAULT_STAGES);
+  const [stagesError, setStagesError] = useState<string | null>(null);
+  const [stagesRetry, setStagesRetry] = useState(0);
   const [editForm, setEditForm] = useState({
     title: deal.title || '',
     value: deal.value?.toString() || '0',
@@ -159,25 +142,26 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
   const [callForm, setCallForm] = useState({ subject: '', notes: '' });
   const [callSaving, setCallSaving] = useState(false);
 
-  // Fetch pipeline stages from API (falls back to defaults)
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     async function loadStages() {
+      const result = await fetchJsonSafe<Record<string, unknown>>('/api/tenant/pipelines', { signal });
+      if (result.status === 'aborted') return;
+      if (result.status !== 'ok') {
+        setStagesError(result.message);
+        clientLogError('deal:fetch-stages', new Error(result.message));
+        return;
+      }
       try {
-        // #3408: kept raw for the same abort/legacy-shape reason as the read above.
-        const res = await fetch('/api/tenant/pipelines', { signal });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (signal.aborted) return;
-        const pipelines = data.data ?? data.pipelines ?? data ?? [];
+        const data = result.data;
+        const pipelines = (data.data ?? data.pipelines ?? data ?? []) as Array<Record<string, unknown>>;
         if (Array.isArray(pipelines) && pipelines.length > 0) {
-          // Find the first pipeline's stages or flatten all stages
           const allStages: Array<{ id: string; name: string }> = [];
           for (const p of pipelines) {
-            const pStages = p.stages ?? p.deal_stages ?? [];
+            const pStages = (p.stages ?? p.deal_stages ?? []) as Array<Record<string, unknown>>;
             for (const s of pStages) {
-              if (s.id && s.name) allStages.push(s);
+              if (typeof s.id === 'string' && typeof s.name === 'string') allStages.push({ id: s.id, name: s.name });
             }
           }
           if (allStages.length > 0) {
@@ -191,14 +175,14 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
             })));
           }
         }
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        // fallback to defaults
+        setStagesError(null);
+      } catch {
+        setStagesError('The pipeline response could not be read.');
       }
     }
     loadStages();
     return () => controller.abort();
-  }, []);
+  }, [stagesRetry]);
 
   const stage = stages.find(s => s.id === deal.stage) || stages[0]!;
   const stageColor = stage?.color || 'bg-slate-100 text-slate-700';
@@ -313,6 +297,12 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-5 animate-fade-in">
+      {stagesError && (
+        <InlineErrorState
+          message={`Pipeline stages could not be loaded — ${stagesError}. The stage picker may be showing built-in defaults, not your pipeline.`}
+          onRetry={() => setStagesRetry(n => n + 1)}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

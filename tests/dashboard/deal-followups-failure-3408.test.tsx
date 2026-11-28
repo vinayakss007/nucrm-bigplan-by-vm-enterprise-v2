@@ -12,7 +12,7 @@
  * and the panel must show a failure affordance instead of the false empty.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const refresh = vi.fn();
 
@@ -72,5 +72,35 @@ describe('#3408: deal follow-ups distinguish a failed read from an empty list', 
     });
     expect(screen.getByText('Send quote')).toBeTruthy();
     expect(screen.queryByText('No follow-ups scheduled')).toBeNull();
+  });
+});
+
+describe('#3408: the deal stage picker names a failed pipelines read', () => {
+  const refused = { ok: false, status: 500, json: async () => ({ error: 'offline' }) } as Response;
+
+  it('warns that the built-in stage defaults may not be the tenant pipeline', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(refused);
+    mount();
+    await waitFor(() => expect(screen.getByText(/Pipeline stages could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/built-in defaults/)).toBeTruthy();
+  });
+
+  it('re-runs the pipelines read from the retry button', async () => {
+    const mock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(refused);
+    mount();
+    await waitFor(() => expect(screen.getByText(/Pipeline stages could not be loaded/)).toBeTruthy());
+    const before = mock.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(mock.mock.calls.length).toBe(before + 1));
+  });
+
+  it('a healthy pipelines read renders its stages with no warning', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: 'p1', name: 'Enterprise', stages: [{ id: 's1', name: 'Negotiation' }] }] }),
+    } as Response);
+    mount();
+    await waitFor(() => expect(screen.getByText('Negotiation')).toBeTruthy());
+    expect(screen.queryByText(/Pipeline stages could not be loaded/)).toBeNull();
   });
 });
