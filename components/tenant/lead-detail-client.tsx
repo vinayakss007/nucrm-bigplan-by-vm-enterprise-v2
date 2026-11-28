@@ -81,11 +81,12 @@ interface Props {
   relatedContacts: RelatedContact[];
   teamMembers: TeamMemberOpt[];
   followUps?: FollowUp[];
+  followUpsLoadFailed?: boolean;
   tenantId: string;
   userId: string;
 }
 
-export default function LeadDetailClient({ lead, activities, relatedContacts, teamMembers, followUps = [] }: Props) {
+export default function LeadDetailClient({ lead, activities, relatedContacts, teamMembers, followUps = [], followUpsLoadFailed = false }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
   const [_showEdit, setShowEdit] = useState(false);
@@ -819,11 +820,13 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
       <div className="admin-card p-4">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <Clock className="w-4 h-4" /> Follow-ups
-          <span className="text-xs font-normal text-muted-foreground">
+          {!followUpsLoadFailed && <span className="text-xs font-normal text-muted-foreground">
             ({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)
-          </span>
+          </span>}
         </h3>
-        {followUps.length === 0 ? (
+        {followUpsLoadFailed ? (
+          <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Follow-ups could not be loaded — an empty list here would be a lie.</p>
+        ) : followUps.length === 0 ? (
           <p className="text-sm text-muted-foreground">No follow-ups scheduled for this lead.</p>
         ) : (
           <div className="space-y-2">

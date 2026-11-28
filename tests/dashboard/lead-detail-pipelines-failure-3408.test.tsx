@@ -53,3 +53,25 @@ describe('#3408: lead convert dialog surfaces a failed pipelines read', () => {
     expect(screen.queryByText(/Pipeline options could not be loaded/)).toBeNull();
   });
 });
+
+describe('#3408: lead detail follow-ups distinguish a failed read from an empty list', () => {
+  const mountWith = (failed: boolean) => render(
+    <LeadDetailClient lead={lead} activities={[]} relatedContacts={[]} teamMembers={[]}
+      followUps={[]} followUpsLoadFailed={failed} tenantId="T1" userId="U1" />,
+  );
+
+  it('a failed read says so instead of "No follow-ups scheduled" and a "(0 open)" count', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(resp({})));
+    mountWith(true);
+    expect(screen.getByRole('alert').textContent).toMatch(/Follow-ups could not be loaded/);
+    expect(screen.queryByText('No follow-ups scheduled for this lead.')).toBeNull();
+    expect(screen.queryByText(/\(0 open\)/)).toBeNull();
+  });
+
+  it('a genuine empty list still shows the normal empty state', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(resp({})));
+    mountWith(false);
+    expect(screen.getByText('No follow-ups scheduled for this lead.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

@@ -79,6 +79,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
 
   // All five are independent once `lead` is resolved — fire together
   // (was 5 serial WAN round-trips).
+  let followUpsFailed = false;
   const [[creator], activities, relatedContacts, teamMembers, followUpsList] = await Promise.all([
   // Get created_by_name (separate join for multiple user references)
   db.select({ fullName: users.fullName })
@@ -147,7 +148,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(followUps.dueDate))
   .limit(50)
-  .catch(() => []),
+  .catch(() => { followUpsFailed = true; return []; }),
   ]);
 
   // Attach created_by_name without mutating (and casting) the query row:
@@ -161,6 +162,7 @@ export default async function LeadDetailPage({ params }: PageProps) {
       relatedContacts={relatedContacts.map(c => stripNulls(c) as unknown as RelatedContact)}
       teamMembers={teamMembers}
       followUps={followUpsList}
+      followUpsLoadFailed={followUpsFailed}
       tenantId={ctx.tenantId}
       userId={ctx.userId}
     />
