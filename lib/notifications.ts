@@ -133,9 +133,10 @@ async function pushNotification(
  */
 async function inAppEnabled(tenantId: string, userId: string, type: string): Promise<boolean> {
   try {
-    const rows = await db.select({ notificationPrefs: tenantMembers.notificationPrefs })
-      .from(tenantMembers)
-      .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.tenantId, tenantId)));
+    const rows = await withTenantContext(tenantId, userId, (tx) =>
+      tx.select({ notificationPrefs: tenantMembers.notificationPrefs })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.tenantId, tenantId))));
     const prefs = (rows as { notificationPrefs?: unknown }[] | undefined)?.[0]?.notificationPrefs;
     return channelEnabled(matrixFromPrefs(prefs), type, 'in_app');
   } catch {

@@ -16,9 +16,12 @@ vi.mock('@/drizzle/db', () => ({
   db: { select: vi.fn(() => ({ from: m.from })), insert: vi.fn(() => ({ values: m.insert })) },
 }));
 vi.mock('@/lib/db/rls', () => ({
-  withTenantContext: vi.fn(async (_t: string, _u: string, fn: (tx: unknown) => Promise<void>) => {
-    await fn({ insert: vi.fn(() => ({ values: m.insert })) });
-  }),
+  withTenantContext: vi.fn(async (_t: string, _u: string, fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      insert: vi.fn(() => ({ values: m.insert })),
+      select: () => ({ from: m.from }),
+    })
+  ),
 }));
 vi.mock('@/drizzle/schema', () => ({
   notifications: { userId: 'userId', tenantId: 'tenantId', type: 'type', title: 'title', body: 'body', link: 'link', metadata: 'metadata' },
