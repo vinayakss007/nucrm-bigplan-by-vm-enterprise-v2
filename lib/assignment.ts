@@ -184,12 +184,9 @@ export function skillBased(config: SkillConfig): AssignmentResult {
   });
 
   // Filter by match mode
-  let candidates = scored;
-  if (matchMode === 'all') {
-    candidates = scored.filter(s => s.hasAll);
-  } else {
-    candidates = scored.filter(s => s.hasAny);
-  }
+  const candidates = matchMode === 'all'
+    ? scored.filter(s => s.hasAll)
+    : scored.filter(s => s.hasAny);
 
   // Sort by match count (descending)
   candidates.sort((a, b) => b.matchCount - a.matchCount);
