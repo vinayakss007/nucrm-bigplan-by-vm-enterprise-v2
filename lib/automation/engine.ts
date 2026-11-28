@@ -38,9 +38,9 @@ import {
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
-import { runAiDraftAction } from './ai-draft-action';
-import { str, interpolate, interpolateHtml } from './interpolate';
 import { captureError } from '@/lib/capture-error';
+import { interpolate, interpolateHtml } from './workflow-values';
+import { runAiDraft } from './ai-draft-action';
 import type { AutomationCondition, AutomationAction } from './types';
 
 export type TriggerEvent =
@@ -153,6 +153,16 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 /**
+ * Read a payload value as a string (undefined when absent/null), so
+ * arbitrary tenant-record data can flow into string-typed columns and
+ * SDK params without an `any` escape hatch.
+ */
+function str(data: Record<string, unknown>, key: string): string | undefined {
+  const v = data[key];
+  return v == null ? undefined : String(v);
+}
+
+/**
  * Run one configured action. `actionFailures` receives a reason for any action
  * that failed WITHOUT throwing (#3131) — a refused mail must not abort the
  * caller's transaction and roll back the sibling actions the tenant also asked
@@ -192,9 +202,12 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'ai_draft': {
-      const prompt = interpolate(String(config.prompt || ''), enrichedData).slice(0, 2000);
-      const targetUserId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
-      if (prompt && targetUserId) await runAiDraftAction({ tenantId: payload.tenantId, userId: String(targetUserId), prompt, failures: actionFailures });
+      const userId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
+      if (!userId || !config.prompt) break;
+      actionFailures.push(...await runAiDraft({
+        prompt: interpolate(String(config.prompt), enrichedData).slice(0, 2000),
+        userId, tenantId: payload.tenantId,
+      }));
       break;
     }
 

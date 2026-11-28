@@ -20,7 +20,6 @@
   "app/api/auth/verify-email/route.ts": 2,
   "app/api/bug-report/route.ts": 3,
   "app/api/cron/ai-auto-followup/route.ts": 1,
-  "app/api/cron/ai-weekly-digest/route.ts": 1,
   "app/api/cron/auto-backup/route.ts": 1,
   "app/api/cron/backup-health/route.ts": 1,
   "app/api/cron/backup-verify/route.ts": 2,

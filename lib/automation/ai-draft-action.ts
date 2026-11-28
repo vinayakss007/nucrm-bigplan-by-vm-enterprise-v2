@@ -6,33 +6,32 @@
 import { chat, GatewayError } from '@/lib/ai/gateway';
 import { createNotification } from '@/lib/notifications';
 
-export async function runAiDraftAction(input: {
-  tenantId: string;
-  userId: string;
+export async function runAiDraft(input: {
   prompt: string;
-  failures: string[];
-}): Promise<void> {
-  const { tenantId, userId, prompt, failures } = input;
+  userId: string;
+  tenantId: string;
+}): Promise<string[]> {
+  if (!input.prompt) return [];
   try {
     const resp = await chat({
-      tenantId,
-      userId,
+      tenantId: input.tenantId,
+      userId: input.userId,
       action: 'draft',
       system: 'You are a CRM assistant. Write a short, professional draft using only the facts supplied. Do not invent facts.',
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: input.prompt }],
       metadata: { feature: 'automation_ai_draft' },
     });
     const stored = await createNotification({
-      userId,
-      tenantId,
+      userId: input.userId,
+      tenantId: input.tenantId,
       type: 'system',
       title: 'AI draft ready for review',
       body: resp.text.slice(0, 1000),
       link: '/tenant/ai/activity',
     });
-    if (!stored) failures.push('ai_draft: notification was not persisted');
+    return stored ? [] : ['ai_draft: notification was not persisted'];
   } catch (err) {
-    if (err instanceof GatewayError) failures.push(`ai_draft: AI provider unavailable (${err.code})`);
-    else throw err;
+    if (err instanceof GatewayError) return [`ai_draft: AI provider unavailable (${err.code})`];
+    throw err;
   }
 }
