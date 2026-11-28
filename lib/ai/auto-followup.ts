@@ -15,10 +15,13 @@
  */
 import { db } from '@/drizzle/db';
 import { followUps, contacts, deals, companies } from '@/drizzle/schema';
-import { and, eq, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull, lte, inArray } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
 import { createNotification } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
+
+export const AUTO_FOLLOWUP_BATCH_SIZE = 25;
+const AUTO_FOLLOWUP_LLM_CONCURRENCY = 5;
 
 export type AutoFollowupInput = {
   followUpTitle: string;
@@ -111,54 +114,66 @@ export async function processAutoFollowups(
         lte(followUps.dueDate, now),
         isNull(followUps.deletedAt),
       ),
-    );
+    )
+    .orderBy(followUps.dueDate)
+    .limit(AUTO_FOLLOWUP_BATCH_SIZE);
 
-  for (const fu of overdue) {
+  // Batch hydration: one read per table for the whole capped batch instead of
+  // three round trips per follow-up (#4057).
+  const contactIds = [...new Set(overdue.map(f => f.contactId).filter((id): id is string => !!id))];
+  const dealIds = [...new Set(overdue.map(f => f.dealId).filter((id): id is string => !!id))];
+
+  const contactRows = contactIds.length
+    ? await db.select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        companyId: contacts.companyId,
+      })
+        .from(contacts)
+        .where(and(inArray(contacts.id, contactIds), isNull(contacts.deletedAt)))
+    : [];
+  const contactById = new Map(contactRows.map(c => [c.id, c]));
+
+  const companyIds = [...new Set(contactRows.map(c => c.companyId).filter((id): id is string => !!id))];
+  const companyRows = companyIds.length
+    ? await db.select({ id: companies.id, name: companies.name })
+        .from(companies)
+        .where(and(inArray(companies.id, companyIds), isNull(companies.deletedAt)))
+    : [];
+  const companyById = new Map(companyRows.map(c => [c.id, c]));
+
+  const dealRows = dealIds.length
+    ? await db.select({ id: deals.id, title: deals.title })
+        .from(deals)
+        .where(and(inArray(deals.id, dealIds), isNull(deals.deletedAt)))
+    : [];
+  const dealById = new Map(dealRows.map(d => [d.id, d]));
+
+  for (let i = 0; i < overdue.length; i += AUTO_FOLLOWUP_LLM_CONCURRENCY) {
+    const batchResults = await Promise.all(overdue.slice(i, i + AUTO_FOLLOWUP_LLM_CONCURRENCY).map(async (fu) => {
     try {
-      // Hydrate context
+      // Hydrate context from the batched maps
       let contactName = '';
       let contactEmail: string | undefined;
       let dealTitle: string | undefined;
       let companyName: string | undefined;
 
       if (fu.contactId) {
-        const [c] = await db
-          .select({
-            firstName: contacts.firstName,
-            lastName: contacts.lastName,
-            email: contacts.email,
-            companyId: contacts.companyId,
-          })
-          .from(contacts)
-          .where(and(eq(contacts.id, fu.contactId), isNull(contacts.deletedAt)))
-          .limit(1);
-        // #3224 — the follow-up named this contact, so an empty result now means the row has
-        // been deleted. Drafting anyway would bill the tenant AI credits for a message
-        // addressed to nobody, so the skip is reported through the result the cron tallies.
+        const c = contactById.get(fu.contactId);
+        // #3224 — the follow-up named this contact, so a missing row means the
+        // record was deleted. Drafting anyway would bill the tenant for a
+        // message addressed to nobody; report the skip instead.
         if (!c) {
-          results.push({ followUpId: fu.id, drafted: false, error: 'contact_unavailable' });
-          continue;
+          return { followUpId: fu.id, drafted: false, error: 'contact_unavailable' };
         }
         contactName = [c.firstName, c.lastName].filter(Boolean).join(' ') || '';
         contactEmail = c.email ?? undefined;
-        if (c.companyId) {
-          const [comp] = await db
-            .select({ name: companies.name })
-            .from(companies)
-            .where(and(eq(companies.id, c.companyId), isNull(companies.deletedAt)))
-            .limit(1);
-          companyName = comp?.name ?? undefined;
-        }
+        if (c.companyId) companyName = companyById.get(c.companyId)?.name ?? undefined;
       }
 
-      if (fu.dealId) {
-        const [d] = await db
-          .select({ title: deals.title })
-          .from(deals)
-          .where(and(eq(deals.id, fu.dealId), isNull(deals.deletedAt)))
-          .limit(1);
-        dealTitle = d?.title ?? undefined;
-      }
+      if (fu.dealId) dealTitle = dealById.get(fu.dealId)?.title ?? undefined;
 
       const prompt = buildAutoFollowupPrompt({
         followUpTitle: fu.title,
@@ -214,16 +229,18 @@ export async function processAutoFollowups(
         });
       }
 
-      results.push({ followUpId: fu.id, drafted: true, ...(deterministic ? { deterministic: true } : {}) });
+      return { followUpId: fu.id, drafted: true, ...(deterministic ? { deterministic: true } : {}) };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       logger.error(`[ai-auto-followup] Failed for follow-up ${fu.id}: ${msg}`);
-      results.push({
+      return {
         followUpId: fu.id,
         drafted: false,
         error: msg,
-      });
+      };
     }
+    }));
+    results.push(...batchResults);
   }
 
   return results;
