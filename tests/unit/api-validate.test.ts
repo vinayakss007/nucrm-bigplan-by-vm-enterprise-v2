@@ -6,6 +6,7 @@ import {
   validateField,
   withValidation,
   safeJson,
+  MAX_VALIDATION_DETAILS,
 } from '@/lib/api/validate';
 
 const createContactSchema = z.object({
@@ -39,6 +40,15 @@ describe('validateBody', () => {
     expect(json.error).toBe('Validation failed');
     expect(Array.isArray(json.details)).toBe(true);
     expect(json.details.length).toBeGreaterThan(0);
+  });
+
+  it('caps the details array at the documented maxItems (#4019)', async () => {
+    const wide = z.object(Object.fromEntries(
+      Array.from({ length: MAX_VALIDATION_DETAILS + 10 }, (_, i) => [`field_${i}`, z.string()])
+    ));
+    const result = validateBody(wide, {});
+    const json = await (result as Response).json();
+    expect(json.details).toHaveLength(MAX_VALIDATION_DETAILS);
   });
 
   it('returns error for non-ZodError (unexpected throw)', () => {

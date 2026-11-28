@@ -22,6 +22,8 @@ import { uuidIdSchemaWith } from '@/lib/validation/uuid';
  */
 export const uuidField = uuidIdSchemaWith('must be a valid UUID');
 
+export const MAX_VALIDATION_DETAILS = 50;
+
 /**
  * Validate request body against a Zod schema.
  * Returns parsed data or a 400 response with field-level errors.
@@ -32,7 +34,7 @@ export function validateBody<T>(schema: ZodSchema<T>, body: unknown): { data: T 
     return { data };
   } catch (err) {
     if (err instanceof ZodError) {
-      const errors = err.issues.map(e => ({
+      const errors = err.issues.slice(0, MAX_VALIDATION_DETAILS).map(e => ({
         field: e.path.join('.'),
         message: e.message,
       }));
@@ -55,7 +57,7 @@ export function validateQuery<T>(schema: ZodSchema<T>, params: Record<string, st
     return { data };
   } catch (err) {
     if (err instanceof ZodError) {
-      const errors = err.issues.map(e => ({
+      const errors = err.issues.slice(0, MAX_VALIDATION_DETAILS).map(e => ({
         field: e.path.join('.'),
         message: e.message,
       }));
