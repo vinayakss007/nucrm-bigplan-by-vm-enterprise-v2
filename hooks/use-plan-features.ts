@@ -51,7 +51,7 @@ export function usePlanFeatures(): PlanFeaturesValue {
     (featureKey: string) => {
       // Super admins see everything
       if (typeof window !== 'undefined' && window.__NUCRM_IS_SUPER_ADMIN__) return true;
-      return featureSet.has(featureKey);
+      return featureSet.has(featureKey) || (featureKey.startsWith('ai_') && featureSet.has('ai_assistant'));
     },
     [featureSet],
   );
