@@ -9,6 +9,7 @@ import { notifications, tenantMembers, users } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
 import { eq, and, ne, sql, ilike, or } from 'drizzle-orm';
 import { withTenantContext } from '@/lib/db/rls';
+import { channelEnabled, matrixFromPrefs } from './notifications/preferences';
 
 /**
  * The one copy of the notification vocabulary. Declared as a runtime tuple for
@@ -125,6 +126,23 @@ async function pushNotification(
   }
 }
 
+/**
+ * #4087: resolve the recipient's in_app preference before writing a row.
+ * Missing rows and unmapped types keep the historical "deliver" behaviour, so
+ * this is a no-op for tenants that never touched the preference UI.
+ */
+async function inAppEnabled(tenantId: string, userId: string, type: string): Promise<boolean> {
+  try {
+    const rows = await db.select({ notificationPrefs: tenantMembers.notificationPrefs })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.tenantId, tenantId)));
+    const prefs = (rows as { notificationPrefs?: unknown }[] | undefined)?.[0]?.notificationPrefs;
+    return channelEnabled(matrixFromPrefs(prefs), type, 'in_app');
+  } catch {
+    return true;
+  }
+}
+
 export async function createNotification(opts: {
   userId: string;
   tenantId: string;
@@ -156,6 +174,8 @@ export async function createNotification(opts: {
   if (!link && opts.entity_type && opts.entity_id) {
     link = deriveEntityLink(opts.entity_type, opts.entity_id);
   }
+
+  if (!await inAppEnabled(opts.tenantId, opts.userId, opts.type)) return true;
 
   try {
     await withTenantContext(opts.tenantId, opts.userId, async (tx) => {
@@ -243,9 +263,11 @@ export async function notifyTenantMembers(opts: {
       filters.push(ne(tenantMembers.userId, opts.excludeUserId));
     }
 
-    const members = await db.select({ userId: tenantMembers.userId })
+    const allMembers = await db.select({ userId: tenantMembers.userId, notificationPrefs: tenantMembers.notificationPrefs })
       .from(tenantMembers)
       .where(and(...filters));
+    const members = allMembers.filter((m) =>
+      channelEnabled(matrixFromPrefs(m.notificationPrefs), opts.type, 'in_app'));
 
     if (!members.length) return true;
 
@@ -293,13 +315,15 @@ export async function notifyTenantMembers(opts: {
     // Retry once after a short delay
     try {
       await new Promise(r => setTimeout(r, 200));
-      const retryMembers = await db.select({ userId: tenantMembers.userId })
+      const retryAll = await db.select({ userId: tenantMembers.userId, notificationPrefs: tenantMembers.notificationPrefs })
         .from(tenantMembers)
         .where(and(
           eq(tenantMembers.tenantId, opts.tenantId),
           eq(tenantMembers.status, 'active'),
           ...(opts.excludeUserId ? [ne(tenantMembers.userId, opts.excludeUserId)] : []),
         ));
+      const retryMembers = retryAll.filter((m) =>
+        channelEnabled(matrixFromPrefs(m.notificationPrefs), opts.type, 'in_app'));
       if (retryMembers.length) {
         const retryMeta: Record<string, unknown> = {};
         if (opts.entity_type) retryMeta['entity_type'] = opts.entity_type;

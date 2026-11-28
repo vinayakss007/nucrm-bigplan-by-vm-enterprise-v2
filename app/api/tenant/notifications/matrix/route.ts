@@ -24,48 +24,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
-const CHANNELS = ['in_app', 'email', 'telegram'] as const;
-type Channel = typeof CHANNELS[number];
-
-// Event taxonomy — keep in sync with the page UI.
-const EVENT_KEYS = new Set([
-  // Leads
-  'lead.created', 'lead.assigned_to_me', 'lead.status_changed',
-  // Contacts
-  'contact.created', 'contact.mentioned_me',
-  // Deals
-  'deal.created', 'deal.assigned_to_me', 'deal.stage_changed',
-  'deal.won', 'deal.lost', 'deal.close_date_approaching',
-  // Tasks
-  'task.assigned_to_me', 'task.due_today', 'task.overdue',
-  // Tickets
-  'ticket.created', 'ticket.assigned_to_me', 'ticket.replied',
-  // Comments / collaboration
-  'comment.mentioned_me', 'comment.replied',
-  // Team
-  'team.invite_accepted', 'team.role_changed',
-  // Security
-  'security.login_new_device', 'security.password_changed', 'security.two_factor_changed',
-  // Billing
-  'billing.trial_ending', 'billing.payment_failed', 'billing.plan_changed',
-  // Contracts
-  'contract.expiring', 'contract.expired', 'contract.renewed',
-]);
-
-const DEFAULTS: Record<string, Record<Channel, boolean>> = Object.fromEntries(
-  Array.from(EVENT_KEYS).map(key => {
-    // sensible default: in_app=on for everything; email=on for personal alerts; telegram=off
-    const personal = /assigned_to_me|mentioned_me|due_today|overdue|replied|won|lost|approaching/.test(key);
-    const security = key.startsWith('security.');
-    const billing  = key.startsWith('billing.');
-    const contract = key.startsWith('contract.');
-    return [key, {
-      in_app:   true,
-      email:    personal || security || billing || contract,
-      telegram: false,
-    }];
-  })
-) as Record<string, Record<Channel, boolean>>;
+import { CHANNELS, EVENT_KEYS, DEFAULTS, type Channel } from '@/lib/notifications/preferences';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
