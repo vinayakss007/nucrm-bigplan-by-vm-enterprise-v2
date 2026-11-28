@@ -29,7 +29,9 @@ type Loose = unknown;
 const mockTxSet = vi.hoisted(() => vi.fn(() => ({ where: vi.fn() })));
 const mockTxUpdate = vi.hoisted(() => vi.fn(() => ({ set: mockTxSet })));
 const mockInsertValues = vi.hoisted(() =>
-  vi.fn(() => ({ returning: vi.fn(() => [{ id: 'delivery-1' }]) })),
+  vi.fn((rows: unknown) => ({
+    returning: vi.fn(() => (Array.isArray(rows) ? rows : [rows]).map((_, i) => ({ id: `delivery-${i + 1}` }))),
+  })),
 );
 
 vi.mock('@/drizzle/db', () => ({
@@ -142,7 +144,9 @@ describe('webhook delivery fix', () => {
     vi.resetModules();
     mockTxSet.mockReturnValue({ where: vi.fn() });
     mockTxUpdate.mockReturnValue({ set: mockTxSet });
-    mockInsertValues.mockReturnValue({ returning: vi.fn(() => [{ id: 'delivery-1' }]) });
+    mockInsertValues.mockImplementation((rows: unknown) => ({
+      returning: vi.fn(() => (Array.isArray(rows) ? rows : [rows]).map((_, i) => ({ id: `delivery-${i + 1}` }))),
+    }));
   });
 
   afterEach(() => {
@@ -233,12 +237,14 @@ describe('webhook delivery fix', () => {
       await fireWebhooks('tenant-42', 'contact.created', {});
 
       expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tenantId: 'tenant-42',
-          webhookId: 'hook-1',
-          url: 'https://example.com/hook',
-          status: 'pending',
-        }),
+        expect.arrayContaining([
+          expect.objectContaining({
+            tenantId: 'tenant-42',
+            webhookId: 'hook-1',
+            url: 'https://example.com/hook',
+            status: 'pending',
+          }),
+        ]),
       );
     });
 
