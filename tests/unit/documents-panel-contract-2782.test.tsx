@@ -308,7 +308,7 @@ describe('the half of the panel that already worked does not move (#2782)', () =
     await waitFor(() => expect(downloadGets).toHaveLength(1));
     expect(downloadGets[0]).toBe(`/api/tenant/documents/${MINE}`);
     expect(vi.mocked(open)).toHaveBeenCalledWith(
-      `http://s3.test/download/documents/${TENANT}/${MINE}.pdf`, '_blank',
+      `http://s3.test/download/documents/${TENANT}/${MINE}.pdf`, '_blank', 'noopener,noreferrer',
     );
   });
 
