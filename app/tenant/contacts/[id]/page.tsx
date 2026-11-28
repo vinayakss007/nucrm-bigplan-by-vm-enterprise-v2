@@ -35,6 +35,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
+  let followUpsFailed = false;
   const [contactResult, activities, deals, tasks, companies, teamMembers, billingData, callLogsList, ticketsList, followUpsList] = await Promise.all([
     db.select({
       contact: contactsTable,
@@ -190,7 +191,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     ))
     .orderBy(desc(followUps.dueDate))
     .limit(50)
-    .catch(() => []),
+    .catch(() => { followUpsFailed = true; return []; }),
   ]);
 
   if (!contactResult.length) notFound();
@@ -281,6 +282,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       callLogs={callLogsList}
       tickets={ticketsList}
       followUps={followUpsList}
+      followUpsLoadFailed={followUpsFailed}
       sourceLead={sourceLead}
     />
     </>

@@ -113,3 +113,30 @@ describe('#3408: contact detail tab failures are not rendered as empty states', 
     expect(screen.queryByText('Could not load edit history')).toBeNull();
   });
 });
+
+describe('#3408: contact follow-ups distinguish a failed server read from an empty list', () => {
+  const renderWith = (failed: boolean) => render(
+    <ContactDetailClient
+      contact={contact} initialActivities={[]} deals={[]} tasks={[]} companies={[]}
+      teamMembers={[]} permissions={{ canEdit: false, canDelete: false, canAssign: false }}
+      userId="U1" callLogs={[callRow]} followUpsLoadFailed={failed}
+    />,
+  );
+
+  it('names the failed read instead of "No follow-ups scheduled" or a "(0 open)" count', async () => {
+    stubFetch({});
+    renderWith(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Follow-ups' }));
+    await waitFor(() => expect(screen.getByText(/Follow-ups could not be loaded/)).toBeTruthy());
+    expect(screen.queryByText('No follow-ups scheduled')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Follow-ups \(0 open\)/ })).toBeNull();
+  });
+
+  it('a genuine empty list still shows the normal empty state', async () => {
+    stubFetch({});
+    renderWith(false);
+    fireEvent.click(screen.getByRole('button', { name: /Follow-ups \(0 open\)/ }));
+    await waitFor(() => expect(screen.getByText('No follow-ups scheduled')).toBeTruthy());
+    expect(screen.queryByText(/Follow-ups could not be loaded/)).toBeNull();
+  });
+});
