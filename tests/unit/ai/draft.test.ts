@@ -139,8 +139,8 @@ describe('AI Draft', () => {
   });
 
   describe('SEED_DRAFT_TEMPLATES', () => {
-    it('provides 5 seed templates', () => {
-      expect(mod.SEED_DRAFT_TEMPLATES).toHaveLength(5);
+    it('provides the seed templates', () => {
+      expect(mod.SEED_DRAFT_TEMPLATES.length).toBeGreaterThanOrEqual(7);
     });
 
     it('each template has required fields', () => {

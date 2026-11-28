@@ -54,7 +54,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     // Plan gate + rate limit, mirroring /api/tenant/ai/draft.
-    const gate = await requireAiFeature(ctx, 'ai_draft');
+    const gate = await requireAiFeature(ctx, 'ai_assistant');
     if (gate) return gate;
     const limited = await checkRateLimit(request, { action: 'ai_email_draft', max: 30, windowMinutes: 60 });
     if (limited) return limited;
