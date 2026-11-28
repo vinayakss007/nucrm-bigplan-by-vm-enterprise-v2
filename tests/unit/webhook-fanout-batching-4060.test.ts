@@ -9,7 +9,7 @@ const fire = src.slice(fireStart, fireEnd);
 
 describe('webhook fan-out batching (#4060)', () => {
   it('inserts the whole fan-out in one statement', () => {
-    expect(fire).toContain('.values(targets.map(({ hook, url, headers }) => ({');
+    expect(fire).toContain('.values(targets.map((target) => ({');
     expect(fire).not.toContain('for (const hook of hooks)');
   });
 
