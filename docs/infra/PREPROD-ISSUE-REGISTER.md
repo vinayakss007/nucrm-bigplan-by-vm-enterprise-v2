@@ -2358,7 +2358,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   `{ok:true,skipped:true,reason:'lock-held'}` (the three coordinates are read at `2d037d6a`: `auto-backup/route.ts:52-54`,
   `cleanup/route.ts:88-90`, `backup-verify/route.ts:179-180` (re-pinned 2026-11-17 from `:180-181` — a dedup-guard comment was added above the lock check; guard:register-drift; re-pinned 2026-10-28: **#3348** shifted it; first re-pinned 2026-10-15 for **#2539**/**#2575**) — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
   same lie with a different string, `reason:'Another instance running'`
-  (`process-sequences/route.ts:40-42` (re-pinned 2026-10-18 from `:39-41`: **#2795**/**#2810** added one import line above `POST`), `scheduled-report-delivery/route.ts:159-161`).
+  (`process-sequences/route.ts:40-42` (re-pinned 2026-10-18 from `:39-41`: **#2795**/**#2810** added one import line above `POST`), `scheduled-report-delivery/route.ts:160-162` (re-pinned 2026-11-28 from `:159-161`: #4063 added the lock-refresh import and p-limit import above the handler; the acquire-lock block itself is unchanged)).
   PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreported
   `unavailable` as a benign skip.** _(measured at the found revision; re-pinned 2026-10-10 by this PR — the two
   `Another instance running` sites each gained one import line, so `process-sequences` moved `:38-40` → `:39-41`
