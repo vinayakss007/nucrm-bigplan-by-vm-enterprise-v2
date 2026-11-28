@@ -30,6 +30,14 @@ import {
 import ImportModal from './import-modal'
 import toast from 'react-hot-toast'
 
+function extractArray(body: unknown, key: string): unknown[] {
+  if (body && typeof body === 'object' && key in body) {
+    const value = (body as Record<string, unknown>)[key]
+    if (Array.isArray(value)) return value
+  }
+  return []
+}
+
 const STATUS_COLORS: Record<string, string> = {
   new: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   contacted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
@@ -325,34 +333,63 @@ export default function ContactsDataTable({
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
   const [sequences, setSequences] = useState<{ id: string; name: string }[]>([])
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([])
+  const [optionErrors, setOptionErrors] = useState<Record<string, string>>({})
+  const [optionsRetry, setOptionsRetry] = useState(0)
 
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=contact', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
-    return () => abort.abort();
+  const readOptions = useCallback(async (
+    key: string,
+    url: string,
+    extract: (body: unknown) => unknown[],
+    apply: (value: unknown) => void,
+    signal: AbortSignal,
+  ) => {
+    const result = await fetchJsonSafe<unknown>(url, { signal })
+    if (result.status === 'aborted') return
+    if (result.status === 'ok') {
+      apply(extract(result.data))
+      setOptionErrors(prev => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    } else {
+      setOptionErrors(prev => ({ ...prev, [key]: result.message }))
+      clientLogWarn('contacts-data-table', `Failed to load ${key}`, new Error(result.message))
+    }
   }, [])
 
   useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=contact', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+    const abort = new AbortController()
+    void readOptions('custom fields', '/api/tenant/custom-fields?entityType=contact',
+      b => extractArray(b, 'fields'),
+      v => setCustomFields(v as { fieldKey: string; fieldLabel: string }[]), abort.signal)
+    return () => abort.abort()
+  }, [readOptions, optionsRetry])
 
   useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/sequences', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load sequences', new Error(r.message)); else if (r.status === 'ok') setSequences(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+    const abort = new AbortController()
+    void readOptions('segments', '/api/tenant/segments?entity_type=contact',
+      b => extractArray(b, 'data'),
+      v => setSegments(v as { id: string; name: string }[]), abort.signal)
+    return () => abort.abort()
+  }, [readOptions, optionsRetry])
 
   useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/email-templates', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('contacts-data-table', 'Failed to load email templates', new Error(r.message)); else if (r.status === 'ok') setEmailTemplates(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+    const abort = new AbortController()
+    void readOptions('sequences', '/api/tenant/sequences',
+      b => extractArray(b, 'data'),
+      v => setSequences(v as { id: string; name: string }[]), abort.signal)
+    return () => abort.abort()
+  }, [readOptions, optionsRetry])
+
+  useEffect(() => {
+    const abort = new AbortController()
+    void readOptions('email templates', '/api/tenant/email-templates',
+      b => extractArray(b, 'data'),
+      v => setEmailTemplates(v as { id: string; name: string }[]), abort.signal)
+    return () => abort.abort()
+  }, [readOptions, optionsRetry])
 
   const bulkActions = useMemo<BulkAction[]>(() => {
     const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
@@ -832,6 +869,14 @@ export default function ContactsDataTable({
           <InlineErrorState
             message={`Could not load contacts — an empty list here would be a lie. (${loadError})`}
             onRetry={() => void loadData(pagination.pageIndex)}
+          />
+        </div>
+      )}
+      {Object.keys(optionErrors).length > 0 && (
+        <div className="p-3">
+          <InlineErrorState
+            message={`Bulk action options could not be loaded (${Object.keys(optionErrors).join(', ')}). An empty picker here would be a lie.`}
+            onRetry={() => setOptionsRetry(n => n + 1)}
           />
         </div>
       )}
