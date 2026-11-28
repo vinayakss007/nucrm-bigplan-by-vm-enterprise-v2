@@ -113,12 +113,12 @@ export async function fireWebhooks(
     // One INSERT for the whole fan-out instead of one round trip per hook (#4060).
     let deliveries: { id: string; attempt?: number }[] = [];
     try {
-      deliveries = await db.insert(webhookQueue).values(targets.map(({ hook, url, headers }) => ({
+      deliveries = await db.insert(webhookQueue).values(targets.map((target) => ({
         tenantId,
-        webhookId: hook.id,
-        url,
+        webhookId: target.hook.id,
+        url: target.url,
         method: 'POST',
-        headers,
+        headers: target.headers,
         payload: payloadObj,
         status: 'pending',
         attempt: 0,
