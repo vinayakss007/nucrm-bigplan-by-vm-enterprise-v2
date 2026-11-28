@@ -95,7 +95,7 @@ describe('cron dedup lock refusal (#2539)', () => {
     // main = 2d037d6a, #2539). If a route is added and this moves, the new
     // route is picked up by the it.each below — which is the point of reading
     // the directory instead of pasting a list.
-    expect(cronDirs).toHaveLength(23);
+    expect(cronDirs).toHaveLength(24);
     expect(cronDirs).toContain('recurring-invoice-generator');
   });
 

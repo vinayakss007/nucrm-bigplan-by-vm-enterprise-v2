@@ -400,7 +400,7 @@ describe('the guard knows the helper and counts the file', async () => {
     // 120 once #3312 pinned the ten lib/ files an anonymous route calls; 121 once
     // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`;
     // 124 once #3409 added the reconcile-counters cron route.
-    expect(guard.MIN_SCANNED_FILES).toBe(124);
+    expect(guard.MIN_SCANNED_FILES).toBe(125);
   });
 
   it('counts the processor and finds nothing unbound in it', async () => {

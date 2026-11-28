@@ -37,9 +37,10 @@ import {
 } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
-import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
+import { interpolate, interpolateHtml } from './workflow-values';
+import { runAiDraft } from './ai-draft-action';
 import type { AutomationCondition, AutomationAction } from './types';
 
 export type TriggerEvent =
@@ -197,6 +198,16 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         link:  config.link || undefined,
       });
       if (!stored) actionFailures.push('send_notification: notification was not persisted');
+      break;
+    }
+
+    case 'ai_draft': {
+      const userId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
+      if (!userId || !config.prompt) break;
+      actionFailures.push(...await runAiDraft({
+        prompt: interpolate(String(config.prompt), enrichedData).slice(0, 2000),
+        userId, tenantId: payload.tenantId,
+      }));
       break;
     }
 
@@ -489,18 +500,4 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
   }
 }
 
-function interpolate(template: string, data: Record<string, unknown>, opts?: { escapeValues?: boolean }): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const value = String(data[key] ?? '');
-    return opts?.escapeValues ? escapeHtml(value) : value;
-  });
-}
 
-/**
- * Like interpolate(), but HTML-escapes each substituted value.
- * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
- * to prevent XSS via user-controlled template variables.
- */
-function interpolateHtml(template: string, data: Record<string, unknown>): string {
-  return interpolate(template, data, { escapeValues: true });
-}

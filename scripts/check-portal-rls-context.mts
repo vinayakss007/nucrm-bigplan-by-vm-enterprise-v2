@@ -81,7 +81,7 @@ export const MIN_TENANT_KEYED_TABLES = 100;
  * #3409 added `app/api/cron/reconcile-counters/route.ts`, whose cross-tenant
  * count runs inside `withSecurityContext`.
  */
-export const MIN_SCANNED_FILES = 124;
+export const MIN_SCANNED_FILES = 125;
 /**
  * Tenant-keyed statements the same walk examines (measured 229 after #3195 took
  * the bare-pool CRM aggregate out of app/api/metrics; 230 before it). Below this

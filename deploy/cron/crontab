@@ -30,6 +30,7 @@
 0 5 * * *	/usr/local/bin/run-cron.sh subscription-check
 */30 * * * *	/usr/local/bin/run-cron.sh detect-missed-followups
 0 * * * *	/usr/local/bin/run-cron.sh ai-auto-followup
+0 9 * * 1	/usr/local/bin/run-cron.sh ai-weekly-digest
 0 7 * * *	/usr/local/bin/run-cron.sh contract-renewal-check
 0 8 * * *	/usr/local/bin/run-cron.sh process-at-risk
 0 7 * * *	/usr/local/bin/run-cron.sh subscription-renewal-check
