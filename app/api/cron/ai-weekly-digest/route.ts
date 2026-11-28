@@ -14,6 +14,7 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { chat, GatewayError } from '@/lib/ai/gateway';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
+import { apiFail } from '@/lib/api/api-envelope';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 const WINDOW_DAYS = 7;
@@ -27,7 +28,7 @@ export function digestFallback(stats: DigestStats): string {
 
 async function cronRouteHandler(request: NextRequest) {
   if (!await verifyCronSecret(request, { job: 'ai-weekly-digest' })) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(apiFail('UNAUTHORIZED', 'Unauthorized'), { status: 401 });
   }
 
   const refusal = await refuseIfCronLockHeld('cron:ai-weekly-digest', LOCK_SECONDS);
