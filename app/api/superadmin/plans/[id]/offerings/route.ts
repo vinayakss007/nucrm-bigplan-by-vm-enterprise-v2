@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { modules } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
@@ -75,40 +75,50 @@ export const PUT = withApiRoute(async (req: NextRequest,
       return NextResponse.json(apiFail('BATCH_TOO_LARGE', 'At most 100 offerings per request'), { status: 400 });
     }
 
-    for (const item of offerings) {
-      const builtin = BUILTIN_MODULES.find(m => m.id === item.module_id);
-      if (!builtin) continue;
+    // One read for every module in the batch instead of a select per offering (#4065).
+    const validIds = [...new Set(offerings
+      .map(item => item.module_id)
+      .filter(id => BUILTIN_MODULES.some(m => m.id === id)))];
+    const moduleRows = validIds.length
+      ? await db.select({ id: modules.id, manifest: modules.manifest })
+          .from(modules)
+          .where(inArray(modules.id, validIds))
+          .limit(100)
+      : [];
+    const manifestById = new Map(moduleRows.map(row => [row.id, (row.manifest as Record<string, unknown>) ?? {}]));
 
-      const existing = await db.select({ id: modules.id, manifest: modules.manifest })
-        .from(modules)
-        .where(eq(modules.id, item.module_id))
-        .limit(1);
-
-      const currentManifest = (existing[0]?.manifest as Record<string, unknown>) ?? {};
-      const currentPricing = (currentManifest.pricing as Record<string, unknown>) ?? {};
-
-      const updatedPricing: Record<string, unknown> = {
-        ...currentPricing,
-        [planId]: {
-          enabled: item.enabled,
-          price: item.price ?? builtin.pricing?.[planId as keyof typeof builtin.pricing]?.price ?? 0,
-        },
-      };
-
-    // Optimistic concurrency guard (superadmin)
     const _eu = body?.expectedUpdatedAt ?? body?._updated_at;
     if (_eu) {
       const _cg = await concurrencyGuard(db, modules, body?.id ?? null, null, _eu);
       if (_cg) return _cg;
     }
 
-      await db.update(modules)
-        .set({
-          manifest: { ...currentManifest, pricing: updatedPricing },
-          updatedAt: new Date(),
-        })
-        .where(eq(modules.id, item.module_id));
+    const changes: { id: string; manifest: Record<string, unknown> }[] = [];
+    for (const item of offerings) {
+      const builtin = BUILTIN_MODULES.find(m => m.id === item.module_id);
+      if (!builtin) continue;
+
+      const currentManifest = manifestById.get(item.module_id) ?? {};
+      const currentPricing = (currentManifest.pricing as Record<string, unknown>) ?? {};
+
+      changes.push({
+        id: item.module_id,
+        manifest: {
+          ...currentManifest,
+          pricing: {
+            ...currentPricing,
+            [planId]: {
+              enabled: item.enabled,
+              price: item.price ?? builtin.pricing?.[planId as keyof typeof builtin.pricing]?.price ?? 0,
+            },
+          },
+        },
+      });
     }
+
+    await Promise.all(changes.map(change => db.update(modules)
+      .set({ manifest: change.manifest, updatedAt: new Date() })
+      .where(eq(modules.id, change.id))));
 
     await logSuperAdminAction({
       adminId: ctx.userId,

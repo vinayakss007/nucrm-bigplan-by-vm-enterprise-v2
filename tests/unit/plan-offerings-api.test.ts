@@ -103,6 +103,41 @@ describe('Plan Offerings API', () => {
     expect(body.ok).toBe(true);
   });
 
+  it('PUT reads manifests once and writes all offerings in one batch (#4065)', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([
+            { id: 'core-crm', manifest: {} },
+            { id: 'ai-assistant', manifest: {} },
+          ]),
+        }),
+      }),
+    });
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+    });
+
+    const { PUT } = await import('@/app/api/superadmin/plans/[id]/offerings/route');
+    const req = new Request('http://localhost:3000/api/superadmin/plans/pro/offerings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offerings: [
+          { module_id: 'core-crm', enabled: true },
+          { module_id: 'ai-assistant', enabled: true },
+        ],
+      }),
+    });
+    const res = await PUT(req as unknown as Parameters<typeof PUT>[0], {
+      params: Promise.resolve({ id: 'pro' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
+    expect(mockDb.update).toHaveBeenCalledTimes(2);
+  });
+
   it('PUT should reject non-array offerings', async () => {
     const { PUT } = await import('@/app/api/superadmin/plans/[id]/offerings/route');
     const req = new Request('http://localhost:3000/api/superadmin/plans/pro/offerings', {
