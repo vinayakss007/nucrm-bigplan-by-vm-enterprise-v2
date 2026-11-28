@@ -245,7 +245,6 @@ export async function recordViolation(
     return true;
   });
   return { created };
-  return { created: true };
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
