@@ -91,121 +91,113 @@ export async function fireWebhooks(
     };
     const payload = JSON.stringify(payloadObj);
 
-    for (const hook of hooks) {
+    const targets = hooks.flatMap((hook) => {
       const config = hook.config as { url?: string; events?: string[]; secret?: string; headers?: Record<string, string> };
       const url = config?.url;
-      if (!url) continue;
-
-      // Check if this hook is subscribed to this event
+      if (!url) return [];
       const subscribedEvents = config?.events || [];
-      if (subscribedEvents.length > 0 && !subscribedEvents.includes(event)) {
-        continue;
-      }
+      if (subscribedEvents.length > 0 && !subscribedEvents.includes(event)) return [];
 
-      try {
-        const secret = config?.secret;
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'User-Agent': 'NuCRM-Webhook/1.0',
-          'X-NuCRM-Event': event,
-          'X-NuCRM-Delivery': randomUUID(),
-        };
-        if (secret) {
-          headers['X-NuCRM-Signature'] = webhookSignature(secret, payload);
-        }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'NuCRM-Webhook/1.0',
+        'X-NuCRM-Event': event,
+        'X-NuCRM-Delivery': randomUUID(),
+      };
+      if (config?.secret) headers['X-NuCRM-Signature'] = webhookSignature(config.secret, payload);
+      return [{ hook, url, headers }];
+    });
 
-        // Create delivery record. A failure here means the row never lands in
-        // the queue, so the delivery is invisible — log it loudly instead of
-        // swallowing it, but keep going so one bad hook cannot abort the rest.
-        let delivery: { id: string; attempt?: number } | undefined;
+    if (targets.length === 0) return;
+
+    // One INSERT for the whole fan-out instead of one round trip per hook (#4060).
+    let deliveries: { id: string; attempt?: number }[] = [];
+    try {
+      deliveries = await db.insert(webhookQueue).values(targets.map(({ hook, url, headers }) => ({
+        tenantId,
+        webhookId: hook.id,
+        url,
+        method: 'POST',
+        headers,
+        payload: payloadObj,
+        status: 'pending',
+        attempt: 0,
+      }))).returning();
+    } catch (insertErr: unknown) {
+      logger.error('[webhooks] failed to enqueue delivery batch', {
+        hookId: targets[0]?.hook.id,
+        event,
+        error: insertErr instanceof Error ? insertErr.message : String(insertErr),
+      });
+      return;
+    }
+    if (deliveries.length === 0) {
+      logger.error('[webhooks] enqueue returned no rows', { event });
+      return;
+    }
+
+    // Deliveries are independent; run them in bounded batches so one slow
+    // endpoint cannot serialize the whole fan-out or exhaust sockets (#4060).
+    for (let i = 0; i < deliveries.length; i += MAX_CONCURRENCY) {
+      const batch = deliveries.slice(i, i + MAX_CONCURRENCY);
+      await Promise.allSettled(batch.map(async (delivery, offset) => {
+        const target = targets[i + offset];
+        if (!delivery || !target) return;
+        const { hook, url, headers } = target;
+
         try {
-          [delivery] = await db.insert(webhookQueue).values({
-            tenantId,
-            webhookId: hook.id,
-            url,
-            method: 'POST',
-            headers,
-            payload: payloadObj,
-            status: 'pending',
-            attempt: 0,
-          }).returning();
-        } catch (insertErr: unknown) {
-          logger.error('[webhooks] failed to enqueue delivery', {
-            hookId: hook.id,
-            event,
-            error: insertErr instanceof Error ? insertErr.message : String(insertErr),
-          });
-          continue;
-        }
+          let res: Response;
+          try {
+            res = await safeFetch(url, {
+              method: 'POST',
+              headers,
+              body: payload,
+              signal: AbortSignal.timeout(10_000)
+            });
+          } catch (err: unknown) {
+            if (err instanceof SsrfBlockedError) {
+              await db.update(webhookQueue)
+                .set({
+                  status: 'dead_letter',
+                  errorMessage: `Blocked by SSRF protection: ${err.reason}`,
+                  nextRetryAt: null,
+                })
+                .where(eq(webhookQueue.id, delivery.id))
+                .catch((e) => console.warn('[Webhook] Failed to record blocked delivery', e));
+              logger.warn(`[webhook] ${hook.name} delivery error: blocked by SSRF protection: ${err.reason}`);
+              return;
+            }
+            throw err;
+          }
 
-        if (!delivery) {
-          logger.error('[webhooks] enqueue returned no row', { hookId: hook.id, event });
-          continue;
-        }
+          await db.transaction(async (tx) => {
+            if (res.ok) {
+              await tx.update(webhookQueue)
+                .set({ status: 'delivered', responseStatus: res.status, deliveredAt: new Date() })
+                .where(eq(webhookQueue.id, delivery.id));
+            } else {
+              const responseBody = await res.text().catch(() => '');
+              const nextAttempt = (delivery.attempt ?? 0) + 1;
+              await tx.update(webhookQueue)
+                .set({
+                  status: 'failed',
+                  responseStatus: res.status,
+                  responseBody: responseBody.slice(0, 1000),
+                  attempt: nextAttempt,
+                  failedAt: new Date(),
+                  nextRetryAt: new Date(Date.now() + getRetryDelay(nextAttempt)),
+                })
+                .where(eq(webhookQueue.id, delivery.id));
+            }
 
-        // The webhook URL is tenant-supplied: safeFetch refuses private and
-        // reserved targets and re-validates redirect hops (SSRF protection).
-        let res: Response;
-        try {
-          res = await safeFetch(url, {
-            method: 'POST',
-            headers,
-            body: payload,
-            signal: AbortSignal.timeout(10_000)
-          });
+            await tx.update(integrations)
+              .set({ lastUsedAt: new Date() })
+              .where(eq(integrations.id, hook.id));
+          }).catch((e) => console.warn('[Webhook] Failed to update delivery + integration timestamp', e));
         } catch (err: unknown) {
-          if (err instanceof SsrfBlockedError) {
-            // Never retryable — the target will stay blocked.
-            await db.update(webhookQueue)
-              .set({
-                status: 'dead_letter',
-                errorMessage: `Blocked by SSRF protection: ${err.reason}`,
-                nextRetryAt: null,
-              })
-              .where(eq(webhookQueue.id, delivery.id))
-              .catch((e) => console.warn('[Webhook] Failed to record blocked delivery', e));
-            logger.warn(`[webhook] ${hook.name} delivery error: blocked by SSRF protection: ${err.reason}`);
-            continue;
-          }
-          throw err;
+          logger.warn(`[webhook] ${hook.name} delivery error: ${err instanceof Error ? err.message : String(err)}`);
         }
-
-        // Update delivery status + integration lastUsedAt atomically
-        await db.transaction(async (tx) => {
-          if (res.ok) {
-            await tx.update(webhookQueue)
-              .set({
-                status: 'delivered',
-                responseStatus: res.status,
-                deliveredAt: new Date(),
-              })
-              .where(eq(webhookQueue.id, delivery.id));
-          } else {
-            const responseBody = await res.text().catch(() => '');
-            const nextAttempt = (delivery.attempt ?? 0) + 1;
-            const retryDelay = getRetryDelay(nextAttempt);
-            await tx.update(webhookQueue)
-              .set({
-                status: 'failed',
-                responseStatus: res.status,
-                responseBody: responseBody.slice(0, 1000),
-                 attempt: nextAttempt,
-                 failedAt: new Date(),
-                nextRetryAt: new Date(Date.now() + retryDelay),
-              })
-              .where(eq(webhookQueue.id, delivery.id));
-          }
-
-          await tx.update(integrations)
-            .set({ lastUsedAt: new Date() })
-            .where(eq(integrations.id, hook.id));
-        }).catch((e) => console.warn('[Webhook] Failed to update delivery + integration timestamp', e));
-          
- 
- 
-      } catch (err: unknown) {
-        logger.warn(`[webhook] ${hook.name} delivery error: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      }));
     }
  
  
