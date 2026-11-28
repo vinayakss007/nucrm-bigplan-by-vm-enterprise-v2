@@ -15,6 +15,7 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { parsePageLimit } from '@/lib/api/query-params';
+import { getOrSet } from '@/lib/cache';
 
 /**
  * Superadmin Cross-Tenant Data Search & Explorer
@@ -59,7 +60,7 @@ async function handleSummary(searchParams: URLSearchParams) {
 
     if (tenantId) {
       // Summary for a specific tenant
-      const res = await db.execute(sql`
+      const rows = await getOrSet(`de:summary:tenant:${tenantId}`, async () => (await db.execute(sql`
         SELECT t.id, t.name, t.subdomain, t.slug, t.status, p.name as plan,
                t.created_at, t.trial_ends_at,
                u.email as owner_email, u.full_name as owner_name,
@@ -76,17 +77,17 @@ async function handleSummary(searchParams: URLSearchParams) {
         LEFT JOIN public.plans p ON p.id = t.plan_id
         LEFT JOIN users u ON t.owner_id = u.id
         WHERE t.id = ${tenantId}
-      `);
+      `)).rows, 300);
 
-      if (res.rows.length === 0) {
+      if (rows.length === 0) {
         return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ tenant: res.rows[0] });
+      return NextResponse.json({ tenant: rows[0] });
     }
 
     // Platform-wide summary
-    const summaryRes = await db.execute(sql`
+    const rows = await getOrSet('de:summary:platform', async () => (await db.execute(sql`
       SELECT
         (SELECT count(*) FROM tenants) as total_tenants,
         (SELECT count(*) FROM tenants WHERE status = 'active') as active_tenants,
@@ -101,11 +102,9 @@ async function handleSummary(searchParams: URLSearchParams) {
         (SELECT COALESCE(SUM(d.amount), 0) FROM deals d WHERE d.deleted_at IS NULL) as total_pipeline_value,
         (SELECT count(*) FROM tenants WHERE created_at > NOW() - INTERVAL '7 days') as new_this_week,
         (SELECT count(*) FROM tenants WHERE created_at > NOW() - INTERVAL '30 days') as new_this_month
-    `);
+    `)).rows, 300);
 
-    return NextResponse.json({ summary: summaryRes.rows[0] });
- 
- 
+    return NextResponse.json({ summary: rows[0] });
   } catch (err) {
     return apiError(err);
   }
@@ -115,53 +114,53 @@ async function handleSummary(searchParams: URLSearchParams) {
 
 async function handleSchemaInfo() {
   try {
-    // Get all tables with their columns and row counts
-    const tablesRes = await db.execute(sql`
-      SELECT 
-        t.table_name,
-        (SELECT count(*) FROM information_schema.columns c 
-         WHERE c.table_name = t.table_name AND c.table_schema = 'public') as column_count,
-        (SELECT EXISTS(
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = t.table_name AND column_name = 'tenant_id'
-        )) as has_tenant_id,
-        (SELECT EXISTS(
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = t.table_name AND column_name = 'deleted_at'
-        )) as has_soft_delete
-      FROM information_schema.tables t
-      WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
-      ORDER BY t.table_name
-    `);
+    const tableDetails = await getOrSet('de:schema:v1', async () => {
+      // One aggregate query replaces three correlated subqueries per table.
+      const tablesRes = await db.execute(sql`
+        SELECT c.table_name,
+               count(*)::int AS column_count,
+               bool_or(c.column_name = 'tenant_id') AS has_tenant_id,
+               bool_or(c.column_name = 'deleted_at') AS has_soft_delete
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+          ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+        GROUP BY c.table_name
+        ORDER BY c.table_name
+      `);
+      const tables = tablesRes.rows as { table_name: string; column_count: number; has_tenant_id: boolean; has_soft_delete: boolean }[];
+      const tenantTables = tables.filter(t => t.has_tenant_id).slice(0, 20);
 
-    const tables = tablesRes.rows as { table_name: string; column_count: number; has_tenant_id: boolean; has_soft_delete: boolean }[];
-    const tenantTables = tables.filter(t => t.has_tenant_id);
-    const tableDetails: { table: string; columns: unknown; totalRows: number }[] = [];
-
-    for (const table of tenantTables.slice(0, 20)) {
-      try {
-        const columnsRes = await db.execute(sql`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_name = ${table.table_name} AND table_schema = 'public'
-          ORDER BY ordinal_position
-        `);
-
-        const countResult = await db.execute(sql`SELECT count(*) FROM ${sql.identifier(table.table_name)}`);
-
-        tableDetails.push({
-          table: table.table_name,
-          columns: columnsRes.rows,
-          totalRows: parseInt(((countResult.rows[0] as Record<string, unknown>)?.count as string) || '0', 10),
-        });
-      } catch {
-        // Silently skip during migration/setup when tables may not exist yet
-      }
-    }
+      // Bounded fan-out: the per-table reads are independent and now run in
+      // parallel instead of two serial round trips each (#4061).
+      const results = await Promise.all(tenantTables.map(async (table) => {
+        try {
+          const [columnsRes, countResult] = await Promise.all([
+            db.execute(sql`
+              SELECT column_name, data_type, is_nullable
+              FROM information_schema.columns
+              WHERE table_name = ${table.table_name} AND table_schema = 'public'
+              ORDER BY ordinal_position
+            `),
+            db.execute(sql`
+              SELECT reltuples::bigint AS estimate
+              FROM pg_class
+              WHERE oid = to_regclass(${'public.' + table.table_name})
+            `),
+          ]);
+          return {
+            table: table.table_name,
+            columns: columnsRes.rows,
+            totalRows: Number((countResult.rows[0] as Record<string, unknown>)?.estimate ?? 0),
+          };
+        } catch {
+          return null;
+        }
+      }));
+      return results.filter(r => r !== null) as { table: string; columns: unknown; totalRows: number }[];
+    }, 300);
 
     return NextResponse.json({ tables: tableDetails });
- 
- 
   } catch (err) {
     return apiError(err);
   }
