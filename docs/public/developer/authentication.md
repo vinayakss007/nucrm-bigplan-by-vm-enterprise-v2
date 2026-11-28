@@ -7,11 +7,11 @@ Every non-public NuCRM API request must be authenticated and is scoped to a sing
 
 ## Authentication methods
 
-| Method | Best for | How |
-| --- | --- | --- |
-| **API key** | Server-to-server integrations | `Authorization: Bearer <api_key>` |
-| **Session cookie** | Browser / first-party apps | `nucrm_session` cookie (set on login) |
-| **Bearer JWT** | Authenticated user context | `Authorization: Bearer <jwt>` |
+| Method             | Best for                      | How                                   |
+| ------------------ | ----------------------------- | ------------------------------------- |
+| **API key**        | Server-to-server integrations | `Authorization: Bearer <api_key>`     |
+| **Session cookie** | Browser / first-party apps    | `nucrm_session` cookie (set on login) |
+| **Bearer JWT**     | Authenticated user context    | `Authorization: Bearer <jwt>`         |
 
 For most integrations, use an **API key**.
 
@@ -40,13 +40,13 @@ does not reveal which auth method failed).
 
 ```bash
 # API key (recommended for integrations)
-curl https://your-domain.com/api/v2/contacts \
+curl https://your-domain.com/api/tenant/contacts \
   -H "Authorization: Bearer $NUCRM_API_KEY"
 ```
 
 ```bash
 # Explicit tenant header (privileged operations)
-curl https://your-domain.com/api/v2/contacts \
+curl https://your-domain.com/api/tenant/contacts \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-Tenant-ID: <workspace-uuid>"
 ```

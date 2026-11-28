@@ -8,33 +8,32 @@ Integrate with NuCRM programmatically: read and write CRM data, receive events, 
 
 ## What's available
 
-| Capability | Doc |
-| --- | --- |
-| **REST API** | [REST API Reference](./rest-api.md) |
-| **Authentication** (API keys, JWT, tenant resolution) | [Authentication](./authentication.md) |
-| **Official TypeScript SDK** | [SDK](./sdk.md) |
-| **Webhooks** (outbound events) | [Webhooks](./webhooks.md) |
-| **Embeddable forms & lead capture** | [Embeds & Forms](./embeds-and-forms.md) |
+| Capability                                            | Doc                                                                   |
+| ----------------------------------------------------- | --------------------------------------------------------------------- |
+| **REST API**                                          | [REST API Reference](./rest-api.md)                                   |
+| **Authentication** (API keys, JWT, tenant resolution) | [Authentication](./authentication.md)                                 |
+| **Official TypeScript SDK**                           | [SDK](./sdk.md)                                                       |
+| **Build an AI service that reads documents**          | [AI service quickstart](./ai-service-quickstart.md)                   |
+| **Webhooks** (outbound events)                        | [Webhooks](./webhooks.md)                                             |
+| **Embeddable forms & lead capture**                   | [Embeds & Forms](./embeds-and-forms.md)                               |
+| **Read-only MCP server for documents**                | [`examples/mcp-documents`](../../../examples/mcp-documents/README.md) |
 
 ---
 
-## API versions & base URLs
+## API base URLs
 
-NuCRM exposes a **versioned public API**. The current version is **v2**.
+New integrations should call the tenant API directly:
 
-| Version | Base path | Notes |
-| --- | --- | --- |
-| **v2** | `/api/v2` | Current. Recommended for all new integrations. |
-| **v1** | `/api/v1` | Maintained for compatibility. See the v1→v2 migration notes. |
+- Local development: `http://localhost:3000/api/tenant`
+- Your production instance: `https://<your-domain>/api/tenant`
 
-Example base URLs:
+`/api/v1` and `/api/v2` remain as **deprecated compatibility gateways** that resolve the tenant
+and redirect to `/api/tenant` (with Sunset headers). They still work but are not where new
+endpoints are added. The SDK targets `/api/tenant` itself — pass your instance origin as
+`baseUrl`, without any API path suffix.
 
-- Local development: `http://localhost:3000/api/v2`
-- Your production instance: `https://<your-domain>/api/v2`
-
-Both `v1` and `v2` are **gateways**: they authenticate the request, resolve the target
-**tenant**, apply CORS, and route to the underlying CRM resource. This means you get a stable,
-versioned surface even as internals evolve.
+API keys (`Authorization: Bearer ak_live_…`) are accepted on `/api/tenant` data routes; cookies
+and JWTs work there too.
 
 ---
 
@@ -50,16 +49,16 @@ versioned surface even as internals evolve.
 
 ```bash
 # List contacts (Bearer token / API key)
-curl https://your-domain.com/api/v2/contacts \
+curl https://your-domain.com/api/tenant/contacts \
   -H "Authorization: Bearer $NUCRM_API_KEY"
 ```
 
 ```ts
 // Using the TypeScript SDK
-import { NuCRMClient } from '@nucrm/sdk';
+import { NuCRMClient } from "@nucrm/sdk";
 
 const nucrm = new NuCRMClient({
-  baseUrl: 'https://your-domain.com/api/v2',
+  baseUrl: "https://your-domain.com",
   apiKey: process.env.NUCRM_API_KEY,
 });
 

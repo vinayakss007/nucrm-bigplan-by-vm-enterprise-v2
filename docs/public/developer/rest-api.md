@@ -12,10 +12,11 @@ invoices, quotes, orders, contracts, and more.
 ## Base URL & version
 
 ```
-https://<your-domain>/api/v2
+https://<your-domain>/api/tenant
 ```
 
-The current API version is **v2**. See [Overview](./README.md#api-versions--base-urls) for v1.
+New integrations should call `/api/tenant` directly. `/api/v2` is a deprecated compatibility
+gateway that resolves the tenant and redirects here; see [Overview](./README.md#api-base-urls).
 
 ## Authentication
 
@@ -28,19 +29,19 @@ All endpoints (except public/health) require authentication and are scoped to a 
 
 The API exposes CRUD-style endpoints for the core CRM resources, including:
 
-| Resource | Example endpoints |
-| --- | --- |
-| **Contacts** | `GET/POST /contacts`, `GET/PUT/DELETE /contacts/{id}`, `POST /contacts/merge`, import/export |
-| **Companies** | `GET/POST /companies`, `GET/PUT/DELETE /companies/{id}` |
-| **Leads** | `GET/POST /leads`, `POST /leads/{id}/convert` |
-| **Deals** | `GET/POST /deals`, `GET/PUT/DELETE /deals/{id}` |
-| **Tasks** | `GET/POST /tasks`, `GET/PUT/DELETE /tasks/{id}` |
-| **Meetings / Activities** | `GET/POST /meetings`, `GET/POST /activities` |
-| **Tickets** | `GET/POST /tickets` |
-| **Invoices / Quotes / Orders** | `GET/POST /invoices`, `/quotes`, `/orders` |
-| **Contracts / Subscriptions / Services** | `GET/POST /contracts`, `/subscriptions`, `/services` |
-| **Products** | `GET/POST /products` |
-| **Forms / Sequences / Automations / Reports** | `GET/POST /forms`, `/sequences`, `/automations`, `/reports` |
+| Resource                                      | Example endpoints                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Contacts**                                  | `GET/POST /contacts`, `GET/PUT/DELETE /contacts/{id}`, `POST /contacts/merge`, import/export |
+| **Companies**                                 | `GET/POST /companies`, `GET/PUT/DELETE /companies/{id}`                                      |
+| **Leads**                                     | `GET/POST /leads`, `POST /leads/{id}/convert`                                                |
+| **Deals**                                     | `GET/POST /deals`, `GET/PUT/DELETE /deals/{id}`                                              |
+| **Tasks**                                     | `GET/POST /tasks`, `GET/PUT/DELETE /tasks/{id}`                                              |
+| **Meetings / Activities**                     | `GET/POST /meetings`, `GET/POST /activities`                                                 |
+| **Tickets**                                   | `GET/POST /tickets`                                                                          |
+| **Invoices / Quotes / Orders**                | `GET/POST /invoices`, `/quotes`, `/orders`                                                   |
+| **Contracts / Subscriptions / Services**      | `GET/POST /contracts`, `/subscriptions`, `/services`                                         |
+| **Products**                                  | `GET/POST /products`                                                                         |
+| **Forms / Sequences / Automations / Reports** | `GET/POST /forms`, `/sequences`, `/automations`, `/reports`                                  |
 
 > The exact list of paths, parameters, and schemas is defined in the OpenAPI spec — always treat it
 > as the source of truth.
@@ -58,13 +59,13 @@ The API exposes CRUD-style endpoints for the core CRM resources, including:
 
 List endpoints support offset pagination:
 
-| Parameter | Default | Max |
-| --- | --- | --- |
-| `limit` | `50` | `500` |
-| `offset` | `0` | — |
+| Parameter | Default | Max   |
+| --------- | ------- | ----- |
+| `limit`   | `50`    | `500` |
+| `offset`  | `0`     | —     |
 
 ```bash
-curl "https://your-domain.com/api/v2/contacts?limit=100&offset=200" \
+curl "https://your-domain.com/api/tenant/contacts?limit=100&offset=200" \
   -H "Authorization: Bearer $NUCRM_API_KEY"
 ```
 
@@ -72,16 +73,16 @@ curl "https://your-domain.com/api/v2/contacts?limit=100&offset=200" \
 
 Errors return an appropriate HTTP status with a JSON body describing the problem. Common statuses:
 
-| Status | Meaning |
-| --- | --- |
-| `400` | Validation error — check the message/details. |
-| `401` | Not authenticated (or auth method not accepted). |
-| `403` | Authenticated but not permitted (RBAC / plan / module gating). |
-| `404` | Resource not found (or not in your tenant). |
-| `409` | Conflict (e.g. duplicate). |
-| `422` | Semantically invalid input. |
-| `429` | Rate limit exceeded. |
-| `5xx` | Server error. |
+| Status | Meaning                                                        |
+| ------ | -------------------------------------------------------------- |
+| `400`  | Validation error — check the message/details.                  |
+| `401`  | Not authenticated (or auth method not accepted).               |
+| `403`  | Authenticated but not permitted (RBAC / plan / module gating). |
+| `404`  | Resource not found (or not in your tenant).                    |
+| `409`  | Conflict (e.g. duplicate).                                     |
+| `422`  | Semantically invalid input.                                    |
+| `429`  | Rate limit exceeded.                                           |
+| `5xx`  | Server error.                                                  |
 
 ### Rate limiting
 

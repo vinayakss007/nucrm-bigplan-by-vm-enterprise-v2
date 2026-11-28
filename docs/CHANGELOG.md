@@ -6,6 +6,19 @@ All notable changes to NuCRM are documented here.
 
 ## [Unreleased]
 
+### External document access — SDK, REST, MCP
+
+- **SDK**: `documents.get()`/`create()` now unwrap the `{ data }` envelope; `list()` has accurate
+  `StoredDocument`/`DocumentPage` types and supports `entityType`, `entityId` and `folderId`
+  filters (`lib/sdk/resources/documents.ts`)
+- **REST**: `GET /api/tenant/documents` and `GET /api/tenant/documents/{id}` are documented in
+  `public/api/openapi.yaml` with an `ApiKeyAuth` security scheme and the correct `/api/tenant` base URL
+- **MCP**: new read-only, stateless Streamable HTTP server exposing `crm_documents_list`,
+  `crm_document_get` and `crm_document_read_text` (`examples/mcp-documents/`)
+- **Docs**: new [AI service quickstart](public/developer/ai-service-quickstart.md); stale `/api/v2`
+  and `@nucrm/sdk` references corrected in the developer guides
+- **Dependency**: `@modelcontextprotocol/sdk@1.32.2` added
+
 ### Pre-Prod Bring-Up Fixes (2026-09-15)
 
 Fixes for the UpCloud pre-prod stack, plus the issue register that tracks the work
@@ -68,11 +81,11 @@ A complete custom plugin system that lets users connect to ANY external API.
 
 Three distinct systems are now properly separated:
 
-| System       | Purpose                                    | Location            |
-| ------------ | ------------------------------------------ | ------------------- |
-| Modules      | Internal feature packs (plan-gated)        | `lib/modules/`      |
-| Integrations | First-party curated providers              | `lib/integrations/` |
-| Plugins      | User-created custom connectors             | `lib/plugins/`      |
+| System       | Purpose                             | Location            |
+| ------------ | ----------------------------------- | ------------------- |
+| Modules      | Internal feature packs (plan-gated) | `lib/modules/`      |
+| Integrations | First-party curated providers       | `lib/integrations/` |
+| Plugins      | User-created custom connectors      | `lib/plugins/`      |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for full details.
 

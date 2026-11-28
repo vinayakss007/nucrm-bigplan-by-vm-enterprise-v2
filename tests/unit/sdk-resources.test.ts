@@ -265,3 +265,35 @@ describe('SDK Resources - shared CRUD factory', () => {
     });
   });
 });
+
+describe('DocumentsResource - stored document catalog', () => {
+  it('get() unwraps the single-key { data } envelope', async () => {
+    const detail = { id: 'd-1', name: 'proposal.pdf', download_url: 'https://s3.example/signed' };
+    const request = vi.fn().mockResolvedValue({ data: detail });
+    const resource = new DocumentsResource(request);
+    await expect(resource.get('d-1')).resolves.toEqual(detail);
+  });
+
+  it('create() unwraps { data: { document, uploadUrl } }', async () => {
+    const result = { document: { id: 'd-2' }, uploadUrl: 'https://s3.example/put' };
+    const request = vi.fn().mockResolvedValue({ data: result });
+    const resource = new DocumentsResource(request);
+    await expect(resource.create({ name: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 10 })).resolves.toEqual(result);
+  });
+
+  it('list() keeps the page envelope and forwards entity filters', async () => {
+    const page = { data: { documents: [], folders: [] }, page: 1, limit: 50, total: 0 };
+    const request = vi.fn().mockResolvedValue(page);
+    const resource = new DocumentsResource(request);
+    await expect(resource.list({ entityType: 'deal', entityId: 'deal-1', page: 2, limit: 10 })).resolves.toEqual(page);
+    expect(request).toHaveBeenCalledWith('GET', '/documents', undefined, {
+      page: '2', limit: '10', entityType: 'deal', entityId: 'deal-1',
+    });
+  });
+
+  it('list() leaves a bare { data: [...] } collection untouched', async () => {
+    const request = vi.fn().mockResolvedValue({ data: [] });
+    const resource = new DocumentsResource(request);
+    await expect(resource.list()).resolves.toEqual({ data: [] });
+  });
+});
