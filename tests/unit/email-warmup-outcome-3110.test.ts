@@ -66,13 +66,15 @@ const m = vi.hoisted(() => {
   const tx = { update: vi.fn(record)};
 
   const db = {
-    select: vi.fn(() => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: async () => state.configs,
-        }),
-      }),
-    })),
+    select: vi.fn(() => {
+      const chain: Record<string, unknown> = {};
+      chain.from = () => chain;
+      chain.innerJoin = () => chain;
+      chain.leftJoin = () => chain;
+      chain.where = () => chain;
+      chain.groupBy = () => Promise.resolve(state.configs);
+      return chain;
+    }),
     query: {
       emailWarmupPool: {
         findMany: vi.fn(async () => state.participants),
