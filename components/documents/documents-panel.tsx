@@ -23,6 +23,7 @@ import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { verifyUploadedDocument } from '@/lib/documents/verify-upload';
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
+import { openExternalUrl } from '@/lib/sanitize';
 import toast from 'react-hot-toast';
 import pLimit from 'p-limit';
 
@@ -155,7 +156,7 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   const downloadDocument = async (doc: DocumentRow) => {
     try {
       const json = await fetchJsonOrThrow<{ data: { download_url: string } }>(`/api/tenant/documents/${doc.id}`);
-      window.open(json.data.download_url, '_blank');
+      openExternalUrl(json.data.download_url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Download failed');
     }

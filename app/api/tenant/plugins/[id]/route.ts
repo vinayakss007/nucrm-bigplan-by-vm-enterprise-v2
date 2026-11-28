@@ -44,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest, context: RouteConte
     }
 
     // Decrypt authConfig and redact sensitive values for the response
-    let safeAuthConfig: unknown = plugin.authConfig;
+    let safeAuthConfig: unknown;
     if (typeof plugin.authConfig === 'string') {
       try {
         const decrypted = decryptAuthConfig(plugin.authConfig);
