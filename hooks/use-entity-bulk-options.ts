@@ -20,7 +20,7 @@ function extractArray(body: unknown, key: string): unknown[] {
   return [];
 }
 
-export function useEntityBulkOptions(entityType: 'contact' | 'company' | 'deal') {
+export function useEntityBulkOptions(entityType: 'contact' | 'company' | 'deal' | 'task') {
   const [customFields, setCustomFields] = useState<FieldOption[]>([]);
   const [segments, setSegments] = useState<NamedOption[]>([]);
   const [optionErrors, setOptionErrors] = useState<Record<string, string>>({});

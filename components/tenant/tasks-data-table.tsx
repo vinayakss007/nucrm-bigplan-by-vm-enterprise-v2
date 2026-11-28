@@ -5,12 +5,13 @@
  */
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
+import { useEntityBulkOptions } from '@/hooks/use-entity-bulk-options'
 import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw, Archive } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
-import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -288,22 +289,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   ], [deleteEntity, today])
 
   // ── Bulk actions ──────────────────────────────────────────
-  const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
-  const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ fields?: { fieldKey: string; fieldLabel: string }[] }>('/api/tenant/custom-fields?entityType=task', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('tasks-data-table', 'Failed to load custom fields', new Error(r.message)); else if (r.status === 'ok') setCustomFields(r.data.fields ?? []); });
-    return () => abort.abort();
-  }, [])
-
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetchJsonSafe<{ data?: { id: string; name: string }[] }>('/api/tenant/segments?entity_type=task', { signal: abort.signal })
-      .then(r => { if (r.status === 'error') clientLogWarn('tasks-data-table', 'Failed to load segments', new Error(r.message)); else if (r.status === 'ok') setSegments(r.data.data ?? []); });
-    return () => abort.abort();
-  }, [])
+  const { customFields, segments, optionErrors, retry: retryOptions } = useEntityBulkOptions('task')
 
   const bulkActions = useMemo(() => {
     const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
@@ -551,6 +537,14 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
 
       {/* DataTable */}
       {loadError&&<div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">Could not load tasks — an empty list here would be a lie.</div>}
+      {Object.keys(optionErrors).length > 0 && (
+        <div className="mb-3">
+          <InlineErrorState
+            message={`Bulk action options could not be loaded (${Object.keys(optionErrors).join(', ')}). An empty picker here would be a lie.`}
+            onRetry={retryOptions}
+          />
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={tasks}

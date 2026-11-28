@@ -9,7 +9,7 @@
  * render "No leads …" (plus an "add leads" prompt) over an outage.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/client-logger', () => ({ clientLogWarn: vi.fn() }));
@@ -36,6 +36,16 @@ function stubFetch(listResponse: Response) {
   });
 }
 
+function stubByUrl(overrides: Record<string, Response>) {
+  const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/tenant/contacts?')) return resp({ data: [] });
+    const key = Object.keys(overrides).find(k => url.includes(k));
+    return key ? overrides[key] : resp({ data: [], fields: [] });
+  });
+  return mock;
+}
+
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
@@ -59,5 +69,40 @@ describe('#3408: leads client distinguishes a failed refresh from an empty pipel
     mount();
     await waitFor(() => expect(screen.getByText('Ada Lovelace')).toBeTruthy());
     expect(screen.queryByText('Leads could not be loaded.')).toBeNull();
+  });
+});
+
+describe('#3408: leads option lists distinguish a failed read from an empty one', () => {
+  it('names the failed product catalogue read instead of an empty picker', async () => {
+    stubByUrl({ '/api/tenant/products': resp({ error: 'offline' }, false, 500) });
+    mount();
+    await waitFor(() => expect(screen.getByText(/Lead option lists could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/products/)).toBeTruthy();
+  });
+
+  it('names the failed segments read', async () => {
+    stubByUrl({ '/api/tenant/segments': resp({ error: 'forbidden' }, false, 403) });
+    mount();
+    await waitFor(() => expect(screen.getByText(/Lead option lists could not be loaded/)).toBeTruthy());
+    expect(screen.getByText(/segments/)).toBeTruthy();
+  });
+
+  it('re-runs the failed catalogue read from the retry button', async () => {
+    const mock = stubByUrl({ '/api/tenant/products': resp({ error: 'offline' }, false, 500) });
+    mount();
+    await waitFor(() => expect(screen.getByText(/Lead option lists could not be loaded/)).toBeTruthy());
+    const before = mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/products')).length;
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => {
+      const after = mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/products')).length;
+      expect(after).toBe(before + 1);
+    });
+  });
+
+  it('shows no option alert when every catalogue answers empty', async () => {
+    const mock = stubByUrl({});
+    mount();
+    await waitFor(() => expect(mock.mock.calls.filter(([input]) => String(input).includes('/api/tenant/products')).length).toBe(1));
+    expect(screen.queryByText(/Lead option lists could not be loaded/)).toBeNull();
   });
 });
