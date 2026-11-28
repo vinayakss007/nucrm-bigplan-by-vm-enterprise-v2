@@ -95,8 +95,8 @@ export function failureFromBody(body: unknown, status: number): ApiFailure | nul
   return null;
 }
 
-export async function apiFetcher<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(url);
+export async function apiFetcher<T = unknown>(url: string, headers?: Record<string, string>): Promise<T> {
+  const res = await fetch(url, headers ? { headers } : undefined);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const info = await res.json().catch(() => ({}));
@@ -172,10 +172,11 @@ export function useApiQuery<T = unknown>(
   key: readonly unknown[],
   url: string,
   options?: Omit<UseQueryOptions<T, ApiQueryError>, 'queryKey' | 'queryFn'>,
+  headers?: Record<string, string>,
 ) {
   const query = useQuery<T, ApiQueryError>({
     queryKey: key,
-    queryFn: () => apiFetcher<T>(url),
+    queryFn: () => apiFetcher<T>(url, headers),
     ...options,
   });
   return { ...query, state: apiQueryState(query) };

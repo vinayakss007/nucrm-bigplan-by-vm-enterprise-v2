@@ -26,8 +26,9 @@ function AcceptInviteContent() {
 
   const { data, isLoading, error: queryError, refetch } = useApiQuery<Invitation & { error?: string; isLoggedIn?: boolean }>(
     ['invite-details', token],
-    `/api/auth/invite-details?token=${token}`,
+    '/api/auth/invite-details',
     { enabled: !!token, retry: false },
+    token ? { 'x-invite-token': token } : undefined,
   );
 
   // #2294: derive the view synchronously instead of only via effect-set state,
