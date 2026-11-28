@@ -17,13 +17,22 @@ import type { ReactNode } from 'react';
 const data = vi.hoisted(() => ({
   fields: [{ id: 'F1', field_label: 'Tier', field_key: 'tier', field_type: 'text',
     is_required: false, is_searchable: false, is_calculated: false, display_order: 1 }],
+  featuresError: null as Error | null,
+  refetchFeatures: null as ReturnType<typeof vi.fn> | null,
 }));
 
 vi.mock('@/lib/query/client', () => ({
-  useApiQuery: (_key: unknown, url: string) => ({
-    data: String(url).includes('features') ? { features: [] } : { fields: data.fields },
-    error: null, isLoading: false, refetch: vi.fn(),
-  }),
+  useApiQuery: (_key: unknown, url: string) => {
+    const features = String(url).includes('features');
+    const refetch = vi.fn();
+    if (features) data.refetchFeatures = refetch;
+    return {
+      data: features ? { features: [] } : { fields: data.fields },
+      error: features ? data.featuresError : null,
+      isLoading: false,
+      refetch,
+    };
+  },
 }));
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/components/ui/confirm-dialog', () => ({
@@ -47,7 +56,7 @@ function mount(deleteResult: Response) {
   render(<CustomFieldsPage />, { wrapper });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); data.featuresError = null; data.refetchFeatures = null; });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('#3408: custom-field mutations surface failures', () => {
@@ -66,5 +75,28 @@ describe('#3408: custom-field mutations surface failures', () => {
       c => String(c[0]).includes('custom-fields?fieldId=F1'),
     )).toBe(true));
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('#3408: custom-fields features panel distinguishes a failed read from no features', () => {
+  it('names the failed read instead of silently hiding the panel', async () => {
+    data.featuresError = new Error('Request failed (503)');
+    mount(resp({}));
+    await waitFor(() => expect(screen.getByText(/Active Features could not be loaded/)).toBeTruthy());
+    expect(screen.queryByText('Active Features (auto-registered)')).toBeNull();
+  });
+
+  it('re-runs the features read from the retry button', async () => {
+    data.featuresError = new Error('Request failed (503)');
+    mount(resp({}));
+    await waitFor(() => expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy());
+    screen.getByRole('button', { name: /try again/i }).click();
+    expect(data.refetchFeatures).toHaveBeenCalled();
+  });
+
+  it('a healthy empty read shows no alert', async () => {
+    mount(resp({}));
+    await waitFor(() => expect(screen.getByTitle('Delete')).toBeTruthy());
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
