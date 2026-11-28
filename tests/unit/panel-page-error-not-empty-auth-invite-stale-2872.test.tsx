@@ -80,7 +80,7 @@ vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: { method?: string }) =>
 import AcceptInvitePage from '@/app/auth/invite/page';
 
 const PAGE = 'app/auth/invite/page.tsx';
-const URL = '/api/auth/invite-details?token=inv-1';
+const URL = '/api/auth/invite-details';
 const INVITATION = { email: 'ada@example.test', tenant_name: 'Analytical Co', role_slug: 'agent', primary_color: '#7c3aed' };
 
 /** A failure that carries the server's own words — `ApiQueryError.info`, #2294. */

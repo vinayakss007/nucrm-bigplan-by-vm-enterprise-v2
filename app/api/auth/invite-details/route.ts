@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'invite-details', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    const token = new URL(request.url).searchParams.get('token');
+    const token = request.headers.get('x-invite-token') || new URL(request.url).searchParams.get('token');
     if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
 
     // #3182: the same contextless read that made /api/auth/accept-invite 404 for
