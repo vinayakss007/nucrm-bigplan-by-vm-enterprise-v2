@@ -20,6 +20,7 @@ import { notFound } from 'next/navigation';
 import DealDetailClient from '@/components/tenant/deal-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
 import { getActivityTimeline } from '@/lib/activity/timeline';
+import RecordAiActions from '@/components/tenant/ai/record-ai-actions';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -169,6 +170,8 @@ export default async function DealDetailPage({ params }: PageProps) {
   };
 
   return (
+    <>
+    <RecordAiActions entityType="deal" entityId={id} canEdit={permissions.canEdit} />
     <DealDetailClient
       deal={deal}
       tasks={tasks}
@@ -180,6 +183,7 @@ export default async function DealDetailPage({ params }: PageProps) {
       tenantId={ctx.tenantId}
       userId={ctx.userId}
     />
+    </>
   );
 
   });

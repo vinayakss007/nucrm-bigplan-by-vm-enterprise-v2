@@ -28,6 +28,7 @@ import { notFound } from 'next/navigation';
 import ContactDetailClient from '@/components/tenant/contact-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
 import { getActivityTimeline } from '@/lib/activity/timeline';
+import RecordAiActions from '@/components/tenant/ai/record-ai-actions';
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   return withTenantScope(async () => {
@@ -261,6 +262,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   };
 
   return (
+    <>
+    <RecordAiActions entityType="contact" entityId={contactId} canEdit={permissions.canEdit} />
     <ContactDetailClient
       contact={contact}
       initialActivities={activities}
@@ -280,6 +283,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       followUps={followUpsList}
       sourceLead={sourceLead}
     />
+    </>
   );
 
   });
