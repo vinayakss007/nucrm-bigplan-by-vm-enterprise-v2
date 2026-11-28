@@ -36,6 +36,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => ({ type: 'eq', args })),
   and: vi.fn((...args: unknown[]) => ({ type: 'and', args })),
   isNull: vi.fn((...args: unknown[]) => ({ type: 'isNull', args })),
+  inArray: vi.fn((...args: unknown[]) => ({ type: 'inArray', args })),
   sql: Object.assign(
     vi.fn(() => ({ type: 'sql' })),
     { raw: vi.fn() },

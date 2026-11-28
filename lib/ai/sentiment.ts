@@ -5,7 +5,7 @@
  */
 import { db } from '@/drizzle/db';
 import { deals } from '@/drizzle/schema/crm';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 import { chat } from './gateway';
 import { logger } from '@/lib/logger';
 
@@ -151,11 +151,34 @@ export async function updateContactDealsSentiment(
       sql`COALESCE(${deals.metadata}->>'outcome', '') NOT IN ('won', 'lost')`,
     ));
 
-  for (const deal of contactDeals) {
-    await updateDealSentiment(deal.id, tenantId, sentiment);
-  }
+  if (contactDeals.length === 0) return 0;
 
-  return contactDeals.length;
+  const dealIds = contactDeals.map(deal => deal.id);
+  const payload = JSON.stringify({
+    score: sentiment.score,
+    label: sentiment.label,
+    confidence: sentiment.confidence,
+    summary: sentiment.summary,
+    analyzedAt: new Date().toISOString(),
+  });
+
+  // One UPDATE for every open deal instead of one round trip per deal (#4067).
+  await db.update(deals)
+    .set({
+      metadata: sql`jsonb_set(
+        COALESCE(${deals.metadata}, '{}'::jsonb),
+        '{ai_sentiment}',
+        ${payload}::jsonb
+      )`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(deals.tenantId, tenantId),
+      inArray(deals.id, dealIds),
+      isNull(deals.deletedAt),
+    ));
+
+  return dealIds.length;
 }
 
 /**
