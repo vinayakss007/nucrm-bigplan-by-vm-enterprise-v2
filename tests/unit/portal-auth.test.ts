@@ -24,14 +24,18 @@ const sessionRow = {
   expiresAt: new Date(Date.now() + 86_400_000),
 };
 
-let tokenLookupResult: unknown[] = [tokenRow];
+const lookups = vi.hoisted(() => ({
+  token: [] as unknown[],
+  config: [] as unknown[],
+  settings: null as unknown,
+}));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
+      from: vi.fn((table: unknown) => ({
         where: vi.fn(() => ({
-          limit: vi.fn(async () => tokenLookupResult),
+          limit: vi.fn(async () => table === lookups.settings ? lookups.config : lookups.token),
         })),
       })),
     })),
@@ -56,7 +60,11 @@ vi.mock('@/lib/portal-session', async (importOriginal) => {
 import { resolvePortalContact, resolvePortalIdentity } from '@/lib/portal-auth';
 import { getPortalSession } from '@/lib/portal-session';
 import { db } from '@/drizzle/db';
+import { platformSettings } from '@/drizzle/schema';
 import type { RlsTransaction } from '@/lib/db/rls';
+
+lookups.settings = platformSettings;
+
 function reqWithHeaders(headers: Record<string, string>): NextRequest {
   return new NextRequest('http://localhost/api/public/quotes/x/accept', { headers });
 }
@@ -64,7 +72,8 @@ function reqWithHeaders(headers: Record<string, string>): NextRequest {
 describe('resolvePortalIdentity (#1913)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    tokenLookupResult = [tokenRow];
+    lookups.token = [tokenRow];
+    lookups.config = [];
   });
 
   it('resolves identity from a valid x-portal-token header', async () => {
@@ -72,8 +81,20 @@ describe('resolvePortalIdentity (#1913)', () => {
     expect(identity).toEqual({ email: 'token-client@example.com', tenantId: 'tenant-token' });
   });
 
+  it('#4091 refuses a valid token when the portal is explicitly disabled', async () => {
+    lookups.config = [{ value: { enabled: false } }];
+    const identity = await resolvePortalIdentity(reqWithHeaders({ 'x-portal-token': 'good-token' }));
+    expect(identity).toBeNull();
+  });
+
+  it('#4091 keeps working when the portal config has no explicit flag', async () => {
+    lookups.config = [{ value: { enabled: true } }];
+    const identity = await resolvePortalIdentity(reqWithHeaders({ 'x-portal-token': 'good-token' }));
+    expect(identity).toEqual({ email: 'token-client@example.com', tenantId: 'tenant-token' });
+  });
+
   it('returns null for an invalid/expired token (does NOT fall through to cookie)', async () => {
-    tokenLookupResult = [];
+    lookups.token = [];
     const identity = await resolvePortalIdentity(reqWithHeaders({ 'x-portal-token': 'bad-token' }));
     expect(identity).toBeNull();
     expect(getPortalSession).not.toHaveBeenCalled();
@@ -112,7 +133,7 @@ describe('resolvePortalContact (#1982)', () => {
   // transaction stand-in; the point of the signature is that a caller cannot
   // leave it out.
   it('returns the contact scoped to (email, tenantId)', async () => {
-    tokenLookupResult = [{ id: 'contact-9', tenantId: 'tenant-cookie' }];
+    lookups.token = [{ id: 'contact-9', tenantId: 'tenant-cookie' }];
     const contact = await resolvePortalContact(
       { email: 'cookie-client@example.com', tenantId: 'tenant-cookie' },
       db as unknown as RlsTransaction,
@@ -121,7 +142,7 @@ describe('resolvePortalContact (#1982)', () => {
   });
 
   it('returns null when no contact matches the scoped lookup', async () => {
-    tokenLookupResult = [];
+    lookups.token = [];
     const contact = await resolvePortalContact(
       { email: 'nobody@example.com', tenantId: 'tenant-cookie' },
       db as unknown as RlsTransaction,

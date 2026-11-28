@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import type { NextRequest } from 'next/server';
-import { contacts, portalClients } from '@/drizzle/schema';
+import { contacts, portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { getPortalSession } from '@/lib/portal-session';
 import type { RlsTransaction } from '@/lib/db/rls';
@@ -13,6 +13,34 @@ import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 export interface PortalIdentity {
   email: string;
   tenantId: string;
+}
+
+/**
+ * #4091: an explicit `portal_config.enabled = false` must close every
+ * customer-facing surface, not just /portal/login. A missing row (or a legacy
+ * row without the flag) keeps the historical behaviour — this only honours an
+ * explicit opt-out. Errors fail open here because identity validation itself
+ * already decided who the caller is; a config read outage must not lock every
+ * customer out of an enabled portal.
+ */
+async function portalExplicitlyDisabled(tenantId: string): Promise<boolean> {
+  try {
+    return await withPortalLookupContext({ tenantId }, async (tx) => {
+      const [row] = await tx
+        .select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(and(
+          eq(platformSettings.tenantId, tenantId),
+          eq(platformSettings.key, 'portal_config'),
+        ))
+        .limit(1);
+      const raw = row?.value;
+      const config = typeof raw === 'string' ? JSON.parse(raw) as Record<string, unknown> : raw;
+      return config?.['enabled'] === false;
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -57,11 +85,13 @@ export async function resolvePortalIdentity(request: NextRequest): Promise<Porta
       return row ?? null;
     });
     if (!portalClient) return null;
+    if (await portalExplicitlyDisabled(portalClient.tenantId)) return null;
     return { email: portalClient.email, tenantId: portalClient.tenantId };
   }
 
   const session = await getPortalSession();
   if (!session) return null;
+  if (await portalExplicitlyDisabled(session.tenantId)) return null;
   return { email: session.email, tenantId: session.tenantId };
 }
 
