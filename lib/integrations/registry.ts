@@ -215,8 +215,8 @@ async function openAiCompletion(
 }
 
 async function handleOpenAI(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
-  const apiKey = instance.config['api_key'];
-  const model = instance.config['model'] || 'gpt-4o-mini';
+  const apiKey = String(instance.config['api_key'] ?? '');
+  const model = String(instance.config['model'] || 'gpt-4o-mini');
 
   if (action === 'generate') {
     const result = await openAiCompletion(apiKey, model, String(params['prompt'] ?? ''), Number(params['temperature'] ?? 0.7));
