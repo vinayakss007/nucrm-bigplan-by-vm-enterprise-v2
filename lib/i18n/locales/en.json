@@ -161,6 +161,9 @@
     "validationError": "Please fix the errors below",
     "sessionExpired": "Your session has expired. Please login again."
   },
+  "notifications": {
+    "viewAll": "View all notifications"
+  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome back",

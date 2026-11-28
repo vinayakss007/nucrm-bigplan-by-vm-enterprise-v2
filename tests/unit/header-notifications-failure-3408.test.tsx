@@ -21,6 +21,9 @@ vi.mock('@/components/shared/bug-report-button', () => ({ default: () => null })
 vi.mock('@/lib/use-notifications', () => ({
   useNotifications: () => ({ unreadCount: 2, connected: true, transport: 'socket' }),
 }));
+vi.mock('@/lib/i18n/provider', () => ({
+  useTranslation: () => ({ locale: 'en', setLocale: vi.fn(), locales: { en: 'English' }, t: (k: string) => k }),
+}));
 
 import TenantHeader from '@/components/tenant/layout/header';
 import type { TenantInfo, ProfileInfo } from '@/components/tenant/layout/types';

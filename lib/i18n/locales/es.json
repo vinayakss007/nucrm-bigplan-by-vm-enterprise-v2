@@ -161,6 +161,9 @@
     "validationError": "Por favor corrige los errores a continuación",
     "sessionExpired": "Tu sesión ha expirado. Por favor inicia sesión nuevamente."
   },
+  "notifications": {
+    "viewAll": "Ver todas las notificaciones"
+  },
   "dashboard": {
     "title": "Panel",
     "welcome": "Bienvenido de nuevo",

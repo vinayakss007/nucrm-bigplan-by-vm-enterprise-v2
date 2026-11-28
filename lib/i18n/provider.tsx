@@ -11,27 +11,36 @@ import en from './locales/en.json';
 type TranslationValue = string | ((...args: string[]) => string);
 type TranslationDict = Record<string, unknown>;
 
-type Locale = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ja' | 'zh';
+type Locale = 'en' | 'es' | 'hi' | 'mr';
 
 const locales: Record<Locale, string> = {
   en: 'English',
   es: 'Español',
-  fr: 'Français',
-  de: 'Deutsch',
-  pt: 'Português',
-  ja: '日本語',
-  zh: '中文',
+  hi: 'हिन्दी',
+  mr: 'मराठी',
 };
 
 const defaultLocale: Locale = 'en';
+
+/** hi/mr ship with a different top-level shape; fold it into the en.json shape. */
+function normalize(dict: TranslationDict): TranslationDict {
+  const out: TranslationDict = { ...dict };
+  const nav = dict['nav'] as TranslationDict | undefined;
+  if (nav) out['navigation'] = { ...(out['navigation'] as TranslationDict | undefined), ...nav };
+  const actions = dict['actions'] as TranslationDict | undefined;
+  if (actions) out['common'] = { ...(out['common'] as TranslationDict | undefined), ...actions };
+  for (const key of ['status', 'entities', 'billing', 'auth']) {
+    const group = dict[key] as TranslationDict | undefined;
+    if (group) out[key] = { ...(out[key] as TranslationDict | undefined), ...group };
+  }
+  return out;
+}
+
 const localeFiles: Record<Locale, () => Promise<TranslationDict>> = {
   en: async () => en as TranslationDict,
   es: async () => (await import('./locales/es.json')).default as TranslationDict,
-  fr: async () => ({}),
-  de: async () => ({}),
-  pt: async () => ({}),
-  ja: async () => ({}),
-  zh: async () => ({}),
+  hi: async () => normalize((await import('./locales/hi')).hi as unknown as TranslationDict),
+  mr: async () => normalize((await import('./locales/mr')).mr as unknown as TranslationDict),
 };
 
 function getNestedValue(obj: TranslationDict, path: string): TranslationValue | TranslationDict | undefined {
@@ -68,13 +77,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(defaultLocale);
   const [translations, setTranslations] = useState<TranslationDict>(en as TranslationDict);
 
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('nucrm_locale') : null;
-    if (saved && saved in locales) {
-      setLocaleState(saved as Locale);
-    }
-  }, []);
-
   const setLocale = useCallback(async (newLocale: Locale) => {
     setLocaleState(newLocale);
     if (typeof window !== 'undefined') {
@@ -91,6 +93,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       setTranslations(en as TranslationDict);
     }
   }, []);
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('nucrm_locale') : null;
+    if (saved && saved in locales) void setLocale(saved as Locale);
+  }, [setLocale]);
 
   const t = useCallback((key: string, params?: Record<string, string>): string => {
     const value = getNestedValue(translations, key);

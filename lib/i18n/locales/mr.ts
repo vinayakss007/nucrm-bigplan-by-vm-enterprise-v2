@@ -98,4 +98,7 @@ export const mr = {
     createdBy: '{{user}} ने तयार केले',
     page: 'पृष्ठ {{current}} पैकी {{total}}',
   },
+  notifications: {
+    viewAll: 'सर्व सूचना पहा',
+  },
 } as const;
