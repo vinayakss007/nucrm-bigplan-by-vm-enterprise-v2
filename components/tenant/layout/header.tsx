@@ -14,6 +14,7 @@ import { clientLogError } from '@/lib/client-logger';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { fetchJsonSafe, fetchJsonOrThrow } from '@/lib/fetch-json';
+import { useNotifications } from '@/lib/use-notifications';
 import { deriveViewState } from '@/lib/view-state';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -26,7 +27,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   tenant: TenantInfo; profile: ProfileInfo; roleSlug: string; onToggleSidebar?: () => void;
 }) {
   const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
-  const [unread, setUnread]       = useState(0);
+  const { unreadCount }           = useNotifications();
+  const [localUnread, setLocalUnread] = useState<number | null>(null);
+  const unread = localUnread ?? unreadCount;
   const [query, setQuery]         = useState('');
   const [results, setResults]     = useState<HeaderSearchResults | null>(null);
   const [searching, setSearching] = useState(false);
@@ -66,21 +69,16 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   }, []);
 
   const loadNotifications = useCallback(async (signal?: AbortSignal) => {
-    const [unreadResult, notifResult] = await Promise.all([
-      fetchJsonSafe<{ count?: number }>('/api/tenant/notifications/unread', { signal }),
-      fetchJsonSafe<{ data?: Record<string, unknown>[] }>('/api/tenant/notifications', { signal }),
-    ]);
-    if (unreadResult.status === 'aborted' || notifResult.status === 'aborted') return;
-    if (unreadResult.status === 'error' || notifResult.status === 'error') {
+    const result = await fetchJsonSafe<{ data?: Record<string, unknown>[] }>('/api/tenant/notifications', { signal });
+    if (result.status === 'aborted') return;
+    if (result.status === 'error') {
       // #3408: keep the last good rows on screen and say the refresh failed —
       // zeroing them would render "All caught up!" over an outage.
-      const message = unreadResult.status === 'error' ? unreadResult.message : (notifResult as { message: string }).message;
-      setNotifError(`Could not refresh notifications: ${message}`);
-      clientLogError('header:notifications', new Error(message));
+      setNotifError(`Could not refresh notifications: ${result.message}`);
+      clientLogError('header:notifications', new Error(result.message));
       return;
     }
-    setUnread(unreadResult.data.count ?? 0);
-    setNotifications((notifResult.data.data ?? []).slice(0, 8)
+    setNotifications((result.data.data ?? []).slice(0, 8)
       .map((n: Record<string, unknown>) => toSnakeCase(n as Record<string, unknown>)) as unknown as HeaderNotification[]);
     setNotifError(null);
   }, []);
@@ -88,9 +86,10 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   useEffect(() => {
     const controller = new AbortController();
     loadNotifications(controller.signal);
-    const iv = setInterval(() => loadNotifications(controller.signal), 60_000);
-    return () => { clearInterval(iv); controller.abort(); };
+    return () => controller.abort();
   }, [loadNotifications]);
+
+  useEffect(() => { setLocalUnread(null); }, [unreadCount]);
 
   useEffect(() => {
     try {
@@ -140,7 +139,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       return;
     }
     setNotifications(prev => prev.map(n => n.id===id ? {...n, is_read:true} : n));
-    setUnread(prev => Math.max(0, prev - 1));
+    setLocalUnread(Math.max(0, unread - 1));
   };
 
   const handleChange = (val: string) => {
@@ -324,7 +323,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     return;
                   }
                   setNotifications(prev => prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
-                  setUnread(0);
+                  setLocalUnread(0);
                 }} className="text-[10px] font-bold text-violet-600 hover:text-violet-700 uppercase tracking-wider">Mark all read</button>}
               </div>
               
