@@ -19,7 +19,14 @@ info:
 
     ## Pagination
     List endpoints support pagination via `limit` and `offset` query parameters.
-    Default: limit=50, offset=0. Maximum limit: 500.
+    Default: limit=50, offset=0. Maximum limit: 500. Some resources (including
+    documents) use `page` and `limit` instead.
+
+    ## API keys
+    Server-to-server integrations should use an API key created under
+    Settings → API keys: `Authorization: Bearer ak_live_<key>`. Keys are
+    tenant-scoped and must carry the scope required by the endpoint (for
+    example `documents.view`). Keys never carry super-admin privileges.
   version: 2.0.0
   contact:
     name: NuCRM API Support
@@ -28,10 +35,12 @@ info:
     name: Proprietary
 
 servers:
-  - url: https://api.nucrm.com/api/v2
+  - url: https://api.nucrm.com/api/tenant
     description: Production API
-  - url: http://localhost:3000/api/v2
+  - url: http://localhost:3000/api/tenant
     description: Local development
+  - url: https://api.nucrm.com/api/v2
+    description: Deprecated compatibility redirects (Sunset) — use /api/tenant
 
 tags:
   - name: Contacts
@@ -58,6 +67,8 @@ tags:
     description: Email and outreach sequences
   - name: Auth
     description: Authentication and session management
+  - name: Documents
+    description: Read stored documents and get signed download URLs
 
 components:
   securitySchemes:
@@ -71,6 +82,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT token for API access
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ak_live
+      description: Tenant-scoped API key created under Settings → API keys
 
   schemas:
     Error:
@@ -110,9 +126,100 @@ components:
           type: boolean
           example: true
 
+    StoredDocument:
+      type: object
+      description: A row in storage_documents (the document catalog)
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        s3Key:
+          type: string
+        s3Bucket:
+          type: [string, "null"]
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        entityType:
+          type: [string, "null"]
+        entityId:
+          type: [string, "null"]
+        folderId:
+          type: [string, "null"]
+        uploadedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/StoredDocument"
+        - type: object
+          properties:
+            storage_key:
+              type: string
+            mime_type:
+              type: string
+            size_bytes:
+              type: integer
+              format: int64
+            uploaded_by:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+            download_url:
+              type: string
+              format: uri
+              description: Signed URL, valid for 10 minutes. Fetch the bytes from this URL.
+
+    DocumentFolder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        parentId:
+          type: [string, "null"]
+          format: uuid
+
+    DocumentPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StoredDocument"
+            folders:
+              type: array
+              items:
+                $ref: "#/components/schemas/DocumentFolder"
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+
     Contact:
       type: object
-      required: [firstName, lastName]
       properties:
         id:
           type: string
@@ -820,7 +927,8 @@ components:
                 type: string
               type:
                 type: string
-                enum: [text, email, phone, textarea, select, checkbox, radio, date]
+                enum:
+                  [text, email, phone, textarea, select, checkbox, radio, date]
               label:
                 type: string
               required:
@@ -872,16 +980,106 @@ security:
   - BearerAuth: []
 
 paths:
+  /documents:
+    get:
+      tags: [Documents]
+      summary: List stored documents
+      description: |
+        Returns the document catalog for the authenticated tenant, newest first.
+        Requires the `documents.view` scope. Excludes soft-deleted documents.
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: entityType
+          in: query
+          schema:
+            type: string
+          description: Filter by linked entity type (e.g. deal, contact)
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by linked entity id
+        - name: folderId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by folder
+      responses:
+        "200":
+          description: Document catalog page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentPage"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden (missing scope, permission, or inactive module)
+
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get a document and a signed download URL
+      description: |
+        Returns metadata plus a signed URL valid for 10 minutes. Fetch the file
+        bytes from `data.download_url`; the URL is temporary and must not be stored.
+        Requires the `documents.view` scope.
+      security:
+        - ApiKeyAuth: []
+        - SessionCookie: []
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Document metadata with signed download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentDetail"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Document not found in this tenant
+        "502":
+          description: Could not sign the download URL (storage misconfigured)
+
   /contacts:
     get:
       tags: [Contacts]
       summary: List contacts
       description: Retrieve a paginated list of contacts with optional filtering
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
-        - $ref: '#/components/parameters/sort'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/sort"
         - name: companyId
           in: query
           schema:
@@ -902,7 +1100,7 @@ paths:
               type: string
           description: Filter by tags
       responses:
-        '200':
+        "200":
           description: List of contacts
           content:
             application/json:
@@ -912,12 +1110,12 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Contact'
+                      $ref: "#/components/schemas/Contact"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
-        '401':
+                    $ref: "#/components/schemas/Pagination"
+        "401":
           description: Unauthorized
-        '403':
+        "403":
           description: Forbidden
 
     post:
@@ -929,20 +1127,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Contact'
+              $ref: "#/components/schemas/Contact"
       responses:
-        '201':
+        "201":
           description: Contact created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Contact'
-        '400':
+                $ref: "#/components/schemas/Contact"
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /contacts/{id}:
     get:
@@ -957,13 +1155,13 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Contact details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Contact'
-        '404':
+                $ref: "#/components/schemas/Contact"
+        "404":
           description: Contact not found
 
     patch:
@@ -982,14 +1180,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Contact'
+              $ref: "#/components/schemas/Contact"
       responses:
-        '200':
+        "200":
           description: Contact updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Contact'
+                $ref: "#/components/schemas/Contact"
 
     delete:
       tags: [Contacts]
@@ -1003,9 +1201,9 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Contact deleted
-        '404':
+        "404":
           description: Contact not found
 
   /companies:
@@ -1014,17 +1212,17 @@ paths:
       summary: List companies
       description: Retrieve a paginated list of companies
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
-        - $ref: '#/components/parameters/sort'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/sort"
         - name: industry
           in: query
           schema:
             type: string
           description: Filter by industry
       responses:
-        '200':
+        "200":
           description: List of companies
           content:
             application/json:
@@ -1034,9 +1232,9 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Company'
+                      $ref: "#/components/schemas/Company"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: "#/components/schemas/Pagination"
 
     post:
       tags: [Companies]
@@ -1047,14 +1245,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Company'
+              $ref: "#/components/schemas/Company"
       responses:
-        '201':
+        "201":
           description: Company created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Company'
+                $ref: "#/components/schemas/Company"
 
   /companies/{id}:
     get:
@@ -1068,12 +1266,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Company details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Company'
+                $ref: "#/components/schemas/Company"
 
     patch:
       tags: [Companies]
@@ -1090,14 +1288,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Company'
+              $ref: "#/components/schemas/Company"
       responses:
-        '200':
+        "200":
           description: Company updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Company'
+                $ref: "#/components/schemas/Company"
 
     delete:
       tags: [Companies]
@@ -1110,7 +1308,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Company deleted
 
   /deals:
@@ -1119,9 +1317,9 @@ paths:
       summary: List deals
       description: Retrieve a paginated list of deals
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
         - name: stageId
           in: query
           schema:
@@ -1141,7 +1339,7 @@ paths:
             enum: [open, won, lost]
           description: Filter by deal status
       responses:
-        '200':
+        "200":
           description: List of deals
           content:
             application/json:
@@ -1151,9 +1349,9 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Deal'
+                      $ref: "#/components/schemas/Deal"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: "#/components/schemas/Pagination"
 
     post:
       tags: [Deals]
@@ -1163,14 +1361,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Deal'
+              $ref: "#/components/schemas/Deal"
       responses:
-        '201':
+        "201":
           description: Deal created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Deal'
+                $ref: "#/components/schemas/Deal"
 
   /deals/{id}:
     get:
@@ -1184,12 +1382,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Deal details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Deal'
+                $ref: "#/components/schemas/Deal"
 
     patch:
       tags: [Deals]
@@ -1206,9 +1404,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Deal'
+              $ref: "#/components/schemas/Deal"
       responses:
-        '200':
+        "200":
           description: Deal updated
 
     delete:
@@ -1222,7 +1420,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Deal deleted
 
   /tasks:
@@ -1230,9 +1428,9 @@ paths:
       tags: [Tasks]
       summary: List tasks
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
         - name: status
           in: query
           schema:
@@ -1259,7 +1457,7 @@ paths:
             type: string
             format: date
       responses:
-        '200':
+        "200":
           description: List of tasks
           content:
             application/json:
@@ -1269,9 +1467,9 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Task'
+                      $ref: "#/components/schemas/Task"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: "#/components/schemas/Pagination"
 
     post:
       tags: [Tasks]
@@ -1281,14 +1479,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: "#/components/schemas/Task"
       responses:
-        '201':
+        "201":
           description: Task created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: "#/components/schemas/Task"
 
   /tasks/{id}:
     get:
@@ -1302,12 +1500,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Task details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: "#/components/schemas/Task"
 
     patch:
       tags: [Tasks]
@@ -1324,9 +1522,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: "#/components/schemas/Task"
       responses:
-        '200':
+        "200":
           description: Task updated
 
     delete:
@@ -1340,7 +1538,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Task deleted
 
   /invoices:
@@ -1348,9 +1546,9 @@ paths:
       tags: [Invoices]
       summary: List invoices
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
         - name: status
           in: query
           schema:
@@ -1362,7 +1560,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: List of invoices
           content:
             application/json:
@@ -1372,9 +1570,9 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Invoice'
+                      $ref: "#/components/schemas/Invoice"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: "#/components/schemas/Pagination"
 
     post:
       tags: [Invoices]
@@ -1384,14 +1582,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Invoice'
+              $ref: "#/components/schemas/Invoice"
       responses:
-        '201':
+        "201":
           description: Invoice created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Invoice'
+                $ref: "#/components/schemas/Invoice"
 
   /invoices/{id}:
     get:
@@ -1405,12 +1603,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Invoice details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Invoice'
+                $ref: "#/components/schemas/Invoice"
 
     patch:
       tags: [Invoices]
@@ -1427,9 +1625,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Invoice'
+              $ref: "#/components/schemas/Invoice"
       responses:
-        '200':
+        "200":
           description: Invoice updated
 
     delete:
@@ -1443,7 +1641,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Invoice deleted
 
   /auth/login:
@@ -1467,19 +1665,19 @@ paths:
                   type: string
                   minLength: 8
       responses:
-        '200':
+        "200":
           description: Login successful
           headers:
             Set-Cookie:
               schema:
                 type: string
               description: Session cookie
-        '401':
+        "401":
           description: Invalid credentials
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /auth/logout:
     post:
@@ -1487,7 +1685,7 @@ paths:
       summary: Logout
       description: Invalidate current session
       responses:
-        '204':
+        "204":
           description: Session invalidated
 
   /auth/me:
@@ -1496,7 +1694,7 @@ paths:
       summary: Get current user
       description: Retrieve authenticated user profile
       responses:
-        '200':
+        "200":
           description: User profile
           content:
             application/json:
@@ -1526,9 +1724,9 @@ paths:
       tags: [Leads]
       summary: List leads
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/search'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/search"
         - name: status
           in: query
           schema:
@@ -1544,7 +1742,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: List of leads
           content:
             application/json:
@@ -1554,7 +1752,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Lead'
+                      $ref: "#/components/schemas/Lead"
                   total:
                     type: integer
                   limit:
@@ -1571,14 +1769,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Lead'
+              $ref: "#/components/schemas/Lead"
       responses:
-        '201':
+        "201":
           description: Lead created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Lead'
+                $ref: "#/components/schemas/Lead"
 
   /leads/{id}:
     get:
@@ -1592,12 +1790,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Lead details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Lead'
+                $ref: "#/components/schemas/Lead"
     patch:
       tags: [Leads]
       summary: Update lead
@@ -1613,9 +1811,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Lead'
+              $ref: "#/components/schemas/Lead"
       responses:
-        '200':
+        "200":
           description: Lead updated
     delete:
       tags: [Leads]
@@ -1628,7 +1826,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Lead deleted
 
   /leads/{id}/convert:
@@ -1659,7 +1857,7 @@ paths:
                   type: string
                   format: uuid
       responses:
-        '200':
+        "200":
           description: Lead converted
           content:
             application/json:
@@ -1679,7 +1877,7 @@ paths:
       tags: [Pipelines]
       summary: List pipelines
       responses:
-        '200':
+        "200":
           description: List of pipelines with stages
           content:
             application/json:
@@ -1689,7 +1887,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Pipeline'
+                      $ref: "#/components/schemas/Pipeline"
     post:
       tags: [Pipelines]
       summary: Create pipeline
@@ -1698,9 +1896,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Pipeline'
+              $ref: "#/components/schemas/Pipeline"
       responses:
-        '201':
+        "201":
           description: Pipeline created
 
   /pipelines/{id}:
@@ -1719,9 +1917,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Pipeline'
+              $ref: "#/components/schemas/Pipeline"
       responses:
-        '200':
+        "200":
           description: Pipeline updated
     delete:
       tags: [Pipelines]
@@ -1734,7 +1932,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Pipeline deleted
 
   # ── Meetings ──
@@ -1743,8 +1941,8 @@ paths:
       tags: [Meetings]
       summary: List meetings
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - name: start
           in: query
           schema:
@@ -1763,7 +1961,7 @@ paths:
             type: string
             enum: [scheduled, completed, cancelled, no_show, rescheduled]
       responses:
-        '200':
+        "200":
           description: List of meetings
           content:
             application/json:
@@ -1773,7 +1971,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Meeting'
+                      $ref: "#/components/schemas/Meeting"
                   total:
                     type: integer
                   limit:
@@ -1790,9 +1988,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Meeting'
+              $ref: "#/components/schemas/Meeting"
       responses:
-        '201':
+        "201":
           description: Meeting created
 
   /meetings/{id}:
@@ -1807,12 +2005,12 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Meeting details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Meeting'
+                $ref: "#/components/schemas/Meeting"
     patch:
       tags: [Meetings]
       summary: Update meeting
@@ -1828,9 +2026,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Meeting'
+              $ref: "#/components/schemas/Meeting"
       responses:
-        '200':
+        "200":
           description: Meeting updated
     delete:
       tags: [Meetings]
@@ -1843,7 +2041,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Meeting deleted
 
   # ── Workflows ──
@@ -1852,15 +2050,15 @@ paths:
       tags: [Workflows]
       summary: List workflows
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - name: triggerType
           in: query
           schema:
             type: string
             enum: [manual, event, schedule]
       responses:
-        '200':
+        "200":
           description: List of workflows
           content:
             application/json:
@@ -1870,7 +2068,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Workflow'
+                      $ref: "#/components/schemas/Workflow"
                   total:
                     type: integer
     post:
@@ -1881,9 +2079,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Workflow'
+              $ref: "#/components/schemas/Workflow"
       responses:
-        '201':
+        "201":
           description: Workflow created
 
   /workflows/{id}:
@@ -1898,7 +2096,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Workflow details
     patch:
       tags: [Workflows]
@@ -1915,9 +2113,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Workflow'
+              $ref: "#/components/schemas/Workflow"
       responses:
-        '200':
+        "200":
           description: Workflow updated
     delete:
       tags: [Workflows]
@@ -1930,7 +2128,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Workflow deleted
 
   /workflows/{id}/run:
@@ -1957,7 +2155,7 @@ paths:
                   type: string
                   format: uuid
       responses:
-        '200':
+        "200":
           description: Workflow executed
 
   # ── Automations ──
@@ -1966,14 +2164,14 @@ paths:
       tags: [Automations]
       summary: List automations
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - name: isActive
           in: query
           schema:
             type: boolean
       responses:
-        '200':
+        "200":
           description: List of automations
           content:
             application/json:
@@ -1983,7 +2181,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Automation'
+                      $ref: "#/components/schemas/Automation"
                   total:
                     type: integer
     post:
@@ -1994,9 +2192,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Automation'
+              $ref: "#/components/schemas/Automation"
       responses:
-        '201':
+        "201":
           description: Automation created
 
   /automations/{id}:
@@ -2015,9 +2213,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Automation'
+              $ref: "#/components/schemas/Automation"
       responses:
-        '200':
+        "200":
           description: Automation updated
     delete:
       tags: [Automations]
@@ -2030,7 +2228,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Automation deleted
 
   # ── Email Templates ──
@@ -2039,15 +2237,15 @@ paths:
       tags: [Email Templates]
       summary: List email templates
       parameters:
-        - $ref: '#/components/parameters/limit'
-        - $ref: '#/components/parameters/offset'
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - name: category
           in: query
           schema:
             type: string
             enum: [general, sales, onboarding, follow-up, nurture, win]
       responses:
-        '200':
+        "200":
           description: List of email templates
           content:
             application/json:
@@ -2057,7 +2255,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/EmailTemplate'
+                      $ref: "#/components/schemas/EmailTemplate"
                   total:
                     type: integer
     post:
@@ -2068,9 +2266,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmailTemplate'
+              $ref: "#/components/schemas/EmailTemplate"
       responses:
-        '201':
+        "201":
           description: Template created
 
   /email-templates/{id}:
@@ -2085,7 +2283,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Template details
     patch:
       tags: [Email Templates]
@@ -2102,9 +2300,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmailTemplate'
+              $ref: "#/components/schemas/EmailTemplate"
       responses:
-        '200':
+        "200":
           description: Template updated
     delete:
       tags: [Email Templates]
@@ -2117,7 +2315,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Template deleted
 
   # ── Webhooks ──
@@ -2126,7 +2324,7 @@ paths:
       tags: [Webhooks]
       summary: List webhooks
       responses:
-        '200':
+        "200":
           description: List of webhooks
           content:
             application/json:
@@ -2136,7 +2334,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Webhook'
+                      $ref: "#/components/schemas/Webhook"
     post:
       tags: [Webhooks]
       summary: Create webhook
@@ -2145,9 +2343,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Webhook'
+              $ref: "#/components/schemas/Webhook"
       responses:
-        '201':
+        "201":
           description: Webhook created
 
   /webhooks/{id}:
@@ -2166,9 +2364,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Webhook'
+              $ref: "#/components/schemas/Webhook"
       responses:
-        '200':
+        "200":
           description: Webhook updated
     delete:
       tags: [Webhooks]
@@ -2181,7 +2379,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Webhook deleted
 
   # ── Members ──
@@ -2190,7 +2388,7 @@ paths:
       tags: [Members]
       summary: List team members
       responses:
-        '200':
+        "200":
           description: List of members
           content:
             application/json:
@@ -2200,7 +2398,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Member'
+                      $ref: "#/components/schemas/Member"
     post:
       tags: [Members]
       summary: Invite member
@@ -2218,7 +2416,7 @@ paths:
                 roleSlug:
                   type: string
       responses:
-        '201':
+        "201":
           description: Invitation sent
 
   # ── API Keys ──
@@ -2227,7 +2425,7 @@ paths:
       tags: [API Keys]
       summary: List API keys
       responses:
-        '200':
+        "200":
           description: List of API keys (redacted)
           content:
             application/json:
@@ -2237,7 +2435,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/ApiKey'
+                      $ref: "#/components/schemas/ApiKey"
     post:
       tags: [API Keys]
       summary: Create API key
@@ -2254,7 +2452,7 @@ paths:
                 expiresInDays:
                   type: integer
       responses:
-        '201':
+        "201":
           description: API key created (key shown once)
           content:
             application/json:
@@ -2296,7 +2494,7 @@ paths:
             type: integer
             default: 20
       responses:
-        '200':
+        "200":
           description: Search results
           content:
             application/json:
@@ -2331,7 +2529,7 @@ paths:
             type: string
             enum: [google, outlook]
       responses:
-        '200':
+        "200":
           description: OAuth URL
           content:
             application/json:
@@ -2361,7 +2559,7 @@ paths:
                   type: string
                   enum: [status, disconnect]
       responses:
-        '200':
+        "200":
           description: Connection status
 
   /calendar-sync/sync:
@@ -2386,7 +2584,7 @@ paths:
                   type: string
                   format: date-time
       responses:
-        '200':
+        "200":
           description: Sync result
           content:
             application/json:
@@ -2415,7 +2613,7 @@ paths:
       tags: [Reports]
       summary: List saved reports
       responses:
-        '200':
+        "200":
           description: List of reports
     post:
       tags: [Reports]
@@ -2425,9 +2623,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Report'
+              $ref: "#/components/schemas/Report"
       responses:
-        '201':
+        "201":
           description: Report created
 
   /reports/{id}:
@@ -2442,7 +2640,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Report details
     patch:
       tags: [Reports]
@@ -2459,9 +2657,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Report'
+              $ref: "#/components/schemas/Report"
       responses:
-        '200':
+        "200":
           description: Report updated
     delete:
       tags: [Reports]
@@ -2474,7 +2672,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Report deleted
 
   /reports/{id}/run:
@@ -2504,7 +2702,7 @@ paths:
                       type: string
                       format: date
       responses:
-        '200':
+        "200":
           description: Report results
 
   # ── Analytics ──
@@ -2513,7 +2711,7 @@ paths:
       tags: [Analytics]
       summary: Get analytics overview
       responses:
-        '200':
+        "200":
           description: Dashboard overview stats
           content:
             application/json:
@@ -2537,7 +2735,7 @@ paths:
       tags: [Dashboard]
       summary: Get dashboard statistics
       responses:
-        '200':
+        "200":
           description: Dashboard stats
 
   # ── Notifications ──
@@ -2556,7 +2754,7 @@ paths:
           schema:
             type: boolean
       responses:
-        '200':
+        "200":
           description: List of notifications
     patch:
       tags: [Notifications]
@@ -2576,7 +2774,7 @@ paths:
                 markAll:
                   type: boolean
       responses:
-        '200':
+        "200":
           description: Notifications updated
 
   # ── Import/Export ──
@@ -2602,7 +2800,7 @@ paths:
                   type: boolean
                   default: false
       responses:
-        '200':
+        "200":
           description: Import results
           content:
             application/json:
@@ -2630,7 +2828,7 @@ paths:
       tags: [Contacts]
       summary: Export contacts as CSV
       responses:
-        '200':
+        "200":
           description: CSV file
           content:
             text/csv:
@@ -2652,7 +2850,7 @@ paths:
                 csv:
                   type: string
       responses:
-        '200':
+        "200":
           description: Import results
 
   /companies/export:
@@ -2660,7 +2858,7 @@ paths:
       tags: [Companies]
       summary: Export companies as CSV
       responses:
-        '200':
+        "200":
           description: CSV file
 
   /deals/import:
@@ -2678,7 +2876,7 @@ paths:
                 csv:
                   type: string
       responses:
-        '200':
+        "200":
           description: Import results
 
   /deals/export:
@@ -2686,7 +2884,7 @@ paths:
       tags: [Deals]
       summary: Export deals as CSV
       responses:
-        '200':
+        "200":
           description: CSV file
 
   # ── Sequences ──
@@ -2695,7 +2893,7 @@ paths:
       tags: [Sequences]
       summary: List email sequences
       responses:
-        '200':
+        "200":
           description: List of sequences
     post:
       tags: [Sequences]
@@ -2705,9 +2903,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Sequence'
+              $ref: "#/components/schemas/Sequence"
       responses:
-        '201':
+        "201":
           description: Sequence created
 
   /sequences/{id}:
@@ -2722,7 +2920,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Sequence details
     patch:
       tags: [Sequences]
@@ -2739,9 +2937,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Sequence'
+              $ref: "#/components/schemas/Sequence"
       responses:
-        '200':
+        "200":
           description: Sequence updated
     delete:
       tags: [Sequences]
@@ -2754,7 +2952,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Sequence deleted
 
   # ── Subscriptions & Billing ──
@@ -2763,7 +2961,7 @@ paths:
       tags: [Billing]
       summary: Get current subscription
       responses:
-        '200':
+        "200":
           description: Current subscription details
     post:
       tags: [Billing]
@@ -2780,7 +2978,7 @@ paths:
                   type: string
                   format: uuid
       responses:
-        '200':
+        "200":
           description: Subscription updated
 
   /billing/subscription/cancel:
@@ -2799,7 +2997,7 @@ paths:
                   type: boolean
                   default: true
       responses:
-        '200':
+        "200":
           description: Subscription cancelled
 
   # ── Forms ──
@@ -2808,7 +3006,7 @@ paths:
       tags: [Forms]
       summary: List forms
       responses:
-        '200':
+        "200":
           description: List of forms
     post:
       tags: [Forms]
@@ -2818,9 +3016,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Form'
+              $ref: "#/components/schemas/Form"
       responses:
-        '201':
+        "201":
           description: Form created
 
   /forms/{id}:
@@ -2835,7 +3033,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Form details
     patch:
       tags: [Forms]
@@ -2852,9 +3050,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Form'
+              $ref: "#/components/schemas/Form"
       responses:
-        '200':
+        "200":
           description: Form updated
     delete:
       tags: [Forms]
@@ -2867,7 +3065,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        "204":
           description: Form deleted
 
   /forms/public/{id}:
@@ -2883,7 +3081,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Public form data
     post:
       tags: [Forms]
@@ -2904,5 +3102,5 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        '201':
+        "201":
           description: Form submitted
