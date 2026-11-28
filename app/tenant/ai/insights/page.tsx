@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Lightbulb, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchJsonOrThrow } from '@/lib/fetch-json';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type EntityType = 'contact' | 'deal';
 type Hit = { id: string; label: string; sublabel?: string; entity_type: EntityType };
@@ -25,8 +26,8 @@ type Insight = {
 type GenerateResp = { ok: boolean; ai: boolean; insights: Insight[] };
 
 const SEARCH_URL: Record<EntityType, string> = {
-  contact: '/api/tenant/contacts?limit=8&search=',
-  deal: '/api/tenant/deals?limit=8&search=',
+  contact: '/api/tenant/contacts?limit=8&q=',
+  deal: '/api/tenant/deals?limit=8&q=',
 };
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -37,7 +38,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 };
 
 type SearchRow = { id: string; firstName?: string; lastName?: string; email?: string; title?: string; companyName?: string };
-type SearchResp = { contacts?: SearchRow[]; deals?: SearchRow[]; data?: SearchRow[] };
+type SearchResp = { data?: SearchRow[] };
 
 export default function AIInsightsPage() {
   const [entityType, setEntityType] = useState<EntityType>('contact');
@@ -57,7 +58,7 @@ export default function AIInsightsPage() {
   );
 
   const hits = useMemo((): Hit[] => {
-    const rows = searchQuery.data?.contacts ?? searchQuery.data?.deals ?? searchQuery.data?.data ?? [];
+    const rows = searchQuery.data?.data ?? [];
     return rows.slice(0, 8).map((row) => entityType === 'contact'
       ? {
           id: row.id,
@@ -156,7 +157,12 @@ export default function AIInsightsPage() {
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 px-1">
             {generate.data.ai ? 'AI recommendations' : 'Heuristic recommendations'}
           </p>
-          {insights.length === 0 ? (
+          {saved.isError ? (
+            <InlineErrorState
+              message={`Could not load the saved insights for this record: ${saved.error?.message ?? 'no response from the server'}`}
+              onRetry={() => void saved.refetch()}
+            />
+          ) : insights.length === 0 ? (
             <p className="text-sm text-muted-foreground">No signals found for this record yet.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

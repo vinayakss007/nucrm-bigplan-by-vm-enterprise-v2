@@ -27,15 +27,15 @@ type Draft = {
 type GenerateResp = { ok: boolean; draft: Draft; subject: string; body: string; provider: string; model: string };
 
 const SEARCH_URL: Record<EntityType, string> = {
-  contact: '/api/tenant/contacts?limit=8&search=',
-  deal: '/api/tenant/deals?limit=8&search=',
+  contact: '/api/tenant/contacts?limit=8&q=',
+  deal: '/api/tenant/deals?limit=8&q=',
 };
 const PURPOSES = ['follow_up', 'introduction', 'check_in', 'proposal', 'closing'];
 const TONES = ['professional', 'warm', 'casual', 'concise'];
 const LENGTHS = ['short', 'medium', 'long'];
 
 type SearchRow = { id: string; firstName?: string; lastName?: string; email?: string; title?: string };
-type SearchResp = { contacts?: SearchRow[]; deals?: SearchRow[]; data?: SearchRow[] };
+type SearchResp = { data?: SearchRow[] };
 
 export default function AIEmailDraftsPage() {
   const [entityType, setEntityType] = useState<EntityType>('contact');
@@ -60,7 +60,7 @@ export default function AIEmailDraftsPage() {
   );
 
   const hits = useMemo((): Hit[] => {
-    const rows = searchQuery.data?.contacts ?? searchQuery.data?.deals ?? searchQuery.data?.data ?? [];
+    const rows = searchQuery.data?.data ?? [];
     return rows.slice(0, 8).map((row) => entityType === 'contact'
       ? {
           id: row.id,
