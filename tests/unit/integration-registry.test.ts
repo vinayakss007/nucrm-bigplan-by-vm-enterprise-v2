@@ -246,5 +246,31 @@ describe('Integration Registry', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Insufficient quota');
     });
+
+    it.each(['summarize', 'draft_email'] as const)('reports a failed %s response instead of success', async (action) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: vi.fn().mockResolvedValue({ error: { message: 'Rate limit reached' } }),
+      } as unknown as Response);
+
+      const { executeAction } = await import('@/lib/integrations/registry');
+      const result = await executeAction(instance, action, { text: 'x', context: 'x' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Rate limit reached');
+    });
+
+    it('reports an empty completion as a failure', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ choices: [] }),
+      } as unknown as Response);
+
+      const { executeAction } = await import('@/lib/integrations/registry');
+      const result = await executeAction(instance, 'summarize', { text: 'x' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('no completion text');
+    });
   });
 });
