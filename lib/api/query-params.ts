@@ -34,6 +34,9 @@
 
 import { NextRequest } from 'next/server';
 
+/** Cap for filter-dropdown lookups on list pages (#4062). */
+export const DROPDOWN_LIMIT = 50;
+
 export interface SortField {
   field: string;
   direction: 'asc' | 'desc';

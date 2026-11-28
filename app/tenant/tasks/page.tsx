@@ -7,6 +7,7 @@ import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, sql, asc, desc } from 'drizzle-orm';
+import { DROPDOWN_LIMIT } from '@/lib/api/query-params';
 import TasksDataTable from '@/components/tenant/tasks-data-table';
 import { withTenantScope } from '@/lib/api/with-api-route';
 
@@ -60,13 +61,15 @@ export default async function TasksPage() {
     db.query.contacts.findMany({
       where: eq(contacts.tenantId, ctx.tenantId),
       columns: { id: true, firstName: true, lastName: true },
-      orderBy: [asc(contacts.firstName)]
+      orderBy: [asc(contacts.firstName)],
+      limit: DROPDOWN_LIMIT
     }).then(c => c.map((contact) => ({ id: contact.id, first_name: contact.firstName ?? '', last_name: contact.lastName ?? '' }))),
 
     db.query.deals.findMany({
       where: eq(deals.tenantId, ctx.tenantId),
       columns: { id: true, title: true },
-      orderBy: [asc(deals.title)]
+      orderBy: [asc(deals.title)],
+      limit: DROPDOWN_LIMIT
     }),
 
     db
@@ -77,6 +80,7 @@ export default async function TasksPage() {
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.status, 'active')))
+      .limit(DROPDOWN_LIMIT)
       .then(rows => rows.map(r => ({ user_id: r.user_id, full_name: r.full_name ?? '' })))
   ]);
 

@@ -7,6 +7,7 @@ import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { companies, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
+import { DROPDOWN_LIMIT } from '@/lib/api/query-params';
 import { getContacts } from '@/lib/db/services/contacts';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
@@ -75,7 +76,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     db.query.companies.findMany({
       where: and(eq(companies.tenantId, tid), isNull(companies.deletedAt)),
       orderBy: [asc(companies.name)],
-      columns: { id: true, name: true }
+      columns: { id: true, name: true },
+      limit: DROPDOWN_LIMIT
     }),
     db
       .select({
@@ -85,7 +87,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       })
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
-      .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active'))),
+      .where(and(eq(tenantMembers.tenantId, tid), eq(tenantMembers.status, 'active')))
+      .limit(DROPDOWN_LIMIT),
     getUserDefaultView(tid, ctx.userId),
   ]);
 
