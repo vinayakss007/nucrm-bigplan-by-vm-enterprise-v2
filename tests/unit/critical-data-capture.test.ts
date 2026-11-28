@@ -104,14 +104,21 @@ describe('CriticalDataCapture', () => {
       expect(count).toBe(0);
     });
 
-    it('captures multiple records', async () => {
-      mockDbExecute
-        .mockResolvedValueOnce({ rows: [{ id: 'id1', name: 'Alice' }] })
-        .mockResolvedValueOnce({ rows: [{ id: 'id2', name: 'Bob' }] });
+    it('captures multiple records in one batched read and write (#4067)', async () => {
+      mockDbExecute.mockResolvedValue({
+        rows: [{ id: 'id1', name: 'Alice' }, { id: 'id2', name: 'Bob' }],
+      });
       const { CriticalDataCapture } = await import('@/lib/critical-data-capture');
       const cdc = new CriticalDataCapture();
       const count = await cdc.captureBeforeDelete('t1', 'contacts', ['id1', 'id2']);
       expect(count).toBe(2);
+      expect(mockDbExecute).toHaveBeenCalledTimes(1);
+      expect(mockDbInsert.mock.results[0]?.value.values).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ recordId: 'id1', operation: 'delete' }),
+          expect.objectContaining({ recordId: 'id2', operation: 'delete' }),
+        ]),
+      );
     });
 
     it('handles bigint values', async () => {
