@@ -36,9 +36,10 @@ export default async function SuperAdminDashboard() {
   // log), so none of them satisfy a tenant-scoped RLS policy. Each one is
   // wrapped in its own security context — separate transactions, so a failing
   // query degrades its own panel section instead of aborting the others.
+  const failed = { stats: false, tenants: false, errors: false, trials: false };
   const [statsRes, recentTenants, recentErrors, expiringSoon] = await Promise.all([
     withSecurityContext(async (tx) => await tx.execute(sql`SELECT public.platform_stats() as data`))
-      .catch((err) => { logger.error('[dashboard] platform_stats failed', { error: err instanceof Error ? err.message : String(err) }); return { rows: [{ data: {} }] }; }),
+      .catch((err) => { failed.stats = true; logger.error('[dashboard] platform_stats failed', { error: err instanceof Error ? err.message : String(err) }); return { rows: [{ data: {} }] }; }),
 
     withSecurityContext(async (tx) => await tx.select({
       id: tenants.id,
@@ -55,7 +56,7 @@ export default async function SuperAdminDashboard() {
     .leftJoin(users, eq(users.id, tenants.ownerId))
     .orderBy(desc(tenants.createdAt))
     .limit(6))
-    .catch((err) => { logger.error('[dashboard] recentTenants failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
+    .catch((err) => { failed.tenants = true; logger.error('[dashboard] recentTenants failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
 
     withSecurityContext(async (tx) => await tx.select({
       level: errorLogs.level,
@@ -69,7 +70,7 @@ export default async function SuperAdminDashboard() {
     ))
     .orderBy(desc(errorLogs.createdAt))
     .limit(5))
-    .catch((err) => { logger.error('[dashboard] recentErrors failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
+    .catch((err) => { failed.errors = true; logger.error('[dashboard] recentErrors failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
 
     withSecurityContext(async (tx) => await tx.select({
       id: tenants.id,
@@ -83,7 +84,7 @@ export default async function SuperAdminDashboard() {
       between(tenants.trialEndsAt, sql`now()`, sql`now() + interval '3 days'`)
     ))
     .orderBy(tenants.trialEndsAt))
-    .catch((err) => { logger.error('[dashboard] expiringSoon failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
+    .catch((err) => { failed.trials = true; logger.error('[dashboard] expiringSoon failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
   ]);
 
   const s = (statsRes as unknown as { rows?: [{ data?: Record<string, unknown> }] })?.rows?.[0]?.data ?? {};
@@ -101,6 +102,10 @@ export default async function SuperAdminDashboard() {
       recentErrors={recentErrors as never[]}
       expiringSoon={expiringSoon as never[]}
       userName={user.fullName ?? 'Admin'}
+      statsFailed={failed.stats}
+      tenantsFailed={failed.tenants}
+      errorsFailed={failed.errors}
+      trialsFailed={failed.trials}
     />
   );
 }

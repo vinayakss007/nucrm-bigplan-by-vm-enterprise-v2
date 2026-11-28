@@ -89,10 +89,15 @@ interface DashboardProps {
   recentErrors: ErrorLog[];
   expiringSoon: ExpiringTrial[];
   userName: string;
+  statsFailed?: boolean;
+  tenantsFailed?: boolean;
+  errorsFailed?: boolean;
+  trialsFailed?: boolean;
 }
 
 export default function SuperAdminDashboardClient({
   stats, recentTenants, recentErrors, expiringSoon, userName,
+  statsFailed = false, tenantsFailed = false, errorsFailed = false, trialsFailed = false,
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -110,6 +115,12 @@ export default function SuperAdminDashboardClient({
   const [alertsDismissed, setAlertsDismissed] = useState<Set<string>>(new Set());
 
   const mrr = Number(stats.mrr ?? 0);
+  const failedReads = [
+    statsFailed && 'platform stats',
+    tenantsFailed && 'recent tenants',
+    errorsFailed && 'recent errors',
+    trialsFailed && 'expiring trials',
+  ].filter(Boolean) as string[];
 
   // Global search
   const handleSearch = useCallback(async (q: string, signal?: AbortSignal) => {
@@ -156,6 +167,11 @@ export default function SuperAdminDashboardClient({
 
   return (
     <div className="space-y-6 max-w-7xl">
+      {failedReads.length > 0 && (
+        <InlineErrorState
+          message={`Platform data could not be read: ${failedReads.join(', ')}. Zeros and empty lists below are not evidence that nothing is wrong.`}
+        />
+      )}
       {/* Greeting + Search */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -352,7 +368,7 @@ export default function SuperAdminDashboardClient({
             <Link href="/superadmin/tenants" className="text-xs text-violet-600 dark:text-violet-400 hover:underline">View all →</Link>
           </div>
           {!recentTenants.length
-            ? <p className="text-muted-foreground text-sm text-center py-8">No tenants yet</p>
+            ? <p className="text-muted-foreground text-sm text-center py-8">{tenantsFailed ? 'Recent tenants could not be loaded.' : 'No tenants yet'}</p>
             : <div className="divide-y divide-border">
               {recentTenants.map(t => (
                 <div key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50 transition-colors">
