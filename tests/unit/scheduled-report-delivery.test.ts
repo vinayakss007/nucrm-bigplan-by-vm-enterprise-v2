@@ -79,6 +79,7 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@/lib/cache', () => ({
   acquireLock: vi.fn().mockResolvedValue(mockLock),
+  refreshLock: vi.fn().mockResolvedValue(undefined),
   releaseLock: vi.fn().mockResolvedValue(undefined),
 }));
 

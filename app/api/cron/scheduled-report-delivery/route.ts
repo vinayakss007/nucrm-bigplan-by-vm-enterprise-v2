@@ -13,7 +13,8 @@ import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql, gt } from 'drizzle-orm';
-import { acquireLock, releaseLock } from '@/lib/cache';
+import { acquireLock, refreshLock, releaseLock } from '@/lib/cache';
+import pLimit from 'p-limit';
 import { instrumentCronRun, cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import { addMonthsClamped } from '@/lib/billing/recurrence-date';
@@ -164,6 +165,11 @@ async function cronRouteHandler(req: NextRequest) {
   let delivered = 0;
   let totalDue = 0;
   const capHitTenants: string[] = [];
+  const lockRefresh = setInterval(() => {
+    void refreshLock(REPORT_LOCK_KEY, lock.value, REPORT_LOCK_TTL).catch((err: unknown) => {
+      void logError({ error: err, context: 'scheduled-report-delivery lock refresh' });
+    });
+  }, 30_000);
   try {
     // scheduled_reports — and the entity tables generateExportData reads through
     // the shared db handle — enforce plain tenant_isolation with no super-admin
@@ -225,7 +231,8 @@ async function cronRouteHandler(req: NextRequest) {
 
       totalDue += dueRows.length;
 
-      for (const report of dueRows) {
+      const limit = pLimit(5);
+      await Promise.all(dueRows.map((report) => limit(async () => {
         try {
           // #1276: A scheduled report is tenant-scoped and already authorized at
           // scheduling time, so it runs with a system/cron identity rather than an
@@ -327,7 +334,7 @@ async function cronRouteHandler(req: NextRequest) {
             updatedAt: new Date(),
           }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.status, 'active'))); // #3407
         }
-      }
+      })));
     });
 
     return NextResponse.json({
@@ -345,6 +352,7 @@ async function cronRouteHandler(req: NextRequest) {
     await logError({ error: err, context: 'scheduled-report-delivery' });
     return NextResponse.json({ ok: false, error: 'Failed to deliver scheduled reports' }, { status: 500 });
   } finally {
+    clearInterval(lockRefresh);
     await releaseLock(REPORT_LOCK_KEY, lock.value);
   }
 }
