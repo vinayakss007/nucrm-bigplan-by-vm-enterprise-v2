@@ -64,13 +64,13 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
     `/api/superadmin/templates/${id}`,
     { enabled: !!id, retry: false },
   );
-  const modulesQuery = useApiQuery<{ data?: Array<{ id: string; name: string; icon: string }> }>(
+  const { data: modulesData, isLoading: modulesLoading, error: modulesError, refetch: refetchModules } = useApiQuery<{ data?: Array<{ id: string; name: string; icon: string }> }>(
     ['superadmin', 'modules'],
     '/api/superadmin/modules',
     { retry: false },
   );
-  const loading = templateQuery.isLoading || modulesQuery.isLoading;
-  const availableModules = (modulesQuery.data?.data ?? []).map(
+  const loading = templateQuery.isLoading || modulesLoading;
+  const availableModules = (modulesData?.data ?? []).map(
     (m: { id: string; name: string; icon: string }) => ({ id: m.id, name: m.name, icon: m.icon }),
   );
 
@@ -371,6 +371,7 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
       {/* Module Selector */}
       <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Modules</h2>
+        {modulesError && <div role="alert" className="text-xs text-red-400">Module options could not be loaded — an empty picker here would be a lie. <button type="button" onClick={() => void refetchModules()} className="underline">Try again</button></div>}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {availableModules.map(mod => {
             const isActive = template.modules.includes(mod.id);
