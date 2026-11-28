@@ -381,7 +381,7 @@ describe('the route holds no statement, and the ledger counts what is left', () 
     // 120 once #3312 pinned the ten lib/ files an anonymous route calls, 121 once
     // #3246 moved the inbound route's stage lookups into `lib/webhooks/inbound-stages.ts`,
     // and 124 once #3409 added the reconcile-counters cron route.
-    expect(guard.MIN_SCANNED_FILES).toBe(124);
+    expect(guard.MIN_SCANNED_FILES).toBe(125);
     // #3246 (2026-11-11): the `app/api/webhooks` deferral is gone — the inbound
     // route's 24 reads are bound now, so the directory is back in scope. The ledger
     // is the cron surface alone.
